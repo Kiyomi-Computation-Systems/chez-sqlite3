@@ -1,6 +1,6 @@
 # ADR-0002: Find libsqlite3 at runtime: an override, else one candidate list per world, loaded once by absolute path
 
-- **Status:** Proposed (the brief, §3b). It waits for the maintainer's acceptance.
+- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b.
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b

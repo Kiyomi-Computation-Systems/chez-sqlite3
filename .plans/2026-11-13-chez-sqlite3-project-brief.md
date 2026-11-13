@@ -1,9 +1,9 @@
 # chez-sqlite3: SQLite bindings for Chez Scheme — project brief
 
 Date: 2026-11-13
-Status: draft, for the maintainer's review. §2 was settled by the maintainer on 2026-11-13.
-§3 is proposed and becomes decision records in M0; where a record and this brief disagree, the
-record wins.
+Status: accepted 2026-11-13. §2 was settled by the maintainer on 2026-11-13. §3a, b, h and i
+are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. The rest of §3 becomes records
+with the M1 and M2 plans. Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses

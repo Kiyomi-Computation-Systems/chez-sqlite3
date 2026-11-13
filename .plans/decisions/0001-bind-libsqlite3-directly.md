@@ -1,6 +1,6 @@
 # ADR-0001: Bind libsqlite3 directly, with no C shim; the Chez floor is 10.4.0
 
-- **Status:** Proposed (the brief, §3a). It waits for the maintainer's acceptance.
+- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3a.
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
