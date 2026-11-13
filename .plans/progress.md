@@ -9,9 +9,11 @@ newest first.
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
 - **M0 slice 1, the container,** is open on `m0-slice-1-container`. Its first commit holds slice
   0's close-out, the first entries in [traps.md](traps.md), and a correction to AGENTS.md's rule
-  on evaluation order, with [the measurement behind it](research/evaluation-order/). Next, it
-  measures what chez-curl's Guix pin gives for Chez, SQLite, gcc and Valgrind, before anything is
-  copied (harness plan §6).
+  on evaluation order, with [the measurement behind it](research/evaluation-order/). The pin is
+  measured and kept: Chez 10.4.0, SQLite 3.53.1, gcc 16.2.0, Valgrind 3.27.0 (ADR-0006's
+  amendment). That measurement also corrected the brief, which had recorded the `sqlite3`
+  command's compile options as the library's. Next: the container's files, copied from chez-curl
+  (harness plan §1).
 - **Open:** brief D1 to D7. D1 (threaded Chez) and D7 (the Mac's SQLite) are due in M1.
 
 ## Close-outs

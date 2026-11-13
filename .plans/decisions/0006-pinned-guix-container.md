@@ -1,7 +1,7 @@
 # ADR-0006: Builds and tests run in a pinned, toolchain-only Guix container with no network
 
-- **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13). M0 slice 1 measures the pin
-  and amends this record.
+- **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13); amended 2026-11-13 with what
+  M0 slice 1 measured at the pin ([amendment](#amendment-2026-11-13-what-m0-slice-1-measured))
 - **Date:** 2026-11-13
 - **Scope:** development tooling; no library change
 - **Related:** chez-curl ADR-0006, which this copies · [ADR-0002](0002-runtime-libsqlite3-discovery.md)
@@ -81,3 +81,24 @@
 - **The container isolates the toolchain; it is not a sandbox.** The repository is shared
   read-write.
 - **Bumping the pin** means changing `channels.scm` and running `make check-guix`.
+
+## Amendment, 2026-11-13: what M0 slice 1 measured
+
+At `b532aa7d…`, a container with `chez-scheme`, `sqlite`, `gcc-toolchain` and `valgrind` gives:
+
+- Chez 10.4.0 (`ta6le`, threaded);
+- SQLite 3.53.1 (`sqlite3_libversion_number` 3053001, `THREADSAFE=1`, `ENABLE_FTS5`,
+  `sqlite3_load_extension` present), with `sqlite3.h` in the profile;
+- gcc 16.2.0;
+- Valgrind 3.27.0.
+
+Through the library, an FTS5 table can be created and `jsonb('{}')` is a blob. Every need in the
+Context is met, so **the pin is kept** (decision 2). The commands and their output are in
+[research/guix-pin/](../research/guix-pin/).
+
+- **The profile's library is the host's Guix home's library:** the same store item,
+  `/gnu/store/vi2anm0…-sqlite-3.53.1`.
+- **The `sqlite3` command is not the library.** The command in that store item links no
+  `libsqlite3`. It carries its own copy of SQLite, compiled with options the library lacks:
+  `DQS=0`, `ENABLE_RTREE` and `ENABLE_STMTVTAB` among them. The brief's first version recorded the
+  command's options as the library's. Options are read from the library, through the FFI.

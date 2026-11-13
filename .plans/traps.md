@@ -18,6 +18,14 @@ told in chez-curl's `.plans/traps.md`.
   appeared, and interpreted code ran them right to left. The probe and its outputs are in
   [research/evaluation-order/](research/evaluation-order/). (chez-sqlite3)
 
+## SQLite
+
+- **The `sqlite3` command carries its own SQLite.** The brief's first evidence read
+  `pragma compile_options` from the Guix home's `sqlite3` command, and recorded its `DQS=0` as the
+  library's. A test rule in the brief, §7, was built on it. The command links no `libsqlite3`. In
+  M0 slice 1, the library beside it, read through the FFI, reported no `DQS`, `RTREE` or
+  `STMTVTAB` option ([research/guix-pin/](research/guix-pin/)). (chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

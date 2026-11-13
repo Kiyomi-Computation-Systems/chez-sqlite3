@@ -97,6 +97,9 @@
   fixed order, and a `let`'s inits are arguments too. No assertion may depend
   on any order; use `for-each` for effects, and `let*` when one init must
   follow another. A probe is code under these rules too.
+* The `sqlite3` command carries its own copy of SQLite, with other compile
+  options. Read a library's version and options through the FFI, never from
+  the command (`.plans/traps.md`).
 * A setter that refuses a value keeps the one it had. Give each round trip
   its own sentinel, and assert every return code.
 * An assertion passes whenever *another* rule can produce its expected value.

@@ -15,8 +15,11 @@ Dependencies: SQLite ≥ 3.45.1, found and loaded at runtime (§2). Chez ≥ 10.
 Evidence, measured on the Linux development host on 2026-11-13:
 
 - Chez 10.4.0, `ta6le`, `(threaded?)` → `#t`.
-- Guix's SQLite 3.53.1: `THREADSAFE=1`, `ENABLE_FTS5`, `DQS=0`, no `OMIT_LOAD_EXTENSION`.
-  `sqlite3.h` is in the profile. `jsonb('{}')` is a blob, and an FTS5 table can be created.
+- Guix's SQLite 3.53.1, read through Chez's FFI: `THREADSAFE=1`, `ENABLE_FTS5`, and
+  `sqlite3_load_extension` present. `sqlite3.h` is in the profile. Through the library,
+  `jsonb('{}')` is a blob and an FTS5 table can be created. The first version of this brief read
+  these options from the `sqlite3` command instead. That command carries its own copy of SQLite,
+  with other options such as `DQS=0` (corrected in M0 slice 1; ADR-0006's amendment).
 - The host's system `libsqlite3.so.0` is 3.37.2: `ENABLE_FTS5`, `ENABLE_JSON1`,
   `ENABLE_LOAD_EXTENSION`. Guix's Chez **cannot** load it by its soname
   (`libsqlite3.so.0: cannot open shared object file`), but loads it by absolute path. The
@@ -160,5 +163,7 @@ Out of v1:
   SQLite's amalgamation, a single C file, at 3.45.1 and at a pinned current release, each
   checked against a pinned checksum, and load it through the override. Locally, the Guix
   container gives what its pin gives, measured in M0.
-- **Build differences are tested, not assumed.** Guix's build has `DQS=0` and the system's
-  doesn't, so no test may depend on double-quoted string literals unless it sets DQS itself.
+- **Build differences are tested, not assumed.** Builds differ in their compile options, and the
+  `sqlite3` command can differ from the library beside it, so a library's options are read
+  through the FFI. No test may depend on an option it hasn't checked; double-quoted string
+  literals (`DQS`) are one example.
