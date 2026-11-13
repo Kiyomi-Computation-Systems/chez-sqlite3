@@ -45,7 +45,7 @@
 ;;; exact, a space at a line's end included: each line is named as written.
 (library (floors)
   (export floors-path check-floors floors-problems parse-floors read-floors file-text
-          floor-text floor-numbers requirement-lines)
+          floor-text floor-numbers requirement-lines workflows-problems)
   (import (rnrs)
           (only (chezscheme) display-condition parameterize print-graph))
 
@@ -413,4 +413,16 @@
       (if (null? problems)
           (let ((floors (car (cadr (read-data ftext)))))
             (if rtext (readme-problems rpath rtext fpath floors) '()))
-          problems))))
+          problems)))
+
+  ;; workflows-problems : String Boolean -> (Listof String)
+  ;; What is wrong with the workflow directory at PATH, given EXISTS?, whether
+  ;; it is there. The workflow rules (that every workflow holds the floors of
+  ;; packaging/floors.sexp) are not written yet: they come with CI, in M0
+  ;; slice 4. Until then a workflow directory is a failure, so that workflows
+  ;; cannot be added and go unchecked. Slice 4 replaces this with the rules.
+  (define (workflows-problems path exists?)
+    (if exists?
+        (list (string-append path ": it exists, but the workflow rules are not written yet"
+                             " (M0 slice 4)"))
+        '())))

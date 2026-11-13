@@ -1,6 +1,7 @@
 # ADR-0008: The floors have one source, `packaging/floors.sexp`
 
-- **Status:** Accepted (the harness plan, 2026-11-13)
+- **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
+  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built))
 - **Date:** 2026-11-13
 - **Scope:** every statement of the Chez and SQLite floors
 - **Related:** chez-curl ADR-0016, which this copies · [ADR-0001](0001-bind-libsqlite3-directly.md)
@@ -40,3 +41,19 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
 - **Changing a floor edits** the file, the README's lines, the code's constant, and the literal
   test rows that name the old floor. Each place left behind fails by name.
 - **CI's cache keys hash the file** with each build script, so changing a floor rebuilds.
+
+## Amendment, 2026-11-13: what M0 slice 2 built
+
+- **The Chez floor's check is built** (decision 4): `tests/test-require-threaded.sps` builds rows
+  from the file's Chez floor, which it must accept, and keeps literal rows that it must refuse:
+  10.3.0, 10.3.9 and pre-releases of 10.4.0. Brief D1 settled that a threaded Chez is required
+  (ADR-0001's amendment).
+- **The SQLite floor's check comes with loading, in M1:** 3.45.1 accepted, 3.45.0 refused, rows
+  from the file.
+- **`check-floors` holds README.org only,** and refuses while a `.github/workflows` directory
+  exists, until slice 4 writes the workflow rules of decision 3. A workflow can't be added with
+  the rules forgotten.
+- **"Each place left behind fails by name" was too strong.** It holds for the file, README.org,
+  `require-threaded`'s minimum and the suites' rows. The decision records state their floors too,
+  but a record is changed by a new record, not kept in step. AGENTS.md and the global constraints
+  stated the floors with nothing to check them; they now point at the file and state none.

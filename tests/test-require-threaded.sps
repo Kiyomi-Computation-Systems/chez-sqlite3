@@ -11,9 +11,16 @@
 ;;; imports (chez-sqlite3 private require-threaded) first among its imports.
 ;;; This suite reads each library's import form as data and holds that order.
 ;;;
+;;; The scan reads .sls files only, but Chez tries every ending of
+;;; (library-extensions), and loads a .ss or a .chezscheme.sls ahead of the
+;;; .sls beside it. So a second rule holds every file under src/ that Chez
+;;; could load, source or compiled, to be a .sls and no .chezscheme.sls, and
+;;; names any other. Each ending has a row, on a tree made in a temporary
+;;; directory, so that two runs of this suite at once share no path.
+;;;
 ;;; It also holds the refusal itself, on this Chez: it expands a copy of the
 ;;; refusal's source in which each call (threaded?) answers #f, as a
-;;; --nothreads Chez's does, and requires the refusal's message. It does the
+;;; --nothreads Chez's does, and requires the refusal's whole message. It does the
 ;;; same with each call (scheme-version-number) answering a version and each
 ;;; call (scheme-version #t) answering the version's text, for a release or
 ;;; for a pre-release, in rows on each side of the floor, 10.4.0. A
@@ -36,7 +43,7 @@
         (chez-sqlite3-testing)
         (floors)
         (only (chezscheme) directory-list file-directory? file-symbolic-link? eval
-              interaction-environment system))
+              interaction-environment library-extensions))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -220,27 +227,120 @@
   (map (lambda (name) (if (sls-file? name) 'read 'skipped))
        '("native.sls" "._native.sls" "native.sls~" "#native.sls#" ".sls" "native.ss")))
 
-;; A tree the suite makes: a library, a dangling .# symbolic link (an Emacs
-;; lock file, which Chez cannot load), a .# regular file, which Chez loads as a
-;; library, and a .# directory. Made under build/, which make clean removes.
-(define scan-tree "build/require-threaded-scan")
+;; Trees the suite makes, each in a temporary directory of its own, so that
+;; two runs of this suite at once share no path.
 
-(define made-tree
-  (and (= 0 (system (string-append
-                     "rm -rf " scan-tree " && mkdir -p " scan-tree "/d/.#dir && "
-                     "echo > " scan-tree "/d/legal.sls && "
-                     "echo > " scan-tree "/d/.#regular.sls && "
-                     "echo > " scan-tree "/d/.#dir/inner.sls && "
-                     "ln -s nowhere " scan-tree "/d/.#lock.sls")))
-       #t))
+;; make-tree : String (Listof (List Symbol String ...)) -> Unit
+;; Makes ENTRIES under DIR: (file PATH) an empty file, (dir PATH) a directory,
+;; (link PATH TARGET) a symbolic link to TARGET, which may be dangling.
+;; Parent directories are made as needed.
+(define (make-tree dir entries)
+  (for-each
+   (lambda (entry)
+     (let* ((path (string-append dir "/" (cadr entry)))
+            (parent (let loop ((i (string-length path)))
+                      (if (char=? (string-ref path (- i 1)) #\/) (substring path 0 (- i 1)) (loop (- i 1))))))
+       (capture-command (list "mkdir" "-p" (if (eq? (car entry) 'dir) path parent)))
+       (case (car entry)
+         ((file) (capture-command (list "touch" path)))
+         ((link) (capture-command (list "ln" "-s" (caddr entry) path)))
+         ((dir) #f))))
+   entries))
+
+;; relative : String (Listof String) -> (Listof String)
+;; PATHS without the leading DIR and slash.
+(define (relative dir paths)
+  (let ((n (+ (string-length dir) 1)))
+    (map (lambda (p) (substring p n (string-length p))) paths)))
+
+;; in-tree : (Listof Entry) (String -> Any) -> Any
+;; PROC on the path of a fresh temporary directory holding ENTRIES. A raise of
+;; PROC's is its answer, as (raised TEXT), so no raise escapes the row.
+(define (in-tree entries proc)
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (dir) (make-tree dir entries) (proc dir)))))
 
 (test-equal "the scan skips a .# dangling symbolic link, reads a .# regular file, and enters a .# directory"
-  (list (string-append scan-tree "/d/.#dir/inner.sls")
-        (string-append scan-tree "/d/.#regular.sls")
-        (string-append scan-tree "/d/legal.sls"))
-  (and made-tree (sls-files scan-tree)))
+  '("d/.#dir/inner.sls" "d/.#regular.sls" "d/legal.sls")
+  (in-tree '((file "d/legal.sls") (file "d/.#regular.sls") (file "d/.#dir/inner.sls")
+             (link "d/.#lock.sls" "nowhere"))
+           (lambda (dir) (relative dir (sls-files dir)))))
 
-(system (string-append "rm -rf " scan-tree))
+(test-equal "the scan reads a .# link that resolves, which is no lock file"
+  '("d/.#live.sls" "d/real.sls")
+  (in-tree '((file "d/real.sls") (link "d/.#live.sls" "real.sls"))
+           (lambda (dir) (relative dir (sls-files dir)))))
+
+;; --- a file Chez could load in place of a .sls --------------------------------------
+;; Chez's (library-extensions) here is .chezscheme.sls .ss .sls .scm .sch, tried
+;; in that order, and an object file (.so) beside a source is loaded when it is
+;; newer. So a counters.ss beside counters.sls, without the refusal import, is
+;; what Chez loads, and the scan of .sls files alone never sees it. Every file
+;; under src/ that Chez could load must be a .sls, and not a .chezscheme.sls,
+;; which Chez prefers to the .sls beside it.
+
+;; ends-with? : String String -> Boolean
+(define (ends-with? suffix s)
+  (let ((n (string-length s)) (m (string-length suffix)))
+    (and (>= n m) (string=? (substring s (- n m) n) suffix))))
+
+;; loadable-endings : (Listof String)
+;; Every ending of a file Chez could load as a library, source or compiled,
+;; from Chez's own list: (library-extensions) pairs each source ending with its
+;; compiled one.
+(define loadable-endings
+  (fold-left (lambda (found ext) (if (member ext found) found (append found (list ext))))
+             '()
+             (apply append (map (lambda (pair) (list (car pair) (cdr pair)))
+                                (library-extensions)))))
+
+;; stray-file? : String String -> Boolean
+;; Whether the entry NAME, at PATH, is a file Chez could load as a library that
+;; is not a plain .sls: it ends in a loadable ending, and is not a .sls other
+;; than .chezscheme.sls. A lock-file? is no file Chez can load.
+(define (stray-file? path name)
+  (and (not (lock-file? path name))
+       (not (file-directory? path))
+       (exists (lambda (ending) (ends-with? ending name)) loadable-endings)
+       (or (not (ends-with? ".sls" name))
+           (ends-with? ".chezscheme.sls" name))))
+
+;; stray-files : String -> (Listof String)
+;; Every stray-file? under DIR, depth first, sorted; none when DIR is not a
+;; directory.
+(define (stray-files dir)
+  (if (file-directory? dir)
+      (apply append
+             (map (lambda (name)
+                    (let ((path (string-append dir "/" name)))
+                      (cond ((lock-file? path name) '())
+                            ((file-directory? path) (stray-files path))
+                            ((stray-file? path name) (list path))
+                            (else '()))))
+                  (list-sort string<? (directory-list dir))))
+      '()))
+
+;; One row per ending: a legal .sls beside the file, so that the tree is
+;; otherwise clean, and the file is the one thing named.
+(for-each
+ (lambda (ending)
+   (test-equal (string-append "a file x" ending " under the tree is named, and the .sls beside it is not")
+     (list (string-append "d/x" ending))
+     (in-tree (list '(file "d/x.sls") (list 'file (string-append "d/x" ending)))
+              (lambda (dir) (relative dir (stray-files dir))))))
+ '(".ss" ".scm" ".sch" ".so" ".chezscheme.sls" ".chezscheme.so"))
+
+(test-equal "a tree of .sls files, other files, a .#lock.ss dangling link and a directory named x.ss has no stray file"
+  '()
+  (in-tree '((file "d/x.sls") (file "d/notes.txt") (file "d/x.sls~") (file "d/.#x.sls")
+             (link "d/.#y.ss" "nowhere") (dir "d/z.ss"))
+           (lambda (dir) (relative dir (stray-files dir)))))
+
+(test-equal "every stray file is named, in order"
+  '("a/b.sch" "a/c.ss" "z.so")
+  (in-tree '((file "a/b.sch") (file "a/c.ss") (file "a/ok.sls") (file "z.so"))
+           (lambda (dir) (relative dir (stray-files dir)))))
 
 ;; --- the real tree ------------------------------------------------------------------
 
@@ -250,6 +350,10 @@
   (map (lambda (path) (cons path (first-datum path))) (sls-files "src")))
 
 (define library-names (map (lambda (entry) (form-name (cdr entry))) libraries))
+
+(test-equal "src/ holds no file Chez could load as a library but a .sls: no .ss, .scm, .sch, .so, .chezscheme.sls or .chezscheme.so"
+  '()
+  (stray-files "src"))
 
 (test-equal "src/ defines (chez-sqlite3 private require-threaded)"
   'defined
@@ -287,8 +391,6 @@
 ;; own source with eval: once as it is, once with each call (threaded?)
 ;; replaced by #f, and once for each version with each call
 ;; (scheme-version-number) replaced by that version's three numbers.
-
-(define refusal-marker "chez-sqlite3 needs a threaded Chez Scheme")
 
 (define refusal-form
   (let ((entry (find (lambda (entry) (equal? (form-name (cdr entry)) refusal-library))
@@ -340,27 +442,6 @@
       (fold-left + 0 (map (lambda (e) (if (equal? e call) 1 (calls-of call e))) x))
       0))
 
-(define (starts-with? prefix s)
-  (and (string? s)
-       (<= (string-length prefix) (string-length s))
-       (string=? prefix (substring s 0 (string-length prefix)))))
-
-;; expand-under : (U Any #f) (Listof Symbol) -> (U Symbol String)
-;; Evaluates FORM, a library form, under the fresh NAME: loaded, or
-;; refused-by-name for a syntax violation from chez-sqlite3 whose message
-;; starts with the marker, or else the text of what was raised.
-(define (expand-under form name)
-  (if (library-form? form)
-      (guard (e ((and (syntax-violation? e)
-                      (who-condition? e) (eq? (condition-who e) 'chez-sqlite3)
-                      (message-condition? e)
-                      (starts-with? refusal-marker (condition-message e)))
-                 'refused-by-name)
-                (#t (describe e)))
-        (eval (cons 'library (cons name (cddr form))) (interaction-environment))
-        'loaded)
-      'no-refusal-source))
-
 ;; expand-refusal : (U Any #f) (Listof Symbol) -> Any
 ;; Evaluates FORM, a library form, under the fresh NAME: loaded, or
 ;; (refused WHO MESSAGE) for a syntax violation, or else the text of what
@@ -384,12 +465,15 @@
 
 (test-equal "on this threaded Chez, the refusal lets its library load"
   'loaded
-  (expand-under refusal-form '(require-threaded as-it-is)))
+  (expand-refusal refusal-form '(require-threaded as-it-is)))
 
-(test-equal "where (threaded?) is #f, the refusal raises its message at expansion"
-  'refused-by-name
-  (expand-under (and refusal-form (as-nonthreaded refusal-form))
-                '(require-threaded as-nonthreaded)))
+;; The whole text, as written by hand: a message cut anywhere, or a line lost
+;; from it, fails.
+(test-equal "where (threaded?) is #f, the refusal raises its whole message at expansion"
+  '(refused chez-sqlite3
+            "chez-sqlite3 needs a threaded Chez Scheme, and (threaded?) is #f in this one. Chez builds threaded unless configured with --nothreads")
+  (expand-refusal (and refusal-form (as-nonthreaded refusal-form))
+                  '(require-threaded as-nonthreaded)))
 
 ;; The floor is Chez 10.4.0, threaded (ADR-0001), written in
 ;; packaging/floors.sexp. Each expected message is the whole text, naming the

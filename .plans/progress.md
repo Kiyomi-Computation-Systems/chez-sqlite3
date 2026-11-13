@@ -16,10 +16,16 @@ newest first.
   - **Brief D1 settled:** a threaded Chez is required (ADR-0001's amendment).
   - **Each test helper comes with its first consumer** (harness plan, amended).
   - **Three Sonnet agents** built the floors, `test-manifest`, and the verdict and counters
-    suites, in parallel. Their results were reproduced here.
+    suites, in parallel. Four, one and three of their results were reproduced here.
   - **Watched failing:** see [the log](test-harness-mutation-log.md). One agent mutation
     survived: an equivalent one.
-- **Open:** brief D1 to D7. D1 (threaded Chez) and D7 (the Mac's SQLite) are due in M1.
+  - **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced and fixed.
+    - The import scan read `.sls` only, and Chez loads a `.ss` first.
+    - The suites wrote stand-ins at fixed paths, so concurrent runs collided: 3 of 6 failed.
+    - A Sonnet agent fixed the test files. Its fixes were reproduced here, and 6 of 6
+      concurrent runs then passed.
+    - `TEST_TIMEOUT=0` is now refused, and the records that overstated are corrected.
+- **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs
 

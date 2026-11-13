@@ -78,7 +78,8 @@
   `(threaded?)` and the version answer otherwise, with rows built from `packaging/floors.sexp`
   (ADR-0008), and holds the import order.
 - **Rejected:** supporting both builds, with counters built on `ftype-locked-incr!` over foreign
-  memory. It would cost a second design and a second CI lane, and the common Chez builds,
-  Guix's and Homebrew's among them, are threaded.
+  memory. It would cost a second design, and a CI lane running every suite on a `--nothreads`
+  Chez rather than one checking a refusal. The common Chez builds, Guix's and Homebrew's among
+  them, are threaded.
 - **Consequence:** CI gains a lane on a `--nothreads` Chez in M0 slice 4, which runs a
   `check-nothreads` target, as chez-curl's does.

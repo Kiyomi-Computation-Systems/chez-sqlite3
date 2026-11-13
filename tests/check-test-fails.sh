@@ -34,7 +34,8 @@
 # compares the lines starting "suite-exit-status: ", and the floors case those
 # starting "check-floors: ".
 #
-# The copy is the working tree without .git and build/, and with the
+# The copy is the working tree without .git, build/ and .claude/ (Claude
+# Code's local state, which can hold whole worktrees), and with the
 # chez-srfi checkout, so make deps works there and nothing is fetched.
 # Nothing in the copy runs git. make deps relinks build/ in the copy. Its
 # src/ holds two of the tree's own libraries, whatever else the tree holds:
@@ -76,7 +77,7 @@ copy=$tmp/tree
 mkdir "$copy"
 for entry in "$root"/* "$root"/.[!.]* "$root"/..?*; do
   [ -e "$entry" ] || [ -L "$entry" ] || continue
-  case "$entry" in "$root/.git" | "$root/build") continue ;; esac
+  case "$entry" in "$root/.git" | "$root/build" | "$root/.claude") continue ;; esac
   cp -a "$entry" "$copy/" || { echo "check-test-fails: could not copy $entry" >&2; exit 2; }
 done
 # No real suite: the plant and the after-suite are the only two.

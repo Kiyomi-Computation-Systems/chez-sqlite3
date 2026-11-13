@@ -17,7 +17,9 @@
 ;;;     while there is none, so a release that bumps one alone fails.
 ;;;
 ;;; There is no check of git clone lines in README.org or docs/ yet: there
-;;; are no install instructions. They come with the first release.
+;;; are no install instructions. They come with the first release. Until a
+;;; check exists, a tripwire fails this suite on any line of README.org, or of
+;;; any file under docs/, that holds "git clone": the line would go unchecked.
 ;;;
 ;;; CHANGELOG.md is read as Keep a Changelog writes it: `# Changelog` first,
 ;;; then `## [Unreleased]`, then each release's `## [X.Y.Z] - YYYY-MM-DD`, the
@@ -37,6 +39,7 @@
 ;;; value here is #f.
 (import (rnrs)
         (srfi :64)
+        (only (chezscheme) directory-list file-directory?)
         (chez-sqlite3-testing))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -303,14 +306,57 @@
               (loop (cons line found))))))))
 
 ;; refusal : (-> Any) -> Any
-;; THUNK's value, or what it raised: its message and irritants, or 'no-message
-;; for a raise that has none.
+;; What THUNK raised: its message and irritants, or 'no-message for a raise
+;; that has none; or (no-raise VALUE) when it returned. A refusal row expects
+;; the first, so a THUNK that returns fails it, whatever it returned.
 (define (refusal thunk)
   (guard (e (#t (if (message-condition? e)
                     (list (condition-message e)
                           (if (irritants-condition? e) (condition-irritants e) '()))
                     'no-message)))
+    (list 'no-raise (thunk))))
+
+;; answer : (-> Any) -> Any
+;; THUNK's value, or (raised MESSAGE IRRITANTS) or (raised no-message) when it
+;; raised, so that no row expecting a value can be met by a raise.
+(define (answer thunk)
+  (guard (e (#t (if (message-condition? e)
+                    (list 'raised (condition-message e)
+                          (if (irritants-condition? e) (condition-irritants e) '()))
+                    '(raised no-message))))
     (thunk)))
+
+;; clone-lines : String -> (Listof String)
+;; The lines of README.org, and of each file under docs/, that hold "git
+;; clone", in the directory ROOT: "PATH:N: LINE", with PATH from ROOT, N the
+;; line's number from 1, and LINE whole. README.org must be there: it raises
+;; when it cannot be read. A docs/ that is absent holds nothing. Files in order,
+;; README.org first, then docs/ depth first, each directory sorted.
+(define (clone-lines root)
+  (apply append
+         (map (lambda (rel)
+                (let loop ((lines (file-lines (string-append root "/" rel))) (n 1) (found '()))
+                  (cond ((null? lines) (reverse found))
+                        ((contains? (car lines) "git clone")
+                         (loop (cdr lines) (+ n 1)
+                               (cons (string-append rel ":" (number->string n) ": " (car lines))
+                                     found)))
+                        (else (loop (cdr lines) (+ n 1) found)))))
+              (cons "README.org" (files-under root "docs")))))
+
+;; files-under : String String -> (Listof String)
+;; Every file under ROOT/REL, as a path from ROOT, depth first, each directory
+;; sorted; none when it is not a directory.
+(define (files-under root rel)
+  (if (file-directory? (string-append root "/" rel))
+      (apply append
+             (map (lambda (name)
+                    (let ((sub (string-append rel "/" name)))
+                      (if (file-directory? (string-append root "/" sub))
+                          (files-under root sub)
+                          (list sub))))
+                  (list-sort string<? (directory-list (string-append root "/" rel)))))
+      '()))
 
 (test-begin "manifest")
 
@@ -318,39 +364,39 @@
 ;; #f, which would hide why a file failed.
 (test-equal "Akku.manifest holds exactly one akku-package form"
   1
-  (refusal (lambda ()
+  (answer (lambda ()
              (length (filter (lambda (datum) (and (pair? datum) (eq? (car datum) 'akku-package)))
                              (read-data "Akku.manifest"))))))
 
 (test-equal "Akku.manifest's package is chez-sqlite3"
   "chez-sqlite3"
-  (refusal (lambda () (car (cadr (the-form 'akku-package "Akku.manifest"))))))
+  (answer (lambda () (car (cadr (the-form 'akku-package "Akku.manifest"))))))
 
 (test-equal "Akku.manifest's license is BSD-3-Clause, and given once"
   '((license "BSD-3-Clause"))
-  (refusal (lambda () (package-clauses 'license))))
+  (answer (lambda () (package-clauses 'license))))
 
 (test-equal "Akku.manifest has no depends clause"
   '()
-  (refusal (lambda () (package-clauses 'depends))))
+  (answer (lambda () (package-clauses 'depends))))
 
 (test-equal "Akku.manifest has no scripts clause"
   '()
-  (refusal (lambda () (package-clauses 'scripts))))
+  (answer (lambda () (package-clauses 'scripts))))
 
 (test-equal "Akku.manifest's depends/dev is exactly chez-srfi, in the range that names the pinned version"
   '((depends/dev ("chez-srfi" "^0.0.0-akku.181.7879b52")))
-  (refusal (lambda () (package-clauses 'depends/dev))))
+  (answer (lambda () (package-clauses 'depends/dev))))
 
 (test-equal "Akku.lock holds exactly one project, chez-srfi"
   '(((name "chez-srfi")))
-  (refusal (lambda () (map (lambda (project) (list (assq 'name project))) (lock-projects)))))
+  (answer (lambda () (map (lambda (project) (list (assq 'name project))) (lock-projects)))))
 
 ;; One url, and it holds the version. The expected value is the version the
 ;; pin names, so a lock and a manifest that drift together still fail.
 (test-equal "Akku.lock's chez-srfi url holds the version Akku.manifest asks for, and the pinned one"
   '((#t #t))
-  (refusal
+  (answer
    (lambda ()
      (map (lambda (url)
             (list (contains? url (manifest-version)) (contains? url "akku.181.7879b52")))
@@ -358,7 +404,7 @@
 
 (test-equal "Akku.lock's chez-srfi carries a sha256 of 64 hex digits"
   '(#t)
-  (refusal
+  (answer
    (lambda ()
      (map (lambda (project)
             (let ((sha (assq 'sha256 (cdr (assq 'content project)))))
@@ -492,19 +538,44 @@
 
 (test-equal "CHANGELOG.md starts with its title"
   "# Changelog"
-  (refusal (lambda () (car (file-lines "CHANGELOG.md")))))
+  (answer (lambda () (car (file-lines "CHANGELOG.md")))))
 
 (test-equal "CHANGELOG.md has [Unreleased] first, and its releases well formed, newest first"
   'well-formed
-  (refusal (lambda () (latest-release (file-lines "CHANGELOG.md")) 'well-formed)))
+  (answer (lambda () (latest-release (file-lines "CHANGELOG.md")) 'well-formed)))
 
 ;; The expected value is computed under a guard: SRFI-64 does not catch a
 ;; raise there. With no release yet, the version is 0.0.0.
 (test-equal "Akku.manifest's version is CHANGELOG.md's latest release, or 0.0.0 with none"
-  (refusal (lambda ()
+  (answer (lambda ()
              (let ((latest (latest-release (file-lines "CHANGELOG.md"))))
                (if (eq? latest 'none) "0.0.0" latest))))
-  (refusal package-version))
+  (answer package-version))
+
+;; --- git clone lines: a tripwire until a check of them exists ---------------------
+;; clone-lines is held on fixture trees first, so that a tripwire which never
+;; fires cannot pass the real one.
+
+(test-equal "clone-lines: a git clone line in README.org is named, with its file, number and whole text"
+  '("README.org:3:   $ git clone https://example.invalid/x.git")
+  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/readme"))))
+
+(test-equal "clone-lines: a git clone line in a file deep under docs/ is named the same way"
+  '("docs/guide/install.md:5:     git clone https://example.invalid/x.git")
+  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/docs"))))
+
+(test-equal "clone-lines: lines that mention git, a clone, or neither, are not clone lines"
+  '()
+  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/clean"))))
+
+(test-equal "clone-lines: with no README.org it raises, and does not pass for want of a file"
+  '("failed for ~a: ~(~a~)"
+    ("tests/fixtures/clone-lines/none/README.org" "No such file or directory"))
+  (refusal (lambda () (clone-lines "tests/fixtures/clone-lines/none"))))
+
+(test-equal "README.org and docs/ hold no git clone line: no clone-line check exists yet, so none may be written"
+  '()
+  (answer (lambda () (clone-lines "."))))
 
 (test-end "manifest")
 

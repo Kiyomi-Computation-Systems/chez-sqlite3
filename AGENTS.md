@@ -23,9 +23,9 @@
 
 ### Dependencies
 
-* SQLite (`libsqlite3`) ≥ 3.45.1 (ADR-0003), found and loaded at runtime
-  (ADR-0002)
-* Chez Scheme ≥ 10.4.0, threaded (ADR-0001)
+* SQLite (`libsqlite3`), found and loaded at runtime (ADR-0002), and Chez
+  Scheme, threaded (ADR-0001), each at or above its floor in
+  `packaging/floors.sexp`, the one place the floors are written (ADR-0008)
 * chez-srfi, vendored as a git submodule, for SRFI-64 in the tests only
 
 ### Guix development container

@@ -12,12 +12,16 @@
 ;;; problem, and a README with no "** Requirements" section or the wrong list
 ;;; in it. A file it cannot read does not stop it comparing the other.
 ;;;
+;;; It also fails when a .github/workflows directory exists beside the README:
+;;; the workflow rules come with CI, in M0 slice 4, and until then a workflow
+;;; would go unchecked.
+;;;
 ;;; It prints one line on a pass, to stdout, naming the files it read and the
 ;;; floors it found, or each problem and then a count of them on a failure, to
 ;;; stderr. It exits 0 or 1, never a count.
 (import (rnrs)
         (floors)
-        (only (chezscheme) display-condition))
+        (only (chezscheme) display-condition file-directory?))
 
 ;; describe : Any -> String
 (define (describe obj)
@@ -47,6 +51,16 @@
               (list (cadr f)))
           (if (eq? (car r) 'text) '() (list (cadr r)))))
 
+;; workflows-path : String -> String
+;; Where the workflows are: .github/workflows, in the directory the README at
+;; RPATH is in, the repository's root for README.org.
+(define (workflows-path rpath)
+  (let loop ((i (string-length rpath)))
+    (cond ((= i 0) ".github/workflows")
+          ((char=? (string-ref rpath (- i 1)) #\/)
+           (string-append (substring rpath 0 i) ".github/workflows"))
+          (else (loop (- i 1))))))
+
 ;; summary : String -> String
 ;; The floors in the file text FTEXT, which floors-problems accepts: "chez
 ;; 10.4.0, sqlite 3.45.1".
@@ -70,7 +84,9 @@
              (rpath (cadr args))
              (f (read-text fpath))
              (r (read-text rpath))
-             (found (problems fpath rpath f r)))
+             (wpath (workflows-path rpath))
+             (found (append (problems fpath rpath f r)
+                            (workflows-problems wpath (file-directory? wpath)))))
         (cond
           ((null? found)
            (say (current-output-port)

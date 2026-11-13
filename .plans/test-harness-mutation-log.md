@@ -10,9 +10,10 @@ without `.git` except where a case needs git. The working tree was never edited.
 checks are adapted from chez-curl's, and its logs are the model.
 
 Three Sonnet agents built the floors, `test-manifest`, and the suites for the verdict and the
-counters, in parallel, each on its own files. Their tables are summarised below. For each, at least
-three of their results were reproduced here through `scripts/guix-env`, from the copy's own
-launcher; every reproduction matched. The rest of the slice, and the mutations in the last
+counters, in parallel, each on its own files. Their tables are summarised below. Four of the floors
+agent's results were reproduced here, one of `test-manifest`'s and three of the suites agent's,
+through `scripts/guix-env` from the copy's own launcher; every reproduction matched. The slice's
+review reproduced thirteen more, all matching. The rest of the slice, and the mutations in the last
 section, were built and run here.
 
 ## How the red runs were made
@@ -174,3 +175,74 @@ lines that name each failure.
     refused) come with the floor check in M1;
   - the workflow rules come with CI, in slice 4;
   - a mutation of `require-threaded.sls` that refuses this Chez makes the suites die unnamed.
+
+## After the slice's review
+
+The read-only Opus review found no blocker, two major findings, and seven numbered minor ones;
+its summary said nine. It reproduced thirteen of the results above, and all matched. Its main
+findings were reproduced here before anything was fixed.
+
+- **Major: the import-order scan read only `.sls` files.** Chez's `(library-extensions)` here is
+  `.chezscheme.sls .ss .sls .scm .sch`, and it loads a `.ss` ahead of the `.sls` beside it.
+  Reproduced: a `counters.ss` beside `counters.sls`, without the refusal import, was the file
+  Chez loaded (`import: found source file "src/chez-sqlite3/private/counters.ss"`), and `make
+  test` ran 5, passed 5.
+- **Major: the suites wrote stand-ins instead of taking the shared helpers,** at fixed paths
+  under `build/`, against the slice's own rule that a helper comes with its first consumer.
+  Reproduced: of six `make test` runs, two at a time in one copy, three failed, each on a scratch
+  path the other was using.
+- **Minor, reproduced:**
+  - `TEST_TIMEOUT=0`, which GNU `timeout` reads as no limit, passed;
+  - the non-threaded refusal's message cut to its first words passed every suite.
+
+A Sonnet agent fixed the test files:
+- the helpers `capture-command`, the temporary directories and `run-until` joined
+  `(chez-sqlite3-testing)`, with chez-curl's tests for them, and the three suites use them;
+- a rule that `src/` holds no library file Chez could load but a plain `.sls`;
+- whole messages compared;
+- the dropped `.#`-link row restored;
+- a distinct no-raise sentinel in `test-manifest`;
+- tripwires: `check-floors` refuses while `.github/workflows` exists, and `test-manifest` refuses
+  a `git clone` line, until slice 4 and the first release write their rules.
+
+Some of its new rows were written after the code they test, and were watched failing through
+mutations only.
+
+**Baselines after the fixes:**
+- `make test` ran 5, passed 5, at 164, 60, 14, 79 and 50 passes;
+- six concurrent runs, two at a time, all passed;
+- `check-test-fails` (10 cases), `check-clean`, `check-guix` (83 host-side), `check-pins` and
+  `check-help` all passed.
+
+| Mutation | Guards | Change | Result |
+|---|---|---|---|
+| stray `.ss` | `src/` holds plain `.sls` files only | a `counters.ss` without the refusal import, beside `counters.sls` | `FAIL src/ holds no file Chez could load as a library but a .sls: …`. **Reproduced here.** |
+| stray, each other ending | the same | `.scm`, `.sch`, `.so`, `.chezscheme.sls`, `.chezscheme.so` | 1 failure each; `.chezscheme.sls` 2 |
+| the stray rule off | the per-ending rows | the ending test always false | 7 failures |
+| cut refusal message | the whole message | the message cut to its first words | `FAIL where (threaded?) is #f, the refusal raises its whole message at expansion`. **Reproduced here.** |
+| counters' messages cut | the whole message | each message shortened | 2 and 4 failures |
+| `lock-file?` without its existence test | the restored row | `(not (file-exists? path))` made `#t` | `FAIL the scan reads a .# link that resolves, which is no lock file`. **Reproduced here.** |
+| unquoted arguments | `capture-command` quotes | words joined unquoted | 9 failures |
+| a fixed directory | `capture-command`'s own directory | a fixed name | 3 failures, the two-thread row among them |
+| no removal | `call-with-temp-directory` removes | its after-thunk a no-op | 5 failures |
+| the absolute-path guard | `remove-temp-directory` refuses a relative path | the guard removed | 1 failure |
+| a workflow directory | the workflows tripwire | `.github/workflows/ci.yml` added | `check-floors: .github/workflows: it exists, but the workflow rules are not written yet (M0 slice 4)`. **Reproduced here.** |
+| the tripwire off | its rows | `workflows-problems` answers nothing | 3 failures |
+| a `git clone` line | the clone-line tripwire | `docs/install.md` with one | 1 failure |
+| the sentinel | a row that expects a raise | its thunk returns the expected value | the old `refusal` passed it; the new one fails it |
+| TT1 | `make test` refuses a bad `TEST_TIMEOUT` | the check removed | host-side 73/10: with 0 and 007, `make test` ran and passed, 0 meaning no limit; 1.5 and empty failed at the suite, not with the refusal. Written with the check, so this is its red run. |
+
+## Not covered, after the review
+
+- **The mutex's `critical-section`, and `native-counts` reading without the lock:** removing
+  either passed every suite, three runs of three (the review). An interrupt between taking the
+  mutex and winding, or a torn read, is not something a suite here can make happen on demand.
+- **`suite-exit-status`'s two `flush-output-port` calls:** removing both passed. They order the
+  runner's summary before the verdict's lines in a terminal, which no check reads.
+- **`run-until`'s wait in the counters' thread test is not mutated.** A wait that never ends would
+  run for its full two minutes.
+- **The stray rule reads names only,** so a `.so` that is a link to a directory is skipped.
+
+**The whole set rerun.** The 27 mutations of this slice's own checks, and TT1, were rerun on
+the fixed tree. All 28 applied, and each exited non-zero with the failures recorded above. G1
+now reads 82/1, and the host-side tests have grown from 70 to 83 checks.

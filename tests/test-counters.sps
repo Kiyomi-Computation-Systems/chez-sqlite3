@@ -11,7 +11,7 @@
 ;;; irritants, against a no-raise sentinel.
 (import (rnrs)
         (srfi :64)
-        (only (chezscheme) fork-thread make-mutex with-mutex real-time sleep make-time
+        (only (chezscheme) fork-thread make-mutex with-mutex sleep make-time
               library-exports)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters))
@@ -35,13 +35,19 @@
         (newline)))))
 
 ;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT) for
-;; any other raise, or (no-raise VALUE).
+;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
+;; for any other raise, or (no-raise VALUE).
 (define (raised thunk)
-  (guard (e ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+  (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
+                  (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-message e)
+                   (condition-irritants e)))
             (#t (list 'other (describe e))))
     (list 'no-raise (thunk))))
+
+;; The two messages, whole, written here and not read from the library.
+(define not-a-kind "not a kind of native object chez-sqlite3 counts")
+(define double-free "more objects of this kind freed than made: a double free")
 
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 
@@ -86,10 +92,10 @@
     (list one two (native-counts))))
 
 (test-equal "count-up! and count-down! refuse a symbol that is no kind, as an assertion violation, and count nothing"
-  (list '(assertion-violation count-up! (blocks))
-        '(assertion-violation count-down! (blocks))
-        '(assertion-violation count-up! ("block"))
-        '(assertion-violation count-down! (conn))
+  (list (list 'assertion-violation 'count-up! not-a-kind '(blocks))
+        (list 'assertion-violation 'count-down! not-a-kind '(blocks))
+        (list 'assertion-violation 'count-up! not-a-kind '("block"))
+        (list 'assertion-violation 'count-down! not-a-kind '(conn))
         zero-counts)
   (let* ((a (raised (lambda () (count-up! 'blocks))))
          (b (raised (lambda () (count-down! 'blocks))))
@@ -98,7 +104,7 @@
     (list a b c d (native-counts))))
 
 (test-equal "a count-down below zero, a double free, raises an assertion violation and leaves the count at zero"
-  (list '(assertion-violation count-down! (statement)) zero-counts
+  (list (list 'assertion-violation 'count-down! double-free '(statement)) zero-counts
         (counts-with '((statement . 1))) zero-counts)
   (let* ((refused (raised (lambda () (count-down! 'statement))))
          (after (native-counts))
@@ -109,8 +115,8 @@
 ;; to some kind's slot would take that count to zero, and still raise at the
 ;; double free; the count held at one gives it away.
 (test-equal "count-down! and count-up! of a symbol that is no kind leave every count where it stood"
-  (list '(assertion-violation count-down! (blocks))
-        '(assertion-violation count-up! (blocks))
+  (list (list 'assertion-violation 'count-down! not-a-kind '(blocks))
+        (list 'assertion-violation 'count-up! not-a-kind '(blocks))
         (counts-with '((block . 1) (connection . 1) (statement . 1))))
   (with-counts '(block connection statement)
     (lambda ()
@@ -130,7 +136,7 @@
        (list during (native-counts))))
    (test-equal (string-append "count-down! of " (symbol->string kind)
                               " at zero raises, a double free, and leaves every count at zero")
-     (list (list 'assertion-violation 'count-down! (list kind)) zero-counts)
+     (list (list 'assertion-violation 'count-down! double-free (list kind)) zero-counts)
      (let ((r (raised (lambda () (count-down! kind)))))
        (list r (native-counts)))))
  '(block connection statement))
@@ -144,8 +150,8 @@
 
 ;; run-threads : (Symbol -> Void) -> (Listof Any)
 ;; THREAD-COUNT threads each call STEP on connection STEPS times. Each thread's
-;; answer is no-raise or what it raised; the wait is bounded, at 120 s, and a
-;; thread that never answered is never-ran.
+;; answer is no-raise or what it raised; the wait is bounded, at 120000 steps of
+;; 1 ms or more (run-until), and a thread that never answered is never-ran.
 (define (run-threads step)
   (let ((mx (make-mutex)) (results (make-vector thread-count 'never-ran)))
     (do ((i 0 (+ i 1))) ((= i thread-count))
@@ -156,17 +162,19 @@
                       (do ((n 0 (+ n 1))) ((= n steps)) (step 'connection))
                       'no-raise)))
              (with-mutex mx (vector-set! results i r)))))))
-    (let ((deadline (+ (real-time) 120000)))
-      (let wait ()
-        (cond ((with-mutex mx (not (memq 'never-ran (vector->list results)))) #t)
-              ((> (real-time) deadline) #f)
-              (else (sleep (make-time 'time-duration 1000000 0)) (wait)))))
+    ;; At most 120000 steps of 1 ms or more each. Whether it ended in time or
+    ;; not, a thread that never answered stays never-ran in the answer.
+    (run-until (lambda () (sleep (make-time 'time-duration 1000000 0)))
+               (lambda () (with-mutex mx (not (memq 'never-ran (vector->list results)))))
+               120000)
     (with-mutex mx (vector->list results))))
 
 (test-equal "the mutex: 8 threads count connection up 20000 times each, then down as often, with no raise, and the count is 160000 between and zero after"
   (list (repeat thread-count 'no-raise) (* thread-count steps)
         (repeat thread-count 'no-raise) zero-counts)
-  ;; Whatever happens, the count is lowered again by what this raised.
+  ;; Nothing here lowers a count the ups raised and the downs did not: if a
+  ;; thread raises, the count stays above zero, this row fails, and so does
+  ;; the suite, which exits through suite-exit-status.
   (let* ((ups (run-threads count-up!))
          (between (cdr (assq 'connection (native-counts))))
          (downs (run-threads count-down!)))

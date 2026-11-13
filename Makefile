@@ -32,7 +32,8 @@ LIBDIRS := src:tests:$(SRFI_LIBS)
 SUITES := $(sort $(wildcard tests/test-*.sps))
 
 # Seconds a suite may run before timeout kills it and make test names it
-# HUNG.
+# HUNG. make test refuses any value but a positive whole number: GNU timeout
+# reads 0 as no limit at all.
 TEST_TIMEOUT ?= 300
 
 # GNU timeout. Homebrew's coreutils installs it as gtimeout on macOS.
@@ -178,6 +179,11 @@ check-pins: ## Fail unless Akku.lock, the gitlink and the checkout name one chez
 # checks come first: check-help, check-suites and check-floors each stop it.
 test: deps check-help check-suites check-floors ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
+	@case '$(TEST_TIMEOUT)' in \
+	  '' | *[!0-9]* | 0*) \
+	    echo "test: TEST_TIMEOUT is '$(TEST_TIMEOUT)', not a positive whole number of seconds" >&2; \
+	    exit 2 ;; \
+	esac
 	@if [ -z "$(SUITES)" ]; then \
 	  echo "test: no suites: nothing matches tests/test-*.sps" >&2; \
 	  exit 1; \

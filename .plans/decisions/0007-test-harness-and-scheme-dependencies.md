@@ -1,6 +1,7 @@
 # ADR-0007: Tests use SRFI-64 from a vendored chez-srfi pinned in Akku.lock, and the suite rules are checks
 
-- **Status:** Accepted (the harness plan, 2026-11-13)
+- **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
+  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built))
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3's suites and Scheme dependencies
 - **Related:** chez-curl ADR-0015, which this copies · [ADR-0006](0006-pinned-guix-container.md)
@@ -61,3 +62,22 @@ check. AGENTS.md carries those rules here.
   together.
 - **A suite can't pass silently** by forgetting its exit line, running no tests, hanging or
   leaking.
+
+## Amendment, 2026-11-13: what M0 slice 2 built
+
+- **The leaks plant raises a count itself.** Decision 4's "leaks a counted block" is, for now, a
+  suite that calls `count-up! 'statement` and never lowers it. It proves the path from the counts
+  through `suite-exit-status` to `make test`, not that anything counts: no library makes a native
+  object yet. M1, with the first constructor, replaces it with a suite that leaks through that
+  constructor. Until then, "a suite can't pass silently by leaking" holds only for objects whose
+  constructors count.
+- **`make test` refuses a `TEST_TIMEOUT` that isn't a positive whole number,** before any suite
+  runs. GNU `timeout` reads 0 as no limit, so `TEST_TIMEOUT=0` would have removed the bound
+  silently. The host-side tests hold the default to a positive whole number and the refusal to
+  0, a leading zero, a fraction and empty.
+- **Every test helper comes with its first consumer,** and a suite uses the shared helper rather
+  than a stand-in of its own. The slice's review found stand-ins writing fixed paths under
+  `build/`, so two `make test` runs in one tree collided. Reproduced: three of six concurrent runs
+  failed.
+- **The copies `check-test-fails` and the host-side tests make leave out `.claude/`,** as
+  `check-clean`'s does. It is Claude Code's local state, and can hold whole worktrees.

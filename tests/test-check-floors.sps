@@ -18,7 +18,9 @@
 ;;;   - the answers (floors) gives a suite: a floor by name, as text and as
 ;;;     numbers, and the checked-in file.
 ;;;
-;;; The CI rules (the workflows) arrive with CI, in slice 4.
+;;; The CI rules (the workflows) arrive with CI, in slice 4. Until then a
+;;; .github/workflows beside the README is a failure, a tripwire with a pure
+;;; row (workflows-problems) and a fixture row.
 ;;;
 ;;; The program runs under the CHEZ the container exports: without it nothing
 ;;; below can run, which fails here, by name, and never skips. Each computation
@@ -516,24 +518,13 @@
 
 ;; --- the program -----------------------------------------------------------------------
 
-(define scratch "build/check-floors-scratch")
-
 ;; run : (Listof String) -> (U (List Integer String String) (List 'raised String))
 ;; tests/check-floors.sps in a fresh Chez with ARGS: its exit status, stdout
-;; and stderr. The arguments are paths of this suite's own, with no quote or
-;; space in them.
+;; and stderr. capture-command makes a directory of its own for each call, and
+;; quotes each argument, so two runs of this suite at once share no file.
 (define (run args)
   (guard (e (#t (list 'raised (describe e))))
-    (let* ((out (string-append scratch "/out"))
-           (err (string-append scratch "/err"))
-           (status
-            (begin
-              (system (string-append "mkdir -p " scratch))
-              (system (string-append
-                       chez " --libdirs tests --program " program
-                       (apply string-append (map (lambda (a) (string-append " " a)) args))
-                       " > " out " 2> " err)))))
-      (list status (file-text out) (file-text err)))))
+    (capture-command (append (list chez "--libdirs" "tests" "--program" program) args))))
 
 ;; at : String String -> String
 ;; The path the program names for FILE in the fixture directory CASE.
@@ -554,6 +545,11 @@
          (apply string-append
                 (map (lambda (p) (string-append "check-floors: " p "\n")) problems))
          "check-floors: FAILED (problems: " (number->string count) ")\n")))
+
+;; workflows-refusal : String -> String
+;; The problem for a workflow directory at PATH, as the program prints it.
+(define (workflows-refusal path)
+  (string-append path ": it exists, but the workflow rules are not written yet (M0 slice 4)"))
 
 (define (cannot-read path)
   (string-append path ": it cannot be read: Exception in open-file-input-port: failed for "
@@ -609,6 +605,11 @@
          "a README and no floors file beside it"
          (both "no-floors")
          (refused 1 (cannot-read (at "no-floors" "floors.sexp"))))
+   ;; The workflow directory is looked for beside the README, as .github/workflows.
+   (list "workflows"
+         "a legal floors file and README, and a .github/workflows beside the README: a tripwire until slice 4 writes the workflow rules"
+         (both "workflows")
+         (refused 1 (workflows-refusal (at "workflows" ".github/workflows"))))
    (list "no-arguments" "no arguments at all" '() usage)
    (list "one-argument" "one argument" (list (at "legal" "floors.sexp")) usage)
    (list "three-arguments" "three arguments"
@@ -621,6 +622,17 @@
      (list 'returned (cadddr row))
      (outcome (lambda () (run (caddr row))))))
  cases)
+
+(test-equal "workflows-problems: a directory that exists is a problem, naming it; one that does not is none"
+  (list 'returned
+        (list (workflows-refusal "d/.github/workflows") '()))
+  (outcome (lambda ()
+             (list (car (workflows-problems "d/.github/workflows" #t))
+                   (workflows-problems "d/.github/workflows" #f)))))
+
+(test-equal "workflows-problems: exactly one problem when the directory exists"
+  '(returned 1)
+  (outcome (lambda () (length (workflows-problems "x" #t)))))
 
 (test-equal "program: a floors file and a README both missing are both named, the floors file first"
   (list 'returned
