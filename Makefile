@@ -40,7 +40,7 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-test-fails clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -175,8 +175,8 @@ check-pins: ## Fail unless Akku.lock, the gitlink and the checkout name one chez
 # failed or hung, or if none matched. --foreground keeps a suite in make's
 # process group, so Ctrl-C at a terminal reaches it at once, and does not
 # wait out the timeout. `make check-test-fails` proves the loop fails. The
-# checks come first: check-help and check-suites each stop it.
-test: deps check-help check-suites ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
+# checks come first: check-help, check-suites and check-floors each stop it.
+test: deps check-help check-suites check-floors ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@if [ -z "$(SUITES)" ]; then \
 	  echo "test: no suites: nothing matches tests/test-*.sps" >&2; \
@@ -206,6 +206,22 @@ test: deps check-help check-suites ## Run every tests/test-*.sps under timeout; 
 check-suites: deps ## Fail unless every tests/test-*.sps ends with the shared exit form
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs $(LIBDIRS) --program tests/check-suites.sps $(SUITES)
+
+# Holds README.org's Requirements section to packaging/floors.sexp, the one
+# file that writes the floors (ADR-0008, tests/check-floors.sps). The workflow
+# rules come with CI, in M0 slice 4. It needs no deps: (floors) imports only
+# (rnrs) and a few of Chez's own bindings.
+check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org
+
+# Plants bad suites, a leaking one among them, and a README that disagrees
+# with the floors file, one at a time, in a copy of the tree, and requires
+# make test to fail on each by name. tests/check-test-fails.sh lists the
+# plants. The copy has no .git, so nothing in it runs git.
+check-test-fails: ## Plant bad suites, none at all and a stale README, in a copy; make test must fail on each, by name
+	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
+	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' sh tests/check-test-fails.sh
 
 # Removes build/, and nothing else: make deps' links (the links, never what
 # they name, since rm does not follow a link) and every check's scratch. The

@@ -25,6 +25,7 @@
 
 * SQLite (`libsqlite3`) ≥ 3.45.1 (ADR-0003), found and loaded at runtime
   (ADR-0002)
+* Chez Scheme ≥ 10.4.0, threaded (ADR-0001)
 * chez-srfi, vendored as a git submodule, for SRFI-64 in the tests only
 
 ### Guix development container

@@ -1,0 +1,6 @@
+* A title
+
+** Requirements
+
+- Chez Scheme 10.8.0 or later, built with threads
+- SQLite 8.1.2 or later

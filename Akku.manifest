@@ -12,7 +12,7 @@
 ;; approval on every install until the package is vetted in the index, and
 ;; the prompt can simply be declined, after which no script runs and the
 ;; install still reports success. There is nothing to build, since no C is
-;; compiled (ADR-0001). See chez-cmark-gfm's ADR-0017.
+;; compiled (ADR-0001). See chez-cmark-gfm ADR-0017.
 ;;
 ;; The version stays 0.0.0 until the first release; test-manifest holds it to
 ;; CHANGELOG.md.

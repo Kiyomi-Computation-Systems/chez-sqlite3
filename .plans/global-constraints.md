@@ -10,8 +10,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   and no abstraction kept only so Windows could come later (ADR-0004).
 - **CI is Linux only.** macOS is checked by hand on the maintainer's Mac, and any variadic binding
   is run there whenever it changes (ADR-0004, ADR-0001).
-- **SQLite ≥ 3.45.1 and Chez ≥ 10.4.0.** Whether Chez must be threaded is brief D1 (ADR-0003,
-  ADR-0001).
+- **SQLite ≥ 3.45.1, and Chez ≥ 10.4.0, threaded.** `(chez-sqlite3 private require-threaded)`
+  refuses any other Chez by name at import, and every library under `src/` imports it first
+  (ADR-0003, ADR-0001 amended).
 - **The floors are written once, in `packaging/floors.sexp`.** README.org's Requirements and every
   workflow are held to it by `make check-floors`. CI reads floors through `scripts/ci/floor.sh` and
   writes none. The code is held to the file by behaviour: the floor itself is accepted and the

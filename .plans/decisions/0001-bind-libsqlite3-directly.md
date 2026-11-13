@@ -1,6 +1,7 @@
 # ADR-0001: Bind libsqlite3 directly, with no C shim; the Chez floor is 10.4.0
 
-- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3a.
+- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3a. Amended
+  2026-11-13: a threaded Chez is required ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
@@ -43,8 +44,7 @@
    dependency. The container and CI provide one (ADR-0006).
 4. **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are passed as pointer-width integers,** −1 and 0,
    never as Scheme procedures.
-5. **Chez ≥ 10.4.0.** Whether the Chez must be threaded is brief D1. M1 settles it, as an
-   amendment to this record.
+5. **Chez ≥ 10.4.0, threaded** ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
 
 ### Rejected
 
@@ -65,3 +65,20 @@
   measured this for `curl_easy_setopt`. There is no macOS CI (AGENTS.md), so the binding is run
   on the maintainer's Mac whenever it changes (M4).
 - **Changing the Chez floor** follows ADR-0008.
+
+## Amendment, 2026-11-13: a threaded Chez is required
+
+- **Settles:** brief D1. The maintainer chose on 2026-11-13, when M0 slice 2 needed the answer.
+- **Why then:** the counters (ADR-0005) guard their counts with a mutex. chez-libuv measured that
+  on a `--nothreads` Chez, a library importing `make-mutex` dies at import with a bare "missing
+  import". Each connection's owning thread (brief §3c) needs `get-thread-id` too.
+- **Decision:** `(chez-sqlite3 private require-threaded)`, copied from chez-curl, refuses a
+  non-threaded Chez, and one older than 10.4.0, by name, while it is being expanded. Every
+  library under `src/` imports it first. `tests/test-require-threaded.sps` expands copies in which
+  `(threaded?)` and the version answer otherwise, with rows built from `packaging/floors.sexp`
+  (ADR-0008), and holds the import order.
+- **Rejected:** supporting both builds, with counters built on `ftype-locked-incr!` over foreign
+  memory. It would cost a second design and a second CI lane, and the common Chez builds,
+  Guix's and Homebrew's among them, are threaded.
+- **Consequence:** CI gains a lane on a `--nothreads` Chez in M0 slice 4, which runs a
+  `check-nothreads` target, as chez-curl's does.

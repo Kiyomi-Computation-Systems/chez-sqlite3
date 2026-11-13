@@ -186,11 +186,14 @@ else
   ok "no-git"
 fi
 
-# Assertion 9: the Makefile's own checks pass in here too. M0 slice 2 adds
-# `test`, which runs every suite (ADR-0007). check-pins is not one of them:
-# it needs git, so it runs on the host and in CI.
+# Assertion 9: the Makefile's own checks pass in here too: check-help, and
+# test, which runs every suite (ADR-0007). check-pins is not one of them: it
+# needs git, so it runs on the host and in CI.
 if ! make --no-print-directory check-help; then
   bad "check-help"
+fi
+if ! make --no-print-directory test; then
+  bad "test"
 fi
 
 if [ "$fail" -eq 0 ]; then

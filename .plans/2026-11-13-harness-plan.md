@@ -1,7 +1,8 @@
 # chez-sqlite3 harness plan: what M0 copies from chez-curl
 
 Date: 2026-11-13
-Status: draft, for the maintainer's review.
+Status: approved 2026-11-13. Amended in M0 slice 2: each test helper comes with its first
+consumer, a threaded Chez is required (brief D1), and the floors' CI rules wait for CI.
 Source: chez-curl at `79c6ced` (`main`), surveyed read-only. Every path below is chez-curl's
 unless it says otherwise.
 Brief: [the project brief](2026-11-13-chez-sqlite3-project-brief.md). The maintainer settled
@@ -21,9 +22,9 @@ library code; the rest arrives with the code it checks (§4).
 | `make test`: every suite runs after a failure, each under `timeout --foreground`, exit 124 reported as HUNG, a summary line, no suites is an error | `Makefile` (`test`) | The prerequisites shrink to `deps check-help check-suites check-floors`. |
 | SRFI-64: `vendor/chez-srfi` at `7879b52`, `Akku.manifest` (`depends/dev` only, no scripts), `Akku.lock`, `make deps` (never fetches), `make check-pins` | the same paths | chez-srfi only, with no jsonparse or byte-machine. |
 | `check-suites`, `check-test-fails`, `clean`, `check-clean` | `tests/check-suites.sps`, `tests/check-test-fails.sh`, `tests/check-clean.sh` | The plants we keep: `fails`, `no-tests`, `hangs`, `exit-line`, `early-exit`, `nested-exit`, `empty`, `leaks`, `floors`, `no-suites`. `seam` arrives with `check-seam` (§4). |
-| The test helper library, as `tests/chez-sqlite3-testing.sls` | `tests/curl-testing.sls`, its first group: `suite-exit-form`, `suite-exit-status`, `capture-command`, temporary directories, `run-until`, `describe` | About a fifth of it. The Node origin, wire probe and TLS helpers stay behind. Its suite comes with it. |
+| The test helper library, as `tests/chez-sqlite3-testing.sls` | `tests/curl-testing.sls`: `suite-exit-form`, `suite-exit-status`, `describe` | Each other helper (`capture-command`, temporary directories, `run-until`) joins with the suite that first needs it, as chez-curl held its origin helpers back until the origin existed. A helper with no consumer can't be seen to fail. The Node origin, wire probe and TLS helpers stay behind. Its suite comes with it. |
 | The counters, as `(chez-sqlite3 private counters)` | `src/curl/private/counters.sls` | Three kinds: `block` (our `foreign-alloc`), `connection`, `statement`. Same mutex inside `critical-section`, no reset, and a raise on a count below zero. `suite-exit-status` fails a suite with any nonzero count. |
-| Floors in one file: `packaging/floors.sexp`, `scripts/ci/floor.sh`, `make check-floors`, `tests/floors.sls` | the same paths | `((chez "10.4.0") (sqlite "3.45.1"))`. README.org's `** Requirements` and every workflow are held to it. |
+| Floors in one file: `packaging/floors.sexp`, `scripts/ci/floor.sh`, `make check-floors`, `tests/floors.sls` | the same paths | `((chez "10.4.0") (sqlite "3.45.1"))`. README.org's `** Requirements` is held to it from slice 2. The workflow rules and `floor.sh` come with CI, in slice 4. |
 | `test-manifest` | `tests/test-manifest.sps` | Our package, chez-srfi as the only dev dependency, the version against CHANGELOG.md. |
 | The memory gate: `test-memory`, `check-memory-gate`, `memory-plant-leak.sps`, `memory-plant-overrun.sps` | `Makefile`, `tests/check-memory-gate.sh` | §3. |
 | CI: Chez built from the pinned release tarball and cached with separate restore and save steps; one fail-closed package list; versions reported; actions pinned to commit SHAs | `.github/workflows/ci.yml`, `scripts/ci/build-chez.sh`, `scripts/ci/check-action-pins.sh`, `packaging/debian-prereqs.txt` | Two jobs in M0, `main` and `memory`. The package list is `build-essential`, `ca-certificates`, `libsqlite3-dev` (for `sqlite3.h`) and `valgrind`. |
@@ -36,8 +37,6 @@ library code; the rest arrives with the code it checks (§4).
 - **What only libcurl needed:** the drift guard (`test-drift`, `known-*.sexp`),
   `check-variadic`, the GnuTLS lane, `CURL_SSL_BACKEND`, `stall-getaddrinfo.c`, the engine
   suites, and the two-family half of `check-seam`.
-- **`check-nothreads` and the `--nothreads` Chez build,** until brief D1 says a threaded Chez
-  is required.
 - **Memory shards** (`MEMORY_SHARD`, `MEMORY_SUITES_1`/`_2`, sabotage group n). We add them when
   the gate gets slow, as chez-curl did in M8.
 - **The Guix suppression** (`tests/guix-glibc-locpath.supp`, sabotage group d). Its leak came
@@ -115,12 +114,18 @@ mutation log in the newer format (Guards, Mutation, Result, Clean rerun).
    to a newer pin. Then the launcher, `enter`, the self-test, `require-tools`, `help`,
    `check-help`, `check-guix`, and `.gitignore`.
 2. **The test harness.** chez-srfi, Akku, `deps`, `check-pins`, the testing library and its
-   suite, the counters, `test`, `check-suites`, `check-test-fails`, `clean`, `check-clean`,
-   floors and `check-floors`, `test-manifest`, CHANGELOG.md, README.org's Requirements.
+   suite, the counters, `require-threaded` and its suite (brief D1, settled), `test`,
+   `check-suites`, `check-test-fails`, `clean`, `check-clean`, floors and `check-floors`,
+   `test-manifest`, CHANGELOG.md, README.org's Requirements. The host-side tests that need
+   `make test` (chez-curl's M2 and its `TIMEOUT` fallback) join `tests/guix-env-launcher.sh`, and
+   the self-test runs `make test`. `test-manifest`'s checks of install instructions wait for
+   the first release, which writes them.
 3. **The memory gate.** Measure first: Valgrind on Chez in the container, loading
    libsqlite3 and opening and closing a database through bare FFI, with no suppression. Then
    `test-memory`, the plants and `check-memory-gate`.
-4. **CI.** `build-chez.sh`, `check-action-pins.sh`, `floor.sh`, the package list, the `main`
-   and `memory` jobs. The first run records the runner's SQLite version and compile options.
+4. **CI.** `build-chez.sh` (with `--nothreads`), `check-action-pins.sh`, `floor.sh`, the package
+   list, and the `main`, `memory` and `nothreads` jobs, the last running `check-nothreads`
+   (ADR-0001's amendment). `check-floors` gains the workflow rules. The first run records the
+   runner's SQLite version and compile options.
 
 M0 ends with a read-only adversarial review, on Opus, of the slices and of this plan.

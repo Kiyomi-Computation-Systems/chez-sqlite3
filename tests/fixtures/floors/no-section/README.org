@@ -1,0 +1,6 @@
+* A title
+
+** Status
+
+- Chez Scheme 10.9.1 or later, built with threads
+- SQLite 8.1.2 or later

@@ -8,9 +8,17 @@ newest first.
 
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
 - **M0 slice 1, the container,** merged as PR #2.
-- **M0 slice 2, the test harness,** is open on `m0-slice-2-test-harness` (harness plan §6). It
-  brings each test helper with its first consumer, so its testing library is the shared exit
-  verdict and the counters.
+- **M0 slice 2, the test harness,** is built on `m0-slice-2-test-harness`, waiting for its review:
+  - **Built:** chez-srfi pinned three ways and checked by `check-pins`; the suite loop,
+    `check-suites`, `check-test-fails`, `clean` and `check-clean`; the verdict and the counters;
+    `require-threaded`; the floors, `check-floors` and README.org's Requirements;
+    `test-manifest`; and the CHANGELOG.
+  - **Brief D1 settled:** a threaded Chez is required (ADR-0001's amendment).
+  - **Each test helper comes with its first consumer** (harness plan, amended).
+  - **Three Sonnet agents** built the floors, `test-manifest`, and the verdict and counters
+    suites, in parallel. Their results were reproduced here.
+  - **Watched failing:** see [the log](test-harness-mutation-log.md). One agent mutation
+    survived: an equivalent one.
 - **Open:** brief D1 to D7. D1 (threaded Chez) and D7 (the Mac's SQLite) are due in M1.
 
 ## Close-outs
@@ -20,7 +28,7 @@ newest first.
 - **Measured first:** chez-curl's Guix pin gives Chez 10.4.0, SQLite 3.53.1 with `sqlite3.h`,
   gcc 16.2.0 and Valgrind 3.27.0, so the pin is kept ([research/guix-pin/](research/guix-pin/)).
   Two findings came with it:
-  - the `sqlite3` command carries its own SQLite, which had led the brief to record the
+  - Guix's `sqlite3` command carries its own SQLite, which had led the brief to record the
     command's options as the library's;
   - AGENTS.md's inherited evaluation-order rule was wrong on this Chez
     ([research/evaluation-order/](research/evaluation-order/)).
