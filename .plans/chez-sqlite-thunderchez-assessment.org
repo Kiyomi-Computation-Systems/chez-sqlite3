@@ -1,0 +1,300 @@
+#+TITLE: Chez Scheme SQLite: Thunderchez Assessment and Proposed Approach
+#+AUTHOR: Codex
+#+DATE: 2026-11-10
+#+OPTIONS: toc:2
+
+* Executive summary
+
+SQLite is a practical choice for a Chez Scheme application, but Thunderchez's
+=sqlite3.sls= should be treated as useful 2019-era source material, not as a
+drop-in cross-platform dependency.  The recommended approach is a small,
+project-owned Chez library based on its good core ideas, with a controlled
+public API and a private FFI layer.
+
+We should not import Thunderchez's public =(sqlite3)= library and try to patch
+around it.  Its global library name, broad bundled dependency tree, untested
+SQLite surface, and lifecycle defects would remain part of our application
+boundary.
+
+* Scope and current state
+
+** Chez Scheme
+
+Chez Scheme has a mature C FFI: shared objects are loaded with
+=load-shared-object= and C functions can be represented with
+=foreign-procedure=.  SQLite is not bundled with Chez, but its stable C ABI is
+a good fit for that FFI.
+
+- Chez FFI documentation: https://cisco.github.io/ChezScheme/csug10.3.0/foreign.html
+- Chez 10.4.1 machine types: https://cisco.github.io/ChezScheme/release_notes/v10.4.1/release_notes.html
+
+** R6RS portability
+
+R6RS itself specifies neither a database API nor a foreign-function interface.
+Consequently, a public R6RS-shaped library can be portable at the Scheme API
+layer, but its SQLite backend must be implementation-specific.  This document
+addresses a Chez backend.
+
+* What Thunderchez's SQLite binding already does well
+
+Source: https://github.com/ovenpasta/thunderchez/blob/trunk/sqlite3.sls
+
+The binding offers a useful foundation for conventional embedded-database work:
+
+- Opens a database and prepares SQL with =sqlite3_prepare_v2=.
+- Binds zero-based positional parameters and =:named= parameters.
+- Copies Scheme strings as UTF-8 and bytevectors as blobs using
+  =SQLITE_TRANSIENT=, avoiding borrowed-input lifetime problems.
+- Converts result values to 64-bit integers, flonums, UTF-8 strings,
+  bytevectors, booleans inferred from declared type names, and a distinct
+  =(sql-null)= object.
+- Provides convenient =execute=, =update=, =first-result=, =first-row=,
+  =fold-row=, =for-each-row=, and =map-row= operations.
+- Implements a =with-transaction= helper using deferred, immediate, or
+  exclusive transactions.
+- Exposes basic busy-timeout, interruption, and database-version operations.
+
+This is enough to support a clean high-level application API after hardening.
+
+* Audit findings
+
+** Maintenance and test status
+
+The =sqlite3.sls= file's last change was 2019-04-11.  The repository had
+newer non-SQLite updates, but its current recursive tree contains no
+SQLite-specific test or example files.
+
+- File history: https://api.github.com/repos/ovenpasta/thunderchez/commits?path=sqlite3.sls&per_page=100
+- Repository tree: https://api.github.com/repos/ovenpasta/thunderchez/git/trees/trunk?recursive=1
+
+This does not make the code unusable, but it means that contemporary Chez,
+current macOS, current Linux distributions, and SQLite behavior have not been
+demonstrated by the project.
+
+** macOS loader defect
+
+The source loads =sqlite3.dll= for Windows and =libsqlite3.so.0= for every
+other platform.  That means macOS takes the Linux path and fails to find the
+library.
+
+On the current Mac, =/usr/lib/libsqlite3.dylib= dynamically loads successfully
+and reports SQLite 3.51.0.  The Xcode SDK identifies that same install name.
+
+** Foreign-memory leaks and failed-open cleanup
+
+=open-database= and =prepare= allocate C out-parameter storage with
+=foreign-alloc=, read the resulting pointer, and never call =foreign-free=.
+The allocation is small but repeats once per connection and prepared statement.
+
+SQLite can return a database handle even when an open operation reports an
+error; it must still be closed.  The current code raises an error without
+closing such a handle.
+
+** Broken database finalization
+
+The database path of =finalize!= has two correctness problems:
+
+- It does not set the database record's pointer to =#f= after a successful
+  =sqlite3_close=, leaving a stale, use-after-close handle.
+- Its "finalize all statements" loop uses =or= on SQLite return codes.  In
+  Scheme, =0= is true, so the loop stops after the first successful statement
+  finalization and never reaches =sqlite3_close=.
+
+All connections and statements need deterministic closure and clear invalid
+handle behavior.  Automatic GC finalizers may be a best-effort fallback, but
+they should not replace lexical, explicit resource management.
+
+** Incorrect 64-bit declarations
+
+The binding declares these SQLite =sqlite3_int64= results as C =int=:
+
+- =sqlite3_last_insert_rowid=
+- =sqlite3_memory_used=
+- =sqlite3_memory_highwater=
+
+They must use Chez's =integer-64= FFI type.  In particular,
+=sqlite3_last_insert_rowid= is a signed 64-bit rowid and will truncate values
+outside a 32-bit range in the current binding.
+
+- SQLite rowid documentation: https://www.sqlite.org/c3ref/last_insert_rowid.html
+- SQLite memory-statistics documentation: https://sqlite.org/c3ref/memory_highwater.html
+
+** Error reporting, transactions, and concurrency
+
+- The binding retains a small list of primary SQLite statuses but does not
+  expose extended result codes or =sqlite3_errcode=/=sqlite3_extended_errcode=.
+- Its Scheme "busy handler" is only a retry around =prepare= and =step=; it is
+  not SQLite's =sqlite3_busy_handler=.  A checked =sqlite3_busy_timeout= is a
+  better base policy.
+- =with-transaction= commits only when its thunk returns a true value and
+  otherwise rolls back.  It has no nested-transaction/savepoint support.
+- The binding opens through =sqlite3_open=, not =sqlite3_open_v2=.  It cannot
+  request read-only mode, URI handling, no-follow protection, or a deliberate
+  connection mutex mode.
+- Sharing a connection or a prepared statement between Chez threads should not
+  be an implicit promise.  Prefer one connection per worker/thread; if sharing
+  a connection is truly required, use =sqlite3_open_v2= with an explicit
+  mutex policy and separately synchronize wrapper-level state.
+
+SQLite's =sqlite3_open_v2= provides the relevant open and mutex flags:
+https://www.sqlite.org/c3ref/open.html
+
+** Unsafe low-level callback surface
+
+The binding exports raw =sqlite3-trace= and =sqlite3-config-log= calls that
+accept C callback pointers, but supplies no safe Chez callback wrapper,
+object-locking policy, or callback lifetime management.  Custom SQL functions,
+collations, authorizers, trace hooks, and progress hooks need a small C shim
+plus a deliberate Chez callback design.  They should not be part of an initial
+public API.
+
+=sqlite3-config= is also global configuration.  Its return code must be
+checked, and most configuration choices are legal only before SQLite has been
+initialized.  SQLite's default configuration is recommended for most
+applications.
+
+https://www.sqlite.org/c3ref/config.html
+
+** Shared cache and extension loading
+
+Do not make =enable-shared-cache!= a normal supported operation.  SQLite
+discourages shared-cache mode, recommends leaving it disabled, and documents
+that the global setting is unsupported on macOS.  WAL mode is usually the
+better concurrency option.
+
+https://www.sqlite.org/c3ref/enable_shared_cache.html
+
+Keep native extension loading disabled by default.  It should be an explicit,
+trusted deployment capability, not an application-level convenience function.
+
+* Proposed library design
+
+** Ownership
+
+Create a small, project-owned package.  Use Thunderchez as attributed source
+material; retain its Apache-2.0 license notice for copied code.  Do not expose
+or depend on Thunderchez's public =(sqlite3)= library.
+
+Suggested layout:
+
+#+begin_example
+(our-project sqlite)                  ; intentionally small public API
+(our-project sqlite private ffi)      ; ftypes and sqlite3_* declarations
+(our-project sqlite private handles)  ; records, validation, cleanup
+(our-project sqlite private rows)     ; value conversion and query machinery
+(our-project sqlite tests)
+#+end_example
+
+The raw FFI layer owns all =load-shared-object= and =foreign-procedure=
+definitions.  Its API should not escape the package.  This lets the high-level
+library change implementation details without breaking application code.
+
+** Public API: start narrow
+
+Export only the operations needed by application code:
+
+- =call-with-database= (or a =with-database= macro)
+- =execute!= for statements without rows
+- =query= and =query-row= for row results
+- =with-transaction=, with documented nested-savepoint behavior
+- =sql-null= and =sql-null?=
+- An optional explicitly scoped prepared-statement interface if profiling
+  later justifies it
+
+Keep database and statement records opaque.  Do not initially export raw
+pointers, callback hooks, shared-cache controls, or extension loading.
+
+** Loader policy
+
+Load the library before evaluating the FFI declarations.  Allow an environment
+override so development, CI, and deployment can choose a vetted SQLite build.
+
+#+begin_src scheme
+(define sqlite3-library
+  (or (getenv "CHEZ_SQLITE3_LIBRARY")
+      (case (machine-type)
+        [(i3osx ti3osx a6osx ta6osx arm64osx tarm64osx)
+         "/usr/lib/libsqlite3.dylib"]
+        [(i3le ti3le a6le ta6le arm64le tarm64le)
+         "libsqlite3.so.0"]
+        [else
+         (error 'sqlite3 "unsupported platform; set CHEZ_SQLITE3_LIBRARY")])))
+
+(load-shared-object sqlite3-library)
+#+end_src
+
+The Apple path is the system install name.  The Linux SONAME permits the
+platform dynamic linker to select its installed runtime library.  Setting
+=CHEZ_SQLITE3_LIBRARY= to an absolute path is the reproducible-deployment
+escape hatch, including for a Homebrew or application-bundled build.
+
+** Hardening changes
+
+1. Add =open-database*= using =sqlite3_open_v2= and explicit mode/flag
+   arguments.  Keep a simple =open-database= with conservative defaults.
+2. Allocate output-pointer storage inside =dynamic-wind= and always
+   =foreign-free= it.  Close any SQLite handle returned by a failed open.
+3. Repair =finalize!=, clear handle records only after successful closure, and
+   make every public operation reject a closed handle.
+4. Use =integer-64= for all SQLite 64-bit values; add 64-bit changes counters.
+5. Turn SQLite return codes into a condition carrying primary code, extended
+   code, message, and relevant SQL where available.
+6. Use a checked busy timeout, and define a connection/thread policy.
+7. Implement nested transactions with uniquely named =SAVEPOINT=s rather than
+   issuing a nested =BEGIN=.
+8. Remove, or place behind an advanced internal API, global configuration,
+   shared-cache, native-extension, and C-callback operations.
+
+* Portability and packaging
+
+The public API can be designed in R6RS style, but the implementation is
+Chez-specific because it uses Chez's C FFI.  If other Scheme implementations
+ever matter, define the portable API separately and add implementation-specific
+backends rather than trying to make the FFI itself portable.
+
+Avoid pulling in all of Thunderchez just for SQLite.  Either vendor the small
+number of helper libraries that remain necessary, or replace them with local,
+tested code while extracting the binding.  The initial Thunderchez source
+imports SRFI helpers, =matchable=, and =sql-null=; many are easily avoidable
+in a focused Chez-only implementation.
+
+* Test plan
+
+Build a test suite before the library is used by application code.  Run it on:
+
+- macOS on Apple Silicon and, if supported, x86_64;
+- Linux x86_64 and AArch64;
+- the Chez versions that the project officially supports;
+- the actual SQLite libraries selected by development, CI, and release builds.
+
+Test at least:
+
+- Loader selection and =sqlite3_libversion= reporting.
+- Opening read-write, read-only, in-memory, and URI databases.
+- UTF-8 text, embedded-NUL blobs, SQL =NULL=, integers beyond 2^31, and
+  64-bit last-inserted rowids.
+- Parameter binding, repeated prepared-statement use, and statement errors.
+- Finalization of statements and connections, including close-with-live-
+  statement failure behavior.
+- Failed open cleanup and foreign-allocation cleanup.
+- Commit, false-return rollback, exception rollback, and nested savepoints.
+- Two-connection lock contention with a configured busy timeout.
+- WAL behavior if it is a supported application configuration.
+
+The current workspace does not have a Chez executable, so this assessment
+verified the macOS dynamic SQLite library but did not execute the Scheme
+binding itself.
+
+* Decision
+
+Implement a focused fork, not a runtime dependency on Thunderchez:
+
+1. Extract and attribute its useful prepared-statement/query ergonomics.
+2. Build a private, audited Chez FFI layer with a configurable macOS/Linux
+   loader.
+3. Fix resource lifetime, 64-bit FFI declarations, error conditions, and
+   transaction behavior before publishing a public API.
+4. Ship it only with the cross-platform test matrix passing.
+
+This gives the application a small, controlled dependency surface while
+retaining Thunderchez's useful design work.
