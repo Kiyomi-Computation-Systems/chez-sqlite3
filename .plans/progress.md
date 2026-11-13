@@ -7,31 +7,50 @@ newest first.
 ## Now
 
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
-- **M0 slice 1, the container,** is built on `m0-slice-1-container`, waiting for its PR:
-  - **Built:** the pinned container, copied from chez-curl and adapted for SQLite; its host-side
-    tests and self-test; and `help`, `check-help` and `check-guix`.
-  - **Measured:** the pin is kept: Chez 10.4.0, SQLite 3.53.1, gcc 16.2.0, Valgrind 3.27.0
-    (ADR-0006's first amendment). That measurement also corrected the brief, which had recorded
-    the `sqlite3` command's compile options as the library's.
-  - **Watched failing:** 56 mutations, every one failing by name except S3, which survives as it
-    did in chez-curl, and which L2 guards ([the log](guix-env-mutation-log.md)).
-  - **Reviewed** (Opus, read-only): no blocker.
-    - **One major finding, reproduced:** `loopback-only` passed with a network on a host with no
-      default route.
-    - **Ten minor ones.** Five were reproduced and fixed, and two gaps in the records were fixed.
-    - **Three couldn't be reproduced here:**
-      - the locale finding, whose fix went in anyway;
-      - a wider `isolated-home` gap, now recorded as not covered;
-      - a claim about Debian's `sqlite3` command, so the record now says the command *can* carry
-        its own SQLite.
-
-    See ADR-0006's second amendment and [traps.md](traps.md). chez-curl shares four of the gaps.
-  - **Also:** slice 0's close-out, and AGENTS.md's evaluation-order rule corrected twice, the
-    second time after the review ([the measurement](research/evaluation-order/)).
-- **Next: M0 slice 2, the test harness** (harness plan §6).
+- **M0 slice 1, the container,** merged as PR #2.
+- **M0 slice 2, the test harness,** is open on `m0-slice-2-test-harness` (harness plan §6). It
+  brings each test helper with its first consumer, so its testing library is the shared exit
+  verdict and the counters.
 - **Open:** brief D1 to D7. D1 (threaded Chez) and D7 (the Mac's SQLite) are due in M1.
 
 ## Close-outs
+
+### 2026-11-13 — M0 slice 1: the pinned Guix container (PR #2, `efe89b3`)
+
+- **Measured first:** chez-curl's Guix pin gives Chez 10.4.0, SQLite 3.53.1 with `sqlite3.h`,
+  gcc 16.2.0 and Valgrind 3.27.0, so the pin is kept ([research/guix-pin/](research/guix-pin/)).
+  Two findings came with it:
+  - the `sqlite3` command carries its own SQLite, which had led the brief to record the
+    command's options as the library's;
+  - AGENTS.md's inherited evaluation-order rule was wrong on this Chez
+    ([research/evaluation-order/](research/evaluation-order/)).
+- **Built:**
+  - `channels.scm` and `manifest.scm`;
+  - the launcher, the entry script, the self-test and `require-tools`;
+  - 63 host-side checks;
+  - `help`, `check-help` and `check-guix`.
+- **Watched failing:** the host-side tests ran red before any script existed, and the self-test
+  ran red in a bare container. Then 56 mutations: every one fails by name except S3,
+  `--emulate-fhs`, which L2 guards ([the log](guix-env-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker.
+  - **One major finding, reproduced and fixed:** the network check passed with a network on a
+    host with no default route. The self-test now requires `lo` alone in `/proc/net/dev`.
+  - **Also fixed:** `petite` passed as `CHEZ`; a header below the floor passed; and
+    `GUIX_ENV_DRY_RUN=0` made `make check-guix` pass with no container.
+  - **The evaluation-order account was corrected again.** The mixed orders came from the
+    interpreter path for simple forms, not from compiled code.
+  - **chez-curl shares four of the gaps.**
+- **CI:** none yet.
+- **Subagents:** one, Opus: the adversarial review, about 163k tokens, 53 tool calls, 13 min.
+  Each finding was reproduced before it was fixed, except the locale one, which couldn't be.
+- **Learned** ([traps.md](traps.md)):
+  - Checks copied from a sibling bring its blind spots, and mutations derived from the same
+    source can't find them.
+  - Before rewriting a rule a measurement contradicts, find the mechanism. A table of results
+    isn't an explanation.
+  - A claim that something is absent needs its evidence recorded unabridged.
+  - A reviewer's suggested fix is checked like the finding. `/sys/class/net` doesn't exist in
+    the case it was meant to catch.
 
 ### 2026-11-13 — M0 slice 0: the records (PR #1, `d998b3e`)
 
