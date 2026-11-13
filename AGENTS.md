@@ -57,6 +57,11 @@
 * Libraries are R6RS `.sls`; libraries and programs contain their own code —
   no shared include bodies. R6RS forbids assigning an exported variable —
   reach mutable state through procedures.
+* Cite a sibling's record with its repository's name (`chez-curl ADR-0014`),
+  never by its number alone.
+* Before a global replace, predict how many matches it should hit, and check
+  the count afterwards: the sentence that defines a marker contains the
+  marker (`.plans/traps.md`).
 
 ### Testing & mutation discipline
 
@@ -85,10 +90,13 @@
 * A suite cannot vouch for the verdict it exits through. A suite that tests
   `suite-exit-status` must also exit 1 on its own failures, before the
   shared form.
-* Chez evaluates arguments right to left in compiled library code, left to
-  right when interpreted, and `map` calls its procedure in no fixed order. A
-  `let`'s inits are arguments too. No assertion may depend on either order;
-  use `for-each` for effects, and `let*` when one init must follow another.
+* Chez fixes no order for a call's arguments. On 10.4.0, compiled code ran
+  one call's arguments `abc`, `bca` or `cab` depending on where the call
+  appeared, and interpreted code ran them right to left
+  (`.plans/research/evaluation-order/`). `map` calls its procedure in no
+  fixed order, and a `let`'s inits are arguments too. No assertion may depend
+  on any order; use `for-each` for effects, and `let*` when one init must
+  follow another. A probe is code under these rules too.
 * A setter that refuses a value keeps the one it had. Give each round trip
   its own sentinel, and assert every return code.
 * An assertion passes whenever *another* rule can produce its expected value.

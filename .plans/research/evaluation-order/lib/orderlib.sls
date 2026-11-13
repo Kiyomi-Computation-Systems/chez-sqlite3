@@ -1,0 +1,8 @@
+(library (orderlib) (export run) (import (chezscheme))
+  (define dummy (load-shared-object "libc.so.6"))
+  (define putchar (foreign-procedure "putchar" (int) int))
+  (define fflush (foreign-procedure "fflush" (uptr) int))
+  (define (mark label) (fflush 0) (flush-output-port (current-output-port)) (display label) (flush-output-port (current-output-port)))
+  (define (run)
+    (mark "lib/list      : ") (list (putchar 97) (putchar 98) (putchar 99)) (fflush 0) (newline)
+    (mark "lib/format    : ") (format "~a~a~a" (putchar 97) (putchar 98) (putchar 99)) (fflush 0) (newline)))

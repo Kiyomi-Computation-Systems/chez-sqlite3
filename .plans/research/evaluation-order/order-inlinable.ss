@@ -1,0 +1,6 @@
+(define (f x) (display x) x)
+(define (show label thunk) (display label) (display ": ") (thunk) (newline))
+(show "list/begin " (lambda () (list (begin (display "a") 1) (begin (display "b") 2) (begin (display "c") 3))))
+(show "list/proc  " (lambda () (list (f "a") (f "b") (f "c"))))
+(show "printf/proc" (lambda () (printf "~a~a~a" (f "a") (f "b") (f "c")) (display " <- args first")))
+(show "let inits  " (lambda () (let ([x (f "a")] [y (f "b")] [z (f "c")]) (list x y z))))
