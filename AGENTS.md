@@ -7,17 +7,25 @@
 * Use the functional core / imperative shell pattern
 * Follow the 12 Factor Apps philosophy
 * Project is built for Chez Scheme
-* Project should be portable across macos (darwin) and linux; windows is not
-  supported (`.plans/decisions/0004-windows-not-supported.md`)
-* Project should be portable across amd64 and arm64
+* A Chez Scheme library binding the SQLite C library (`libsqlite3`) through
+  the FFI; handle C *safely*.
+* Project should be portable across macos (darwin) and linux, on amd64 and
+  arm64; windows is not supported
+  (`.plans/decisions/0004-windows-not-supported.md`)
 * **DO NOT** setup macos CI runners: linux only!
 * Exported functions should have a comment with a Typed Racket style type signature
-* A Chez Scheme library binding the sqlite3 C library through the FFI;
-  handle C *safely*. Portable across darwin, linux, on amd64 and arm64.
+* The public library is `(chez-sqlite3)`. Internals live under
+  `(chez-sqlite3 private …)` and never escape it (ADR-0009).
+* The code is written fresh. Thunderchez's `sqlite3.sls` is a reference for
+  API ideas only: copy none of its code (it is Apache-2.0; this project is
+  BSD-3). `.plans/chez-sqlite-thunderchez-assessment.org` lists its defects
+  (ADR-0009).
 
 ### Dependencies
 
-* sqlite3
+* SQLite (`libsqlite3`) ≥ 3.45.1 (ADR-0003), found and loaded at runtime
+  (ADR-0002)
+* chez-srfi, vendored as a git submodule, for SRFI-64 in the tests only
 
 ### Guix development container
 

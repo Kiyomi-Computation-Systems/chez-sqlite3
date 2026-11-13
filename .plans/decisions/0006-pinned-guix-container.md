@@ -1,0 +1,83 @@
+# ADR-0006: Builds and tests run in a pinned, toolchain-only Guix container with no network
+
+- **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13). M0 slice 1 measures the pin
+  and amends this record.
+- **Date:** 2026-11-13
+- **Scope:** development tooling; no library change
+- **Related:** chez-curl ADR-0006, which this copies · [ADR-0002](0002-runtime-libsqlite3-discovery.md)
+  (the override) · [ADR-0005](0005-memory-gate.md) (Valgrind) ·
+  [ADR-0007](0007-test-harness-and-scheme-dependencies.md) (submodules)
+
+## Context
+
+- **The maintainer develops on Guix.** Builds and tests need Chez ≥ 10.4.0, SQLite ≥ 3.45.1 with
+  its header, a C compiler for the constants check (ADR-0001), Valgrind (ADR-0005), `make` and the
+  usual shell tools.
+- **Outside Guix, this host's SQLite is 3.37.2,** below the floor, and Guix's Chez can't load it by
+  soname (ADR-0002). The host's Guix home has SQLite 3.53.1, but that is the host's Guix, not a
+  pin.
+- **chez-curl's container already does this job,** and so does its pin, `b532aa7d…`. What SQLite
+  that pin gives isn't measured yet.
+
+## Decision
+
+**Copy chez-curl's container, with these changes for SQLite.**
+
+1. **The launcher, unchanged.** `scripts/guix-env` runs
+   `guix time-machine -C channels.scm -- shell -m manifest.scm --container -- sh scripts/guix-env-enter CMD…`
+   without `--network`. It refuses to run inside a Guix environment. It preserves only `TERM`,
+   `COLORTERM` and `LANG`. `GUIX_ENV_DRY_RUN=1` prints the command instead of running it.
+2. **The pin.** `channels.scm` pins chez-curl's `b532aa7d0bb345aafabf6b63cbfbda45abbec091`, if M0
+   slice 1 measures its SQLite at 3.45.1 or above. Otherwise slice 1 moves to a newer pin.
+   Either way, the measurement is recorded here as an amendment.
+3. **The manifest** holds `chez-scheme`, `sqlite` (library and header) and `gcc-toolchain`
+   (ADR-0001), `valgrind` (ADR-0005), and the shell tools the Makefile and scripts call. It holds
+   no git, Node or openssl. Each entry has a comment naming the decision that needs it.
+4. **`scripts/guix-env-enter`** refuses to start without `bin/scheme`, `bin/gcc` and
+   `lib/libsqlite3.so.0` in the profile. It exports:
+   - `CHEZ`, the profile's real `scheme` binary;
+   - `CC`, the profile's `gcc` (the toolchain has no `cc`);
+   - `CHEZ_SQLITE3_LIBRARY`, which is `$GUIX_ENVIRONMENT/lib/libsqlite3.so.0`, so no suite
+     depends on discovery.
+
+   It sets no `LD_LIBRARY_PATH` and uses no `--emulate-fhs`, so no bare-name load can work by
+   accident.
+5. **`scripts/require-tools GOAL TOOL…`** fails a target before it runs when a tool is missing. On
+   a Guix host, its hint is `scripts/guix-env`.
+6. **`make check-guix`** runs the host-side launcher tests, then a self-test in the container. The
+   self-test asserts these things:
+   - `HOME` is isolated.
+   - `scheme`, `gcc`, `valgrind` and `make` resolve to the profile's own binaries.
+   - `CHEZ` is an ELF binary under the profile.
+   - `CC` compiles a program against `<sqlite3.h>`.
+   - `CHEZ_SQLITE3_LIBRARY` is exactly the profile's library, and it exists.
+   - A bare-name load of `libsqlite3.so.0` is refused.
+   - The network is loopback only.
+   - Valgrind instruments `$CHEZ`.
+   - There is no git.
+   - The Makefile's own checks pass.
+
+   Each assertion is watched failing under a targeted change before it counts.
+7. **People and agents edit, commit and push on the host.** Builds and tests go through
+   `scripts/guix-env`.
+
+### Rejected
+
+- **`--network`.** Nothing fetches at build or test time, so "no test touches the network" is a
+  property of the environment.
+- **`--emulate-fhs`, or `LD_LIBRARY_PATH`.** ADR-0002 never searches standard directories in a Guix
+  world, and either would let a bare-name load succeed by accident.
+- **git in the container.** In a git worktree, the container's git finds no repository, because
+  `.git` names a directory outside the share (chez-curl ADR-0006's amendment).
+
+## Consequences
+
+- **Anything that needs the network or git runs on the host:** submodules, `make check-pins`, and
+  fetching an amalgamation.
+- **The container is for x86_64 Linux hosts like this one.** The Mac doesn't use it.
+- **No CI job runs the container.** CI builds Chez from the release tarball and uses the runner's
+  SQLite, or one it compiles. Each run records the versions it used, because the pinned container
+  and the runner can drift apart.
+- **The container isolates the toolchain; it is not a sandbox.** The repository is shared
+  read-write.
+- **Bumping the pin** means changing `channels.scm` and running `make check-guix`.
