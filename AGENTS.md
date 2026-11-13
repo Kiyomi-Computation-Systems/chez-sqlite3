@@ -37,7 +37,8 @@
   agents or tokens, and no network but loopback (ADR-0006).
 * Verify it with `make check-guix`, run on the host.
 * The container exports `CHEZ` (the real `scheme` binary), `CC` (gcc; the
-  toolchain has no `cc`).
+  toolchain has no `cc`) and `CHEZ_SQLITE3_LIBRARY` (the profile's
+  `libsqlite3.so.0`, ADR-0002). It sets no `LD_LIBRARY_PATH`.
 * Anything that needs the network or git runs on the host: fetches, pushes,
   downloads, `make check-pins`, and `git submodule update --init --recursive`,
   which a fresh clone needs once before `make deps`. The container has no git.

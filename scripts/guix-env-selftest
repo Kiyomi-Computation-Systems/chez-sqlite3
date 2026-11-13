@@ -1,0 +1,164 @@
+#!/bin/sh
+# Runs INSIDE the pinned container, as `make check-guix-inside`. Not a
+# launcher: `make check-guix` runs tests/guix-env-launcher.sh on the host,
+# then this through scripts/guix-env. Asserts what the environment exists
+# for (ADR-0006). Each failure names its assertion.
+set -u
+
+if [ -z "${GUIX_ENVIRONMENT:-}" ]; then
+  echo "check-guix: FAILED not-in-environment: this is the self-test, not the launcher; use make check-guix" >&2
+  exit 2
+fi
+
+fail=0
+ok()  { echo "check-guix: ok $*"; }
+bad() { echo "check-guix: FAILED $*" >&2; fail=1; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Assertion 1: nothing of the host's HOME is visible. The container's HOME
+# holds at most the directories leading down to the repository, which it
+# shares; anything else (a dotfile, a key, a host tool's config) means the
+# isolation this environment exists for is gone.
+home_ok=1
+for e in "$HOME"/* "$HOME"/.[!.]* "$HOME"/..?*; do
+  [ -e "$e" ] || continue
+  case "$PWD/" in
+    "$e"/*) ;;
+    *) bad "isolated-home: $e is visible inside the container"; home_ok=0 ;;
+  esac
+done
+[ "$home_ok" -eq 1 ] && ok "isolated-home ($HOME holds only the path to $PWD)"
+
+# Assertion 2: however a login shell finds a tool, it runs the pinned
+# binary. Both forms, since rc files branch on $-. Compared by resolved
+# path: a host or guix-home copy that is a different store item is not the
+# pinned one.
+for mode in -lc -lic; do
+  for tool in scheme gcc valgrind make; do
+    p=$(bash "$mode" "command -v $tool" 2>/dev/null | tail -n 1)
+    want=$(readlink -f "$GUIX_ENVIRONMENT/bin/$tool")
+    got=
+    [ -n "$p" ] && got=$(readlink -f "$p")
+    if [ -n "$got" ] && [ "$got" = "$want" ]; then
+      ok "tool-path[$mode] ($tool: $p)"
+    else
+      bad "tool-path[$mode]: $tool resolves to '${got:-nothing}' (via '${p:-nothing}'), expected $want"
+    fi
+  done
+done
+
+# Assertion 3: the Makefile's $(CHEZ) is the profile's Chez binary itself.
+# A wrapper script that execs Chez satisfies the suites while hiding Chez
+# from Valgrind, which then prints no ERROR SUMMARY. One that doesn't exec
+# makes Valgrind report on the shell instead, so the ELF check is needed
+# too.
+chez=${CHEZ:-}
+case "$chez" in
+  "$GUIX_ENVIRONMENT"/*) ok "chez-variable ($chez)" ;;
+  *) bad "chez-variable: CHEZ is '${chez:-unset}', expected under $GUIX_ENVIRONMENT" ;;
+esac
+magic=$(head -c 4 "$chez" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+if [ "$magic" = 7f454c46 ]; then
+  ok "chez-is-elf"
+else
+  bad "chez-is-elf: '${chez:-unset}' starts with '${magic:-nothing}', not an ELF header"
+fi
+if valgrind "$chez" --version 2>&1 | grep -q 'ERROR SUMMARY'; then
+  ok "valgrind-instruments-chez"
+else
+  bad "valgrind-instruments-chez: valgrind '${chez:-unset}' --version printed no ERROR SUMMARY"
+fi
+
+# Assertion 4: the Makefile's $(CC) is the profile's gcc, and it compiles a
+# program against SQLite's header, as the constants check will (ADR-0001).
+cc=${CC:-}
+case "$cc" in
+  "$GUIX_ENVIRONMENT"/*) ok "cc-variable ($cc)" ;;
+  *) bad "cc-variable: CC is '${cc:-unset}', expected under $GUIX_ENVIRONMENT" ;;
+esac
+cat >"$tmp/header.c" <<'EOF'
+#include <stdio.h>
+#include <sqlite3.h>
+int main(void) { printf("sqlite3.h %s\n", SQLITE_VERSION); return 0; }
+EOF
+got=
+if "$cc" -o "$tmp/header" "$tmp/header.c" 2>"$tmp/cc.err"; then
+  got=$("$tmp/header")
+fi
+case "$got" in
+  "sqlite3.h "[0-9]*.[0-9]*.[0-9]*) ok "sqlite-header (${got#sqlite3.h })" ;;
+  *) bad "sqlite-header: '${cc:-unset}' could not compile against <sqlite3.h>: $(head -n 1 "$tmp/cc.err")" ;;
+esac
+
+# Assertion 5: CHEZ_SQLITE3_LIBRARY names the profile's libsqlite3.so.0
+# itself, not the store file it resolves to, so the suites never depend on
+# discovery (ADR-0002).
+lib=${CHEZ_SQLITE3_LIBRARY:-}
+want=$GUIX_ENVIRONMENT/lib/libsqlite3.so.0
+if [ "$lib" != "$want" ]; then
+  bad "sqlite-override: CHEZ_SQLITE3_LIBRARY is '${lib:-unset}', expected $want"
+elif [ ! -f "$lib" ]; then
+  bad "sqlite-override: $lib is not a regular file"
+else
+  ok "sqlite-override ($lib -> $(readlink -f "$lib"))"
+fi
+
+# Assertion 6: no library loads by bare name. Exit 3 means Chez refused
+# the load, 4 that it loaded, and anything else that Chez itself failed.
+printf '%s\n' '(exit (guard (e (#t 3)) (load-shared-object "libsqlite3.so.0") 4))' \
+  | "$chez" -q >/dev/null 2>&1
+status=$?
+case "$status" in
+  3) ok "no-bare-name-load (libsqlite3.so.0 refused)" ;;
+  4) bad "no-bare-name-load: Chez loaded libsqlite3.so.0 by bare name (LD_LIBRARY_PATH=${LD_LIBRARY_PATH-unset})" ;;
+  *) bad "no-bare-name-load: '${chez:-unset}' exited $status, expected 3" ;;
+esac
+
+# Assertion 7: the network is loopback only. Nothing here listens, so a
+# loopback connection is refused, which shows the interface is up. An
+# outside address (TEST-NET-1, RFC 5737) must fail at once as unreachable;
+# with a network it would hang instead, until timeout ends it with 124.
+# bash's /dev/tcp makes the connections: the container has no other client.
+probe() {
+  timeout 5 bash -c "exec 3<>/dev/tcp/$1/9" 2>&1
+  echo "exit $?"
+}
+inside=$(probe 127.0.0.1)
+outside=$(probe 192.0.2.1)
+case "$inside" in
+  *"Connection refused"*"exit 1") loop_ok=1 ;;
+  *) loop_ok=0 ;;
+esac
+case "$outside" in
+  *"Network is unreachable"*"exit 1") out_ok=1 ;;
+  *) out_ok=0 ;;
+esac
+if [ "$loop_ok" -eq 1 ] && [ "$out_ok" -eq 1 ]; then
+  ok "loopback-only (127.0.0.1 refused; 192.0.2.1 unreachable)"
+else
+  bad "loopback-only: 127.0.0.1 gave '$(printf '%s' "$inside" | tr '\n' ' ')'; 192.0.2.1 gave '$(printf '%s' "$outside" | tr '\n' ' ')'"
+fi
+
+# Assertion 8: there is no git in here. In a git worktree, .git names a
+# directory outside the one directory this container shares, so git here
+# would read nothing, and whatever needed it would fail in every worktree
+# (ADR-0006).
+if p=$(command -v git); then
+  bad "no-git: git is at $p; anything that needs git runs on the host"
+else
+  ok "no-git"
+fi
+
+# Assertion 9: the Makefile's own checks pass in here too. M0 slice 2 adds
+# `test`, which runs every suite (ADR-0007). check-pins is not one of them:
+# it needs git, so it runs on the host and in CI.
+if ! make --no-print-directory check-help; then
+  bad "check-help"
+fi
+
+if [ "$fail" -eq 0 ]; then
+  echo "check-guix: ALL CHECKS PASSED"
+fi
+exit "$fail"
