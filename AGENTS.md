@@ -92,15 +92,15 @@
   `suite-exit-status` must also exit 1 on its own failures, before the
   shared form.
 * Chez fixes no order for a call's arguments. On 10.4.0, compiled code ran
-  one call's arguments `abc`, `bca` or `cab` depending on where the call
-  appeared, and interpreted code ran them right to left
-  (`.plans/research/evaluation-order/`). `map` calls its procedure in no
-  fixed order, and a `let`'s inits are arguments too. No assertion may depend
-  on any order; use `for-each` for effects, and `let*` when one init must
-  follow another. A probe is code under these rules too.
-* The `sqlite3` command carries its own copy of SQLite, with other compile
-  options. Read a library's version and options through the FFI, never from
-  the command (`.plans/traps.md`).
+  them left to right and `interpret` right to left, and the interpreter path
+  that `--script` and `load` take for simple top-level forms mixed them
+  (`cab`, `bca`) (`.plans/research/evaluation-order/`). `map` calls its
+  procedure in no fixed order, and a `let`'s inits are arguments too. No
+  assertion may depend on any order; use `for-each` for effects, and `let*`
+  when one init must follow another. A probe is code under these rules too.
+* The `sqlite3` command can carry its own copy of SQLite, with other
+  compile options; Guix's does. Read a library's version and options through
+  the FFI, never from the command (`.plans/traps.md`).
 * A setter that refuses a value keeps the one it had. Give each round trip
   its own sentinel, and assert every return code.
 * An assertion passes whenever *another* rule can produce its expected value.

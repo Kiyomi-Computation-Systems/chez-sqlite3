@@ -49,14 +49,22 @@ for mode in -lc -lic; do
   done
 done
 
-# Assertion 3: the Makefile's $(CHEZ) is the profile's Chez binary itself.
-# A wrapper script that execs Chez satisfies the suites while hiding Chez
-# from Valgrind, which then prints no ERROR SUMMARY. One that doesn't exec
-# makes Valgrind report on the shell instead, so the ELF check is needed
-# too.
+# Assertion 3: the Makefile's $(CHEZ) is the profile's Chez binary itself:
+# under the profile, and resolving to its scheme. Another binary there, such
+# as petite, which has no compiler, is not Chez. A wrapper script that execs
+# Chez satisfies the suites while hiding Chez from Valgrind, which then
+# prints no ERROR SUMMARY. One that doesn't exec makes Valgrind report on
+# the shell instead, so the ELF check is needed too.
 chez=${CHEZ:-}
+want_chez=$(readlink -f "$GUIX_ENVIRONMENT/bin/scheme")
 case "$chez" in
-  "$GUIX_ENVIRONMENT"/*) ok "chez-variable ($chez)" ;;
+  "$GUIX_ENVIRONMENT"/*)
+    got_chez=$(readlink -f "$chez")
+    if [ "$got_chez" = "$want_chez" ]; then
+      ok "chez-variable ($chez)"
+    else
+      bad "chez-variable: CHEZ is '$chez', which resolves to '${got_chez:-nothing}', not the profile's scheme, $want_chez"
+    fi ;;
   *) bad "chez-variable: CHEZ is '${chez:-unset}', expected under $GUIX_ENVIRONMENT" ;;
 esac
 magic=$(head -c 4 "$chez" 2>/dev/null | od -An -tx1 | tr -d ' \n')
@@ -81,14 +89,17 @@ esac
 cat >"$tmp/header.c" <<'EOF'
 #include <stdio.h>
 #include <sqlite3.h>
-int main(void) { printf("sqlite3.h %s\n", SQLITE_VERSION); return 0; }
+int main(void) { printf("sqlite3.h %s %d\n", SQLITE_VERSION, SQLITE_VERSION_NUMBER); return 0; }
 EOF
 got=
+header_number=
 if "$cc" -o "$tmp/header" "$tmp/header.c" 2>"$tmp/cc.err"; then
   got=$("$tmp/header")
 fi
 case "$got" in
-  "sqlite3.h "[0-9]*.[0-9]*.[0-9]*) ok "sqlite-header (${got#sqlite3.h })" ;;
+  "sqlite3.h "[0-9]*.[0-9]*.[0-9]*" "[0-9]*)
+    header_number=${got##* }
+    ok "sqlite-header (${got#sqlite3.h })" ;;
   *) bad "sqlite-header: '${cc:-unset}' could not compile against <sqlite3.h>: $(head -n 1 "$tmp/cc.err")" ;;
 esac
 
@@ -105,6 +116,19 @@ else
   ok "sqlite-override ($lib -> $(readlink -f "$lib"))"
 fi
 
+# Assertion 5b: the header the compiler finds describes the library the
+# override names. A header from another SQLite would hold the constants
+# check to numbers the loaded library doesn't use (ADR-0001). Compared as
+# SQLITE_VERSION_NUMBER against sqlite3_libversion_number, read through
+# $CHEZ.
+lib_number=$(printf '%s\n' "(begin (load-shared-object \"$lib\") (display ((foreign-procedure \"sqlite3_libversion_number\" () int))))" \
+  | "$chez" -q 2>/dev/null)
+if [ -n "$header_number" ] && [ "$header_number" = "$lib_number" ]; then
+  ok "header-matches-library ($header_number)"
+else
+  bad "header-matches-library: sqlite3.h says '${header_number:-nothing}', ${lib:-the library} says '${lib_number:-nothing}'"
+fi
+
 # Assertion 6: no library loads by bare name. Exit 3 means Chez refused
 # the load, 4 that it loaded, and anything else that Chez itself failed.
 printf '%s\n' '(exit (guard (e (#t 3)) (load-shared-object "libsqlite3.so.0") 4))' \
@@ -116,13 +140,24 @@ case "$status" in
   *) bad "no-bare-name-load: '${chez:-unset}' exited $status, expected 3" ;;
 esac
 
-# Assertion 7: the network is loopback only. Nothing here listens, so a
-# loopback connection is refused, which shows the interface is up. An
-# outside address (TEST-NET-1, RFC 5737) must fail at once as unreachable;
-# with a network it would hang instead, until timeout ends it with 124.
-# bash's /dev/tcp makes the connections: the container has no other client.
+# Assertion 7: the network is loopback only. First, the container's only
+# interface is lo: /proc/net/dev lists the reading process's own network
+# namespace. A probe that found no route out would not be enough: with a
+# network but no default route, as on a host that is offline, it passes.
+ifaces=$(sed -n '3,$p' /proc/net/dev | cut -d: -f1 | tr -d ' ' | tr '\n' ' ')
+if [ "$ifaces" = "lo " ]; then
+  ok "interfaces (lo alone)"
+else
+  bad "interfaces: /proc/net/dev lists '$ifaces', expected lo alone"
+fi
+
+# Then a probe cross-checks it. Nothing here listens, so a loopback
+# connection is refused, which shows lo is up. An outside address
+# (TEST-NET-1, RFC 5737) must fail at once as unreachable. bash's /dev/tcp
+# makes the connections: the container has no other client. LC_ALL=C keeps
+# the error messages in English, whatever LANG the host passes in.
 probe() {
-  timeout 5 bash -c "exec 3<>/dev/tcp/$1/9" 2>&1
+  LC_ALL=C timeout 5 bash -c "exec 3<>/dev/tcp/$1/9" 2>&1
   echo "exit $?"
 }
 inside=$(probe 127.0.0.1)

@@ -7,13 +7,28 @@ newest first.
 ## Now
 
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
-- **M0 slice 1, the container,** is open on `m0-slice-1-container`. Its first commit holds slice
-  0's close-out, the first entries in [traps.md](traps.md), and a correction to AGENTS.md's rule
-  on evaluation order, with [the measurement behind it](research/evaluation-order/). The pin is
-  measured and kept: Chez 10.4.0, SQLite 3.53.1, gcc 16.2.0, Valgrind 3.27.0 (ADR-0006's
-  amendment). That measurement also corrected the brief, which had recorded the `sqlite3`
-  command's compile options as the library's. Next: the container's files, copied from chez-curl
-  (harness plan §1).
+- **M0 slice 1, the container,** is built on `m0-slice-1-container`, waiting for its PR:
+  - **Built:** the pinned container, copied from chez-curl and adapted for SQLite; its host-side
+    tests and self-test; and `help`, `check-help` and `check-guix`.
+  - **Measured:** the pin is kept: Chez 10.4.0, SQLite 3.53.1, gcc 16.2.0, Valgrind 3.27.0
+    (ADR-0006's first amendment). That measurement also corrected the brief, which had recorded
+    the `sqlite3` command's compile options as the library's.
+  - **Watched failing:** 56 mutations, every one failing by name except S3, which survives as it
+    did in chez-curl, and which L2 guards ([the log](guix-env-mutation-log.md)).
+  - **Reviewed** (Opus, read-only): no blocker.
+    - **One major finding, reproduced:** `loopback-only` passed with a network on a host with no
+      default route.
+    - **Ten minor ones.** Five were reproduced and fixed, and two gaps in the records were fixed.
+    - **Three couldn't be reproduced here:**
+      - the locale finding, whose fix went in anyway;
+      - a wider `isolated-home` gap, now recorded as not covered;
+      - a claim about Debian's `sqlite3` command, so the record now says the command *can* carry
+        its own SQLite.
+
+    See ADR-0006's second amendment and [traps.md](traps.md). chez-curl shares four of the gaps.
+  - **Also:** slice 0's close-out, and AGENTS.md's evaluation-order rule corrected twice, the
+    second time after the review ([the measurement](research/evaluation-order/)).
+- **Next: M0 slice 2, the test harness** (harness plan §6).
 - **Open:** brief D1 to D7. D1 (threaded Chez) and D7 (the Mac's SQLite) are due in M1.
 
 ## Close-outs

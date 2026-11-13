@@ -284,5 +284,14 @@ check "M1 make check-guix without guix: names the goal" \
   grep -Fxq "make check-guix: guix not found." "$tmp/err"
 check "M1 make check-guix without guix: runs no test" [ ! -s "$started" ]
 
+# T9: only GUIX_ENV_DRY_RUN=1 is a dry run. Any other value, 0 among them,
+# runs guix: here a stub first on PATH, which records that it ran. Were 0
+# a dry run, `make check-guix` would pass without entering any container.
+reset_stubs guix
+run GUIX_ENV_DRY_RUN=0 PATH="$stubs:$PATH" "$launcher" make help
+check "T9 GUIX_ENV_DRY_RUN=0: exit 0" [ "$status" -eq 0 ]
+check "T9 GUIX_ENV_DRY_RUN=0: runs guix" grep -Fxq guix "$started"
+check "T9 GUIX_ENV_DRY_RUN=0: prints no dry run" [ ! -s "$tmp/out" ]
+
 printf '%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

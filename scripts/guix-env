@@ -8,9 +8,10 @@
 # no agents, no tokens, and no network but loopback. Edit, commit and push
 # on the host; send builds and tests through here.
 #
-# GUIX_ENV_DRY_RUN=1 prints `cd <dir>` and the guix command, one argument
-# per line, instead of running it: tests/guix-env-launcher.sh asserts on
-# that.
+# GUIX_ENV_DRY_RUN=1, and no other value, prints `cd <dir>` and the guix
+# command, one argument per line, instead of running it:
+# tests/guix-env-launcher.sh asserts on that. Were 0 a dry run too,
+# `make check-guix` would pass without entering any container.
 set -eu
 
 die() { printf 'guix-env: %s\n' "$*" >&2; exit 2; }
@@ -32,7 +33,7 @@ set -- time-machine -C channels.scm -- shell -m manifest.scm \
   --container '--preserve=^(TERM|COLORTERM|LANG)$' \
   -- sh scripts/guix-env-enter "$@"
 
-if [ -n "${GUIX_ENV_DRY_RUN:-}" ]; then
+if [ "${GUIX_ENV_DRY_RUN:-}" = 1 ]; then
   printf 'cd %s\n' "$PWD"
   printf '%s\n' guix "$@"
   exit 0
