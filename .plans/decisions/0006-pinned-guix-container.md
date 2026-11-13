@@ -1,7 +1,9 @@
 # ADR-0006: Builds and tests run in a pinned, toolchain-only Guix container with no network
 
-- **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13). M0 slice 1 measures the pin
-  and amends this record.
+- **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13); amended 2026-11-13 with what
+  M0 slice 1 measured at the pin ([amendment](#amendment-2026-11-13-what-m0-slice-1-measured)), and
+  with the self-test after the slice's review
+  ([amendment](#amendment-2026-11-13-the-self-test-after-the-slices-review))
 - **Date:** 2026-11-13
 - **Scope:** development tooling; no library change
 - **Related:** chez-curl ADR-0006, which this copies · [ADR-0002](0002-runtime-libsqlite3-discovery.md)
@@ -81,3 +83,44 @@
 - **The container isolates the toolchain; it is not a sandbox.** The repository is shared
   read-write.
 - **Bumping the pin** means changing `channels.scm` and running `make check-guix`.
+
+## Amendment, 2026-11-13: what M0 slice 1 measured
+
+At `b532aa7d…`, a container with `chez-scheme`, `sqlite`, `gcc-toolchain` and `valgrind` gives:
+
+- Chez 10.4.0 (`ta6le`, threaded);
+- SQLite 3.53.1 (`sqlite3_libversion_number` 3053001, `THREADSAFE=1`, `ENABLE_FTS5`,
+  `sqlite3_load_extension` present), with `sqlite3.h` in the profile;
+- gcc 16.2.0;
+- Valgrind 3.27.0.
+
+Through the library, an FTS5 table can be created and `jsonb('{}')` is a blob. Every need in the
+Context is met, so **the pin is kept** (decision 2). The commands and their output are in
+[research/guix-pin/](../research/guix-pin/).
+
+- **The profile's library is the host's Guix home's library:** the same store item,
+  `/gnu/store/vi2anm0…-sqlite-3.53.1`.
+- **The `sqlite3` command is not the library.** The command in that store item links no
+  `libsqlite3`. It carries its own copy of SQLite, compiled with options the library lacks:
+  `DQS=0`, `ENABLE_RTREE` and `ENABLE_STMTVTAB` among them. The brief's first version recorded the
+  command's options as the library's. Options are read from the library, through the FFI.
+
+## Amendment, 2026-11-13: the self-test after the slice's review
+
+The slice's review found checks that read a symptom instead of the property (`.plans/traps.md`).
+Each was reproduced, then fixed and watched failing ([the mutation
+log](../guix-env-mutation-log.md)). Decisions 1 and 6 gain:
+
+- **Only `GUIX_ENV_DRY_RUN=1` is a dry run.** Any other value runs guix, so
+  `GUIX_ENV_DRY_RUN=0 make check-guix` can't pass without entering a container.
+- **`CHEZ` is the profile's `scheme` itself:** under the profile, and resolving to its `scheme`.
+  `petite`, which is under the profile too, has no compiler.
+- **The header is the library's.** `sqlite3.h`'s `SQLITE_VERSION_NUMBER` must equal
+  `sqlite3_libversion_number` from `CHEZ_SQLITE3_LIBRARY`. Otherwise the constants check could be
+  held to another SQLite's numbers (ADR-0001).
+- **The container's only interface is `lo`,** read from `/proc/net/dev`. The connection probe
+  stays as a cross-check, run under `LC_ALL=C` because it matches error text. An outside address
+  that is unreachable shows only that there is no route there. A container with a network gives
+  that too when the host has no default route.
+
+chez-curl's scripts share each of these gaps; this repository's copies now differ from them.

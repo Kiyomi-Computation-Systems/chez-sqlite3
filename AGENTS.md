@@ -37,7 +37,8 @@
   agents or tokens, and no network but loopback (ADR-0006).
 * Verify it with `make check-guix`, run on the host.
 * The container exports `CHEZ` (the real `scheme` binary), `CC` (gcc; the
-  toolchain has no `cc`).
+  toolchain has no `cc`) and `CHEZ_SQLITE3_LIBRARY` (the profile's
+  `libsqlite3.so.0`, ADR-0002). It sets no `LD_LIBRARY_PATH`.
 * Anything that needs the network or git runs on the host: fetches, pushes,
   downloads, `make check-pins`, and `git submodule update --init --recursive`,
   which a fresh clone needs once before `make deps`. The container has no git.
@@ -57,6 +58,11 @@
 * Libraries are R6RS `.sls`; libraries and programs contain their own code —
   no shared include bodies. R6RS forbids assigning an exported variable —
   reach mutable state through procedures.
+* Cite a sibling's record with its repository's name (`chez-curl ADR-0014`),
+  never by its number alone.
+* Before a global replace, predict how many matches it should hit, and check
+  the count afterwards: the sentence that defines a marker contains the
+  marker (`.plans/traps.md`).
 
 ### Testing & mutation discipline
 
@@ -85,10 +91,16 @@
 * A suite cannot vouch for the verdict it exits through. A suite that tests
   `suite-exit-status` must also exit 1 on its own failures, before the
   shared form.
-* Chez evaluates arguments right to left in compiled library code, left to
-  right when interpreted, and `map` calls its procedure in no fixed order. A
-  `let`'s inits are arguments too. No assertion may depend on either order;
-  use `for-each` for effects, and `let*` when one init must follow another.
+* Chez fixes no order for a call's arguments. On 10.4.0, compiled code ran
+  them left to right and `interpret` right to left, and the interpreter path
+  that `--script` and `load` take for simple top-level forms mixed them
+  (`cab`, `bca`) (`.plans/research/evaluation-order/`). `map` calls its
+  procedure in no fixed order, and a `let`'s inits are arguments too. No
+  assertion may depend on any order; use `for-each` for effects, and `let*`
+  when one init must follow another. A probe is code under these rules too.
+* The `sqlite3` command can carry its own copy of SQLite, with other
+  compile options; Guix's does. Read a library's version and options through
+  the FFI, never from the command (`.plans/traps.md`).
 * A setter that refuses a value keeps the one it had. Give each round trip
   its own sentinel, and assert every return code.
 * An assertion passes whenever *another* rule can produce its expected value.

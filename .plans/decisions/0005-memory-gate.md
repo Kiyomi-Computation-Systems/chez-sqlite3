@@ -14,8 +14,8 @@
   out-parameter block allocated per open and per prepare and never freed; a handle left open after
   a failed open; a close loop that stopped early and never reached `sqlite3_close`.
 - **Valgrind can't see Chez's heap.** chez-curl measured that a dropped `foreign-alloc` block,
-  still wrapped in an ftype pointer, passes clean, and so does an overrun into a bytevector (chez-curl
-  ADR-0014, amended 2026-10-16). A handle Scheme forgot is still "reachable" to Valgrind.
+  still wrapped in an ftype pointer, passes clean, and so does an overrun into a bytevector
+  (chez-curl ADR-0014, amended 2026-10-16). A handle Scheme forgot is still "reachable" to Valgrind.
 - **SQLite counts for itself.** `sqlite3_memory_used` reports what SQLite holds, unless the build
   turns memory statistics off; neither build measured on the host does. `sqlite3_next_stmt` walks
   a connection's open statements.
