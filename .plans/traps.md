@@ -109,6 +109,12 @@ told in chez-curl's `.plans/traps.md`.
   7th, and the row broke on an edit it wasn't about. Anchor on a line's content. (M1 slice 3,
   chez-sqlite3)
 
+- **A test that reads the name of the file `CHEZ` names assumes a layout.** CI's and the
+  container's Chez is `…/bin/scheme`; Homebrew's on a Mac is `/opt/homebrew/bin/chez`.
+  `test-check-floors`' `check-chez.sh` rows took the prefix from `CHEZ`'s path and failed 6 rows
+  on the maintainer's Mac. They now build a `bin/scheme` that execs it when the name differs.
+  (M1, the Mac's first hand run, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
