@@ -8,26 +8,55 @@ newest first.
 
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
 - **M0 slice 1, the container,** merged as PR #2.
-- **M0 slice 2, the test harness,** is built on `m0-slice-2-test-harness`, waiting for its review:
-  - **Built:** chez-srfi pinned three ways and checked by `check-pins`; the suite loop,
-    `check-suites`, `check-test-fails`, `clean` and `check-clean`; the verdict and the counters;
-    `require-threaded`; the floors, `check-floors` and README.org's Requirements;
-    `test-manifest`; and the CHANGELOG.
-  - **Brief D1 settled:** a threaded Chez is required (ADR-0001's amendment).
-  - **Each test helper comes with its first consumer** (harness plan, amended).
-  - **Three Sonnet agents** built the floors, `test-manifest`, and the verdict and counters
-    suites, in parallel. Four, one and three of their results were reproduced here.
-  - **Watched failing:** see [the log](test-harness-mutation-log.md). One agent mutation
-    survived: an equivalent one.
-  - **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced and fixed.
-    - The import scan read `.sls` only, and Chez loads a `.ss` first.
-    - The suites wrote stand-ins at fixed paths, so concurrent runs collided: 3 of 6 failed.
-    - A Sonnet agent fixed the test files. Its fixes were reproduced here, and 6 of 6
-      concurrent runs then passed.
-    - `TEST_TIMEOUT=0` is now refused, and the records that overstated are corrected.
+- **M0 slice 2, the test harness,** merged as PR #3.
+- **M0 slice 3, the memory gate,** is in progress on `m0-slice-3-memory-gate`.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs
+
+### 2026-11-13 — M0 slice 2: the test harness (PR #3, `d23cab1`)
+
+- **Built:**
+  - chez-srfi pinned three ways, and `check-pins`;
+  - the suite loop, `check-suites`, `check-test-fails`, `clean` and `check-clean`;
+  - the verdict and the counters; `require-threaded`;
+  - the floors, `check-floors` and README.org's Requirements;
+  - `test-manifest` and the CHANGELOG.
+- **Brief D1 settled:** a threaded Chez is required (ADR-0001's amendment).
+- **Watched failing:** the floors were written test-first; the verdict, counters and manifest
+  suites ran red against stubs or through their mutations, as
+  [the log](test-harness-mutation-log.md) records. One agent mutation survived: an equivalent one.
+- **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced and fixed.
+  - The import scan read `.sls` only, and Chez loads a `.ss` beside it first.
+  - The suites wrote stand-ins at fixed paths, so concurrent runs collided: 3 of 6 failed, and
+    6 of 6 passed after the fix.
+  - Also fixed: `TEST_TIMEOUT=0` ran with no limit, messages were checked by prefix only, and
+    records overstated their evidence.
+- **CI:** none yet.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The floors and `test-require-threaded` | Sonnet | about 144k | 35 | 9 min |
+  | `test-manifest` | Sonnet | about 64k | 10 | 2 min |
+  | The verdict and counters suites | Sonnet | about 93k | 20 | 4 min |
+  | The adversarial review | Opus | about 288k | 70 | 19 min |
+  | The review's fixes to the test files | Sonnet | about 161k | 46 | 8 min |
+
+  Two agents claimed the container couldn't run scratch copies; it can. One worked around a
+  safety check to remove `.git` from its scratch copies; the repository's own `.git` was checked
+  intact.
+- **Learned:**
+  - A rule added to the plan goes into every brief it binds. "Each helper comes with its first
+    consumer" was in the plan and not in the briefs, and three agents wrote fixed-path stand-ins.
+  - A harness that can run concurrently is tested concurrently.
+  - Trimming a copy, list what each dropped piece protected and where that protection now lives.
+    `check-seam`'s rule against library files that aren't `.sls` was dropped with nothing in its
+    place.
+  - Counts in the records come from the evidence. Reproductions were first written as three per
+    agent; they were four, one and three.
+  - A brief that wants a test written first asks for the red run's output in the hand-back. Two of
+    the three agents wrote their code first, and said so.
 
 ### 2026-11-13 — M0 slice 1: the pinned Guix container (PR #2, `efe89b3`)
 
