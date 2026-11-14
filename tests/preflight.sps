@@ -7,8 +7,12 @@
 ;;; and the source id, on stdout, and exits 0. Refused: it prints
 ;;; (reason . SYMBOL), then the path, the source, the detail, the version and
 ;;; source id when the refusal came after the library said what it is, every
-;;; candidate checked and a one-line remedy, on stderr, and exits 1. The
-;;; reason is the contract; the rest is for the reader (ADR-0002). Anything
+;;; candidate checked and a one-line remedy, on stderr, and exits 1. Either
+;;; way its last line is its counts, (chez-sqlite3 private counters)'
+;;; native-counts: it is a child that reaches native code when
+;;; tests/test-library-loading.sps runs it, and that suite requires every
+;;; count zero (ADR-0005, decision 4). The reason is the contract; the rest
+;;; is for the reader (ADR-0002). Anything
 ;;; else raised is a bug, not a refusal, and is left to Chez's default
 ;;; handler, which exits non-zero. The report's accessors live in
 ;;; (chez-sqlite3 private libsqlite3-info), whose body cannot raise, so
@@ -22,7 +26,8 @@
 (import (rnrs)
         (only (chezscheme) eval environment)
         (chez-sqlite3 private conditions)
-        (chez-sqlite3 private libsqlite3-info))
+        (chez-sqlite3 private libsqlite3-info)
+        (chez-sqlite3 private counters))
 
 ;; say : Output-Port Any ... -> Void
 ;; PARTS displayed, then a newline.
@@ -31,6 +36,13 @@
   (newline port))
 
 (define (or-none value) (or value "none"))
+
+;; say-counts : Output-Port -> Void
+;; The last line: every native count, as native-counts gives them.
+(define (say-counts port)
+  (display "  counts:     " port)
+  (write (native-counts) port)
+  (newline port))
 
 (guard (e ((sqlite-library-unavailable? e)
            (let ((err (current-error-port))
@@ -54,6 +66,7 @@
              (say err "  remedy:     " (if (message-condition? e)
                                             (condition-message e)
                                             "name a usable libsqlite3 with CHEZ_SQLITE3_LIBRARY, an absolute path"))
+             (say-counts err)
              (exit 1))))
   (let ((info (eval '(loaded-libsqlite3) (environment '(chez-sqlite3 private native))))
         (out (current-output-port)))
@@ -62,4 +75,5 @@
     (say out "  version:    " (libsqlite3-info-version info)
          " (" (libsqlite3-info-version-number info) ")")
     (say out "  source id:  " (libsqlite3-info-source-id info))
+    (say-counts out)
     (exit 0)))

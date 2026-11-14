@@ -25,12 +25,17 @@
 #     `concurrency` line for line, the three jobs and each key in them, each
 #     step's keys, with: and env: keys, the one if: and where it may be, the
 #     cache keys, the checks each job must run, each as one step's whole run
-#     line, in order, and the CHEZ each job runs with; and in job main, between
-#     its check-chez step and its make step, the steps "Report the versions
-#     this run uses" (its run block, line for line) and "Report the runner's
+#     line, in order, and the CHEZ each job runs with; in job main, ADR-0002's
+#     install check, make build, as one step's whole run line, after its
+#     check-chez step and before its make step; and in job main, between its
+#     check-chez step and its make step, the steps "Report the versions this
+#     run uses" (its run block, line for line) and "Report the runner's
 #     SQLite" (its run line, and its env CHEZ), in that order;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
-#     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...); and
+#     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...), the
+#     compiler's and the loader's among them (CC, C_INCLUDE_PATH, CPATH,
+#     LD_LIBRARY_PATH, LD_PRELOAD), which could steer test-constants or the
+#     load; and
 #     check-memory-gate, test-memory and check-nothreads anywhere but as the
 #     whole run line of the step that runs them.
 #
@@ -164,7 +169,7 @@ function closeblock(k,   i, top) {
 # nreq(j): fills rq[1..n] with the run lines job j must run, in order.
 function nreq(j) {
   if (j == "main") {
-    rq[1] = CHKT; rq[2] = MAKELINE; rq[3] = LAUNCHER; return 3
+    rq[1] = CHKT; rq[2] = BUILDLINE; rq[3] = MAKELINE; rq[4] = LAUNCHER; return 4
   }
   if (j == "memory") {
     rq[1] = CHKT; rq[2] = "make check-memory-gate"; rq[3] = "make test-memory"; return 3
@@ -333,15 +338,16 @@ BEGIN {
   gname[1] = "check-memory-gate"; gjob[1] = "memory"
   gname[2] = "test-memory";       gjob[2] = "memory"
   gname[3] = "check-nothreads";   gjob[3] = "nothreads"
-  split("MAKEFLAGS MFLAGS GNUMAKEFLAGS VALGRIND MEMORY_SUITES MEMORY_TIMEOUT TEST_TIMEOUT LIBDIRS TIMEOUT SUITES CHEZ_SQLITE3_LIBRARY", bw, " ")
-  for (i = 1; i <= 11; i++) banned[bw[i]] = 1
+  nbw = split("MAKEFLAGS MFLAGS GNUMAKEFLAGS VALGRIND MEMORY_SUITES MEMORY_TIMEOUT TEST_TIMEOUT LIBDIRS TIMEOUT SUITES CHEZ_SQLITE3_LIBRARY CHEZ_SQLITE3_DECOY CHEZ_SQLITE3_GATE_CHILD CC C_INCLUDE_PATH CPATH LD_LIBRARY_PATH LD_PRELOAD", bw, " ")
+  for (i = 1; i <= nbw; i++) banned[bw[i]] = 1
   HASHLIST = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh'"
   IFLINE = "if: steps.chez.outputs.cache-hit != 'true'"
   PINRUN = "scripts/ci/check-action-pins.sh .github/workflows"
   CHKT = "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\""
   CHKN = "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads"
   BLDN = "scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads"
-  MAKELINE = "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-clean"
+  BUILDLINE = "make build"
+  MAKELINE = "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean"
   LAUNCHER = "sh tests/guix-env-launcher.sh"
   VERS = "Report the versions this run uses"
   SQLN = "Report the runner's SQLite"

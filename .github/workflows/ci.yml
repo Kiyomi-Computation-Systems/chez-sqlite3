@@ -13,7 +13,8 @@ name: CI
 # pull request, each push to main or a v* tag, and each run asked for from the
 # Actions tab. No path filter: a check that a change skips is no check.
 #   main        every action pinned to a commit, the runner's SQLite
-#               reported, every check, then the suites.
+#               reported, then found by discovery and accepted (ADR-0002's
+#               install check), every check, then the suites.
 #   memory      the Valgrind gate (ADR-0005): the planted defects must fail
 #               it, then every suite runs under it.
 #   nothreads   every library under src/ must be refused, by name, on a Chez
@@ -140,12 +141,21 @@ jobs:
           CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
         run: scripts/ci/report-sqlite.sh
 
+      # ADR-0002's install check. No line here names the override, so make
+      # build finds the runner's SQLite by discovery, in the FHS world, and
+      # must accept it: any refusal fails this step, with build's reason. The
+      # file it found is the path line of this step's log.
+      - name: The install check, by discovery
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+        run: make build
+
       # CHEZ is the real binary, not a symlink or a wrapper. make test runs
       # check-ci, which holds this file's shape.
       - name: Checks and suites
         env:
           CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
-        run: make check-help check-suites check-pins check-floors check-ci test check-test-fails check-clean
+        run: make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean
 
       # The launcher's own tests run no Guix: stand-ins take its place. They
       # need make test, so CHEZ too.

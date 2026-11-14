@@ -10,7 +10,11 @@
 ;;;
 ;;; The program is compiled into a fresh directory of call-with-temp-directory's,
 ;;; never a fixed path, and removed with it. It dlopens the path it is given,
-;;; exactly, and links no libsqlite3 (the program's header).
+;;; exactly, and links no libsqlite3 (the program's header). It runs through
+;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
+;;; with a log of its own: the gate takes a child named libsqlite3-oracle, as
+;;; it takes Chez (ADR-0005, amended). Measured clean there: 0 errors, nothing
+;;; lost, 3,732 bytes still reachable from its dlopen.
 ;;;
 ;;; Test-only: it lives in tests/, which make test puts on Chez's library
 ;;; path, not in src/.
@@ -22,7 +26,10 @@
   ;; oracle-fields : (Listof Symbol)
   ;; What the oracle prints, in its order: sqlite3_libversion,
   ;; sqlite3_libversion_number, sqlite3_sourceid, sqlite3_threadsafe, the
-  ;; compile options, and sqlite3_errstr of each code asked for.
+  ;; compile options, and sqlite3_errstr of each code asked for. It then
+  ;; prints (valgrind . yes) or (valgrind . no): whether it ran under memcheck.
+  ;; libsqlite3-oracle answers it after these fields, never among them, so that
+  ;; a suite comparing each field with another source leaves it out.
   (define oracle-fields '(version version-number source-id threadsafe compile-options errstr))
 
   ;; split-words : String -> (Listof String)
@@ -48,8 +55,9 @@
   ;;                     -> (U (Listof (Pairof Symbol Any)) (List 'no-oracle Symbol Any))
   ;; Compiles tests/libsqlite3-oracle.c with (c-compiler GETENV), -Wall and
   ;; -Werror into a fresh directory from call-with-temp-directory, runs it on
-  ;; PATH and CODES, and answers what it printed, read as data: (FIELD . VALUE)
-  ;; for each of oracle-fields, in order. Anything else is (no-oracle STEP
+  ;; PATH and CODES, through (gated-command GETENV ...), and answers what it printed, read as data: (FIELD . VALUE)
+  ;; for each of oracle-fields, in order, then (valgrind . yes) or
+  ;; (valgrind . no). Anything else is (no-oracle STEP
   ;; EVIDENCE), naming the step that went wrong: compile, run, output (that is
   ;; not the fields), or raised, with the text of a raise, which includes
   ;; mktemp's answer being refused. It never raises. The directory is removed,
@@ -67,15 +75,16 @@
                                    "-ldl")))))
       (if (not (= (car compiled) 0))
           (list 'no-oracle 'compile compiled)
-          (let ((ran (capture-command (cons program (cons path (map number->string codes))))))
+          (let ((ran (capture-command
+                      (gated-command getenv (cons program (cons path (map number->string codes)))))))
             (if (not (= (car ran) 0))
                 (list 'no-oracle 'run ran)
                 (let ((data (read-all (cadr ran))))
                   (if (and (list? data)
-                           (= (length data) (length oracle-fields))
+                           (= (length data) (+ (length oracle-fields) 1))
                            (for-all (lambda (datum field)
                                       (and (pair? datum) (eq? (car datum) field)))
-                                    data oracle-fields))
+                                    data (append oracle-fields '(valgrind))))
                       data
                       (list 'no-oracle 'output (cadr ran)))))))))
 

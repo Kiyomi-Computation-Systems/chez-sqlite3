@@ -1,8 +1,8 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3-testing): suite-exit-form, suite-exit-status,
 ;;; capture-command, the temporary directories (call-with-temp-directory,
-;;; make-process-temp-directory, remove-temp-directory), run-until and
-;;; describe.
+;;; make-process-temp-directory, remove-temp-directory), run-until,
+;;; gated-command and describe.
 ;;;
 ;;; Each expected value is one the code under test cannot produce by failing.
 ;;; SRFI-64 turns a raise in the actual expression into #f, so no expected
@@ -709,6 +709,38 @@
   '(assertion-violation run-until (step))
   (raised (lambda () (run-until 'step (lambda () #f) 3))))
 
+
+;; --- gated-command ----------------------------------------------------------
+
+;; env-of : (Listof (Pairof String String)) -> (String -> (U String #f))
+;; A getenv that reads ALIST and nothing else.
+(define (env-of alist)
+  (lambda (name) (cond ((assoc name alist) => cdr) (else #f))))
+
+(define child-argv '("/opt/chez/bin/scheme" "--libdirs" "src" "--program" "tests/p.sps" "a b"))
+
+(test-equal "gated-command: with CHEZ_SQLITE3_GATE_CHILD unset, the command comes back unchanged"
+  child-argv
+  (gated-command (env-of '(("OTHER" . "valgrind"))) child-argv))
+
+(test-equal "gated-command: with it set, its words come first, cut at runs of spaces, tabs and newlines, and each argument of the command stays one word"
+  (append '("valgrind" "-v" "--log-file=build/memory/x.children/%p.valgrind" "--error-exitcode=9")
+          child-argv)
+  (gated-command (env-of '(("CHEZ_SQLITE3_GATE_CHILD"
+                            . "  valgrind\t-v --log-file=build/memory/x.children/%p.valgrind\n --error-exitcode=9 ")))
+                 child-argv))
+
+(test-equal "gated-command: a value that holds no word is refused, since no Valgrind would run the child"
+  '((assertion-violation gated-command ("")) (assertion-violation gated-command (" \t ")))
+  (let* ((empty (raised (lambda () (gated-command (env-of '(("CHEZ_SQLITE3_GATE_CHILD" . ""))) child-argv))))
+         (blank (raised (lambda () (gated-command (env-of '(("CHEZ_SQLITE3_GATE_CHILD" . " \t "))) child-argv)))))
+    (list empty blank)))
+
+(test-equal "gated-command: a command is a non-empty list of strings"
+  '((assertion-violation gated-command (())) (assertion-violation gated-command (("scheme" 5))))
+  (let* ((none (raised (lambda () (gated-command (env-of '()) '()))))
+         (odd (raised (lambda () (gated-command (env-of '()) '("scheme" 5))))))
+    (list none odd)))
 
 ;; --- describe -------------------------------------------------------------
 

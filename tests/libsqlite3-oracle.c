@@ -21,6 +21,13 @@
  *                                             from 0 to the first NULL
  *   (errstr (0 . "not an error") ...)         sqlite3_errstr(CODE), for each
  *                                             CODE given, in order
+ *   (valgrind . yes)                          whether this process runs
+ *                                             under Valgrind's memcheck:
+ *                                             yes when /proc/self/maps maps
+ *                                             vgpreload_memcheck, else no
+ *                                             (as off Linux). Under make
+ *                                             test-memory the suites require
+ *                                             yes (ADR-0005, amended).
  *
  * A NULL string is #f. It exits 0, or 1 with a message on stderr when PATH
  * will not load, lacks a function, or a CODE is no integer. A missing header
@@ -30,6 +37,7 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sqlite3.h>
 
 /* put_quoted: "VALUE", with " and \ escaped, or #f for NULL. */
@@ -47,6 +55,20 @@ static void put_quoted(const char *value)
     putchar(*p);
   }
   putchar('"');
+}
+
+/* under_valgrind: 1 when /proc/self/maps maps memcheck's preload, else 0. */
+static int under_valgrind(void)
+{
+  char line[4096];
+  int found = 0;
+  FILE *maps = fopen("/proc/self/maps", "r");
+  if (!maps)
+    return 0;
+  while (!found && fgets(line, sizeof line, maps))
+    found = strstr(line, "vgpreload_memcheck") != NULL;
+  fclose(maps);
+  return found;
 }
 
 /* find: NAME's address in LIBRARY, or exit 1 naming it. */
@@ -115,5 +137,6 @@ int main(int argc, char **argv)
     putchar(')');
   }
   printf(")\n");
+  printf("(valgrind . %s)\n", under_valgrind() ? "yes" : "no");
   return 0;
 }

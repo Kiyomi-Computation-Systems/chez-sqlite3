@@ -95,6 +95,20 @@ told in chez-curl's `.plans/traps.md`.
   until the call returns. Only another process can release it: `test-native`'s FIFO row opens
   the FIFO from a shell. (M1 slice 2, chez-sqlite3)
 
+- **`--trace-children` with a skip list sees nothing below what it skips.** Chez's `system` runs
+  a static bash, which, traced, reports about 300 uninitialised-value errors and exits 9 for every
+  child. Skipping the shell untraced every child it started, so a planted child leak passed. The
+  gate runs each child under its own Valgrind instead (ADR-0005, M1 slice 3, chez-sqlite3).
+
+- **GNU `env` reads `-u` only before its first assignment.** `env A=1 -u HOME sh` runs a command
+  named `-u`: "env: '-u': No such file or directory". Unset first, then assign. (M1 slice 3,
+  chez-sqlite3)
+
+- **A row that finds its anchor by counting occurrences breaks when the file gains one.** A
+  `test-check-ci` row named the 6th `CHEZ:` line of the workflow; slice 3's new step made it the
+  7th, and the row broke on an edit it wasn't about. Anchor on a line's content. (M1 slice 3,
+  chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

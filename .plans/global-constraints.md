@@ -135,11 +135,15 @@ Proposed record is marked *(provisional)* until that record is accepted.
   three jobs and their keys; each check as a step's whole run line; no `if:` but the cache's own;
   no line naming a variable that steers a check; no key spelled so a text check would miss it. It
   holds against a mistaken edit, not a deliberate one: a step can compute any name. A change to
-  the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended).
+  the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended). The banned names include
+  `CC`, `C_INCLUDE_PATH`, `CPATH`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `CHEZ_SQLITE3_DECOY` and
+  `CHEZ_SQLITE3_GATE_CHILD`, and `CHEZ_SQLITE3_LIBRARY` stays banned in `main`, the job that tests
+  discovery (M1 slice 3).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
-- **Valgrind follows no child process.** A suite's child that reaches native code runs under the
-  gate itself, with its own log, or the gate follows children and reads every process's log
-  (ADR-0005, amended).
+- **Every child that reaches native code runs through `gated-command`,** under the gate's own
+  Valgrind with its own log, which `make test-memory` holds to the parent's evidence rules. The
+  gate never uses `--trace-children`. A child started otherwise runs outside Valgrind (ADR-0005,
+  amended).
 - **`make test-memory` takes `MEMORY_SUITES` from make's command line only,** and refuses one
   from the environment (ADR-0005, amended).
