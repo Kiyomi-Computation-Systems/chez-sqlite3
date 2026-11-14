@@ -42,13 +42,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
   code from a `uptr` (ADR-0011).
   - **M2 narrows the U+0000 refusal to the strings SQLite reads to a NUL:** a filename, SQL text, a
     parameter name. Bound text is counted, and keeps its U+0000 (ADR-0011 amended).
-    *(provisional)*
 - **The calls that can block are `__collect_safe`:** `sqlite3_open_v2` and `sqlite3_close` from
   M1, `sqlite3_prepare_v3` and `sqlite3_step` from M2. Every binding has a row in the convention
   table, and from M1 slice 2 the convention suite holds every `foreign-procedure` form to it
   (ADR-0011).
   - **`sqlite3_reset` and `sqlite3_finalize` join them in M2,** measured waiting in the busy
-    handler, and M2's four are held by behaviour too (ADR-0011 amended). *(provisional)*
+    handler, and M2's four are held by behaviour too (ADR-0011 amended).
 
 ## Loading libsqlite3
 
@@ -97,42 +96,39 @@ Proposed record is marked *(provisional)* until that record is accepted.
 ## Statements and values
 
 - **A statement is an integer in an opaque, sealed record, and its connection holds it,
-  strongly.** No guardians, no weak tracking (ADR-0014, ADR-0012 amended). *(provisional)*
+  strongly.** No guardians, no weak tracking (ADR-0014, ADR-0012 amended).
 - **`close-database!` finalizes every statement it holds, checks `sqlite3_next_stmt`, calls
   `sqlite3_close`, and then raises the first failure a finalize reported;** a failed close keeps the
   connection open and counted (the maintainer's, R1). The statements are finalized oldest first,
-  and a failed close raises its own failure (ADR-0014). *(provisional)*
+  and a failed close raises its own failure (ADR-0014).
 - **Every statement verb checks, in order, before anything reaches C:** a statement; on its
   connection's owning thread, else `&sqlite-wrong-thread`; not finalized, else `&sqlite-closed`;
   then its state. `finalize-statement!` makes the first two alone, and does nothing on a finalized
-  statement (ADR-0014). *(provisional)*
+  statement (ADR-0014).
 - **A statement's state lives in Scheme:** `ready`, `row`, `done`, `failed`, or finalized. Binding
   and `clear-bindings!` are allowed only in `ready`, column values only in `row`; `step!` on a done
   or failed statement is refused until `reset!`; every index is checked before C against a count
-  read in the same critical section (ADR-0014). *(provisional)*
+  read in the same critical section (ADR-0014).
 - **SQL holding no statement, or more than one, is refused,** the tail checked by a scan in Scheme,
   never prepared, against SQLite's own whitespace (space, `\t`, `\n`, `\f`, `\r`) and comments;
-  so is SQL holding U+0000 (ADR-0014, ADR-0011 amended). *(provisional)*
+  so is SQL holding U+0000 (ADR-0014, ADR-0011 amended).
 - **Reset and finalize raise a failure of their own,** and never repeat a failed step's. A finalize
   clears, untracks and counts the statement down whatever SQLite answers, then raises (ADR-0014).
-  *(provisional)*
 - **A statement verb raises after its critical section, never inside it,** and reaches a
   connection's handle only through `call-with-open-handle`, its one accessor (ADR-0014, ADR-0012
-  amended). *(provisional)*
+  amended).
 - **What binds:** an exact integer within 64 bits, checked by us, a flonum but `+nan.0`, a string,
   a bytevector, `sql-null`. Anything else, `#t` and `#f` among them, is an assertion violation
   naming the value by its kind; a bind SQLite refuses raises `&sqlite-error` (ADR-0015).
-  *(provisional)*
 - **A pointer passed for a value is never NULL,** even for an empty one (ADR-0011 amended,
-  ADR-0015). *(provisional)*
+  ADR-0015).
 - **A column's Scheme type comes from `sqlite3_column_type`, never the declared type.** TEXT is
   read through `sqlite3_column_text` and decoded strictly, and bytes that aren't well-formed UTF-8
   raise `&sqlite-invalid-text`; `column-bytevector` reads them undecoded (ADR-0015).
-  *(provisional)*
 - **A `&sqlite-error`'s subtype comes from its primary code, in the one procedure that makes
-  one,** and its `offset` counts characters of its `sql` (ADR-0013 amended). *(provisional)*
+  one,** and its `offset` counts characters of its `sql` (ADR-0013 amended).
 - **`test-library-loading` is split in two once it passes 450 s under the gate on CI,** three
-  quarters of `MEMORY_TIMEOUT` (ADR-0005 amended). *(provisional)*
+  quarters of `MEMORY_TIMEOUT` (ADR-0005 amended).
 
 ## Layout and names
 

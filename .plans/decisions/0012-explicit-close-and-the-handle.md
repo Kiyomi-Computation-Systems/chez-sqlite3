@@ -3,7 +3,7 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   approved decision 2 (the handle) and decision 3's surface on 2026-11-13, and decision 7's type
   and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
-  what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14, proposed: the statements a connection
+  what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: the statements a connection
   holds (M2's plan, [amendment](#amendment-2026-11-14-the-statements-a-connection-holds-m2s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
@@ -170,9 +170,9 @@
 
 ## Amendment, 2026-11-14: the statements a connection holds (M2's plan)
 
-Proposed in M2 slice 0. Closing, then raising a finalize's failure, is the maintainer's choice
-(R1, 2026-11-14, [the M2 plan](../2026-11-14-m2-plan.md), §3); the rest awaits the maintainer's
-acceptance.
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0. Closing, then raising a
+finalize's failure, is the maintainer's own choice (R1, 2026-11-14,
+[the M2 plan](../2026-11-14-m2-plan.md), §3).
 
 - **Decision 5 is built in M2,** by [ADR-0014](0014-statements-belong-to-their-connection.md):
   the `database` record holds its live statements, strongly. `close-database!` finalizes each,

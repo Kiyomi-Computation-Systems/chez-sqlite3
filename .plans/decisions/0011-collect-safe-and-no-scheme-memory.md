@@ -3,7 +3,7 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. Proposed first in
   the brief, §3d. Amended 2026-11-14: what slice 2 measured
   ([amendment](#amendment-2026-11-14-what-m1-slice-2-measured)). Amended
-  2026-11-14, proposed: strings SQLite reads to a NUL, and counted values (M2's plan,
+  2026-11-14: strings SQLite reads to a NUL, and counted values (M2's plan,
   [amendment](#amendment-2026-11-14-strings-sqlite-reads-to-a-nul-and-counted-values-m2s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
@@ -101,7 +101,7 @@
 
 ## Amendment, 2026-11-14: strings SQLite reads to a NUL, and counted values (M2's plan)
 
-Proposed in M2 slice 0, and awaiting the maintainer's acceptance
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
 ([the M2 plan](../2026-11-14-m2-plan.md), §4.3 to §4.5). Measured on Guix's 3.53.1 and at the
 floor, 3.45.1, with the same results ([research/m2-plan/](../research/m2-plan/),
 [research/m2-review/](../research/m2-review/)).

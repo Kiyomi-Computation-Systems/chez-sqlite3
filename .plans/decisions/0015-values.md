@@ -1,11 +1,12 @@
 # ADR-0015: Values: what binds, what a column reads back, and what is refused
 
-- **Status:** Proposed in M2 slice 0. The maintainer chose, on 2026-11-14
-  ([the M2 plan](../2026-11-14-m2-plan.md), §2 and §3): decision 3's refusal of `+nan.0` (D4);
-  decision 4's refusal of `#t` and `#f` (D5); decision 9's named condition for TEXT that isn't
-  UTF-8, with the column readable as bytes instead (D6), and its type and fields (Q8, in
-  [ADR-0013](0013-errors-are-condition-types.md)'s amendment); and decision 10's `sql-null` as one
-  value (Q7). The rest, the reasons given here among it, awaits the maintainer's acceptance.
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M2 slice 0. The maintainer's own
+  choices, the same day ([the M2 plan](../2026-11-14-m2-plan.md), §2 and §3): decision 3's
+  refusal of `+nan.0` (D4); decision 4's refusal of `#t` and `#f` (D5); decision 9's named
+  condition for TEXT that isn't UTF-8, with the column readable as bytes instead (D6), and its type
+  and fields (Q8, in [ADR-0013](0013-errors-are-condition-types.md)'s amendment); and decision 10's
+  `sql-null` as one value (Q7). The reasons given here were put to the maintainer, and accepted
+  with the record.
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every bound parameter and every column value
 - **Settles:** brief §3f, D4, D5 and D6

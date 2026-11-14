@@ -3,7 +3,7 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
   §3g. Amended 2026-11-14: what slice 4 built
-  ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14, proposed: M2's conditions (M2's plan,
+  ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: M2's conditions (M2's plan,
   [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
@@ -118,10 +118,10 @@
 
 ## Amendment, 2026-11-14: M2's conditions (M2's plan)
 
-Proposed in M2 slice 0. The maintainer chose, on 2026-11-14 ([the M2 plan](../2026-11-14-m2-plan.md),
-§3): `offset` in characters (Q6); `&sqlite-invalid-text`, under the root, with the column's
-index and a byte offset (Q8); and `&sqlite-closed` for a finalized statement (Q5). The rest awaits
-the maintainer's acceptance.
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0. The maintainer's own choices,
+the same day ([the M2 plan](../2026-11-14-m2-plan.md), §3): `offset` in characters (Q6);
+`&sqlite-invalid-text`, under the root, with the column's index and a byte offset (Q8); and
+`&sqlite-closed` for a finalized statement (Q5).
 
 - **The hierarchy, with M2's types:**
 

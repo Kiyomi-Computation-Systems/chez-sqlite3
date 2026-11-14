@@ -11,8 +11,8 @@
   [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)), and the
   children under the gate (M1 slice 3,
   [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)), and SQLite's memory check
-  (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)). Amended 2026-11-14,
-  proposed: statements, and the decoy's cost (M2's plan, [amendment](#amendment-2026-11-14-statements-and-the-decoys-cost-m2s-plan)).
+  (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)). Amended 2026-11-14:
+  statements, and the decoy's cost (M2's plan, [amendment](#amendment-2026-11-14-statements-and-the-decoys-cost-m2s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -367,7 +367,7 @@ Measured in the pinned container before the gate was built
 
 ## Amendment, 2026-11-14: statements, and the decoy's cost (M2's plan)
 
-Proposed in M2 slice 0, and awaiting the maintainer's acceptance
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
 ([the M2 plan](../2026-11-14-m2-plan.md), §4.1 and §4.7).
 
 - **The `statement` counter gets its counts** ([ADR-0014](0014-statements-belong-to-their-connection.md),

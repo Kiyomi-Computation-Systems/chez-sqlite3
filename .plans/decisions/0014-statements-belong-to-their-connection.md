@@ -1,14 +1,12 @@
 # ADR-0014: A statement belongs to its connection, is an integer in a sealed record, and keeps its state in Scheme
 
-- **Status:** Proposed in M2 slice 0. The maintainer chose, on 2026-11-14
-  ([the M2 plan](../2026-11-14-m2-plan.md), §3): decision 1's short names (Q1) and `step!`'s
-  answer (Q2); decision 3's `&sqlite-closed` for a finalized statement, and a second finalize that
-  does nothing (Q5); decision 4's refusal of SQL holding no statement or more than one (Q3), and
-  its scan of the tail in Scheme (R2); decision 5's refusal of `step!` on a done or failed
-  statement until `reset!` (Q4); and decision 8's finalize, close, then raise the first finalize
-  failure, with the connection left open and counted when the close fails (R1). The rest awaits
-  the maintainer's acceptance: decision 1's list of verbs, decision 8's order and which failure is
-  raised when both a finalize and the close fail among it.
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M2 slice 0. The maintainer's own
+  choices, the same day ([the M2 plan](../2026-11-14-m2-plan.md), §3): decision 1's short names
+  (Q1) and `step!`'s answer (Q2); decision 3's `&sqlite-closed` for a finalized statement, and a
+  second finalize that does nothing (Q5); decision 4's refusal of SQL holding no statement or more
+  than one (Q3), and its scan of the tail in Scheme (R2); decision 5's refusal of `step!` on a done
+  or failed statement until `reset!` (Q4); and decision 8's finalize, close, then raise the first
+  finalize failure, with the connection left open and counted when the close fails (R1).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -173,7 +171,7 @@
      the caller learns that, for example, a commit was lost;
    - if `sqlite3_close` fails, the connection stays open and counted.
 
-   Proposed with it:
+   Proposed in slice 0 with it, and accepted with the record:
    - **the statements are finalized oldest first,** in the order they were prepared;
    - when `sqlite3_close` fails, its failure is the one raised, as in M1; an untracked statement
      is refused as in M1; each takes the place of a finalize failure;

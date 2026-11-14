@@ -3,7 +3,7 @@
 - **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b. Amended
   2026-11-14: `not-threadsafe`, and what the Mac showed
   ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)). Amended
-  2026-11-14, proposed: M2's required entry points ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)).
+  2026-11-14: M2's required entry points ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -182,7 +182,7 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
 
 ## Amendment, 2026-11-14: M2's required entry points (M2's plan)
 
-Proposed in M2 slice 0, and awaiting the maintainer's acceptance
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
 ([the M2 plan](../2026-11-14-m2-plan.md), §4.7).
 
 - **M2 adds 21 required entry points** to item 5 of the M1 amendment's "What is bound, in
