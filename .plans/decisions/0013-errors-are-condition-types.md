@@ -1,6 +1,6 @@
 # ADR-0013: Errors are condition types under one fieldless root, and SQLite's codes are symbols
 
-- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
   §3g. Amended 2026-11-14: what slice 4 built
   ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).
@@ -98,8 +98,8 @@
   not its constructor, as the maintainer's list of public names has it. The consequence's "one
   type, predicate and accessor set per condition" is read so.
 - **`sqlite-library-unavailable-library` is not exported in M1.** It would hand back a report no
-  public accessor can read, and `below-floor`'s detail already carries the version. For the
-  maintainer's review.
+  public accessor can read, and `below-floor`'s detail already carries the version. The
+  maintainer approved leaving it unexported, 2026-11-14.
 - **`code`'s type is `(U Symbol Integer)`.** Decision 4's "every primary code is named" holds for
   today's primaries; a future low byte the table doesn't name answers the integer.
 - **Slice 4's refusals lead their irritants with a symbol naming the rule:** `not-a-string`,

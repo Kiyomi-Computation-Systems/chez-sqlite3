@@ -1,6 +1,6 @@
 # ADR-0010: A connection belongs to the thread that opened it, and opens with SQLite's mutex
 
-- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Decisions 3 and 4
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. Decisions 3 and 4
   were the maintainer's own, on 2026-11-13: brief D2, and the `THREADSAFE=0` refusal. Proposed first
   in the brief, §3c. Amended 2026-11-14: the mutex, measured
   ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)).

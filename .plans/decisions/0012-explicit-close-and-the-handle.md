@@ -1,6 +1,6 @@
 # ADR-0012: Closing is explicit, with no guardians, and a connection's handle is an integer in a sealed record
 
-- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   approved decision 2 (the handle) and decision 3's surface on 2026-11-13, and decision 7's type
   and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
   what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).

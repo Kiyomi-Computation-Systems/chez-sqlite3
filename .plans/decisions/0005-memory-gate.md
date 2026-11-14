@@ -213,7 +213,7 @@ Measured in the pinned container before the gate was built
   ([research/mac-d7/](../research/mac-d7/)). A check that the count returns to its baseline would
   pass there without testing anything.
 - **So the memory check has a positive control, and the control is the check's own** (proposed
-  in M1 slice 0, for acceptance with its PR). At a suite's exit, in a process that loaded
+  in M1 slice 0; accepted by the maintainer, 2026-11-14). At a suite's exit, in a process that loaded
   libsqlite3, the check opens a `:memory:` connection of its own, reads the count while it is
   open, and closes it. If the count rose, the library counts, and the check runs: the count must
   be back at its baseline. If it didn't rise, the check is unavailable. A suite that opens

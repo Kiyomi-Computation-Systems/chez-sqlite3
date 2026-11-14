@@ -44,7 +44,7 @@
 
 ## Amendment, 2026-11-14: what `check-seam` reads (M1's plan)
 
-Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
+Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0.
 
 - **`check-seam` reads `src/` alone.** The rule is about what the library exposes:
   under `src/`, only `(chez-sqlite3)` and the `(chez-sqlite3 private …)` libraries exist, and no

@@ -119,7 +119,7 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
 - **A sixth reason, `not-threadsafe`.** A library whose `sqlite3_threadsafe()` answers 0 is
   refused (ADR-0010, decision 4; the maintainer, 2026-11-13). The refusal's detail is the
   answer, 0.
-- **What is bound, in order** (proposed in M1 slice 0, for acceptance with its PR):
+- **What is bound, in order** (proposed in M1 slice 0; accepted by the maintainer, 2026-11-14):
   1. **The report's three:** `sqlite3_libversion_number`, `sqlite3_libversion` and
      `sqlite3_sourceid`, which every SQLite 3 has. The report is built from them, with the path
      and the source: those five fields and no others. So every refusal from here on carries it.

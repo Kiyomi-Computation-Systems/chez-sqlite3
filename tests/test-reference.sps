@@ -7,7 +7,7 @@
 ;;; lists them, never as the library's text writes them; and what each name
 ;;; is, as Chez evaluates it in the library's environment: a procedure, or
 ;;; another value (syntax, too, which this library exports none of, would
-;;; fail the suite). No code comment is read. And the page, read as
+;;; fail the suite). And the page, read as
 ;;; CommonMark is: its ATX headings outside fenced blocks, and the lines of
 ;;; each fenced block whose info string's first word is text, in any case.
 ;;;
@@ -18,11 +18,19 @@
 ;;; - an entry holds exactly one text block, of one line, "NAME : TYPE", the
 ;;;   same NAME as its heading; a procedure's TYPE holds ->, and a value's
 ;;;   does not;
-;;; - every export has exactly one entry, and every entry is an export.
+;;; - every export has exactly one entry, and every entry is an export;
+;;; - the line is, character for character, the signature comment of the
+;;;   export in src/chez-sqlite3.sls, ";; NAME : TYPE", of which each export
+;;;   has exactly one, and none is for a name that is not exported.
 ;;;
-;;; Out of its reach, with no oracle but a reader's reading of the code: a
-;;; type that is wrong, so long as a procedure's holds -> and a value's does
-;;; not.
+;;; The signature comments are read as text, up to the source's import
+;;; clause. This is the one place a test reads a code comment. AGENTS.md
+;;; says not to; its exception, the maintainer, 2026-11-14, holds the
+;;; reference's signatures to the source's signature comments, which are the
+;;; contract: the page is wrong when it differs from them. The export names
+;;; are still Chez's, never read from the text.
+;;;
+;;; Out of its reach: a signature comment that is itself wrong.
 ;;;
 ;;; The page is read as CommonMark is: its ATX headings outside fenced
 ;;; blocks, and each fenced block, opened by up to three spaces and three or
@@ -258,6 +266,24 @@
     (and (starts? line lead)
          (substring line (string-length lead) (string-length line)))))
 
+;; signature-comments : String -> (Listof (Pair String String))
+;; Every line of the source's text, up to its import clause, that is a comment
+;; ";; NAME : TYPE" (any indent), as (NAME . "NAME : TYPE"). NAME holds no space.
+(define (signature-comments text)
+  (let* ((lines (let take ((ls (text-lines text)) (out '()))
+                  (if (or (null? ls) (starts? (trim (car ls)) "(import"))
+                      (reverse out)
+                      (take (cdr ls) (cons (trim (car ls)) out)))))
+         (comments (map (lambda (l) (substring l 3 (string-length l)))
+                        (filter (lambda (l) (starts? l ";; ")) lines))))
+    (apply append
+           (map (lambda (c)
+                  (let ((ws (words c)))
+                    (if (and (pair? ws) (pair? (cdr ws)) (string=? (cadr ws) ":"))
+                        (list (cons (car ws) c))
+                        '())))
+                comments))))
+
 ;; --- the readers, on texts of the suite's own ------------------------------------------
 
 (define sample-page
@@ -311,6 +337,13 @@
           (kind-in env "else")
           (let ((k (kind-in env "no-such-name-here"))) (if (pair? k) (car k) k)))))
 
+;; the sample's comments: any indent, a name whole, a prose comment and a ;;; line none
+(test-equal "signature-comments: a comment of any indent, as its name and the line whole; none past the import clause, none of prose, none of three semicolons"
+  '(("f" . "f : A -> B") ("fx" . "fx : C") ("f" . "f : D"))
+  (signature-comments
+   (string-append ";;; g : no\n(library (x)\n  (export f\n   ;; f : A -> B\n"
+                  "   ;; fx : C\n;; prose not : x\n;; see f : here\n    ;; f : D\n  (import (rnrs))\n;; h : late\n")))
+
 (test-equal "has-arrow?, line-type: an arrow anywhere in a type; a line's type only after its own NAME and the space-colon-space"
   '(#t #f #t #f "X -> Y" #f #f)
   (list (has-arrow? "A -> B") (has-arrow? "A - > B") (has-arrow? "->") (has-arrow? "-")
@@ -323,6 +356,10 @@
   (guard (e (#t (list 'unreadable (describe e)))) (slurp "docs/reference.md")))
 
 (define export-names (exports-of library))
+
+;; source-text : (U String (List 'unreadable String))
+(define source-text
+  (guard (e (#t (list 'unreadable (describe e)))) (slurp "src/chez-sqlite3.sls")))
 
 ;; Each export, with what Chez evaluates it to, in the library's environment.
 (define library-env (guard (e (#t #f)) (environment library)))
@@ -410,6 +447,53 @@
 (test-equal "each entry holds one line NAME : TYPE of its own name, whose TYPE holds -> for a procedure and not for a value, as Chez evaluates each: the entries that do not, as (name kind line)"
   '()
   (wrong-lines))
+
+;; source-comments : (Listof (Pair String String))
+(define source-comments (if (string? source-text) (signature-comments source-text) '()))
+
+(test-equal "the source is read and holds signature comments"
+  'read
+  (cond ((not (string? source-text)) source-text)
+        ((null? source-comments) 'no-signature-comments)
+        (else 'read)))
+
+;; comments-of : String -> (Listof String)
+(define (comments-of name)
+  (map cdr (filter (lambda (c) (string=? (car c) name)) source-comments)))
+
+(test-equal "every export has exactly one signature comment in the source: the exports with none, or more, as (name how many)"
+  '()
+  (if (list? export-names)
+      (map (lambda (n) (list n (length (comments-of n))))
+           (filter (lambda (n) (not (= (length (comments-of n)) 1))) export-names))
+      export-names))
+
+(test-equal "no signature comment is for a name that is not exported"
+  '()
+  (if (list? export-names)
+      (difference (map car source-comments) export-names)
+      export-names))
+
+;; unlike-source : (Listof (List String Any Any))
+;; Each export whose entry's one text line is not its source comment, whole:
+;; (name the comment the line). An export with no entry, or without exactly
+;; one comment, is the other tests' to name.
+(define (unlike-source)
+  (if (list? export-names)
+      (apply append
+             (map (lambda (n)
+                    (let ((entry (find (lambda (e) (equal? (caddr e) (string->symbol n))) entries))
+                          (cs (comments-of n)))
+                      (if (and entry (= (length cs) 1)
+                               (not (equal? (car cs) (entry-signature entry))))
+                          (list (list n (car cs) (entry-signature entry)))
+                          '())))
+                  export-names))
+      '()))
+
+(test-equal "each entry's line is its export's source signature comment, character for character: the entries that differ, as (name comment line)"
+  '()
+  (unlike-source))
 
 (test-end "reference")
 

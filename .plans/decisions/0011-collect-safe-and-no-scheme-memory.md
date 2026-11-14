@@ -1,6 +1,6 @@
 # ADR-0011: Calls that can block are `__collect_safe`, and nothing passed to libsqlite3 lives in Scheme memory
 
-- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Proposed first in
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. Proposed first in
   the brief, §3d. Amended 2026-11-14: what slice 2 measured
   ([amendment](#amendment-2026-11-14-what-m1-slice-2-measured)).
 - **Date:** 2026-11-14

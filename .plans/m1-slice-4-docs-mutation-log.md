@@ -64,3 +64,29 @@ Each mutation of the table above was rerun in a copy, on `test-reference` and `t
 | The docs' guard answering another symbol | `d-guard-answer` | test-docs: 2 failed (new) |
 
 The remaining out-of-reach case: a type that is wrong while its arrow is where it should be.
+
+## The signature check, restored
+
+The maintainer ruled on 2026-11-14 that the reference's signatures are held to the source's
+`;; NAME : TYPE` comments, which are the contract (an exception in AGENTS.md). `tests/test-reference.sps`
+reads them again, as text, up to the source's `(import` clause. Every earlier check stays; the export
+names are still Chez's `library-exports`. Added: one reader test (`signature-comments`), and four tests:
+the source is read and holds signature comments; every export has exactly one comment; no comment is
+for a name that is not exported; and each entry's line equals its export's comment whole, the
+differences listed with both texts. The suite holds 19 tests (it held 14), all passing; `make test`
+ran 25 suites, 25 passed.
+
+Each mutation ran in its own copy under the scratchpad's `s4sig/`, through the copy's `scripts/guix-env`.
+Each failed the one test named, and no other (18 passed, 1 failed, in `test-reference`).
+
+| Mutation | Copy | Result |
+|---|---|---|
+| The page's `sqlite-version : -> String` to `-> Strin` (the one-character mutation of the table above) | `page` | 1 failed: each entry's line is its source comment |
+| The same change in the source comment alone | `src` | 1 failed: the same test, the page now being the one that differs |
+| The comment of `sqlite-version-number` removed | `dropped` | 1 failed: every export has exactly one signature comment |
+| A comment `;; ghost-name : -> String` for a name not exported, added in the export clause | `extra` | 1 failed: no signature comment is for a name that is not exported |
+
+A comment for a name that is not exported should fail: the comments before the import clause are
+the export clause's contract, so one for no export is stale (an export renamed or removed) or
+misspelt, and the check on the exports alone would never see it. Comments past the import clause
+are not scanned. The remaining out-of-reach case: a signature comment that is itself wrong.
