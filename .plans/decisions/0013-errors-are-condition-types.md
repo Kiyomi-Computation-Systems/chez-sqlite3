@@ -3,7 +3,8 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
   §3g. Amended 2026-11-14: what slice 4 built
-  ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).
+  ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14, proposed: M2's conditions (M2's plan,
+  [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -114,3 +115,58 @@
 - **`&sqlite-closed` can't be reached through the public surface in M1:** its one verb,
   `close-database!`, is a no-op on a closed connection. `test-connection` reaches it through the
   private `call-with-open-handle`, which M2's verbs use.
+
+## Amendment, 2026-11-14: M2's conditions (M2's plan)
+
+Proposed in M2 slice 0. The maintainer chose, on 2026-11-14 ([the M2 plan](../2026-11-14-m2-plan.md),
+§3): `offset` in characters (Q6); `&sqlite-invalid-text`, under the root, with the column's
+index and a byte offset (Q8); and `&sqlite-closed` for a finalized statement (Q5). The rest awaits
+the maintainer's acceptance.
+
+- **The hierarchy, with M2's types:**
+
+  ```
+  &error
+   └ &chez-sqlite3-error             no fields; every library condition is one
+      ├ &sqlite-error                code, extended-code, message, sql, offset
+      │   ├ &sqlite-busy             primary code busy or locked
+      │   ├ &sqlite-constraint       primary code constraint
+      │   └ &sqlite-read-only        primary code readonly
+      ├ &sqlite-invalid-text         column, offset
+      ├ &sqlite-library-unavailable  reason, path, source, detail, candidates, library
+      ├ &sqlite-wrong-thread         owner, caller
+      └ &sqlite-closed               no fields
+  ```
+
+- **The subtypes add no field.** The one procedure that makes a `&sqlite-error` classes it by its
+  primary code (decision 8), so every raise gets its subtype, M1's open and close among them. The
+  classing is a pure function, tested over every primary code, those that give no subtype too.
+  `(chez-sqlite3)` exports `sqlite-busy?`, `sqlite-constraint?` and `sqlite-read-only?`.
+- **`offset` counts characters** (Q6): an index into the `sql` field's string, converted from
+  SQLite's byte offset, which measured 13 for a token at character 12, after an `é`
+  ([research/m2-plan/](../research/m2-plan/)). SQLite's −1, which it answers for an error at the
+  end of the SQL, gives `#f` ([research/m2-review/](../research/m2-review/)).
+- **`sql` and `offset`, by where the failure came from**
+  ([ADR-0014](0014-statements-belong-to-their-connection.md), [ADR-0015](0015-values.md)). This
+  amends decision 3, whose `sql` came from prepare alone:
+  - a failed prepare carries the SQL it was given and its offset;
+  - **every other `&sqlite-error` a statement raises carries its statement's SQL and no offset:**
+    a failed step; a reset or finalize that fails on its own; a bind SQLite refuses; a column read
+    out of memory; `sqlite3_column_name` answering NULL; and the finalize failure
+    `close-database!` raises, which carries the SQL of the statement whose finalize failed;
+  - a connection's own failures, an open or a close, carry neither, as in M1.
+- **`&sqlite-invalid-text`** (Q8) is raised for a TEXT value, or a column name, that isn't
+  well-formed UTF-8 ([ADR-0015](0015-values.md), decision 9). Its fields are the column's index
+  and the byte offset where the first ill-formed part starts, both naturals. It carries no bytes.
+  It isn't a `&sqlite-error`: SQLite answered `SQLITE_OK`, and the subtype would carry a code it
+  never returned. `(chez-sqlite3)` exports `sqlite-invalid-text?`, `sqlite-invalid-text-column`
+  and `sqlite-invalid-text-offset`.
+- **A finalized statement raises `&sqlite-closed`** (Q5), its `&who` naming the verb. So
+  `&sqlite-closed` becomes reachable through the public surface, which M1's amendment found it
+  wasn't. Its fixed `&message`, "the connection is closed" in M1, is reworded to cover a statement
+  too; no row asserts its text (decision 9).
+- **Decision 7's U+0000 rule is narrowed** to the strings SQLite reads to a NUL: a filename, SQL
+  text, a parameter name. A bound string keeps its U+0000 (ADR-0011, amended).
+- **M2's refusals of a caller's mistake are assertion violations** (decision 7): a value that can't
+  bind, a parameter or column out of range, a verb its statement's state doesn't allow, SQL
+  holding no statement or more than one.

@@ -4,7 +4,9 @@ Date: 2026-11-13
 Status: accepted 2026-11-13. §2 was settled by the maintainer on 2026-11-13. §3a, b, h and i
 are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. §3c, d, e and g are ADR-0010 to
 ADR-0013, from the M1 plan. Amended 2026-11-14 with the M1 plan: D2 settled, D7 measured, and the
-settings list moved to M3 (§2.7, §6). Where a record and this brief disagree, the record wins.
+settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 to D6 settled
+by the maintainer (§5). §3f is ADR-0015, proposed. Where a record and this brief disagree, the
+record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses
@@ -135,10 +137,10 @@ Out of v1:
 |---|---|---|
 | D1 | Is a threaded Chez required, as in chez-curl? | **Settled 2026-11-13: required** (ADR-0001's amendment). The counters need a mutex. |
 | D2 | The connection's mutex mode under §3c: `NOMUTEX` (one thread uses it anyway) or `FULLMUTEX` (defence if our check has a gap). | **Settled 2026-11-13: `FULLMUTEX` by default, `'no-mutex` per connection** (ADR-0010). A `THREADSAFE=0` library is refused. |
-| D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | v1, in M3, bounded and cleared by close. |
-| D4 | Binding `+nan.0`: SQLite stores NULL without complaint (measured). | Refuse it with a condition. |
-| D5 | Binding `#t` and `#f`. | Refuse them: 1 in, 1 out is asymmetric. Callers pass 1 or 0. |
-| D6 | TEXT that isn't valid UTF-8: `utf8->string` replaces bytes silently (measured). | Raise a named condition; a column can always be read as bytes instead. |
+| D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | **Settled 2026-11-14: in M3** (the maintainer). The leaning's "bounded and cleared by close" waits for M3's plan. |
+| D4 | Binding `+nan.0`: SQLite stores NULL without complaint (measured). | **Settled 2026-11-14: refused** (the maintainer). ADR-0015, proposed, makes it an assertion violation and binds infinities as REAL. |
+| D5 | Binding `#t` and `#f`. | **Settled 2026-11-14: refused; callers pass 1 or 0** (the maintainer). ADR-0015, proposed, gives the reasons put to the maintainer. |
+| D6 | TEXT that isn't valid UTF-8: `utf8->string` replaces bytes silently (measured). | **Settled 2026-11-14: a named condition naming the column, and the column readable as bytes instead** (the maintainer), `&sqlite-invalid-text` (the M2 plan's Q8). ADR-0015 and ADR-0013's amendment, proposed, build it. |
 | D7 | macOS versions and extension loading on Apple's SQLite. | **Measured 2026-11-13 on macOS 26.7.1:** 3.51.0, above the floor, loaded from the dyld cache by path; no extension loading ([research/mac-d7/](research/mac-d7/)). macOS 14 and 15 unmeasured. |
 
 ## 6. Milestones
@@ -152,7 +154,7 @@ Out of v1:
   `sqlite3_libversion`, compile options. SQLite's two memory checks join the gate; the `floor`
   and `current` CI lanes arrive. The Mac measurements (D7). [The M1 plan](2026-11-13-m1-plan.md).
 - **M2, statements and values.** Prepare, bind, step, columns, reset, finalize, statement
-  tracking, §3f's mapping, §3g's conditions.
+  tracking, §3f's mapping, §3g's conditions. [The M2 plan](2026-11-14-m2-plan.md).
 - **M3, the conveniences.** `execute!`, `query`, `query-row`, the fold, transactions and
   savepoints, the settings list (§2.7, moved from M1), the busy timeout, interrupt, the change
   counters, the statement cache (D3). Two connections in WAL mode contending under a busy

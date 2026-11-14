@@ -3,7 +3,8 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   approved decision 2 (the handle) and decision 3's surface on 2026-11-13, and decision 7's type
   and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
-  what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).
+  what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14, proposed: the statements a connection
+  holds (M2's plan, [amendment](#amendment-2026-11-14-the-statements-a-connection-holds-m2s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -166,3 +167,37 @@
   `(collect 4)`. `check-memory-gate` plants it, beside the counters' case in `check-test-fails`.
 - **Three of the assessment's defects are planted and caught:** a failed open's handle never
   closed, an out-parameter never freed, and a close that leaves the address in the record.
+
+## Amendment, 2026-11-14: the statements a connection holds (M2's plan)
+
+Proposed in M2 slice 0. Closing, then raising a finalize's failure, is the maintainer's choice
+(R1, 2026-11-14, [the M2 plan](../2026-11-14-m2-plan.md), §3); the rest awaits the maintainer's
+acceptance.
+
+- **Decision 5 is built in M2,** by [ADR-0014](0014-statements-belong-to-their-connection.md):
+  the `database` record holds its live statements, strongly. `close-database!` finalizes each,
+  counting each down, before `sqlite3_next_stmt` and `sqlite3_close`.
+- **A finalize can report a failure of its own,** such as the commit of an `insert … returning`
+  stepped once, answered BUSY and rolled back (measured,
+  [research/m2-review/](../research/m2-review/)). The statement is freed all the same.
+  `close-database!` keeps the first such failure, closes, and then raises it, with the connection
+  closed (R1).
+- **A close that then fails leaves its statements finalized.** `sqlite3_close` answering
+  `SQLITE_BUSY`, as it does while a backup reads from the connection, keeps the connection open
+  and counted, as decision 5 says, and its failure is the one raised.
+- **M2's statement verbs reach a connection's handle only through `call-with-open-handle`,** which
+  stays its one accessor: `prepare-statement`, and every verb that needs `sqlite3_errmsg`
+  ([ADR-0014](0014-statements-belong-to-their-connection.md), decisions 2 and 10).
+- **M1's closing review fixes two raises inside critical sections, not M2.** `call-with-open-handle`
+  raises `&sqlite-wrong-thread`, `&sqlite-closed` and its refusal of a non-database inside its
+  section, and `call-with-database`'s failed open raises inside the section that holds its open,
+  so a `with-exception-handler` handler of the raise runs with interrupts disabled; a `guard`
+  clause, which runs after unwinding, doesn't (measured, [research/m2-review/](../research/m2-review/),
+  and reproduced by the M1 session on `main` at `2579a0d`). The M1 session took the fix on
+  2026-11-14, in the shape slice 0's review proposed: the record and owner checks before the
+  section, the open check inside it returning its refusal as data, the procedure returning data
+  and raising nothing, every refusal raised after, and `call-with-open-handle` still the one
+  accessor. It lands with its own amendment to this record, for the maintainer to accept; M2 slice
+  3 builds on the contract it settles, and this amendment cites its PR once merged.
+- **A failed close raises `&sqlite-busy` there,** a `&sqlite-error`: ADR-0013's subtypes, amended
+  the same day, class every raise.
