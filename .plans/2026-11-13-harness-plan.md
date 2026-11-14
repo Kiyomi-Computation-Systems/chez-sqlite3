@@ -3,6 +3,8 @@
 Date: 2026-11-13
 Status: approved 2026-11-13. Amended in M0 slice 2: each test helper comes with its first
 consumer, a threaded Chez is required (brief D1), and the floors' CI rules wait for CI.
+Amended in M0 slice 3: the gate needs no suppression, so sabotage group c has nothing to hold,
+and group o comes with CI in slice 4.
 Source: chez-curl at `79c6ced` (`main`), surveyed read-only. Every path below is chez-curl's
 unless it says otherwise.
 Brief: [the project brief](2026-11-13-chez-sqlite3-project-brief.md). The maintainer settled
@@ -60,7 +62,10 @@ The four parts each see something the others miss:
 - **M0 builds the Valgrind half and the counters.** Valgrind runs each suite as chez-curl's
   does: `timeout` wraps Valgrind and never sits between it and Chez, `CHEZ` is the real binary,
   and evidence comes from Valgrind's log alone. Its evidence rules, its refusals of `VALGRIND_*`
-  and rc files, and sabotage groups a–c, e–m and o come with it.
+  and rc files, and sabotage groups a, b and e–m come with it. Group c held chez-curl's
+  suppression file to its one entry; slice 3 measured that we need none, so it has nothing to
+  hold ([research/memory-gate/](research/memory-gate/)). Group o reads the CI workflow, so it
+  comes with CI in slice 4.
 - **M1 adds SQLite's two checks** to `suite-exit-status`, once there is a loaded library to ask.
   M1 measures first whether `sqlite3_memory_used` returns to its pre-open value after a full
   open and close; if SQLite keeps something global, the baseline is taken after the first
@@ -126,7 +131,9 @@ mutation log in the newer format (Guards, Mutation, Result, Clean rerun).
    `test-memory`, the plants and `check-memory-gate`.
 4. **CI.** `build-chez.sh` (with `--nothreads`), `check-action-pins.sh`, `floor.sh`, the package
    list, and the `main`, `memory` and `nothreads` jobs, the last running `check-nothreads`
-   (ADR-0001's amendment). `check-floors` gains the workflow rules. The first run records the
-   runner's SQLite version and compile options.
+   (ADR-0001's amendment). `check-floors` gains the workflow rules, and `check-memory-gate`
+   gains group o: the `memory` job runs `check-memory-gate` before `test-memory`, and neither
+   carries `if:` or `continue-on-error:` (ADR-0005). The first run records the runner's SQLite
+   version and compile options.
 
 M0 ends with a read-only adversarial review, on Opus, of the slices and of this plan.

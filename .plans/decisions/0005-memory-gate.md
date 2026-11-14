@@ -1,6 +1,8 @@
 # ADR-0005: The memory gate is Valgrind on Linux, our counters, and SQLite's own checks
 
 - **Status:** Accepted (the maintainer, 2026-11-13). The two SQLite checks are built in M1.
+  Amended 2026-11-13: what M0 slice 3 measured
+  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -72,3 +74,23 @@
 - **Every suite that opens something closes it,** or its exit status fails.
 - **A test that raises a count on purpose lowers it again,** under `dynamic-wind`.
 - **The `memory` job will get slow.** It is split into shards when it does, as chez-curl's was.
+
+## Amendment, 2026-11-13: what M0 slice 3 measured
+
+Measured in the pinned container before the gate was built
+([research/memory-gate/](../research/memory-gate/)).
+
+- **Decision 2's "no suppressions" holds with nothing to add.** Loading libsqlite3, a WAL file
+  database, `:memory:`, and an open that fails and is closed lose nothing under the gate's
+  command, and Valgrind suppressed nothing, not even from its own `default.supp`. So
+  `test-memory` passes no suppression file in any environment, and allows exactly Valgrind's own
+  `default.supp`.
+- **The context's "a handle Scheme forgot is still reachable" holds only for some shapes.** A
+  `:memory:` connection never closed, its handle kept as an integer, is definitely lost to
+  Valgrind (840 bytes, and 75,168 indirectly), even while a live variable holds the integer: a
+  fixnum holds an address shifted, so Valgrind finds no pointer to it. Kept in an ftype pointer,
+  the same handle is still reachable, and the run passes. So Valgrind sees a connection left open
+  only if M1 holds handles as integers. Decision 4's counters see it either way, and remain the
+  gate for what Scheme forgets.
+- **`MEMORY_TIMEOUT` must be a positive whole number,** as `TEST_TIMEOUT` must: GNU `timeout`
+  reads 0 as no limit.
