@@ -78,6 +78,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   the second close, the maintainer's)*.
 - **A handle is an integer in an opaque, sealed `database` record,** with a private accessor. No
   ftype pointer holds one (ADR-0012).
+- **A `file:` name without `'uri` is refused,** case-sensitively, as SQLite tests it (ADR-0012,
+  amended; the maintainer's).
+- **`(chez-sqlite3)` exports the maintainer's names and the conditions' predicates and accessors,
+  and `test-public` holds the list whole** (ADR-0012, ADR-0013, amended).
 - **`open-database`'s options are symbols, and the flags SQLite gets are always legal.** A
   contradiction, an option given twice, or an unknown option is an assertion violation before
   anything is allocated (ADR-0012). *(The surface is the maintainer's; refusing an option given
@@ -123,7 +127,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
   open. Where it never rises, as on Apple's `DEFAULT_MEMSTATUS=0` build, the suite names the
   check as unavailable and passes on its other checks, never silently (ADR-0005, amended; the
   maintainer's). The control is the check's own `:memory:` open and close, so a suite that opens
-  nothing still runs it *(provisional)*.
+  nothing still runs it. Native registers the check with the counters after
+  `sqlite3_initialize`; a process that never loaded libsqlite3 has none (ADR-0005, amended)
+  *(provisional)*.
+- **The testing library and the counters never load libsqlite3,** and `test-never-loads` holds
+  their imports to exact allowlists (ADR-0005, amended).
 - **Valgrind's evidence comes from its log alone.** `timeout` wraps Valgrind and never sits between
   it and Chez, and `CHEZ` is the real binary. There are no suppressions without a recorded run
   that needs one (ADR-0005).

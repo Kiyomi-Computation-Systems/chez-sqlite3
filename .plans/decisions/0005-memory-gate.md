@@ -10,7 +10,8 @@
   suite that loads libsqlite3 (M1 slice 2,
   [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)), and the
   children under the gate (M1 slice 3,
-  [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)).
+  [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)), and SQLite's memory check
+  (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -306,4 +307,36 @@ Measured in the pinned container before the gate was built
 - **A gated child that forks** got a second log from Valgrind, with a `Command:` line and no
   summary, and failed the gate though clean (slice 3's review). The gate passes
   `--child-silent-after-fork=yes`, parent and child alike.
+
+## Amendment, 2026-11-14: SQLite's memory check (M1 slice 4)
+
+- **Decision 5's memory check is built, where the M1 plan leaned.** Native's last step reads
+  `sqlite3_memory_used` right after its bindings, so after `sqlite3_initialize` with no SQLite
+  call between, and registers the check with the counters, which load nothing. A load refused
+  earlier registers nothing, so a suite that never loaded libsqlite3 has no check to run.
+  `suite-exit-status` runs every registered check before it reads the counts, and names each
+  outcome on its own line:
+
+  ```
+  suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+  suite-exit-status: exit 1 (the sqlite3_memory_used check failed): the count is 61360 bytes after the control's :memory: open and close, not its baseline, 0 bytes: SQLite still holds memory that a suite's end must have freed
+  suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+  ```
+- **The control** is a raw, uncounted `:memory:` open and close, the count read before, while
+  open, and after. No rise while open is unavailable; otherwise the count after must equal the
+  baseline exactly. A failed control open or close fails the check.
+- **No first-cycle baseline is needed.** On Guix's 3.53.1 and on 3.45.1 built from its
+  amalgamation, the count came back to its value after `sqlite3_initialize`, 0, after every open
+  and close measured: `:memory:` (61,360 and 57,232 bytes while open), a WAL file with a blob
+  (154,472 and 150,272), and a failed open (1,376 and 1,304). A 3.45.1 build with
+  `DEFAULT_MEMSTATUS=0` never moved, and every suite named the check unavailable and passed. CI's
+  Ubuntu 3.45.1 is measured by its first run with this check.
+- **The testing library never loads libsqlite3, and a check holds it:** `test-never-loads` holds
+  `(chez-sqlite3-testing)`'s and the counters' imports to exact allowlists, works out which
+  libraries load libsqlite3 from `src/`'s imports, and checks what the testing library can reach.
+  It passed before the registration landed. A route through a name the testing library already
+  imports, `system` say, is held by review.
+- **The leaks plant goes through `open-database`:** `check-test-fails`' leaks case fails on the
+  counters (`connection 1`) and the memory check; `check-memory-gate`'s connection plant fails
+  under Valgrind, its loss record's stack through `sqlite3_open_v2`.
 

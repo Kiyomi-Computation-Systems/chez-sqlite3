@@ -396,6 +396,10 @@
 (define threadsafe-call "sqlite3_threadsafe()")
 (define initialize-call "sqlite3_initialize()")
 (define (log-of switch . calls) (cons (read-switch switch) calls))
+(define memory-used-call "sqlite3_memory_used()")
+;; A successful load's six calls: native's step 8 reads the memory baseline
+;; after initialize. No refusal reaches it.
+(define (loaded-calls switch) (append (every-call switch) (list memory-used-call)))
 (define (every-call switch)
   (append (list (read-switch switch)) the-report-three (list threadsafe-call initialize-call)))
 
@@ -413,8 +417,8 @@
     (cdr (assq name sqlite-result-codes))))
 
 (decoy-row "control" #f '()
-  "the floor itself is accepted: the report's five fields, threadsafe 2, and the load's five calls in order"
-  (lambda (so) (loaded so 'override control-report 2 (every-call "control"))))
+  "the floor itself is accepted: the report's five fields, threadsafe 2, and the load's six calls in order"
+  (lambda (so) (loaded so 'override control-report 2 (loaded-calls "control"))))
 
 (decoy-row "control" "below-floor" '()
   "one below the floor is below-floor, detail its version, carrying its report, and nothing runs after the report's three"
@@ -442,7 +446,7 @@
 (decoy-row "control" "sourceid-utf8" '()
   "a source id past ASCII is read as UTF-8: d\xE9;coy-\x3BB;\x20AC;"
   (lambda (so) (loaded so 'override (report floor-version floor-number "d\xE9;coy-\x3BB;\x20AC;") 2
-                       (every-call "sourceid-utf8"))))
+                       (loaded-calls "sourceid-utf8"))))
 
 (decoy-row "control" "initialize-fails" '()
   "sqlite3_initialize answering SQLITE_NOMEM is load-failed, detail that code, carrying the report, after threadsafe"
@@ -461,19 +465,19 @@
   "a value that is no switch behaves as the control, and the log names it"
   (lambda (so) (loaded so 'override control-report 2
                        (append (list "decoy(?Below-floor)") the-report-three
-                               (list threadsafe-call initialize-call)))))
+                               (list threadsafe-call initialize-call memory-used-call)))))
 
 (decoy-row "control" "below-floorX" '()
   "a value that only begins with a switch, below-floorX, is no switch: the control, and the log names it"
   (lambda (so) (loaded so 'override control-report 2
                        (append (list "decoy(?below-floorX)") the-report-three
-                               (list threadsafe-call initialize-call)))))
+                               (list threadsafe-call initialize-call memory-used-call)))))
 
 (decoy-row "control" "" '()
   "an empty value is no switch either"
   (lambda (so) (loaded so 'override control-report 2
                        (append (list "decoy(?)") the-report-three
-                               (list threadsafe-call initialize-call)))))
+                               (list threadsafe-call initialize-call memory-used-call)))))
 
 ;; Each entry point left out, one at a time: refused by name before anything
 ;; calls it, never Chez's "no entry for". The report's three are each bound
@@ -557,7 +561,7 @@
 (decoy-row "marked" #f '("--marker" "decoy_marker")
   "a build with DECOY_MARKER, once loaded, shows its marker to foreign-entry?"
   (lambda (so) (outcome 0 (loaded-lines so 'override control-report 2) '()
-                        (list (cons 'marker 'present)) (every-call "control"))))
+                        (list (cons 'marker 'present)) (loaded-calls "control"))))
 
 ;; --- the real libsqlite3 ---------------------------------------------------------------
 

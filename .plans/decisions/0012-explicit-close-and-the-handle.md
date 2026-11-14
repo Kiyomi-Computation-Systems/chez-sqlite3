@@ -2,7 +2,8 @@
 
 - **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
   approved decision 2 (the handle) and decision 3's surface on 2026-11-13, and decision 7's type
-  and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e.
+  and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
+  what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -129,3 +130,39 @@
   Apple's and Homebrew's are compiled with `USE_URI`, and no open flag turns that off. So a
   filename can bring in `vfs=` or `cache=shared`. Whether `open-database` refuses a `file:` name
   given without `'uri` is decided in slice 4, with a test per build (the M1 plan, §7).
+
+## Amendment, 2026-11-14: what M1 slice 4 built
+
+- **A `file:` name without `'uri` is refused** (the maintainer, 2026-11-14): an assertion violation
+  from the procedure the caller called, before anything is allocated, its irritants
+  `(file-uri-without-uri-option (kind string))`. The test is SQLite's own: the five bytes `file:`
+  at position 0, case-sensitive. With `SQLITE_OPEN_URI`, `"FILE:up.db"` opened a file of that
+  literal name (3.53.1). This settles the consequence's open question. Guix's 3.53.1 isn't built
+  with `USE_URI` (`sqlite3_compileoption_used("USE_URI")` answered 0, and `"file:nu.db?mode=rwc"`
+  without the flag made a file of that name), so there such a name would have been a plain file;
+  the refusal makes every build alike.
+- **The public names** (the maintainer, 2026-11-14): `sqlite-version`, `sqlite-version-number`,
+  `sqlite-source-id`, `sqlite-library-path`, `sqlite-library-source`, `sqlite-compile-option?`,
+  `sqlite-compile-options`, `open-database`, `close-database!`, `call-with-database`,
+  `database?`, and the conditions' predicates and accessors (ADR-0013, amended). `test-public`
+  asserts the list whole, so no private binding can leak through `(chez-sqlite3)`.
+- **The libraries:** `(chez-sqlite3 private open-options)`, the pure parser of decision 3's table;
+  `(chez-sqlite3 private connection)`; and `(chez-sqlite3 private report)`. `(chez-sqlite3)`
+  re-exports, with an empty body, and referencing a condition predicate through it runs no
+  library that loads libsqlite3.
+- **`call-with-open-handle` is the only accessor of the handle,** even privately. It runs its three
+  checks (decision 7) and the procedure in one critical section, so no engine or interrupt can
+  close the handle between a check and its use. The open, the read of the out-parameter and
+  `count-up!` share one critical section; so do the close, clearing the handle and `count-down!`.
+- **`call-with-database` doesn't survive an engine's preemption.** An expiry runs `dynamic-wind`'s
+  after thunk: a 2,000-expiry engine logged 4,002 before and after entries. So the connection
+  closes at the first expiry, and a resumed procedure finds it closed. A program under engines
+  takes `open-database`.
+- **SQLite refuses a close when a backup reads from the connection,** with `SQLITE_BUSY` and no
+  statement open. `test-connection` uses that to test decision 5's failed close.
+- **The consequence on Valgrind holds.** A connection from `open-database` whose record is dropped
+  unclosed is definitely lost at exit: 840 bytes direct and 61,288 indirect on 3.53.1, 792 and
+  56,640 on 3.45.1, the same with the record held by a top-level variable and after
+  `(collect 4)`. `check-memory-gate` plants it, beside the counters' case in `check-test-fails`.
+- **Three of the assessment's defects are planted and caught:** a failed open's handle never
+  closed, an out-parameter never freed, and a close that leaves the address in the record.

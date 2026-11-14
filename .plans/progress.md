@@ -36,7 +36,11 @@ newest first.
 - **M1 slice 3, refusals end to end,** is on `m1-slice-3-refusals`, stacked on slice 2: the decoy
   libsqlite3, the refusal probe and `test-library-loading`, `make dev` and `check-dev`, children
   under the gate's own Valgrind, and CI's install check by discovery.
-- **Next: slice 4,** stacked on slice 3.
+- **M1 slice 4, the public library and connections,** is on `m1-slice-4-connections`, stacked on
+  slice 3: the conditions for connections, `open-database`, `close-database!` and
+  `call-with-database` with thread ownership, the first `(chez-sqlite3)`, SQLite's memory check in
+  the gate, `test-never-loads`, the leaks plant through `open-database`, and `docs/reference.md`.
+- **Next: M1 slice 5,** the `floor` and `current` lanes, then M1's closing review.
 - **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
   `nothreads` is the maintainer's call (ADR-0005, amended).
 

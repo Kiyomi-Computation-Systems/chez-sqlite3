@@ -458,3 +458,55 @@ libraries); 12 caught, and one equivalent on every library measured.
   the same on the 3.45.1 build and the no-count build, through `CHEZ_SQLITE3_LIBRARY`.
 - **`scripts/guix-env make check-memory-gate`:** `the memory gate failed, as it must, and its
   refusals held, in all 38 cases`: the connection plant's `a` and `b` are the two new ones.
+
+## Integration with slice 3
+
+Slice 4 was rebased onto slice 3. The integration is test-side: `src/`, `.github/`, the records and
+the plans are untouched.
+
+### What the rebase broke, and the fixes
+
+- **`test-library-loading`, 6 rows** (the brief said 5; the `marked` row is the sixth). Native's
+  step 8 reads `sqlite3_memory_used` once after `sqlite3_initialize`, so a successful load's call
+  log is six calls, not five. Every successful row's expected log gains `sqlite3_memory_used()`,
+  whole. No refusal row's log changes: step 8 follows every refusal, and the refusal rows passed
+  untouched, `initialize-fails` and `initialize-misuse` among them. `loaded-calls` is the
+  successful load's calls; `every-call` stays the calls a refusal after `initialize` shows.
+- **`test-chez-sqlite3-testing`, the four native children** (the raw-open plant, opened nothing,
+  opened and closed, left open) run through `gated-command`, by `gated-child-suite`. Each child
+  prints `(valgrind . yes|no)` after its counts, read from `/proc/self/maps` for
+  `vgpreload_memcheck`, and each row asserts the whole stdout, the line included: `(valgrind . yes)`
+  under `make test-memory`, `(valgrind . no)` in `make test`. The children that never reach native
+  code (the checks registered by hand) stay on plain `capture-command`.
+- **A trap the gate found.** Two of the four children leak on purpose (the raw open and the left
+  open connection). Run under the gate's Valgrind, each left 840 bytes definitely lost and a log
+  that fails the suite, exit 9, rightly. Each now frees what it holds in an `exit-handler`, which
+  runs after `suite-exit-status` has run every check, so the row still sees the leak at the moment
+  it is about, and the exit status passes through unchanged. Not done: tolerating a leaking child's
+  log in the gate.
+- **Other children:** `test-memory-check`, `test-connection`, `test-public`, `test-docs`,
+  `test-reference` and `test-never-loads` start none. `test-counters`' one child imports only
+  `(chez-sqlite3 private counters)`, never native, so it needs no gate. `check-test-fails`' leaks
+  plant runs `make test` in a copy, not under the gate: out of scope, as before.
+- **`test-never-loads`** needed no change: `gated-command` adds no import to `(chez-sqlite3-testing)`.
+
+### Mutations (each in its own copy, through the copy's `scripts/guix-env`)
+
+- **A child run without `gated-command`.** `gated-child-suite` handed plain `capture-command`
+  (this takes all four children, as they share it). `make test-memory
+  MEMORY_SUITES=tests/test-chez-sqlite3-testing.sps` FAILED, 4 rows, each with `(valgrind . no)`
+  where `(valgrind . yes)` was expected, exit 1.
+- **The control's expected log missing `sqlite3_memory_used`.** `loaded-calls` answering
+  `every-call`: `make test` on `test-library-loading` FAILED, 3 rows (`control`, `sourceid-utf8`,
+  `marked`), 67 passed. The three near-miss rows keep their own explicit lists.
+- **The planted import of native** into `(chez-sqlite3-testing)`: `test-never-loads` FAILED, 2 rows
+  (the import allowlist, and the loader reached through `src/`), as it must.
+
+### Final runs
+
+- **`make test`:** `ran 25, passed 25, failed 0, hung 0`.
+- **`make test-memory`:** `ran 25, passed 25, failed 0, hung 0`, 8 min 25 s; the slowest suite
+  `test-library-loading`, 244 s, then `test-chez-sqlite3-testing`, 41 s.
+- **`make check-memory-gate`:** 54 cases, all held, cases `a` and `b` (the connection plant) and
+  `p` and `q` (slice 3's children) among them.
+- **`make check-test-fails`:** all 12 cases. **`make check-dev`**, **`make build`:** ok.

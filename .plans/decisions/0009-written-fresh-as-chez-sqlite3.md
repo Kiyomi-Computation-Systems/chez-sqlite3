@@ -66,4 +66,5 @@ Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
   `display-condition` are `(chez-sqlite3 private native)`'s alone. `define-ftype`, `lock-object`,
   `foreign-callable` and `fork-thread` are allowed to no library. A library that imports a
   library-only name may export no macro (rule (k)).
+- **Slice 4 adds `get-thread-id`,** `(chez-sqlite3 private connection)`'s alone.
 

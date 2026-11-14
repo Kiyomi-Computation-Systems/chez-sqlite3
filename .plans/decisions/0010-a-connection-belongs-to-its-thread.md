@@ -2,7 +2,8 @@
 
 - **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Decisions 3 and 4
   were the maintainer's own, on 2026-11-13: brief D2, and the `THREADSAFE=0` refusal. Proposed first
-  in the brief, §3c.
+  in the brief, §3c. Amended 2026-11-14: the mutex, measured
+  ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
 - **Settles:** brief §3c and D2. Closes ADR-0002's open question.
@@ -76,3 +77,14 @@
   `sqlite3_config` (ADR-0001), and can't see another library's call.
 - **A test of decision 1 forks a thread** and asserts the type that thread raised, as its answer,
   with every wait bounded (AGENTS.md).
+
+## Amendment, 2026-11-14: the mutex, measured (M1 slice 4)
+
+- **On Guix's 3.53.1, `THREADSAFE=1`,** `sqlite3_db_mutex` answered non-NULL with no mutex flag,
+  non-NULL with `SQLITE_OPEN_FULLMUTEX`, and NULL with `SQLITE_OPEN_NOMUTEX`. So on that build no
+  behaviour tells the default from no flag at all: the parser's rows hold that `FULLMUTEX` is
+  passed, and `'no-mutex` alone is proven end to end. Apple's `THREADSAFE=2` library is where the
+  default shows; the Mac's hand run reads it (decision 5).
+- **Thread ids:** six threads forked in turn got ids 1 to 6, the main thread 0, on Chez 10.4.0.
+  CSUG doesn't promise that ids are never reused. If a later Chez reused them, a new thread could
+  pass a dead owner's check.

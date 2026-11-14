@@ -681,12 +681,47 @@
 ;; rest load it, through (chez-sqlite3 private native), whose load registers
 ;; the sqlite3_memory_used check; each such child reads the count itself, and
 ;; prints what it read, so the row knows the numbers the verdict must name.
-;; Those children reach native code, outside Valgrind.
+;; Those children reach native code, so each runs through gated-command: under
+;; make test-memory the gate's own Valgrind runs it, with a log of its own, and
+;; it prints (valgrind . yes|no) after its counts, read from /proc/self/maps.
+;; Its row asserts the line: (valgrind . yes) there, (valgrind . no) in a plain
+;; make test.
 
 ;; child-suite : String String -> (List Integer String String)
 ;; The exit status, stdout and stderr of a child suite whose imports end with
 ;; IMPORTS and whose forms after its one test are BODY.
 (define (child-suite imports body)
+  (run-child-suite capture-command imports body))
+
+;; gated-child-suite : String String -> (List Integer String String)
+;; child-suite for a child that reaches native code: run through
+;; gated-command, and its stdout ends with its (valgrind . yes|no) line.
+(define (gated-child-suite imports body)
+  (run-child-suite (lambda (argv) (capture-command (gated-command getenv argv)))
+                   imports
+                   (string-append body "\n" valgrind-printer)))
+
+;; Prints whether this process runs under memcheck: its preload is in /proc/self/maps.
+(define valgrind-printer
+  (string-append
+   "(write (cons 'valgrind\n"
+   "            (guard (e (#t 'no-maps))\n"
+   "              (let ((maps (call-with-port\n"
+   "                           (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
+   "                                                 (make-transcoder (utf-8-codec)))\n"
+   "                           get-string-all))\n"
+   "                    (needle \"vgpreload_memcheck\"))\n"
+   "                (let loop ((i 0))\n"
+   "                  (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
+   "                        ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
+   "                        (else (loop (+ i 1)))))))))\n"
+   "(newline)"))
+
+;; Under make test-memory the gated child says (valgrind . yes); anywhere else, no.
+(define valgrind-line
+  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
+
+(define (run-child-suite run imports body)
   (call-with-temp-directory
    (lambda (base)
      (let ((program (string-append base "/child.sps")))
@@ -702,7 +737,7 @@
                     body "\n"
                     "(test-end \"child\")\n"
                     "(exit (suite-exit-status runner))\n"))
-       (capture-command (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program))))))
+       (run (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program))))))
 
 (test-equal "two checks that pass and are unavailable: exit 0, each named on its own line, in the order registered"
   (list 0 ""
@@ -778,19 +813,36 @@
 
 (define native-import "(chez-sqlite3 private native)")
 
+;; The children below leave SQLite memory held on purpose, for the exit check
+;; to name. Under the gate's Valgrind a leak the child still holds at its end
+;; would fail the gate, rightly, so each frees it in an exit handler: the
+;; handler runs after suite-exit-status has run every check, which is the
+;; moment the row is about, and keeps the exit status it was given.
+(define exit-handler-import "(only (chezscheme) exit-handler)")
+
+;; freed-after-the-exit-checks : String -> String
+;; A form that runs FREE-FORM, when the child exits, after the checks.
+(define (freed-after-the-exit-checks free-form)
+  (string-append
+   "(exit-handler (let ((previous (exit-handler)))\n"
+   "  (lambda args " free-form " (apply previous args))))\n"))
+
 ;; The plant: SQLite memory held past a suite's end, through a raw open that
 ;; nothing counts and nothing closes. The child prints the count once loaded,
 ;; the count holding the open, and the open's code.
 (define raw-plant
   (guard (e (#t (list 'raised (describe e))))
-    (child-suite native-import
+    (gated-child-suite (string-append native-import " " exit-handler-import)
                  (string-append
                   "(define baseline (sqlite3-memory-used))\n"
+                  "(define plant-handle #f)\n"
                   "(define rc\n"
                   "  (call-with-c-string 'plant \":memory:\"\n"
                   "    (lambda (name)\n"
                   "      (let-values (((rc handle) (call-with-out-pointer 'plant (lambda (slot) (sqlite3-open-v2 name slot 6 0)))))\n"
+                  "        (set! plant-handle handle)\n"
                   "        rc))))\n"
+                  (freed-after-the-exit-checks "(sqlite3-close plant-handle)")
                   "(define holding (sqlite3-memory-used))\n"
                   "(write (list baseline holding rc))\n"
                   "(newline)"))))
@@ -814,7 +866,8 @@
   (if plant-read?
       (let ((baseline (car plant-read)) (holding (cadr plant-read)))
         (list (if counting? 1 0)
-              (string-append (call-with-string-output-port (lambda (p) (write plant-read p))) "\n")
+              (string-append (call-with-string-output-port (lambda (p) (write plant-read p))) "\n"
+                             valgrind-line)
               (if counting?
                   (memory-fail-line holding baseline)
                   (memory-unavailable-line baseline))))
@@ -829,7 +882,7 @@
 ;; A child that loads native, reads the count, runs BODY, then prints the count
 ;; it read after the load and the one at the end of BODY.
 (define (native-child imports body)
-  (child-suite (string-append native-import " " imports)
+  (gated-child-suite (string-append native-import " " imports)
                (string-append "(define baseline (sqlite3-memory-used))\n"
                               body "\n"
                               "(write (list baseline (sqlite3-memory-used)))\n"
@@ -847,7 +900,7 @@
         (list 'the-child-printed-no-counts outcome))))
 
 (define (printed counts)
-  (string-append (call-with-string-output-port (lambda (p) (write counts p))) "\n"))
+  (string-append (call-with-string-output-port (lambda (p) (write counts p))) "\n" valgrind-line))
 
 ;; checked-line : Integer -> String
 ;; The check's line for a suite that freed all it held: a pass naming the
@@ -874,7 +927,9 @@
 
 (define left-open
   (guard (e (#t (list 'raised (describe e))))
-    (native-child "(chez-sqlite3)" "(define db (open-database \":memory:\"))")))
+    (native-child (string-append "(chez-sqlite3) " exit-handler-import)
+                  (string-append "(define db (open-database \":memory:\"))\n"
+                                 (freed-after-the-exit-checks "(close-database! db)")))))
 
 (test-equal "a suite that left a connection from open-database open: exit 1, the connection counted, then the check's line naming the count it holds"
   (expected-for left-open
