@@ -91,8 +91,8 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
 
 ## Amendment, 2026-11-13: the SQLite floor's numeric forms (M0's closing review)
 
-- **Decision 3 covers every form a floor is written in.** The review found that SQLite writes its
-  floor in two forms that hold no `3.45.1`: the version number, `3045001`
+- **Decision 3 covers the forms a floor is written in, not only its dotted text.** The review
+  found that SQLite writes its floor in two forms that hold no `3.45.1`: the version number, `3045001`
   (`SQLITE_VERSION_NUMBER` and `sqlite3_libversion_number`), and the amalgamation's file name,
   `sqlite-amalgamation-3450100.zip`. Two such lines in the `main` job passed `check-floors` and
   `check-ci`. M1's `floor` lane is where both would be written.
@@ -102,6 +102,17 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
   such runs inside longer ones. The problem names the file, the line, the form and the floor.
 - **The Chez floor has no numeric form.** Chez names its releases by the dotted version alone,
   in its tarball (`csv10.4.0.tar.gz`) and its tag (`v10.4.0`).
+- **What still passes,** found by the fixes' review, each beside `check-floors` and `check-ci`:
+  - a form beside a letter, as in `v3450100`, `v3045001`, `3045001L` and `sqlite3450100`. That
+    follows from the boundary, which keeps hex digests from tripping the rule;
+  - other spellings of the dotted text: `3_45_1`, `3,45,1`, `3-45-1`, and a prefix such as
+    `(>= 3.45)`;
+  - anything outside `.github/workflows`, the one directory `check-floors` reads. M1's `floor` lane
+    will fetch the amalgamation from a script under `scripts/ci/`, so the slice that writes it
+    extends `check-floors` to that directory first.
+
+  The rule holds against the forms CI's own tools print and download, not against every way of
+  writing a version.
 - **Tests:** `test-check-floors` holds each form at every position, beside each kind of
   neighbour, and on a fixture whose own floor is 3.46.0, where 3.45.1's forms pass
   ([the log](../m0-review-mutation-log.md)).

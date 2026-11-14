@@ -46,7 +46,9 @@ check-floors check-ci` with exit 0.
   line.
 - **The review's two lines,** in a copy with the new rule: `check-floors: FAILED (problems: 2)`,
   naming line 273's `3450100` as the amalgamation form and line 274's `3045001` as the
-  version-number form. *Rerun here.*
+  version-number form. That copy appended them at the file's end, inside the `nothreads` job, not
+  in `main`'s versions block, as the fixes' review noticed. *Rerun here* where the review planted
+  them, after the block's `kernel` line: refused as lines 132 and 133, exit 2.
 
 Each mutation of `tests/floors.sls` failed the suite with exit 1:
 
@@ -81,7 +83,9 @@ lines everywhere, and it changes nothing the shell runs.
     block: exit 1, `… has a run line that differs from the one check-ci holds`. That closes those
     two reproductions where they were planted, not the holes: ADR-0008's amendment closes the
     first, and ADR-0005's says why no text check closes the second.
-- **Rows moved:** 15 rows planted their edits after the versions block's `kernel` line. Each would
+- **Rows moved:** 24 rows planted their edits after the versions block's `kernel` line, from 10
+  call sites, two of them `map`s over 13 banned words and 3 gates. The fixes' review counted them:
+  with the new anchor's end marker broken, exactly 24 failed, 125 passed (*rerun here*). Each would
   now gain a second problem, since that block is held line for line. That is also why one of them
   failed by accident in the review, 127 and 1, when a line was added there. They now plant in
   `main`'s "Identify the runner image" block, which `check-ci` holds to no line.
@@ -134,3 +138,59 @@ check-ci: FAILED (problems: 1)
 
 `check-help` is the one prerequisite of `make test` with no case here. CI's `main` job runs it by
 name, as its make line's first target, and `check-ci` holds that line whole.
+
+## The fixes' review
+
+The commit was reviewed read-only, on Opus, against a snapshot of it. No blocker, two major
+findings and eleven minor, every one checked here. Every fix closed its original reproduction, and
+the full harness passed in the reviewer's copy.
+
+**Major, both reproduced here, then fixed by Sonnet agents on disjoint files:**
+
+- **Finding 10 was half closed.** The row "remove-temp-directory: only an absolute path other
+  than /, and it runs no rm for any other" built a `list` whose fourth argument checks for
+  `rm-log`, beside the three refusals whose effect it observes. Under the reviewer's mutation,
+  where `remove-temp-directory` runs `rm --version` first, `--program` gave 59 passed and 1
+  failed, and `interpret` gave **60 passed**. *Rerun here.* The row is now a `let*`. The agent
+  read the whole file for any other call or `let` whose arguments both act and observe, and found
+  none.
+- **Finding 1's boundary was not held against its complement.** With `digit-or-letter?` written
+  as `0..Z ∪ a..z`, which takes `: ; < = > ? @` for letters, the suite passed 318 of 318, and
+  `check-floors` passed `echo SQLITE_VERSION_NUMBER=3045001`. *Rerun here.* Four rows now put
+  every character from U+0001 to U+007F but the newline, and `é`, `α`, U+00A0 and U+1F600, beside
+  each form on each side. Each asserts the whole list of characters for which the form is not
+  found: the 62 ASCII letters and digits. The final run passed 322.
+
+| Mutation | Guards | Result |
+|---|---|---|
+| H4 | the third `remove-temp-directory` row observes after it acts: `rm --version` runs before the refusals | 59 passed, 1 failed, compiled and interpreted. *Rerun here*, both ways |
+| F12 | the boundary is the ASCII letters and digits: `0..Z ∪ a..z` | 318 passed, 4 failed: the four boundary rows. *Rerun here* |
+| F13 | the upper-case range is in the boundary: dropped | 317 passed, 5 failed: the four, and "an upper-case letter beside a form is a letter too" |
+| F14 | `_` is not in the boundary: added | 317 passed, 5 failed: the four, and "a form beside a dot, a dash, an underscore or a space is found" |
+| C15 | the SQLite step not before the check-chez step: line 248's check deleted | before the new row, 149 of 149 passed. Now 149 passed, 1 failed: "the SQLite step moved before Check the Chez". *Rerun here* |
+
+C15 was the one survivor of a sweep: each of `mainsteps`' five order checks was deleted in turn,
+and the other four each failed at least one row. The new row's whole output holds line 248's
+problem line, which the other checks' lines don't stand in for.
+
+**Minor, fixed in the records:**
+
+- "Refuses a floor in any form" overstated. These pass `check-floors` and `check-ci`: a form
+  beside a letter (`v3450100`, `3045001L`, `sqlite3450100`), by the boundary's design; other
+  spellings of the dotted text (`3_45_1`, `3,45,1`, `(>= 3.45)`); and anything outside
+  `.github/workflows`. ADR-0008 and `global-constraints.md` now say so, and M1's plan extends
+  `check-floors` to `scripts/ci/` before the script that fetches the amalgamation is written.
+- ADR-0006's report steps are held, not what `report-sqlite.sh` prints: replaced by `exit 0`, it
+  passed `check-ci`.
+- Finding 4's conclusion, that `check-ci` loosens per job and never for the whole file, is now in
+  ADR-0005, not only in M1's plan to come.
+- This log's "15 rows moved" was 24; and the rerun of the review's two floor lines had appended
+  them at the file's end, inside `nothreads`. Both are corrected above.
+- ADR-0005's "GNU Make 4.3" was the host's. The container's is 4.4.1, and gives the same origin.
+- The harness plan's table still listed three prerequisites of `make test` and ten plants.
+- `workflows-problems`' comment in `tests/floors.sls` named two of its rules; it names them all.
+
+**Not settled by a run here:** the suites under mawk, which CI's runner uses. The host's `awk` is
+mawk 1.3.4. Under it, `tests/check-ci.sh` passes the real workflow, and refuses the review's
+three planted workflows, each with exit 1. The suites themselves run in the container, where awk is
+gawk, so CI's first run on this branch is their first under mawk.

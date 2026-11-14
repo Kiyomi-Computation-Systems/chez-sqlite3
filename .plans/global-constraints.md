@@ -14,8 +14,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(chez-sqlite3 private require-threaded)` refuses any other Chez by name at import, and every
   library under `src/` imports it first (ADR-0003, ADR-0001 amended).
 - **The floors are written once, in `packaging/floors.sexp`.** README.org's Requirements is held
-  to it by `make check-floors`, which also refuses any workflow line that writes a floor, in any
-  form: SQLite's version number and amalgamation name too. CI reads floors through
+  to it by `make check-floors`, which also refuses any workflow line that writes a floor: its
+  dotted text, and SQLite's version number and amalgamation number as whole runs of digits. Other
+  spellings pass, and `check-floors` reads only `.github/workflows` (ADR-0008, amended). CI reads floors through
   `scripts/ci/floor.sh` and writes none. The code is held to the file by behaviour: the floor
   itself is accepted and the version below it refused (ADR-0008, amended). No other house
   document restates a floor.

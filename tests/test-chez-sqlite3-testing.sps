@@ -571,10 +571,11 @@
    (lambda (base)
      (with-fake-rm base
        (lambda ()
-         (list (refusal (lambda () (remove-temp-directory "relative/dir")))
-               (refusal (lambda () (remove-temp-directory "/")))
-               (refusal (lambda () (remove-temp-directory "")))
-               (if (file-exists? (string-append base "/rm-log")) 'run 'never-run)))))))
+         (let* ((relative (refusal (lambda () (remove-temp-directory "relative/dir"))))
+                (root (refusal (lambda () (remove-temp-directory "/"))))
+                (empty (refusal (lambda () (remove-temp-directory ""))))
+                (ran (if (file-exists? (string-append base "/rm-log")) 'run 'never-run)))
+           (list relative root empty ran)))))))
 
 (test-equal "remove-temp-directory: a directory still there after rm is a raise"
   (list (list 'other-raise "could not remove the directory") 'still-there)

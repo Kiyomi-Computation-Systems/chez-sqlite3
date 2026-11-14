@@ -583,9 +583,11 @@
   ;; at FPATH. A text that is #f is a file the caller could not read, which it
   ;; names: it is not compared. In order: a directory with no file, named
   ;; alone; one with no ci.yml, WDIR/ci.yml; and then, file by file in the
-  ;; order of their paths, whatever order they come in, each line that
-  ;; contains a floor's version text or holds a backslash after a double quote
-  ;; (line-problems).
+  ;; order of their paths, whatever order they come in, each line's complaints
+  ;; (line-problems), in this order: for each floor, the Chez floor first, its
+  ;; version text if the line contains it, then, for the SQLite floor, each
+  ;; numeric form the line holds as a whole run of digits; then a backslash
+  ;; after a double quote; then an odd number of double quotes.
   (define (workflows-problems fpath wdir workflows floors)
     (let* ((ci-path (string-append wdir "/" ci-workflow))
            ;; (name version forms) for each floor: forms are the numeric forms

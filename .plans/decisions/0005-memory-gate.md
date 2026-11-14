@@ -179,13 +179,20 @@ Measured in the pinned container before the gate was built
   ([the log](../m0-review-mutation-log.md)).
 - **Not covered, added: a variable carried in an exported `MAKEFLAGS`.**
   `MAKEFLAGS="MEMORY_SUITES=tests/test-counters.sps" make test-memory` ran one suite and said
-  nothing. GNU Make 4.3 gives such a variable the origin `command line`, the same as a real
-  command-line assignment, so the refusal can't tell them apart. It matters locally only: the
+  nothing. GNU Make gives such a variable the origin `command line`, the same as a real
+  command-line assignment: measured with 4.3 on the host, which is Ubuntu 24.04's too, and 4.4.1 in
+  the container, so the refusal can't tell them apart. It matters locally only: the
   workflow bans `MAKEFLAGS`.
 - **"No suppression" is measured in the container only:** Valgrind 3.27 and SQLite 3.53.1
   ([research/memory-gate/](../research/memory-gate/)). CI's memory job, with Valgrind 3.22 and
   Ubuntu's 3.45.1, has not yet run a suite that loads libsqlite3. So the slice 4 amendment's "as
   inside it, the gate passes no suppression" is policy there until M1's first such suite runs.
+- **`check-ci` is loosened per job, never for the whole file.** M1's `floor` and `current` jobs
+  need what `check-ci` refuses today: `CHEZ_SQLITE3_LIBRARY`, `C_INCLUDE_PATH`, more jobs, cache
+  steps. `main` is the one job that tests discovery, since the container always sets the
+  override, so `CHEZ_SQLITE3_LIBRARY` stays banned there. And `CC`, `C_INCLUDE_PATH`, `CPATH`,
+  `LD_LIBRARY_PATH` and `LD_PRELOAD` join the banned names before any job gains an `env:` key
+  beyond `CHEZ`: each can steer `test-constants` or the load.
 - **Where SQLite's two checks run.** Decision 5 puts `sqlite3_next_stmt` before each close, where
   a connection is still open. The harness plan had put both checks in `suite-exit-status`, whose
   library never loads libsqlite3, so that `check-suites`, `check-test-fails`' copy and the

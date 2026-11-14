@@ -699,6 +699,59 @@
   "      - run: echo 10009001 10090100 100901 1009001 10901 1091"
   '())
 
+;; The boundary against its whole complement. For each form, and on each side
+;; of it separately, every character from U+0001 to U+007F but the newline
+;; (which ends the line), then a few beyond ASCII, is put immediately beside the
+;; form, as the whole line. The row computes the characters for which the form
+;; was not found, in the order tried, and expects exactly the 62 ASCII letters
+;; and digits, in code point order: a character wrongly taken as a boundary, or
+;; wrongly left out, fails the row and is named in it. A form is found when the
+;; line's complaints hold its message. Both forms go through whole-run?, but
+;; each is driven, so a rule that told them apart would be seen too.
+
+(define neighbours
+  (append (let loop ((i #x7f) (acc '()))
+            (cond ((= i 0) acc)
+                  ((= i 10) (loop (- i 1) acc))
+                  (else (loop (- i 1) (cons (integer->char i) acc)))))
+          (list #\xe9 #\x3b1 #\xa0 #\x1f600)))
+
+(define letters-and-digits
+  (string->list "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+
+;; unfound-neighbours : String (Char -> String) -> (Listof Char)
+;; The neighbours for which the workflow with LINE-OF's line as its body has no
+;; complaint MESSAGE, or raises.
+(define (unfound-neighbours message line-of)
+  (let ((outcomes
+         (map (lambda (c)
+                (cons c (outcome (lambda ()
+                                   (check-floors fp good rp (apply under-section good-lines) wd
+                                                 (list (list wp (workflow-with (line-of c)))))))))
+              neighbours)))
+    (let loop ((rest outcomes) (acc '()))
+      (cond ((null? rest) (reverse acc))
+            ((and (eq? (car (cdar rest)) 'returned) (member message (cadr (cdar rest))))
+             (loop (cdr rest) acc))
+            (else (loop (cdr rest) (cons (caar rest) acc)))))))
+
+(test-equal "boundary: the version number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (numbered wp body-line)
+                      (lambda (c) (string-append (string c) "8001002"))))
+(test-equal "boundary: the version number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (numbered wp body-line)
+                      (lambda (c) (string-append "8001002" (string c)))))
+(test-equal "boundary: the amalgamation number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (amalgam wp body-line)
+                      (lambda (c) (string-append (string c) "8010200"))))
+(test-equal "boundary: the amalgamation number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (amalgam wp body-line)
+                      (lambda (c) (string-append "8010200" (string c)))))
+
 (workflow-row "a form on the first line of a file, and another on the last, which has no newline after it"
   (string-append "8001002\n" "name: CI\n" "# 8010200")
   (list (numbered wp 1) (amalgam wp 3)))

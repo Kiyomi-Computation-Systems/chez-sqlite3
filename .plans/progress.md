@@ -27,7 +27,12 @@ newest first.
     `remove-temp-directory` stays exported: its suite tests the refusals that
     `call-with-temp-directory` can't reach, a relative path and `/`.
   - **Findings 3 and 4 are about what M1 builds:** where SQLite's two checks run, and how
-    `check-ci` loosens for new jobs. M1's plan takes them.
+    `check-ci` loosens for new jobs. ADR-0005's amendment records both, and M1's plan takes them.
+  - **The fixes were reviewed too** (Opus, read-only): no blocker, two major findings, both
+    reproduced and fixed. A third row of the helper suite still depended on argument order, and
+    passed interpreted under a mutation it failed compiled. `check-floors`' boundary wasn't held
+    against its complement: a range that took `=` for a letter passed every row. The records now
+    say what still passes `check-floors`.
 - **M1's plan comes next.** The maintainer settled four of its questions on 2026-11-13, and
   approved its slicing and the open surface; the plan records them.
 - **Open:** brief D2 to D7. D2's answer and D7's measurement go in with M1's plan.

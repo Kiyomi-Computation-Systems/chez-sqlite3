@@ -762,6 +762,12 @@
          (list (e (string-append (chk-step-text) "\n" (vers-step))
                   (string-append (vers-step) "\n" (chk-step-text))))
          (list (list vers-hdr (runs-before vers-name chk-t))))
+    (row "the SQLite step moved before Check the Chez"
+         (list (e (string-append (sql-step) "\n") "")
+               (e (string-append (chk-step-text) "\n" (vers-step))
+                  (string-append (sql-step) "\n" (chk-step-text) "\n" (vers-step))))
+         (list (list sql-hdr (runs-before sql-name chk-t))
+               (list sql-hdr swapped-msg)))
     (row "a line at the start of the versions block"
          (list (e (string-append vers-l1 "\n") (string-append "          echo x\n" vers-l1 "\n")))
          (list (list "          echo x" (vers-differs vers-l1 "          echo x"))))

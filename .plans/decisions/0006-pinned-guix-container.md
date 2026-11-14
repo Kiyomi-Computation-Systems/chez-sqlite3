@@ -129,8 +129,11 @@ chez-curl's scripts share each of these gaps; this repository's copies now diffe
 
 ## Amendment, 2026-11-13: the version reports are held (M0's closing review)
 
-- **"Each run records the versions it used" is now a check.** The review deleted both of the
-  `main` job's report steps, and every check passed. `make check-ci` now requires them, once each
-  and in order, between the check-chez step and the make step: "Report the versions this run
-  uses", with its run block line for line, then "Report the runner's SQLite", with its `env:
-  CHEZ` and its run line (ADR-0005's amendments).
+- **The steps that record the versions are now held.** The review deleted both of the `main`
+  job's report steps, and every check passed. `make check-ci` now requires them, once each and in
+  order, between the check-chez step and the make step: "Report the versions this run uses", with
+  its run block line for line, then "Report the runner's SQLite", with its `env: CHEZ` and its
+  run line (ADR-0005's amendments).
+- **What `scripts/ci/report-sqlite.sh` prints is not held.** Replaced by `exit 0`, it passed
+  `check-ci`, and nothing under `tests/` runs it. It reports and checks nothing, and was left out
+  of slice 4's mutations for that reason; its output is read by eye on each run.
