@@ -1,6 +1,8 @@
 # ADR-0002: Find libsqlite3 at runtime: an override, else one candidate list per world, loaded once by absolute path
 
-- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b.
+- **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b. Amended
+  2026-11-14: `not-threadsafe`, and what the Mac showed
+  ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -92,6 +94,8 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
 - **Whether a `THREADSAFE=0` build is refused** is decided with the thread records (brief D1, D2),
   as an amendment. Both builds measured here report `THREADSAFE=1`.
 
+  Closed 2026-11-14: it is refused, as `not-threadsafe` (ADR-0010, and the amendment below).
+
 ## Consequences
 
 - **Nothing reads `LD_LIBRARY_PATH` or `DYLD_*` on chez-sqlite3's behalf.** A non-standard SQLite,
@@ -108,3 +112,26 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
   override. macOS 14 and 15 may be such Macs (brief D7). If M1 measures that they are, M1 revisits
   whether macOS should get more candidates.
 - **The reason symbols are the contract.** Tests assert the reason, never the remedy text.
+
+## Amendment, 2026-11-14: `not-threadsafe`, and what the Mac showed (M1's plan)
+
+- **A sixth reason, `not-threadsafe`.** A library whose `sqlite3_threadsafe()` answers 0 is
+  refused (ADR-0010, decision 4; the maintainer, 2026-11-13). The order of decision 3 becomes:
+  bind `sqlite3_libversion_number` and check the floor; then bind `sqlite3_threadsafe` and refuse
+  0; then bind every other required entry point. The refusal's detail is the answer, 0, and its
+  report is the library's, since the version was read first.
+- **Apple's SQLite, measured on the maintainer's Mac** (macOS 26.7.1, arm64;
+  [research/mac-d7/](../research/mac-d7/)):
+  - **It loads by absolute path with no file on disk,** as decision 1 expects: a `stat` would
+    have found nothing.
+  - **It is 3.51.0, above the floor.** So on current macOS the one candidate is enough, and the
+    consequence's "M1 revisits whether macOS should get more candidates" isn't triggered. macOS 14
+    and 15 stay unmeasured.
+  - **It answers `THREADSAFE=2`,** so `not-threadsafe` doesn't refuse it.
+  - **It is built with `OMIT_LOAD_EXTENSION`:** `sqlite3_load_extension` and
+    `sqlite3_enable_load_extension` are missing, the only two of the 45 entry points v1 binds.
+    Both are optional (decision 3), so the load accepts it, and M4 reports their absence where
+    extension loading is asked for.
+- **Homebrew's SQLite is at `/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib`,** 3.54.1 on that
+  Mac. It loads by absolute path, as the override names it. Whether Homebrew also links it into
+  `/opt/homebrew/lib` wasn't checked; nothing here reads that directory.

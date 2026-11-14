@@ -6,38 +6,74 @@ newest first.
 
 ## Now
 
-- **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
-- **M0 slice 1, the container,** merged as PR #2.
-- **M0 slice 2, the test harness,** merged as PR #3.
-- **M0 slice 3, the memory gate,** merged as PR #4.
-- **M0 slice 4, CI,** merged as PR #5. CI on `main` passed in all three jobs.
-- **M0's closing review** (harness plan §6) ran: Opus, read-only, over the five slices and the
-  harness plan, on a snapshot of `main` at `37bb4c4`. No blocker, four major findings, every one
-  reproduced here. `m0-review-fixes` fixes M0's share ([the log](m0-review-mutation-log.md)):
-  - **`check-floors` refuses SQLite's floor in its numeric forms,** `3045001` and `3450100`,
-    which held no `3.45.1` and passed (finding 1, ADR-0008).
-  - **`check-test-fails` holds `check-ci`'s place in `make test`.** Removing it passed every check
-    (finding 2, ADR-0005 and ADR-0007).
-  - **`check-ci` holds the version reports,** which could be deleted unseen (finding 7,
-    ADR-0006). `test-check-ci`'s top-level raise is guarded (9), and two rows of the helper suite
-    assert in a fixed order and whole (10).
-  - **The records say what holds and what doesn't:** `check-ci` holds against accident, not
-    intent (5); a variable carried in `MAKEFLAGS` is not covered (6); "no suppression" was
-    measured in the container only (8). Stale and conflicting records are fixed (11).
-    `remove-temp-directory` stays exported: its suite tests the refusals that
-    `call-with-temp-directory` can't reach, a relative path and `/`.
-  - **Findings 3 and 4 are about what M1 builds:** where SQLite's two checks run, and how
-    `check-ci` loosens for new jobs. ADR-0005's amendment records both, and M1's plan takes them.
-  - **The fixes were reviewed too** (Opus, read-only): no blocker, two major findings, both
-    reproduced and fixed. A third row of the helper suite still depended on argument order, and
-    passed interpreted under a mutation it failed compiled. `check-floors`' boundary wasn't held
-    against its complement: a range that took `=` for a letter passed every row. The records now
-    say what still passes `check-floors`.
-- **M1's plan comes next.** The maintainer settled four of its questions on 2026-11-13, and
-  approved its slicing and the open surface; the plan records them.
-- **Open:** brief D2 to D7. D2's answer and D7's measurement go in with M1's plan.
+- **M0 is done.** Its five slices merged as PRs #1 to #5, and its closing review and the review's
+  fixes as PR #6. CI on `main` passed in all three jobs at `d85c28c`.
+- **M1 slice 0, the plan and the records,** is on `m1-slice-0-plan`:
+  [the M1 plan](2026-11-13-m1-plan.md), accepted; ADR-0010 to ADR-0013; and amendments to
+  ADR-0002, ADR-0005, ADR-0009, the brief and these constraints.
+  - **The maintainer settled eight questions** on 2026-11-13 and 2026-11-14 (the plan, §2): the
+    settings list moves to M3; `FULLMUTEX` by default, with `'no-mutex`; a `THREADSAFE=0` library is
+    refused; D7 measured on the one Mac; a fieldless condition root; a closed connection raises
+    `&sqlite-closed`; a library with no memory count is reported and passes; and
+    `call-with-database` takes its procedure last.
+  - **Brief D7 is measured** on macOS 26.7.1 ([research/mac-d7/](research/mac-d7/)). Apple's SQLite
+    is 3.51.0, loads from the dyld cache by path, and has no extension loading and no memory count.
+- **Next: M1 slice 1, the pure core.** Slices 1 to 4 are stacked, each branch on the one before.
+- **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
+  `nothreads` is the maintainer's call (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-13 — M0's closing review and its fixes (PR #6, `d85c28c`)
+
+- **The review** (harness plan §6) ran on Opus, read-only, over the five slices and the harness
+  plan, on a snapshot of `main` at `37bb4c4`. It found no blocker and four major findings. Every
+  finding was reproduced before it was fixed.
+- **Fixed** ([the log](m0-review-mutation-log.md)):
+  - **`check-floors` refuses SQLite's floor in its numeric forms,** `3045001` and `3450100`, as
+    whole runs of digits (finding 1, ADR-0008).
+  - **`check-test-fails`' case `ci` holds `check-ci`'s place in `make test`.** Removing the
+    prerequisite had passed every check (finding 2, ADR-0005 and ADR-0007).
+  - **`check-ci` holds the version reports** (finding 7, ADR-0006). `test-check-ci`'s top-level
+    raise is guarded (9), and the helper suite's rows assert in no fixed order, and whole (10).
+  - **The records say what holds and what doesn't** (5, 6, 8, 11).
+  - **Findings 3 and 4 shaped M1's plan:** where SQLite's two checks run, and how `check-ci`
+    loosens for new jobs (ADR-0005, amended).
+- **Watched failing:** 20 mutations, H1 to H4, F7 to F14, C10 to C15, T29 and T30, each failing
+  its check. Final runs: `test-check-floors` 322 passed, `test-check-ci` 150, the helper suite 60
+  compiled and interpreted, and `check-test-fails` 11 cases.
+- **The fixes were reviewed too** (Opus, read-only): no blocker, two major findings, both
+  reproduced and fixed. A third helper-suite row still depended on argument order, and passed
+  interpreted under a mutation it failed compiled. `check-floors`' boundary wasn't tested against
+  its complement: a range that took `=` for a letter passed every row.
+- **CI:** the PR's run passed in all three jobs, with the same counts as the container, and so
+  did `main`'s after the merge.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | M0's closing review | Opus | about 372k | 73 | 17 min |
+  | The floors' numeric forms | Sonnet | about 81k | 18 | 3 min |
+  | `check-ci`'s report steps | Sonnet | about 102k | 18 | 4.5 min |
+  | The helper suite's rows | Sonnet | about 51k | 9 | 1.3 min |
+  | `check-test-fails`' case `ci` | Sonnet | about 56k | 10 | 1.8 min |
+  | The fixes' review | Opus | about 233k | 57 | 15 min |
+  | The boundary's complement | Sonnet | about 56k | 8 | 1.3 min |
+  | The last order-dependent row | Sonnet | about 63k | 16 | 1.5 min |
+  | The order checks | Sonnet | about 57k | 10 | 1.5 min |
+
+  The builders ran in parallel on disjoint files, and the `check-test-fails` agent after them,
+  since it copies the whole tree.
+- **Learned:**
+  - A brief quotes every AGENTS.md rule that binds what it builds. The boundary's brief gave
+    sample characters, not "an allowlist against its whole complement", and a looser range passed
+    every row.
+  - A finding names one instance; a brief names its class and asks for a sweep. Finding 10 named
+    one order-dependent row, and its sibling 30 lines below had the same defect.
+  - A record says what a check holds, what still passes, and the run that shows it. "Any form",
+    "the whole shape" and "is now a check" each claimed more than the check held.
+  - Where a mutation landed is checked, not only its verdict. A plant recorded as inside `main`
+    had been appended at the file's end; rerun inside `main`, it was refused.
 
 ### 2026-11-13 — M0 slice 4: CI (PR #5, `37bb4c4`)
 

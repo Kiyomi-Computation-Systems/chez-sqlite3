@@ -4,7 +4,9 @@
   Amended 2026-11-13: what M0 slice 3 measured and built
   ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)), CI's memory job
   (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)), and M0's closing
-  review ([amendment](#amendment-2026-11-13-m0s-closing-review)).
+  review ([amendment](#amendment-2026-11-13-m0s-closing-review)). Amended 2026-11-14: a library
+  that keeps no memory count (M1's plan,
+  [amendment](#amendment-2026-11-14-a-library-that-keeps-no-memory-count-m1s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -198,3 +200,20 @@ Measured in the pinned container before the gate was built
   library never loads libsqlite3, so that `check-suites`, `check-test-fails`' copy and the
   launcher's `env -i` runs can import it. The plan now follows decision 5. `sqlite3_memory_used`
   is asked only in a process that loaded the library, as M1 decides.
+
+## Amendment, 2026-11-14: a library that keeps no memory count (M1's plan)
+
+- **Apple's SQLite keeps no memory count.** It is built with `DEFAULT_MEMSTATUS=0`, and
+  `sqlite3_memory_used` answered 0 before an open, while a database was open, and after the close
+  ([research/mac-d7/](../research/mac-d7/)). A check that the count returns to its baseline would
+  pass there without testing anything.
+- **So the memory check has a positive control.** It must first see the count rise while a
+  connection is open. Where the count never rises, the check is unavailable. It is detected by
+  that control, not by the compile option, which `sqlite3_config` could override at runtime.
+- **A suite that finds the check unavailable reports it, by name, and passes on its other checks**
+  (the maintainer, 2026-11-14). Its verdict line names the check as unavailable, so the result is
+  never a silent pass. On the Mac, the hand runs reach Apple's library through discovery and are
+  read that way. CI's three Linux libraries all keep the count, and their suites run the check.
+- **Where it runs:** only in a process that loaded libsqlite3 (the closing review's amendment).
+  Slice 4 of M1 settles the mechanism, and measures first whether the count returns to its value
+  before the first open, or needs a baseline taken after the first cycle (decision 5).

@@ -2,8 +2,9 @@
 
 Date: 2026-11-13
 Status: accepted 2026-11-13. §2 was settled by the maintainer on 2026-11-13. §3a, b, h and i
-are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. The rest of §3 becomes records
-with the M1 and M2 plans. Where a record and this brief disagree, the record wins.
+are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. §3c, d, e and g are ADR-0010 to
+ADR-0013, from the M1 plan. Amended 2026-11-14 with the M1 plan: D2 settled, D7 measured, and the
+settings list moved to M3 (§2.7, §6). Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses
@@ -29,7 +30,8 @@ Evidence, measured on the Linux development host on 2026-11-13:
   embedded NUL.
 
 Not measured here: any macOS SQLite. The assessment reports `/usr/lib/libsqlite3.dylib` at
-3.51.0 on the maintainer's Mac.
+3.51.0 on the maintainer's Mac. M1 measured it there on macOS 26.7.1: 3.51.0, `THREADSAFE=2`,
+`DEFAULT_MEMSTATUS=0` and `OMIT_LOAD_EXTENSION` ([research/mac-d7/](research/mac-d7/)).
 
 ## 1. Goal
 
@@ -63,8 +65,8 @@ need prepared statements, and the conveniences are built on them. Nothing privat
    `(chez-sqlite3 private …)`. The name avoids Thunderchez's `(sqlite3)`.
 2. **The floor is SQLite 3.45.1,** Ubuntu 24.04's, and the first with JSONB. Discovery
    refuses an older library and says why. Ubuntu 22.04 (3.37.2) and Debian 12 (3.40.1) need the
-   override. macOS 14 and 15 are believed to ship 3.43.x, so they'd need it too; M1 measures
-   this on the Mac.
+   override. macOS 14 and 15 are believed to ship 3.43.x, so they'd need it too. M1 measured
+   only the maintainer's Mac, on macOS 26.7.1, which ships 3.51.0; 14 and 15 stay unmeasured.
 3. **Written fresh.** Thunderchez is a reference for API ideas only. None of its code is copied:
    it is Apache-2.0, and this project is BSD-3.
 4. **The harness is a trimmed copy of chez-curl's** (the harness plan, M0). The memory gate has
@@ -74,14 +76,18 @@ need prepared statements, and the conveniences are built on them. Nothing privat
 5. **Loadable extensions are in v1, opt-in per connection.** Opting in turns on the C call
    alone (`SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION`), never SQL's `load_extension()`, so SQL text
    can never load a library. A library built without extension loading raises a named
-   condition. Apple's system SQLite is believed to be one; M1 measures it.
+   condition. Apple's system SQLite is one: measured in M1, it is built with
+   `OMIT_LOAD_EXTENSION`.
 6. **FTS5 and JSON are compiled in, not loaded.** Tests use both on every SQLite they run
    against, and a compile-option query (`sqlite3_compileoption_used`) is exported so an
    application can check at startup.
 7. **PRAGMAs are SQL.** They run through the ordinary statement path. Opening a connection
    also takes a checked list of per-connection settings, run on every open, because
    `foreign_keys` and `busy_timeout` reset with each connection. A PRAGMA's value can't be a
-   bound parameter, so each name and value is validated before it reaches SQL text.
+   bound parameter, so each name and value is validated before it reaches SQL text. The list
+   arrives in M3, not M1 (the maintainer, 2026-11-13): a setting is checked by reading its row
+   back, which needs M2's statements. `journal_mode=wal` on a `:memory:` database answers
+   `memory` with every return code 0 ([research/m1-plan/](research/m1-plan/)).
 8. **`sqlite3_config` stays out:** it is process-wide and legal only before SQLite
    initialises. `sqlite3_db_config` is reached through a few named, checked options:
    extension loading, defensive mode, double-quoted strings.
@@ -128,12 +134,12 @@ Out of v1:
 | # | Question | Leaning |
 |---|---|---|
 | D1 | Is a threaded Chez required, as in chez-curl? | **Settled 2026-11-13: required** (ADR-0001's amendment). The counters need a mutex. |
-| D2 | The connection's mutex mode under §3c: `NOMUTEX` (one thread uses it anyway) or `FULLMUTEX` (defence if our check has a gap). | `FULLMUTEX`; the cost is small. |
+| D2 | The connection's mutex mode under §3c: `NOMUTEX` (one thread uses it anyway) or `FULLMUTEX` (defence if our check has a gap). | **Settled 2026-11-13: `FULLMUTEX` by default, `'no-mutex` per connection** (ADR-0010). A `THREADSAFE=0` library is refused. |
 | D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | v1, in M3, bounded and cleared by close. |
 | D4 | Binding `+nan.0`: SQLite stores NULL without complaint (measured). | Refuse it with a condition. |
 | D5 | Binding `#t` and `#f`. | Refuse them: 1 in, 1 out is asymmetric. Callers pass 1 or 0. |
 | D6 | TEXT that isn't valid UTF-8: `utf8->string` replaces bytes silently (measured). | Raise a named condition; a column can always be read as bytes instead. |
-| D7 | macOS versions and extension loading on Apple's SQLite. | Measure on the Mac in M1. |
+| D7 | macOS versions and extension loading on Apple's SQLite. | **Measured 2026-11-13 on macOS 26.7.1:** 3.51.0, above the floor, loaded from the dyld cache by path; no extension loading ([research/mac-d7/](research/mac-d7/)). macOS 14 and 15 unmeasured. |
 
 ## 6. Milestones
 
@@ -142,14 +148,15 @@ Out of v1:
   constraints, the Guix container, the Makefile, SRFI-64 from vendored chez-srfi, the suite
   checks and the pin checks, the counters, the Valgrind gate, and Linux CI's `main`, `memory`
   and `nothreads` jobs.
-- **M1, loading.** Discovery, the floor check, conditions, open and close, the settings list,
+- **M1, loading.** Discovery, the floor check, conditions, open and close,
   `sqlite3_libversion`, compile options. SQLite's two memory checks join the gate; the `floor`
-  and `current` CI lanes arrive. The Mac measurements (D7).
+  and `current` CI lanes arrive. The Mac measurements (D7). [The M1 plan](2026-11-13-m1-plan.md).
 - **M2, statements and values.** Prepare, bind, step, columns, reset, finalize, statement
   tracking, §3f's mapping, §3g's conditions.
 - **M3, the conveniences.** `execute!`, `query`, `query-row`, the fold, transactions and
-  savepoints, the busy timeout, interrupt, the change counters, the statement cache (D3). Two
-  connections in WAL mode contending under a busy timeout.
+  savepoints, the settings list (§2.7, moved from M1), the busy timeout, interrupt, the change
+  counters, the statement cache (D3). Two connections in WAL mode contending under a busy
+  timeout.
 - **M4, extensions and `db_config`.** Loadable extensions opt-in, defensive mode, DQS. FTS5
   and JSON suites.
 - **M5, the release.** `/docs` finished, README, CHANGELOG, 0.1.0. `docs/reference.md` grows

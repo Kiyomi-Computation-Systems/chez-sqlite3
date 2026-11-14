@@ -33,6 +33,14 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are pointer-width integers,** −1 and 0 (ADR-0001).
 - **v1 binds only entry points that exist at the floor.** A newer one is optional: checked with
   `foreign-entry?`, its absence reported where it is used (ADR-0003, ADR-0002).
+- **No binding takes a Scheme object:** never Chez's `string`, `utf-8`, `u8*` or `scheme-object`
+  types, nor a bytevector. Every string passed to libsqlite3 is copied, UTF-8 and NUL-terminated,
+  into a counted foreign block freed on every path, and one holding U+0000 is refused before
+  anything is allocated. Out-parameters are counted blocks too. A returned string is read by our
+  code from a `uptr` (ADR-0011).
+- **The calls that can block are `__collect_safe`:** `sqlite3_open_v2` and `sqlite3_close` from
+  M1, `sqlite3_prepare_v3` and `sqlite3_step` from M2. Every binding has a row in the convention
+  table, which the convention suite holds every `foreign-procedure` form to (ADR-0011).
 
 ## Loading libsqlite3
 
@@ -41,18 +49,43 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Otherwise one candidate list, chosen by world.** A Guix world never yields a standard
   directory, and an FHS world never yields a Guix profile. macOS has one candidate,
   `/usr/lib/libsqlite3.dylib`. Discovery is a pure function of its inputs (ADR-0002).
-- **One load, then verify, never fall through.** The floor is checked first. Every required entry
-  point is then bound eagerly in the same library body. The first failure is kept for the life of
-  the process (ADR-0002).
+- **One load, then verify, never fall through.** The floor is checked first, then
+  `sqlite3_threadsafe`: a single-thread build is refused. Every other required entry point is then
+  bound eagerly in the same library body. The first failure is kept for the life of the process
+  (ADR-0002, amended; ADR-0010).
 - **Refusals carry a reason symbol:** `invalid-override`, `not-found`, `load-failed`,
-  `below-floor` or `missing-api`. Tests assert the symbol, never the text (ADR-0002).
+  `below-floor`, `not-threadsafe` or `missing-api`. Tests assert the symbol, never the text
+  (ADR-0002, amended).
 - **Nothing reads `LD_LIBRARY_PATH` or `DYLD_*` on the library's behalf** (ADR-0002).
+
+## Connections, threads and conditions
+
+- **A connection belongs to the thread that opened it.** Every verb checks, in order, that its
+  argument is a database, that it runs on the owning thread, and that the connection is open,
+  before anything reaches C. The wrong thread raises `&sqlite-wrong-thread`, and a closed
+  connection `&sqlite-closed`. M3's `sqlite3_interrupt` is the one exception (ADR-0010,
+  ADR-0012).
+- **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
+  always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
+- **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
+  checks `sqlite3_next_stmt`, then calls `sqlite3_close`, never `sqlite3_close_v2`. A failed open
+  closes its handle before it raises. A second close does nothing (ADR-0012).
+- **A handle is an integer in an opaque, sealed `database` record,** with a private accessor. No
+  ftype pointer holds one (ADR-0012).
+- **`open-database`'s options are symbols, and the flags SQLite gets are always legal.** A
+  contradiction, an option given twice, or an unknown option is an assertion violation before
+  anything is allocated (ADR-0012).
+- **Every condition is a `&chez-sqlite3-error`,** a fieldless root under `&error`. SQLite's codes
+  are symbols on `&sqlite-error`. A caller's mistake is an assertion violation that names a string
+  by its kind, never its text. Tests assert the type, the reason or code and the fields, never a
+  message (ADR-0013).
 
 ## Layout and names
 
 - **The public library is `(chez-sqlite3)`.** Internals live under `(chez-sqlite3 private …)`, and
   nothing public imports them except `(chez-sqlite3)` itself. The test helpers are
-  `(chez-sqlite3-testing)` (ADR-0009).
+  `(chez-sqlite3-testing)` (ADR-0009). `check-seam` reads `src/` alone: tests and the test
+  helpers may import private libraries (ADR-0009, amended).
 - **No Thunderchez code.** Its API ideas may be taken, never its text. It is not vendored, fetched
   or imported (ADR-0009).
 - **Each defect the assessment lists becomes a test,** watched failing against a planted copy of
@@ -76,7 +109,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
 ## Memory and the test harness
 
 - **The gate has four parts:** Valgrind, our counters, `sqlite3_next_stmt` and
-  `sqlite3_memory_used`. The last two join in M1 (ADR-0005).
+  `sqlite3_memory_used`. The last two join in M1: `sqlite3_next_stmt` in `close-database!`, and
+  `sqlite3_memory_used` only in a process that loaded libsqlite3 (ADR-0005, amended).
+- **The memory check has a positive control.** It must see the count rise while a connection is
+  open. Where it never rises, as on Apple's `DEFAULT_MEMSTATUS=0` build, the suite names the
+  check as unavailable and passes on its other checks, never silently (ADR-0005, amended).
 - **Valgrind's evidence comes from its log alone.** `timeout` wraps Valgrind and never sits between
   it and Chez, and `CHEZ` is the real binary. There are no suppressions without a recorded run
   that needs one (ADR-0005).
