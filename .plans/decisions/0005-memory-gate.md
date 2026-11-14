@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (the maintainer, 2026-11-13). The two SQLite checks are built in M1.
   Amended 2026-11-13: what M0 slice 3 measured and built
-  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)).
+  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)), and CI's memory job
+  (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -120,3 +121,22 @@ Measured in the pinned container before the gate was built
     any other's.
   - **Two runs in one tree** remove each other's logs and fail, naming the wrong reason. They fail
     closed.
+
+## Amendment, 2026-11-13: CI's memory job (M0 slice 4)
+
+- **Decision 6 is narrowed to what it protects.** "Neither the job nor its steps carry `if:`"
+  can't hold as written: the job restores Chez from a cache, and its build and save steps run only
+  on a miss, through `if:`, as chez-curl's do. The rule is now that neither the job nor its two
+  gate steps, `make check-memory-gate` and `make test-memory`, carry `if:` or
+  `continue-on-error:`.
+- **`check-memory-gate`'s case o holds it,** replacing slice 3's tripwire. It reads
+  `.github/workflows/ci.yml` and requires:
+  - one step whose whole run line is `make test-memory`, after one whose whole run line is
+    `make check-memory-gate`, in the same job, and no other line naming either;
+  - neither of those steps, nor their job, carrying `if:` or `continue-on-error:`;
+  - no line but a comment naming a variable that would change what the gate runs or whether its
+    failure counts: `MAKEFLAGS`, `MFLAGS`, `GNUMAKEFLAGS`, `VALGRIND`, any `VALGRIND_` variable,
+    `MEMORY_SUITES`, `MEMORY_TIMEOUT`, `LIBDIRS` or `TIMEOUT`. Slice 3's review asked for this:
+    `make -i` through `MAKEFLAGS` turns a failing gate green, and a job's `env:` could narrow it.
+- **The job runs on every event,** on Ubuntu 24.04, against Chez built at its floor from the
+  release tarball. Outside the container, as inside it, the gate passes no suppression.

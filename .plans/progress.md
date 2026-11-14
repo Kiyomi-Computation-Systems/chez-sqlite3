@@ -25,7 +25,17 @@ newest first.
       the gate doesn't cover, and the harness plan gives M1 the children that reach native code.
     - Also fixed: `b fails` compares its lines whole; o is a tripwire until slice 4; the research
       table lacked possibly-lost figures.
-- **M0 slice 4, CI,** comes next, stacked on slice 3's branch.
+- **M0 slice 4, CI,** is built on `m0-slice-4-ci`, stacked on slice 3's branch:
+  - **Built:** `.github/workflows/ci.yml` with three jobs, `main`, `memory` and `nothreads`, on
+    Ubuntu 24.04; `scripts/ci/` (`build-chez.sh`, `floor.sh`, `check-action-pins.sh`,
+    `report-sqlite.sh`); `packaging/debian-prereqs.txt`; the floors' workflow rules;
+    `check-nothreads`, over every library under `src/`; and `check-memory-gate`'s case o.
+  - **Pins checked:** each action's commit and the Chez tarball's sha256, against GitHub.
+  - **Two Sonnet agents** built the workflow rules with the CI scripts' tests, and
+    `check-nothreads`, in parallel.
+  - **Watched failing:** [the log](ci-mutation-log.md). 39 mutations, every one failing its
+    check.
+  - **Waiting for:** CI's first run, which records the runner's SQLite, and the slice's review.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs

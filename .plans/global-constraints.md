@@ -14,8 +14,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(chez-sqlite3 private require-threaded)` refuses any other Chez by name at import, and every
   library under `src/` imports it first (ADR-0003, ADR-0001 amended).
 - **The floors are written once, in `packaging/floors.sexp`.** README.org's Requirements is held
-  to it by `make check-floors`, which refuses any workflow until slice 4 writes the workflow rules.
-  CI will read floors through `scripts/ci/floor.sh` and write none. The code is held to the file by
+  to it by `make check-floors`, which also refuses any workflow line that writes a floor. CI reads
+  floors through `scripts/ci/floor.sh` and writes none. The code is held to the file by
   behaviour: the floor itself is accepted and the version below it refused (ADR-0008, amended). No
   other house document restates a floor.
 
@@ -86,7 +86,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
   runs before `make test-memory` in CI (ADR-0005).
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
-- **CI's `memory` job carries no `if:` and no `continue-on-error:`** (ADR-0005).
+- **CI's `memory` job and its two gate steps carry no `if:` and no `continue-on-error:`,** and no
+  line of the workflow names a variable that steers the gate. `check-memory-gate` holds both
+  (ADR-0005, amended).
+- **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
+  Chez (ADR-0001, amended).
 - **Valgrind follows no child process.** A suite's child that reaches native code runs under the
   gate itself, with its own log, or the gate follows children and reads every process's log
   (ADR-0005, amended).

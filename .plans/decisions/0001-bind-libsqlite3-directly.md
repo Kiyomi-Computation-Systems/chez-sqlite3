@@ -83,3 +83,10 @@
   them, are threaded.
 - **Consequence:** CI gains a lane on a `--nothreads` Chez in M0 slice 4, which runs a
   `check-nothreads` target, as chez-curl's does.
+- **Built in M0 slice 4:** `make check-nothreads` imports every library under `src/` and
+  requires each import to be refused by name. That is every library, private ones too, where
+  chez-curl's checks only public ones and fails when it finds none: M0 has no public library, and
+  every library under `src/` imports `require-threaded` first, so every one must be refused. CI's
+  `nothreads` job runs it on Chez built `--nothreads` from the release tarball. On a threaded Chez
+  it fails, naming each library: that is its red run, and why `make test` doesn't run it.
+  `tests/test-check-nothreads.sps` holds each rule on fixture trees.
