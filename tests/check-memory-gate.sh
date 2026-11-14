@@ -39,6 +39,12 @@
 #                   nothing (chez-curl's n all, without the shards)
 #   g  environment  test-memory refuses a MEMORY_SUITES from the
 #                   environment, by its whole message, running no suite
+#   g  whitespace   test-memory refuses to run from a checkout whose path
+#                   holds whitespace, a space or a tab, each in a real
+#                   directory of its own (make's CURDIR is the physical
+#                   path, so a symlink's name never reaches it), by its
+#                   whole message naming the path, exit 2, running no
+#                   suite: the gate's child prefix is cut at whitespace
 #   h  options      test-memory refuses to run while any source of options
 #                   its command line does not show is present, each in a
 #                   case of its own, planted in the case's own copy:
@@ -980,6 +986,28 @@ if grep -q '^=== ' "$out" || [ -e "$stub.argv" ] || [ -e "$(log_of "$after")" ];
   problem "with MEMORY_SUITES in the environment, a suite ran"
 fi
 verdict "g environment: test-memory refuses a MEMORY_SUITES from the environment, by its whole message, running no suite"
+
+# The checkout's path holds whitespace: the gate's child prefix, which holds
+# an absolute --log-file path, would be cut there. A real directory, since
+# CURDIR is the physical path. A space, and a tab, each in a copy of its own.
+for name in "with space" "with	tab"; do
+  newtree
+  holder=$tmp/$name
+  mkdir "$holder" || exit 2
+  cp -a "$T" "$holder/tree" || { echo "check-memory-gate: could not copy the tree" >&2; exit 2; }
+  cd "$holder/tree" || exit 2
+  here=$(pwd -P)
+  rm -f "$stub.argv"
+  gate MEMORY_SUITES="$after" VALGRIND="$stub"
+  status=$?
+  [ "$status" -eq 2 ] || problem "in '$here': make test-memory exited $status, not 2"
+  want_lines "test-memory: the checkout's path holds whitespace, '$here': the gate's child prefix, CHEZ_SQLITE3_GATE_CHILD, is cut at whitespace, so its absolute --log-file path would split; run from a path without whitespace"
+  if grep -q '^=== ' "$out" || [ -e "$stub.argv" ] || [ -e "$(log_of "$after")" ]; then
+    problem "in '$here': a suite ran"
+  fi
+  cd "$tmp" || exit 2
+  verdict "g whitespace: test-memory refuses to run from a path holding whitespace ($(printf '%s' "$name" | tr '\t' 'T')), by its whole message, exit 2, running no suite"
+done
 
 # ---- h: options from outside the command line ----
 # Each source is planted in the case's own copy, never in the working tree,

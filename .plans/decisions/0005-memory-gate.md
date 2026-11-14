@@ -346,3 +346,20 @@ Measured in the pinned container before the gate was built
   unavailable and passed on its other checks, as designed; with Homebrew's 3.54.1 through the
   override, the check passed, the count back at 0 after 66,848 bytes while open.
 
+
+## Amendment, 2026-11-14: a checkout path holding whitespace (owed to M1's closing review)
+
+- **Found at slice 3's review fixes:** `CHEZ_SQLITE3_GATE_CHILD` holds each child's absolute
+  `--log-file`, under `$(CURDIR)`. Its two readers, `gated-command` and `test-library-loading`'s
+  `gate-log-dir`, cut it at whitespace, as make cuts `VALGRIND`. In a checkout whose path held a
+  space, the log path became two words, and nothing refused it.
+- **Measured:** `deps` and `require-tools` pass in such a path, and so does a suite that starts no
+  gated child. Only a gated child meets the split. `CURDIR` is the physical path: a symlink whose
+  name holds a space never puts one there.
+- **`make test-memory` refuses such a checkout,** exit 2, after the `MEMORY_TIMEOUT` check and
+  before any suite runs, naming the path and why. The two readers are unchanged.
+  `check-memory-gate`'s `g whitespace` copies the tree into a real directory named with a space,
+  and one named with a tab, and asserts the whole message, the exit and that no suite ran
+  ([the log](../m1-owed-fixes-mutation-log.md)).
+- **Rejected:** carrying such a path through the prefix. The prefix is a string of words, as
+  `VALGRIND` is, and a quoting of its own would be a second rule for both readers to keep.

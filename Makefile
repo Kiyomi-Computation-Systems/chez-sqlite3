@@ -416,6 +416,11 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    echo "test-memory: MEMORY_TIMEOUT is '$(MEMORY_TIMEOUT)', not a positive whole number of seconds" >&2; \
 	    exit 2 ;; \
 	esac
+	@case '$(CURDIR)' in \
+	  *[[:space:]]*) \
+	    echo "test-memory: the checkout's path holds whitespace, '$(CURDIR)': the gate's child prefix, CHEZ_SQLITE3_GATE_CHILD, is cut at whitespace, so its absolute --log-file path would split; run from a path without whitespace" >&2; \
+	    exit 2 ;; \
+	esac
 	@case '$(origin MEMORY_SUITES)' in \
 	  environment*) \
 	    echo "test-memory: MEMORY_SUITES is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)" >&2; \

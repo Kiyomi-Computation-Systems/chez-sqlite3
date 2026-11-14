@@ -35,21 +35,6 @@
         (write (test-result-ref r (quote actual-value)))
         (newline)))))
 
-;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
-;; for any other raise, or (no-raise VALUE).
-(define (raised thunk)
-  (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
-                  (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
-            (#t (list 'other (describe e))))
-    (list 'no-raise (thunk))))
-
-;; The two messages, whole, written here and not read from the library.
-(define not-a-kind "not a kind of native object chez-sqlite3 counts")
-(define double-free "more objects of this kind freed than made: a double free")
-
 ;; refused : (-> Any) -> (U (List 'assertion-violation Symbol (Listof Any)) (List 'other String) (List 'no-raise Any))
 ;; THUNK's assertion violation as its who and irritants alone, never its message.
 (define (refused thunk)
@@ -101,36 +86,36 @@
     (list one two (native-counts))))
 
 (test-equal "count-up! and count-down! refuse a symbol that is no kind, as an assertion violation, and count nothing"
-  (list (list 'assertion-violation 'count-up! not-a-kind '(blocks))
-        (list 'assertion-violation 'count-down! not-a-kind '(blocks))
-        (list 'assertion-violation 'count-up! not-a-kind '("block"))
-        (list 'assertion-violation 'count-down! not-a-kind '(conn))
+  (list (list 'assertion-violation 'count-up! '(not-a-kind blocks))
+        (list 'assertion-violation 'count-down! '(not-a-kind blocks))
+        (list 'assertion-violation 'count-up! '(not-a-kind "block"))
+        (list 'assertion-violation 'count-down! '(not-a-kind conn))
         zero-counts)
-  (let* ((a (raised (lambda () (count-up! 'blocks))))
-         (b (raised (lambda () (count-down! 'blocks))))
-         (c (raised (lambda () (count-up! "block"))))
-         (d (raised (lambda () (count-down! 'conn)))))
+  (let* ((a (refused (lambda () (count-up! 'blocks))))
+         (b (refused (lambda () (count-down! 'blocks))))
+         (c (refused (lambda () (count-up! "block"))))
+         (d (refused (lambda () (count-down! 'conn)))))
     (list a b c d (native-counts))))
 
 (test-equal "a count-down below zero, a double free, raises an assertion violation and leaves the count at zero"
-  (list (list 'assertion-violation 'count-down! double-free '(statement)) zero-counts
+  (list (list 'assertion-violation 'count-down! '(double-free statement)) zero-counts
         (counts-with '((statement . 1))) zero-counts)
-  (let* ((refused (raised (lambda () (count-down! 'statement))))
+  (let* ((result (refused (lambda () (count-down! 'statement))))
          (after (native-counts))
          (up (with-counts '(statement) native-counts)))
-    (list refused after up (native-counts))))
+    (list result after up (native-counts))))
 
 ;; An unknown kind with a count standing at one: a count-down! that fell back
 ;; to some kind's slot would take that count to zero, and still raise at the
 ;; double free; the count held at one gives it away.
 (test-equal "count-down! and count-up! of a symbol that is no kind leave every count where it stood"
-  (list (list 'assertion-violation 'count-down! not-a-kind '(blocks))
-        (list 'assertion-violation 'count-up! not-a-kind '(blocks))
+  (list (list 'assertion-violation 'count-down! '(not-a-kind blocks))
+        (list 'assertion-violation 'count-up! '(not-a-kind blocks))
         (counts-with '((block . 1) (connection . 1) (statement . 1))))
   (with-counts '(block connection statement)
     (lambda ()
-      (let* ((down (raised (lambda () (count-down! 'blocks))))
-             (up (raised (lambda () (count-up! 'blocks)))))
+      (let* ((down (refused (lambda () (count-down! 'blocks))))
+             (up (refused (lambda () (count-up! 'blocks)))))
         (list down up (native-counts))))))
 
 ;; Every kind, each alone: a counter that lost one kind's index, or raised
@@ -145,8 +130,8 @@
        (list during (native-counts))))
    (test-equal (string-append "count-down! of " (symbol->string kind)
                               " at zero raises, a double free, and leaves every count at zero")
-     (list (list 'assertion-violation 'count-down! double-free (list kind)) zero-counts)
-     (let ((r (raised (lambda () (count-down! kind)))))
+     (list (list 'assertion-violation 'count-down! (list 'double-free kind)) zero-counts)
+     (let ((r (refused (lambda () (count-down! kind)))))
        (list r (native-counts)))))
  '(block connection statement))
 

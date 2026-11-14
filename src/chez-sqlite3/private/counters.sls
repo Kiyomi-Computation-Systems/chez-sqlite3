@@ -52,16 +52,18 @@
 
   ;; kind-index : Symbol Symbol -> Natural
   ;; Where KIND's count stands; an assertion violation from WHO for a
-  ;; symbol that is not a kind.
+  ;; symbol that is not a kind, whose irritants are not-a-kind, then KIND.
   (define (kind-index who kind)
     (let loop ((kinds native-kinds) (i 0))
       (cond ((null? kinds)
-             (assertion-violation who "not a kind of native object chez-sqlite3 counts" kind))
+             (assertion-violation who "not a kind of native object chez-sqlite3 counts"
+                                   'not-a-kind kind))
             ((eq? (car kinds) kind) i)
             (else (loop (cdr kinds) (+ i 1))))))
 
   ;; count-up! : Symbol -> Void
-  ;; One more object of KIND.
+  ;; One more object of KIND. A KIND that is not a kind is an assertion
+  ;; violation, whose irritants are not-a-kind, then KIND, and nothing is counted.
   (define (count-up! kind)
     (let ((i (kind-index 'count-up! kind)))
       (locked lock
@@ -70,7 +72,9 @@
   ;; count-down! : Symbol -> Void
   ;; One object of KIND fewer. A count at zero stays at zero, and the call
   ;; raises an assertion violation: one more object freed than was made is
-  ;; a double free.
+  ;; a double free, whose irritants are double-free, then KIND. A KIND that is
+  ;; not a kind is an assertion violation, whose irritants are not-a-kind, then
+  ;; KIND, and nothing is counted.
   (define (count-down! kind)
     (let* ((i (kind-index 'count-down! kind))
            (was (locked lock
@@ -82,7 +86,7 @@
       (when (= was 0)
         (assertion-violation 'count-down!
                              "more objects of this kind freed than made: a double free"
-                             kind))))
+                             'double-free kind))))
 
   ;; native-counts : -> (Listof (Pairof Symbol Natural))
   ;; Every kind with its count, in native-kinds order, read at one moment.
