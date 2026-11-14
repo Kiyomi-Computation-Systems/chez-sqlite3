@@ -284,6 +284,78 @@ check "M1 make check-guix without guix: names the goal" \
   grep -Fxq "make check-guix: guix not found." "$tmp/err"
 check "M1 make check-guix without guix: runs no test" [ ! -s "$started" ]
 
+# M2: `make test` with no Chez stops at its prerequisite check-suites, whose
+# require-tools hint names `test`, the goal the user typed, not
+# `check-suites`: GOAL's $(MAKECMDGOALS) branch, reached through a
+# prerequisite. It runs in a copy of the tree, with the real PATH, so deps and
+# check-help pass and check-suites' require-tools is what stops it, before any
+# suite runs. The copy has no .git and no build/: make test needs neither, and
+# in a worktree .git points outside the one directory the container shares.
+# Only the hint's first line is compared: the line after it depends on whether
+# the host has guix. make's own "***" line carries a Makefile line number.
+copy=$tmp/tree
+mkdir "$copy"
+for entry in "$root"/* "$root"/.[!.]* "$root"/..?*; do
+  [ -e "$entry" ] || [ -L "$entry" ] || continue
+  case "$entry" in "$root/.git" | "$root/build" | "$root/.claude") continue ;; esac
+  cp -a "$entry" "$copy/" || { echo "guix-env-launcher: could not copy $entry" >&2; exit 2; }
+done
+( env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$copy" test CHEZ=no-such-chez ) \
+  >"$tmp/out" 2>"$tmp/err"
+status=$?
+check "M2 make test without Chez: fails" [ "$status" -ne 0 ]
+check "M2 make test without Chez: the prerequisite's hint names test" \
+  grep -Fxq "make test: no-such-chez not found." "$tmp/err"
+check "M2 make test without Chez: runs no suite" lacks "=== "
+check "M2 make test without Chez: names no suite's outcome" lacks "test: "
+
+# T11: make test's per-suite bound. GNU timeout reads 0 as no limit, so make
+# test refuses any TEST_TIMEOUT but a positive whole number, before any suite
+# runs, and the default is one. Each refusal runs in M2's copy.
+print_test_timeout() {
+  env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$root" \
+    --eval 'print-test-timeout: ; @echo "$(TEST_TIMEOUT)"' print-test-timeout
+}
+default_timeout=$(print_test_timeout 2>/dev/null)
+positive_whole() { case "$1" in '' | *[!0-9]* | 0*) return 1 ;; esac; }
+check "T11a the default TEST_TIMEOUT is a positive whole number" positive_whole "$default_timeout"
+for bad_timeout in 0 007 1.5 ''; do
+  ( env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout" ) \
+    >"$tmp/out" 2>"$tmp/err"
+  status=$?
+  check "T11b TEST_TIMEOUT='$bad_timeout': refused" [ "$status" -ne 0 ]
+  check "T11b TEST_TIMEOUT='$bad_timeout': says why" \
+    grep -Fxq "test: TEST_TIMEOUT is '$bad_timeout', not a positive whole number of seconds" "$tmp/err"
+  check "T11b TEST_TIMEOUT='$bad_timeout': runs no suite" lacks "=== "
+done
+
+# T10: the TIMEOUT fallback. GNU timeout is `timeout`, else `gtimeout` (where
+# Homebrew's coreutils installs it, on macOS), else the bare name `timeout`,
+# which require-tools then reports missing. Each case asks make which TIMEOUT it
+# would use, with PATH holding only the stubs. The first holds both names, so
+# `timeout` must win. The quotes in the recipe make make run it through the
+# shell, whose echo is built in: with no quote or other shell character in the
+# line, make would exec echo itself, and PATH has no echo.
+print_timeout() {
+  status=999
+  env -i PATH="$stubs" "$make_bin" --no-print-directory -C "$root" \
+    --eval 'print-timeout: ; @echo "$(TIMEOUT)"' print-timeout >"$tmp/out" 2>"$tmp/err"
+  status=$?
+}
+printed() { [ "$status" -eq 0 ] && [ "$(cat "$tmp/out")" = "$1" ]; }
+
+reset_stubs timeout gtimeout
+print_timeout
+check "T10a timeout and gtimeout: timeout, by its path" printed "$stubs/timeout"
+
+reset_stubs gtimeout
+print_timeout
+check "T10b only gtimeout: gtimeout, by its path" printed "$stubs/gtimeout"
+
+reset_stubs
+print_timeout
+check "T10c neither: the bare name timeout" printed timeout
+
 # T9: only GUIX_ENV_DRY_RUN=1 is a dry run. Any other value, 0 among them,
 # runs guix: here a stub first on PATH, which records that it ran. Were 0
 # a dry run, `make check-guix` would pass without entering any container.

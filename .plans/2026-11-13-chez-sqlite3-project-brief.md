@@ -127,7 +127,7 @@ Out of v1:
 
 | # | Question | Leaning |
 |---|---|---|
-| D1 | Is a threaded Chez required, as in chez-curl? §3c needs a thread id; a non-threaded Chez has one thread. | Support both if `get-thread-id`'s availability allows; decide in M1. |
+| D1 | Is a threaded Chez required, as in chez-curl? | **Settled 2026-11-13: required** (ADR-0001's amendment). The counters need a mutex. |
 | D2 | The connection's mutex mode under §3c: `NOMUTEX` (one thread uses it anyway) or `FULLMUTEX` (defence if our check has a gap). | `FULLMUTEX`; the cost is small. |
 | D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | v1, in M3, bounded and cleared by close. |
 | D4 | Binding `+nan.0`: SQLite stores NULL without complaint (measured). | Refuse it with a condition. |
