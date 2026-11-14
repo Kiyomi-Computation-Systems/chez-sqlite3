@@ -1,0 +1,45 @@
+# Debian/Ubuntu packages to build and test chez-sqlite3 in CI, on
+# ubuntu-24.04 (harness plan, section 5).
+#
+# Every job of .github/workflows/ci.yml installs from this file: one step
+# reads every uncommented line, installs them together with
+# `apt-get install -y --no-install-recommends`, and fails when the file
+# yields no package. A package a job needs and this file lacks fails that
+# job: add it here.
+#
+# ONE copy, deliberately: the workflow installs from this file instead of
+# restating the list in a step, so a list in two places cannot drift.
+# Lines starting with # and blank lines are ignored, so the section headers
+# below are labels only: every uncommented line is installed together. Keep
+# each package alone on its line, because a trailing comment would be
+# installed as a package.
+#
+# Not listed: git, which `make check-pins` needs: the runner checks the
+# repository out with its own.
+
+# --- to build Chez Scheme at the floor in packaging/floors.sexp --------------
+# CI builds Chez itself because noble's chezscheme is 9.5.8, below the floor
+# (ADR-0001). With ./configure --disable-x11 --disable-curses, Chez's BUILDING
+# file asks for nothing but a C compiler and make, so there is no libx11-dev
+# and no libncurses-dev (measured in chez-curl). build-essential is the C
+# toolchain: gcc, g++, make and libc6-dev.
+build-essential
+
+# --- to fetch the Chez release tarball ----------------------------------------
+# scripts/ci/build-chez.sh downloads it with curl, checks its sha256, and
+# unpacks it with tar. The runner image has curl already; it is listed so that
+# this file is the whole truth about a bare machine. tar is an Essential Debian
+# package, so it needs no line here.
+ca-certificates
+curl
+
+# --- SQLite ---------------------------------------------------------------------
+# libsqlite3-dev gives sqlite3.h, which scripts/ci/report-sqlite.sh and,
+# from M1, the constants check compile against (ADR-0001), and pulls in
+# libsqlite3-0, the library the suites load. The main job reports that
+# library's version and compile options, read through the FFI (harness plan,
+# section 5).
+libsqlite3-dev
+
+# --- the memory gate (ADR-0005) -------------------------------------------------
+valgrind

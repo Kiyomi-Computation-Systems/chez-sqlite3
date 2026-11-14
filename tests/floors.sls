@@ -8,10 +8,15 @@
 ;;; for a reader; `make check-floors` holds it to the file. The Scheme code
 ;;; that enforces a floor is held to it by behaviour, in
 ;;; tests/test-require-threaded.sps, which reads the floors from here. CI
-;;; arrives in slice 4, and the workflow rules come with it.
+;;; states no floor either: scripts/ci/build-chez.sh and floor.sh read them
+;;; from the file, and `make check-floors` holds every file in CI's workflow
+;;; directory to it (below).
 ;;;
 ;;;   floors-problems   what is wrong with the floors file's text
-;;;   check-floors      what is wrong with the floors file or the README
+;;;   check-floors      what is wrong with the floors file, the README or the
+;;;                     workflows
+;;;   workflows-problems what is wrong with the workflow directory's files
+;;;   ci-workflow       the workflow, by name, that the directory must hold
 ;;;   parse-floors      the floors file's text as a Floors, or a raise
 ;;;   read-floors       the checked-in floors file as a Floors
 ;;;   floor-text        a floor by name, as text
@@ -43,9 +48,42 @@
 ;;; indented, "* ". Prose and blank lines between them are not compared.
 ;;; Lists under other headings are not compared either. The comparison is
 ;;; exact, a space at a line's end included: each line is named as written.
+;;;
+;;; What the workflows must be. CI states no floor: scripts/ci/build-chez.sh
+;;; takes no version and reads its own from the floors file, and a step that
+;;; needs a floor gets it from scripts/ci/floor.sh, so nothing a workflow
+;;; says, an env value or a matrix value, changes what CI builds or compares.
+;;; Every file under the workflow directory is held, in subdirectories too, so
+;;; a second workflow cannot say one unseen. The directory must hold a file,
+;;; and ci.yml, directly in it. And no line of any file there may hold, as
+;;; text:
+;;;
+;;;   - the Chez floor's version, or the SQLite floor's, with the versions the
+;;;     floors file gives, whatever the line is: a step, a cache key, a
+;;;     comment;
+;;;   - a backslash after a double quote, closed or not: YAML reads escapes
+;;;     there, so "8\x2e1\x2e2" spells a floor without its text, and this check
+;;;     reads text, line by line, and fails closed;
+;;;   - an odd number of double quotes: a double-quoted string left open at
+;;;     the line's end goes on over the lines after it, where an escape is no
+;;;     longer after a quote on its own line (M0 slice 4's review).
+;;;
+;;; chez-curl's two env keys (CHEZ_VERSION, CURL_FLOOR_VERSION) and its
+;;; node-version rule are left out: no env key here ever held a floor, and
+;;; there is no setup-node. Its explicit-key, alias, non-ASCII and tab rules
+;;; are not here either, but they are not dropped: they protect rules about
+;;; keys, and this project has two, the uses key check-action-pins.sh reads
+;;; and the keys of the workflow's shape. tests/check-ci.sh holds both, and
+;;; carries those rules (M0 slice 4's review found them first left out).
+;;;
+;;; The text is searched, not parsed as YAML, so a version inside a longer
+;;; number is also the floor's text. A value that is no floor's text, as a
+;;; matrix of other versions, is not seen here: nothing reads it. Nor is an
+;;; expression that builds a version, as format('{0}.{1}.{2}', ...) does:
+;;; nothing would read that either, since build-chez.sh takes no version.
 (library (floors)
   (export floors-path check-floors floors-problems parse-floors read-floors file-text
-          floor-text floor-numbers requirement-lines workflows-problems)
+          floor-text floor-numbers requirement-lines workflows-problems ci-workflow)
   (import (rnrs)
           (only (chezscheme) display-condition parameterize print-graph))
 
@@ -402,27 +440,127 @@
          (list-problems rpath fpath (filter list-line? (car found))
                         (requirement-lines floors))))))
 
-  ;; check-floors : String String String (U String #f) -> (Listof String)
+  ;; --- the workflows --------------------------------------------------------
+
+  ;; workflow-floors : (Listof (List Symbol String))
+  ;; The floors no workflow line may contain: the floor's key in the floors
+  ;; file, and what the messages call it.
+  (define workflow-floors
+    '((chez "Chez")
+      (sqlite "SQLite")))
+
+  ;; ci-workflow : String
+  ;; The name of the file, directly in the workflow directory, that it must
+  ;; hold.
+  (define ci-workflow "ci.yml")
+
+  ;; contains? : String String -> Boolean
+  ;; Whether PIECE is somewhere in TEXT.
+  (define (contains? text piece)
+    (let ((n (string-length text)) (m (string-length piece)))
+      (let loop ((i 0))
+        (cond ((> (+ i m) n) #f)
+              ((string=? (substring text i (+ i m)) piece) #t)
+              (else (loop (+ i 1)))))))
+
+  ;; backslash-after-quote? : String -> Boolean
+  ;; Whether LINE holds a backslash anywhere after its first double quote.
+  (define (backslash-after-quote? line)
+    (let ((n (string-length line)))
+      (let find-quote ((i 0))
+        (cond ((= i n) #f)
+              ((char=? (string-ref line i) #\")
+               (let find-slash ((j (+ i 1)))
+                 (cond ((= j n) #f)
+                       ((char=? (string-ref line j) #\\) #t)
+                       (else (find-slash (+ j 1))))))
+              (else (find-quote (+ i 1)))))))
+
+  ;; odd-quotes? : String -> Boolean
+  ;; Whether LINE holds an odd number of double quotes: a double-quoted
+  ;; string is left open at its end, and goes on over the lines after it.
+  (define (odd-quotes? line)
+    (let loop ((i 0) (n 0))
+      (cond ((= i (string-length line)) (odd? n))
+            ((char=? (string-ref line i) #\") (loop (+ i 1) (+ n 1)))
+            (else (loop (+ i 1) n)))))
+
+  ;; line-problems : String String (Listof String) (Listof (List String String)) -> (Listof String)
+  ;; Each complaint about the lines LINES of the file at PATH, in line order:
+  ;; for a line, the floors whose version text it contains, the Chez floor
+  ;; first, then a backslash after a double quote, then an odd number of
+  ;; double quotes. FPATH is the floors file's
+  ;; path, FLOORS (name version) for each floor.
+  (define (line-problems path fpath lines floors)
+    (let loop ((rest lines) (n 1))
+      (if (null? rest)
+          '()
+          (append
+           (apply append
+                  (map (lambda (floor)
+                         (if (contains? (car rest) (cadr floor))
+                             (list (string-append
+                                    path ": line " (number->string n) " contains the "
+                                    (car floor) " floor " (cadr floor)
+                                    ", which no workflow line may write: the CI scripts read it from "
+                                    fpath))
+                             '()))
+                       floors))
+           (if (backslash-after-quote? (car rest))
+               (list (string-append
+                      path ": line " (number->string n)
+                      " holds a backslash after a double quote, which YAML may read as an escape, and check-floors does not"))
+               '())
+           (if (odd-quotes? (car rest))
+               (list (string-append
+                      path ": line " (number->string n)
+                      " holds an odd number of double quotes, so a double-quoted string goes on past it, where YAML may read an escape, and check-floors reads line by line"))
+               '())
+           (loop (cdr rest) (+ n 1))))))
+
+  ;; workflows-problems : String String (Listof (List String (U String #f))) Floors -> (Listof String)
+  ;; What is wrong with WORKFLOWS, every file under the workflow directory
+  ;; WDIR, each as its path and its text, against FLOORS, from the floors file
+  ;; at FPATH. A text that is #f is a file the caller could not read, which it
+  ;; names: it is not compared. In order: a directory with no file, named
+  ;; alone; one with no ci.yml, WDIR/ci.yml; and then, file by file in the
+  ;; order of their paths, whatever order they come in, each line that
+  ;; contains a floor's version text or holds a backslash after a double quote
+  ;; (line-problems).
+  (define (workflows-problems fpath wdir workflows floors)
+    (let* ((ci-path (string-append wdir "/" ci-workflow))
+           ;; (name version) for each floor.
+           (rows (map (lambda (row)
+                        (list (cadr row) (floor-text floors (car row))))
+                      workflow-floors))
+           (sorted (list-sort (lambda (a b) (string<? (car a) (car b))) workflows)))
+      (if (null? workflows)
+          (list (string-append wdir ": it holds no file, but must hold " ci-workflow
+                               ", the workflow CI runs"))
+          (append
+           (if (assoc ci-path sorted)
+               '()
+               (list (string-append wdir ": it holds no " ci-workflow ", the workflow CI runs")))
+           (apply append
+                  (map (lambda (entry)
+                         (if (cadr entry)
+                             (line-problems (car entry) fpath (split (cadr entry) #\newline) rows)
+                             '()))
+                       sorted))))))
+
+  ;; check-floors : String String String (U String #f) String
+  ;;                (U (Listof (List String (U String #f))) #f) -> (Listof String)
   ;; What is wrong with FTEXT, the text of the floors file at FPATH, or, when
-  ;; that is right, with RTEXT, the text of the README at RPATH, against it.
-  ;; Empty when both are right. A bad floors file is reported alone: the
-  ;; README cannot be held to it. An RTEXT that is #f is a README that could
-  ;; not be read, which the caller reports: it is not compared.
-  (define (check-floors fpath ftext rpath rtext)
+  ;; that is right, with RTEXT, the text of the README at RPATH, and then with
+  ;; WORKFLOWS, every file under the workflow directory WDIR as its path and
+  ;; text, against it (workflows-problems). Empty when all are right. A bad
+  ;; floors file is reported alone: the others cannot be held to it. A text
+  ;; that is #f is a file that could not be read, and WORKFLOWS #f a directory
+  ;; that could not be read, which the caller reports: neither is compared.
+  (define (check-floors fpath ftext rpath rtext wdir workflows)
     (let ((problems (floors-problems fpath ftext)))
       (if (null? problems)
           (let ((floors (car (cadr (read-data ftext)))))
-            (if rtext (readme-problems rpath rtext fpath floors) '()))
-          problems)))
-
-  ;; workflows-problems : String Boolean -> (Listof String)
-  ;; What is wrong with the workflow directory at PATH, given EXISTS?, whether
-  ;; it is there. The workflow rules (that every workflow holds the floors of
-  ;; packaging/floors.sexp) are not written yet: they come with CI, in M0
-  ;; slice 4. Until then a workflow directory is a failure, so that workflows
-  ;; cannot be added and go unchecked. Slice 4 replaces this with the rules.
-  (define (workflows-problems path exists?)
-    (if exists?
-        (list (string-append path ": it exists, but the workflow rules are not written yet"
-                             " (M0 slice 4)"))
-        '())))
+            (append (if rtext (readme-problems rpath rtext fpath floors) '())
+                    (if workflows (workflows-problems fpath wdir workflows floors) '())))
+          problems))))

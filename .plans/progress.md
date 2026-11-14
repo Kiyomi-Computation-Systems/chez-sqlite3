@@ -9,26 +9,73 @@ newest first.
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
 - **M0 slice 1, the container,** merged as PR #2.
 - **M0 slice 2, the test harness,** merged as PR #3.
-- **M0 slice 3, the memory gate,** is built on `m0-slice-3-memory-gate`, waiting for its PR's
-  review:
-  - **Measured first** ([research/memory-gate/](research/memory-gate/)): Valgrind on Chez, opening
-    and closing databases through bare FFI, loses nothing and suppresses nothing, so the gate
-    passes no suppression. A forgotten handle is definitely lost when Chez holds it as an
-    integer, and passes when it is wrapped in an ftype pointer: an input to M1's design.
-  - **Built:** `make test-memory`, the two plants, and `make check-memory-gate`, 36 cases, each in
-    a private copy of the tree. A Sonnet agent adapted the check from chez-curl's.
-  - **Watched failing:** [the log](memory-gate-mutation-log.md).
-  - **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced.
-    - Nothing held `test-memory`'s default to every suite: chez-curl's case for it went with the
-      shards. Now g all, and g environment refuses a `MEMORY_SUITES` from the environment.
-    - Valgrind follows no child process, and the records didn't say so. ADR-0005 now lists what
-      the gate doesn't cover, and the harness plan gives M1 the children that reach native code.
-    - Also fixed: `b fails` compares its lines whole; o is a tripwire until slice 4; the research
-      table lacked possibly-lost figures.
-- **M0 slice 4, CI,** comes next, stacked on slice 3's branch.
+- **M0 slice 3, the memory gate,** merged as PR #4.
+- **M0 slice 4, CI,** is built on `m0-slice-4-ci`, rebased onto `main` after slice 3 merged:
+  - **Built:** `.github/workflows/ci.yml` with three jobs, `main`, `memory` and `nothreads`, on
+    Ubuntu 24.04; `scripts/ci/` (`build-chez.sh`, `floor.sh`, `check-action-pins.sh`,
+    `report-sqlite.sh`); `packaging/debian-prereqs.txt`; the floors' workflow rules;
+    `check-nothreads`, over every library under `src/`; and `check-memory-gate`'s case o.
+  - **Pins checked:** each action's commit and the Chez tarball's sha256, against GitHub.
+  - **Two Sonnet agents** built the workflow rules with the CI scripts' tests, and
+    `check-nothreads`, in parallel.
+  - **Watched failing:** [the log](ci-mutation-log.md). 39 mutations, every one failing its
+    check.
+  - **CI's first run passed** in all three jobs, building Chez from a cold cache. The runner's
+    SQLite is 3.45.1, the floor itself, with a matching header
+    ([research/ci-runner/](research/ci-runner/)). On the real `--nothreads` Chez, both libraries
+    were refused by name.
+  - **Reviewed** (Opus, read-only): no blocker, three major findings, all reproduced. Each was a
+    hole a later edit to the workflow could pass through, not a fault in what ran:
+    - Case o ran only in the job it guards, and nothing read the `nothreads` job or the pin step.
+    - Case o read keys as text, so `"if": false`, `? if`, aliases, `needs:`, `defaults: shell:`,
+      path filters and `GITHUB_ENV` writes passed it.
+    - Dropping chez-curl's spelling rules reopened `? uses`, which hid an unpinned action from
+      the pin check. The reason recorded for dropping them was wrong.
+  - **Fixed:**
+    - `make check-ci` (a Sonnet agent, test-first: 1 passed, 125 failed, then 128 passed) holds
+      the workflow's whole shape, and `make test` runs it.
+    - Case o runs it. `scripts/ci/check-chez.sh` re-checks a Chez restored from the cache.
+    - The cache keys hash every script, and `MEMORY_TIMEOUT` is 600 s.
+    - Smaller fixes: an open double-quoted string fails `check-floors`; new rows for an
+      unreadable workflow file and for `check-chez.sh`; the launcher's tests run in `main`.
+  - **CI's second run failed in `main`,** at the launcher's tests: T11b ran `make test` under
+    `env -i`, which dropped `CHEZ`, and the runner has no `scheme` on `PATH`. Reproduced, fixed,
+    and the third run passed in all three jobs, on Chez restored from the cache and re-checked.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs
+
+### 2026-11-14 — M0 slice 3: the memory gate (PR #4, `3c8cff9`)
+
+- **Measured first** ([research/memory-gate/](research/memory-gate/)): Valgrind on Chez, opening and
+  closing databases through bare FFI, loses nothing and suppresses nothing, so the gate passes no
+  suppression. A connection left open is definitely lost when Chez holds its handle as an
+  integer, even in a live variable, and passes when it is wrapped in an ftype pointer: an input to
+  M1's design.
+- **Built:** `make test-memory`, its evidence read from Valgrind's log alone; the two plants; and
+  `make check-memory-gate`, 36 cases, each in a private copy of the tree.
+- **Watched failing:** a red run, 31 of 33 cases against a `test-memory` with no Valgrind, then 31
+  mutations, every one failing the check ([the log](memory-gate-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced and fixed.
+  - Nothing held the default to every suite: chez-curl's case for it went with the shards.
+  - Valgrind follows no child process, and the records didn't say so. ADR-0005 now lists what the
+    gate doesn't cover, and M1 owns the children that reach native code. chez-curl issue #60
+    files the same gap there.
+- **CI:** none on this branch; slice 4's CI runs the gate.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Adapting `check-memory-gate.sh` | Sonnet | about 128k | 24 | 9 min |
+  | The adversarial review | Opus | about 229k | 45 | 22 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A pattern written against a tool's padding misses a line padded otherwise: the first
+    research table had no possibly-lost column.
+  - Dropping chez-curl's shards dropped `n all` with them: slice 2's lesson again, that a dropped
+    piece takes its protection with it.
+  - Two counts in the mutation log were first written by eye, and both were wrong. They are now
+    read from the outputs.
 
 ### 2026-11-13 — M0 slice 2: the test harness (PR #3, `d23cab1`)
 

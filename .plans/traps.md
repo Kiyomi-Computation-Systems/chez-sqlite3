@@ -55,6 +55,22 @@ told in chez-curl's `.plans/traps.md`.
   possibly-lost column. The slice's review found 12,856 bytes there in one case. The pattern now
   matches the words after any run of spaces. (chez-sqlite3)
 
+- **A reason to drop a copied rule is checked against every rule the copy keeps.** M0 slice 4
+  dropped chez-curl's explicit-key, alias, non-ASCII and tab rules from `check-floors`, reasoning
+  that they protected rules about keys and this project had none. `check-action-pins.sh`, kept in
+  the same slice, reads a key: `uses`. Reproduced: `- ? uses` then `: some-owner/some-action@main`
+  passed the pin check, which counted the 9 pinned lines and saw no tenth. The review found it;
+  the rules now live in `tests/check-ci.sh`. It is slice 2's lesson again, that a dropped piece
+  takes its protection with it, and a reason written down is no check of it. (chez-sqlite3)
+
+- **`env -i` in a test drops the variable that names a tool, and the default may only work
+  here.** The launcher's T11b ran `make test` under `env -i`, so `CHEZ` fell back to the
+  Makefile's default, `scheme` on `PATH`. The host and the container have one; CI's runner keeps
+  Chez in `$RUNNER_TEMP`, on no `PATH`. On CI's second run, `make test` stopped at its
+  prerequisites, and T11b's four "says why" checks failed: 79 passed, 4 failed. Reproduced in the
+  container with a `PATH` of every tool but `scheme`: the same 79 and 4, then 83 with `CHEZ`
+  passed through. (chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

@@ -76,14 +76,19 @@
 #                   program or a missing feature would (fails); one that
 #                   prints "ok", then exits 2 (ok-fails); and one that exits
 #                   0, printing nothing (silent)
-#   o  ci           a tripwire until M0 slice 4 writes this case: it fails
-#                   while .github/workflows exists, so a workflow cannot run
-#                   the gate, or skip it, unchecked
+#   o  ci           tests/check-ci.sh passes on .github/workflows, with its
+#                   one line: it holds the whole workflow, and so the memory
+#                   job's two steps, "run: make check-memory-gate" then
+#                   "run: make test-memory", with no if: or
+#                   continue-on-error: on them or their job, and no variable
+#                   that steers the gate. make test runs it too, so a
+#                   workflow that drops the memory job fails CI's main job
 #
 # chez-curl's c, d and n are not here: c and d held its one suppression
 # file, which this gate has none of (it passes no suppression in any
 # environment), and n held its two shards, all but n all, which is g all
-# here. Its o, which holds CI's memory job, comes with CI in M0 slice 4.
+# here. Its o held two jobs, one per shard, with an awk of its own; ours
+# runs check-ci, which holds the whole workflow (ADR-0005, amended).
 #
 # Every case runs in a private copy of the tree, made under mktemp -d: the
 # working tree without .git (nor any .git below vendor/), build/ and
@@ -979,11 +984,20 @@ $(count_line 1 0 1 0)"
   esac
 done
 
-# ---- o: CI's memory job, a tripwire until M0 slice 4 writes the case ----
-if [ -e "$root/.github/workflows" ] || [ -L "$root/.github/workflows" ]; then
-  problem ".github/workflows exists, but the case that holds its memory job is not written yet (M0 slice 4)"
+# ---- o: ci.yml runs the gate, as tests/check-ci.sh holds it ----
+# check-ci holds the whole workflow, the memory job among its jobs: make
+# check-memory-gate, then make test-memory, each a step's whole run line,
+# with no if: or continue-on-error: on them or their job, and no variable
+# that steers the gate. make test runs it too, so a workflow that drops this
+# job still fails CI's main job.
+wanted="check-ci: .github/workflows/ci.yml has the one shape check-ci reads"
+got=$(cd "$root" && sh tests/check-ci.sh .github/workflows 2>&1)
+status=$?
+if [ "$status" -ne 0 ] || [ "$got" != "$wanted" ]; then
+  problem "tests/check-ci.sh exited $status, printing:
+$(printf '%s\n' "$got" | sed 's/^/  | /')"
 fi
-verdict "o ci: no workflow exists until M0 slice 4 writes the case that holds its memory job" plain
+verdict "o ci: tests/check-ci.sh holds ci.yml, whose memory job runs make check-memory-gate, then make test-memory, with no if:, no continue-on-error: and no variable that steers the gate" plain
 
 if [ "$fail" -eq 0 ]; then
   printf 'check-memory-gate: the memory gate failed, as it must, and its refusals held, in all %d cases\n' "$pass"

@@ -319,8 +319,17 @@ print_test_timeout() {
 default_timeout=$(print_test_timeout 2>/dev/null)
 positive_whole() { case "$1" in '' | *[!0-9]* | 0*) return 1 ;; esac; }
 check "T11a the default TEST_TIMEOUT is a positive whole number" positive_whole "$default_timeout"
+# The refusal is test's own recipe, after its prerequisites, which need Chez:
+# CHEZ goes through when it is set, as on CI's runner, whose Chez is on no
+# PATH. Without it, env -i would leave the Makefile's default, scheme on
+# PATH, and a runner without one fails at the prerequisites, for another
+# reason (M0 slice 4's second CI run).
 for bad_timeout in 0 007 1.5 ''; do
-  ( env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout" ) \
+  ( if [ -n "${CHEZ:-}" ]; then
+      exec env -i PATH="$PATH" CHEZ="$CHEZ" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout"
+    else
+      exec env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout"
+    fi ) \
     >"$tmp/out" 2>"$tmp/err"
   status=$?
   check "T11b TEST_TIMEOUT='$bad_timeout': refused" [ "$status" -ne 0 ]
