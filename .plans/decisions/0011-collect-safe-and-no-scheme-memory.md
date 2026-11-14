@@ -5,7 +5,8 @@
   ([amendment](#amendment-2026-11-14-what-m1-slice-2-measured)). Amended
   2026-11-14: strings SQLite reads to a NUL, and counted values (M2's plan,
   [amendment](#amendment-2026-11-14-strings-sqlite-reads-to-a-nul-and-counted-values-m2s-plan)).
-  Amended 2026-11-14, proposed: the helpers raise after their sections (M1's closing review,
+  Amended 2026-11-14, and accepted by the maintainer that day: the helpers raise after their
+  sections (M1's closing review,
   [amendment](#amendment-2026-11-14-the-helpers-raise-after-their-sections-m1s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
@@ -151,7 +152,7 @@ floor, 3.45.1, with the same results ([research/m2-plan/](../research/m2-plan/),
 
 ## Amendment, 2026-11-14: the helpers raise after their sections (M1's closing review)
 
-Proposed in M1's closing review, with [ADR-0012's amendment](0012-explicit-close-and-the-handle.md#amendment-2026-11-14-raised-after-the-section-m1s-closing-review), which states the rule and why.
+Accepted by the maintainer on 2026-11-14, proposed in M1's closing review, with [ADR-0012's amendment](0012-explicit-close-and-the-handle.md#amendment-2026-11-14-raised-after-the-section-m1s-closing-review), which states the rule and why.
 
 - **`call-with-block`'s critical thunks raise nothing.**
   - A re-entry is refused from a plain before thunk outside them.

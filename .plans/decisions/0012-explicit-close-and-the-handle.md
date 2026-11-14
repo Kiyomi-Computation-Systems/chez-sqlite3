@@ -5,7 +5,8 @@
   and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
   what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: the statements a connection
   holds (M2's plan, [amendment](#amendment-2026-11-14-the-statements-a-connection-holds-m2s-plan)).
-  Amended 2026-11-14, proposed: raised after the section (M1's closing review,
+  Amended 2026-11-14, and accepted by the maintainer that day: raised after the section (M1's
+  closing review,
   [amendment](#amendment-2026-11-14-raised-after-the-section-m1s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
@@ -206,8 +207,8 @@ finalize's failure, is the maintainer's own choice (R1, 2026-11-14,
 
 ## Amendment, 2026-11-14: raised after the section (M1's closing review)
 
-Proposed in M1's closing review. The maintainer approved its scope and the procedure's contract on
-2026-11-14. The amendment itself awaits the maintainer's acceptance.
+Accepted by the maintainer on 2026-11-14, proposed in M1's closing review. The maintainer had
+approved its scope and the procedure's contract that day.
 
 - **The rule.** Nothing raises inside `critical-section`, or inside a critical `dynamic-wind`
   thunk, in any library under `src/` or in `(chez-sqlite3-testing)`. Code there answers data, and

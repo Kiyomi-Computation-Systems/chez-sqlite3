@@ -17,7 +17,7 @@
   ([amendment](#amendment-2026-11-14-a-checkout-path-holding-whitespace-owed-to-m1s-closing-review)),
   and the `floor` and `current` lanes (M1 slice 5,
   [amendment](#amendment-2026-11-14-the-floor-and-current-lanes-m1-slice-5)). Amended 2026-11-14,
-  proposed: the CI scripts' execute bits (M1's closing review,
+  and accepted by the maintainer that day: the CI scripts' execute bits (M1's closing review,
   [amendment](#amendment-2026-11-14-the-ci-scripts-execute-bits-m1s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
@@ -440,6 +440,8 @@ Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
   answer the job's total time, 14 minutes of 60 so far, which this doesn't approach.
 
 ## Amendment, 2026-11-14: the CI scripts' execute bits (M1's closing review)
+
+Accepted by the maintainer on 2026-11-14, proposed in M1's closing review.
 
 - **`check-ci` refuses a step whose whole run line begins `scripts/ci/NAME`,** unless that file is
   there and executable.
