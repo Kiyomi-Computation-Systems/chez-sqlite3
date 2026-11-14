@@ -26,7 +26,10 @@
   ;; oracle-fields : (Listof Symbol)
   ;; What the oracle prints, in its order: sqlite3_libversion,
   ;; sqlite3_libversion_number, sqlite3_sourceid, sqlite3_threadsafe, the
-  ;; compile options, and sqlite3_errstr of each code asked for.
+  ;; compile options, and sqlite3_errstr of each code asked for. It then
+  ;; prints (valgrind . yes) or (valgrind . no): whether it ran under memcheck.
+  ;; libsqlite3-oracle answers it after these fields, never among them, so that
+  ;; a suite comparing each field with another source leaves it out.
   (define oracle-fields '(version version-number source-id threadsafe compile-options errstr))
 
   ;; split-words : String -> (Listof String)
@@ -53,7 +56,8 @@
   ;; Compiles tests/libsqlite3-oracle.c with (c-compiler GETENV), -Wall and
   ;; -Werror into a fresh directory from call-with-temp-directory, runs it on
   ;; PATH and CODES, through (gated-command GETENV ...), and answers what it printed, read as data: (FIELD . VALUE)
-  ;; for each of oracle-fields, in order. Anything else is (no-oracle STEP
+  ;; for each of oracle-fields, in order, then (valgrind . yes) or
+  ;; (valgrind . no). Anything else is (no-oracle STEP
   ;; EVIDENCE), naming the step that went wrong: compile, run, output (that is
   ;; not the fields), or raised, with the text of a raise, which includes
   ;; mktemp's answer being refused. It never raises. The directory is removed,
@@ -77,10 +81,10 @@
                 (list 'no-oracle 'run ran)
                 (let ((data (read-all (cadr ran))))
                   (if (and (list? data)
-                           (= (length data) (length oracle-fields))
+                           (= (length data) (+ (length oracle-fields) 1))
                            (for-all (lambda (datum field)
                                       (and (pair? datum) (eq? (car datum) field)))
-                                    data oracle-fields))
+                                    data (append oracle-fields '(valgrind))))
                       data
                       (list 'no-oracle 'output (cadr ran)))))))))
 

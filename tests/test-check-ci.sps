@@ -262,11 +262,26 @@
      (list name (lambda () edits) (lambda () problems) setup))))
 
 ;; An anchor: a string, the one line of the edited file that is exactly it; a
-;; list (string n), the nth such line; 'eof, the file's last line; 'dir, no
-;; line, the directory; 'file, no line, the file.
+;; list (string n), the nth such line; (after HEADER string), the first line
+;; that is exactly string below the one line that is exactly HEADER, so that a
+;; line repeated across steps is named by its step; 'eof, the file's last
+;; line; 'dir, no line, the directory; 'file, no line, the file.
 
 ;; line-number : (Listof String) Anchor -> Natural
 (define (line-number ls anchor)
+  (if (and (pair? anchor) (eq? (car anchor) 'after))
+      (line-number-after ls (cadr anchor) (caddr anchor))
+      (line-number-plain ls anchor)))
+
+;; line-number-after : (Listof String) String String -> Natural
+(define (line-number-after ls header text)
+  (let ((start (line-number-plain ls header)))
+    (let loop ((rest (list-tail ls start)) (i (+ start 1)))
+      (cond ((null? rest) (error 'anchor "no such line below its header" header text))
+            ((string=? (car rest) text) i)
+            (else (loop (cdr rest) (+ i 1)))))))
+
+(define (line-number-plain ls anchor)
   (let* ((text (if (pair? anchor) (car anchor) anchor))
          (nth (if (pair? anchor) (cadr anchor) #f))
          (hits (let loop ((ls ls) (i 1) (acc '()))
@@ -663,9 +678,11 @@
     (row "the CHEZ path of nothreads swapped to main's"
          (list (e (string-append "      - name: Every library must be refused, by name\n        env:\n          CHEZ: " chez-n "\n")
                   (string-append "      - name: Every library must be refused, by name\n        env:\n          CHEZ: " chez-t "\n")))
-;; The swapped line is the seventh of its text: main has four, the install
-;; check's among them, and memory two.
-         (list (list (list (string-append "          CHEZ: " chez-t) 7) (env-chez "nothreads" chez-n))))
+;; The swapped line is named by its step's header, not by its place among
+;; the file's CHEZ lines.
+         (list (list (list 'after "      - name: Every library must be refused, by name"
+                           (string-append "          CHEZ: " chez-t))
+                     (env-chez "nothreads" chez-n))))
     (row "an if with another value"
          (list (e (string-append "        if: steps.chez.outputs.cache-hit != 'true'\n        run: " bld-n "\n")
                   (string-append "        if: false\n        run: " bld-n "\n")))

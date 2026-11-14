@@ -14,7 +14,8 @@
 ;;; libsqlite3. It runs through gated-command, so under make test-memory the
 ;;; gate's own Valgrind runs it, with a log of its own (ADR-0005, amended). It
 ;;; prints its counts, and this suite asserts them zero (ADR-0005, decision
-;;; 4).
+;;; 4); then whether it ran under memcheck, which this suite requires to be yes
+;;; exactly when the gate asked, so a child that escaped the gate fails its row.
 ;;;
 ;;; A test that raises a count on purpose lowers it again under dynamic-wind,
 ;;; and this suite exits through suite-exit-status, which fails it if any
@@ -172,13 +173,32 @@
    "(let* ((again (try (lambda () (free-foreign-block! block))))\n"
    "       (never (try (lambda () (free-foreign-block! 4096)))))\n"
    "  (write (list again never (native-counts)))\n"
-   "  (newline))\n"))
+   "  (newline))\n"
+   ";; Whether this process runs under memcheck: its preload is in /proc/self/maps.\n"
+   "(write (cons 'valgrind\n"
+   "            (guard (e (#t 'no-maps))\n"
+   "              (let ((maps (call-with-port\n"
+   "                           (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
+   "                                                 (make-transcoder (utf-8-codec)))\n"
+   "                           get-string-all))\n"
+   "                    (needle \"vgpreload_memcheck\"))\n"
+   "                (let loop ((i 0))\n"
+   "                  (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
+   "                        ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
+   "                        (else (loop (+ i 1)))))))))\n"
+   "(newline)\n"))
+
+;; Under make test-memory the child runs under the gate's own Valgrind, and
+;; says so; anywhere else it does not.
+(define valgrind-line
+  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
 
 (test-equal "free-foreign-block! refuses a dead address, freed already or never allocated, before free runs: in a child Chez, which goes on to print its counts, all zero"
   (list 0
         (string-append
          "((free-foreign-block! that-block) (free-foreign-block! (4096)) "
-         "((block . 0) (connection . 0) (statement . 0)))\n")
+         "((block . 0) (connection . 0) (statement . 0)))\n"
+         valgrind-line)
         "")
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory

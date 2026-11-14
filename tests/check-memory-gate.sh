@@ -88,6 +88,10 @@
 #                   output (leak); so does one that overruns the overrun
 #                   plant's 23-byte block (overrun). A clean child passes,
 #                   and leaves its one log (clean)
+#                   A child that spawns a process, a fork before its exec, passes
+#                   clean and leaves its one log, since the gate's options carry
+#                   --child-silent-after-fork=yes; it still fails on a leak of
+#                   its own (fork, forkleak)
 #   q  child        every rule the parent's log is held to holds for each
 #      evidence     child's: a Valgrind that drops --leak-check=full for
 #                   children alone hides the child's leak, and fails it by
@@ -103,6 +107,7 @@
 #                   passes (unwrapped). That is the gap ADR-0005 records;
 #                   tests/test-library-loading.sps closes it for its own
 #                   children, each of which must say it ran under memcheck
+#   o  ci           tests/check-ci.sh passes on .github/workflows, with its
 #                   one line: it holds the whole workflow, and so the memory
 #                   job's two steps, "run: make check-memory-gate" then
 #                   "run: make test-memory", with no if: or
@@ -383,9 +388,33 @@ cat >"$kit/forge.sps" <<'EOF'
 (exit 1)
 EOF
 
+# Two children that fork before they exec: each runs `true` through
+# capture-command. Valgrind, given --log-file with %p, opens a second log for
+# a fork before its exec, with a Command: line and no summary, unless it is
+# given --child-silent-after-fork=yes (M1 slice 3's review). The second also
+# leaks the leak plant's 777 bytes.
+cat >"$kit/forkclean.sps" <<'EOF'
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: a clean child that spawns a process.
+(import (rnrs) (chez-sqlite3-testing))
+(capture-command '("true"))
+(exit 0)
+EOF
+cat >"$kit/forkleak.sps" <<'EOF'
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: a child that spawns a process, then
+;;; loses 777 bytes.
+(import (rnrs) (only (chezscheme) foreign-alloc) (chez-sqlite3-testing))
+(capture-command '("true"))
+(foreign-alloc 777)
+(display "forkleak: spawned a process, then planted a 777-byte block")
+(newline)
+(exit 0)
+EOF
+
 # The parents of cases p and q. Each runs one child and ignores the child's
 # exit status, so a red gate can only mean the gate read the child's log.
-for how in leak overrun clean forged other unwrapped stale; do
+for how in leak overrun clean forged other unwrapped stale forkclean forkleak elsewhere; do
   case $how in
     leak)      run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps"))' ;;
     overrun)   run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-overrun.sps"))' ;;
@@ -394,12 +423,15 @@ for how in leak overrun clean forged other unwrapped stale; do
     other)     run="(gated-command getenv (list \"env\" (getenv \"CHEZ\") \"--program\" \"$after\"))" ;;
     unwrapped) run='(list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps")' ;;
     stale)     run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps"))' ;;
+    forkclean) run="(gated-command getenv (list (getenv \"CHEZ\") \"--libdirs\" \"$LIBDIRS\" \"--program\" \"$scratch/forkclean.sps\"))" ;;
+    elsewhere) run="(append (list \"sh\" \"-c\" \"cd / && exec \\\"\$@\\\"\" \"sh\") (gated-command getenv (list (getenv \"CHEZ\") \"--program\" (string-append (current-directory) \"/$after\"))))" ;;
+    forkleak)  run="(gated-command getenv (list (getenv \"CHEZ\") \"--libdirs\" \"$LIBDIRS\" \"--program\" \"$scratch/forkleak.sps\"))" ;;
   esac
   cat >"$kit/child-$how.sps" <<EOF
 #!r6rs
 ;;; Written by tests/check-memory-gate.sh: runs one child, and ignores its
 ;;; exit status, so that only Valgrind's log of the child can fail it.
-(import (rnrs) (only (chezscheme) getenv) (chez-sqlite3-testing))
+(import (rnrs) (only (chezscheme) getenv current-directory) (chez-sqlite3-testing))
 (capture-command $run)
 (display "child-$how: ran its child")
 (newline)
@@ -444,6 +476,22 @@ for how in oracle-leak oracle-clean; do
 (exit 0)
 EOF
 done
+
+# The oracle again, run through a symlinked directory, as a TMPDIR that is a
+# link makes it (macOS's /var is one): its Command: line names the link, and
+# Valgrind's "Reading syms from" line names the file the link leads to, so the
+# gate resolves the Command: line's program before it compares them.
+cat >"$kit/child-oracle-link.sps" <<EOF
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: runs the oracle through a symlinked
+;;; directory, through gated-command, and ignores its exit status.
+(import (rnrs) (only (chezscheme) getenv current-directory) (chez-sqlite3-testing))
+(capture-command (list "ln" "-sfn" "oracle" "$scratch/oracle-link"))
+(capture-command (gated-command getenv (list (string-append (current-directory) "/$scratch/oracle-link/libsqlite3-oracle"))))
+(display "child-oracle-link: ran its child")
+(newline)
+(exit 0)
+EOF
 
 # A Valgrind that drops --leak-check=full from a child's options alone: one
 # whose --log-file is under a .children directory. The parent's options
@@ -687,7 +735,7 @@ child_why() { printf "a child's Valgrind log, %s/PID.valgrind: %s" "$(children_o
 
 # child_options SUITE: the options test-memory hands a child's Valgrind.
 child_options() {
-  printf '%s' "-v --command-line-only=yes --log-file=$(children_of "$1")/%p.valgrind --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite"
+  printf '%s' "-v --command-line-only=yes --log-file=$(pwd -P)/$(children_of "$1")/%p.valgrind --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes"
 }
 
 # A suite's two logs: its own output, and Valgrind's.
@@ -699,7 +747,7 @@ vlog_of() { printf '%s/%s.valgrind' "$logs" "$(basename "$1" .sps)"; }
 # ADR-0005's, written out here and not read from the Makefile. No
 # suppression, in any environment.
 gate_options() {
-  printf '%s' "-v --command-line-only=yes --log-file=$(vlog_of "$1") --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite"
+  printf '%s' "-v --command-line-only=yes --log-file=$(vlog_of "$1") --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes"
 }
 
 # The problems zero_line names, worded as test-memory words them.
@@ -794,7 +842,7 @@ expected_argv() {
   printf '%s\n' -v --command-line-only=yes true --
   printf 'parent: %s\n' "$(basename -- "$TIMEOUT")"
   printf '%s\n' -v --command-line-only=yes "--log-file=$(vlog_of "$leak")" --error-exitcode=9 \
-    --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite
+    --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes
   printf '%s\n' "$CHEZ" --libdirs "$LIBDIRS" --program "$leak" --
 }
 for arm in outside inside; do
@@ -1170,6 +1218,35 @@ $(count_line 1 1 0 0)"
 want_children "$scratch/child-clean.sps" 1
 verdict "p clean: a clean child passes its parent, and leaves its one log"
 
+newtree
+gate MEMORY_SUITES="$scratch/child-forkclean.sps"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $scratch/child-forkclean.sps
+$(count_line 1 1 0 0)"
+want_children "$scratch/child-forkclean.sps" 1
+verdict "p fork: a clean child that spawns a process passes, and leaves its one log: Valgrind's log of the fork is silent"
+
+newtree
+parent=$scratch/child-forkleak.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status nonzero "$status"
+want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "$no_zero")")
+$(count_line 1 0 1 0)"
+want_children "$parent" 1
+want_in "$out" "777 bytes in 1 blocks are definitely lost in loss record" "test-memory's own output"
+verdict "p forkleak: a child that spawns a process and then leaks 777 bytes still fails, by name, and leaves its one log"
+
+newtree
+gate MEMORY_SUITES="$scratch/child-elsewhere.sps"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $scratch/child-elsewhere.sps
+$(count_line 1 1 0 0)"
+want_children "$scratch/child-elsewhere.sps" 1
+verdict "p elsewhere: a clean child run from another working directory, / here, writes its log where the gate reads it: the log path is absolute"
+
 # ---- q: each child's log is held to the parent's rules ----
 newtree
 parent=$scratch/child-leak.sps
@@ -1211,6 +1288,16 @@ want_lines "test-memory: pass $parent
 $(count_line 1 1 0 0)"
 want_children "$parent" 1
 verdict "q oracle: a C child named libsqlite3-oracle that loses nothing passes, and leaves its one log"
+
+newtree
+parent=$scratch/child-oracle-link.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $parent
+$(count_line 1 1 0 0)"
+want_children "$parent" 1
+verdict "q oracle-link: a C child named libsqlite3-oracle, run through a symlinked directory, passes: its program is resolved before it is compared with the file Valgrind ran"
 
 newtree
 parent=$scratch/child-forged.sps

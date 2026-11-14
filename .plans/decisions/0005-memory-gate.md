@@ -253,13 +253,14 @@ Measured in the pinned container before the gate was built
 - **Each child that reaches native code runs under the gate's own Valgrind, with its own log**
   (the closing review's amendment, its first choice). `make test-memory` exports
   `CHEZ_SQLITE3_GATE_CHILD` to each suite: `$(VALGRIND)` and the gate's own options, with
-  `--log-file=build/memory/<suite>.children/%p.valgrind`. A suite runs each such child through
+  `--log-file=$(CURDIR)/build/memory/<suite>.children/%p.valgrind`, absolute so a child run from
+  another directory still writes it. A suite runs each such child through
   `(chez-sqlite3-testing)`'s `gated-command`: the refusal probes, preflight, `test-blocks`'
   dead-address child and `test-native`'s C oracle. Before each suite its old child logs are
   removed; after it, every child log is held to the parent's rules:
   - the options are exactly the child's;
   - `Command:` begins with `$(CHEZ) `, or names the program `libsqlite3-oracle`, and the first
-    program Valgrind read is that file;
+    program Valgrind read is that file, both paths resolved with `readlink -f`;
   - 0 errors from 0 contexts;
   - no suppression file but Valgrind's own `default.supp`.
 
@@ -271,16 +272,38 @@ Measured in the pinned container before the gate was built
   - Skipping the shell with `--trace-children-skip` untraces everything the shell starts, so no
     child is seen. Tracing with a suppression for the static bash worked, but needs a suppression
     and a skip list kept by hand, against decision 2.
-- **What it costs:** about 4.1 s per Chez child and 0.25 s per oracle run. `test-library-loading`
-  takes 14 s plain and 223 s under the gate, with 53 child logs, against `MEMORY_TIMEOUT`'s 600 s.
-  `make test-memory` went from 171 s to 409 s in the container. CI's runner is the next
-  measurement; decision 5's consequence, shards, is the remedy if it grows too slow.
-- **`check-memory-gate` gains cases p and q** (48 cases): a child's planted leak (777 bytes) and
+- **What it costs:** about 4.1 s per Chez child and 0.25 s per oracle run. Measured on the
+  review's fixed tree, in the container and on CI (run 43609564593):
+
+  | What | Container | CI |
+  |---|---|---|
+  | `test-library-loading`, plain | 6.7 s | 6 s |
+  | `test-library-loading`, under the gate | 230 s, 55 child logs | 308 s |
+  | `make test-memory` | 404 s | 556 s |
+  | `make check-memory-gate` | 221 s | 262 s |
+  | the `memory` job, warm | | 14 min 3 s of 60 |
+
+  `test-library-loading` uses half of `MEMORY_TIMEOUT`'s 600 s on CI: room for about 50 more gated
+  children. Decision 5's consequence, shards, is the remedy when it grows.
+- **`check-memory-gate` gains cases p and q** (52 cases after the review's fixes): a child's planted leak (777 bytes) and
   overrun (23 bytes) fail the gate; options dropped for children, another program, the oracle
   leaking, a forged log and a stale one each fail; and a child run without `gated-command`
-  passes, which is the gap that remains.
-- **Not covered:** a child started without `gated-command` runs outside Valgrind, unseen. Of the
-  wrapped children, only `test-library-loading`'s say whether they ran under memcheck: a child's
-  `/proc/self/maps` shows `vgpreload_memcheck`. `test-blocks`' child and the oracle have no such
-  row yet.
+  passes, which is the gap that remains. After the review: a child that forks passes clean and
+  still fails on a planted leak, a child run from another directory is found, and the oracle run
+  through a symlinked directory passes.
+- **Not covered:**
+  - **A child started without `gated-command`** runs outside Valgrind, unseen. So does one started
+    through `gated-command` with a `getenv` that hides `CHEZ_SQLITE3_GATE_CHILD`, since the helper
+    takes `getenv` as an argument.
+  - **Which wrapped children say they ran under memcheck.** A child reads `/proc/self/maps` for
+    `vgpreload_memcheck` and prints the answer. As first built, 41 of `test-library-loading`'s 53
+    children asserted it. The preflight runs, the `message-of` probes, the ambient probe, the
+    oracle and `test-blocks`' child didn't, and each passed ungated (slice 3's review). Now every
+    wrapped child asserts it. Preflight prints no such line, since `make build` runs it, so its
+    caller requires the one new log in the child-log directory to name its whole command.
+  - **`check-ci` doesn't read `scripts/ci/*.sh`.** A script that runs before the install check
+    and writes `GITHUB_ENV` would let the check pass through an override. Review holds that.
+- **A gated child that forks** got a second log from Valgrind, with a `Command:` line and no
+  summary, and failed the gate though clean (slice 3's review). The gate passes
+  `--child-silent-after-fork=yes`, parent and child alike.
 

@@ -39,9 +39,13 @@
 ;;; Each child that reaches native code prints its counts, and every row
 ;;; requires them zero (ADR-0005, decision 4). Each runs through
 ;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
-;;; with a log of its own that the gate reads. The probe says whether it ran
-;;; under Valgrind, and each row requires yes exactly when the gate asked:
-;;; a child that escaped the gate fails its row (ADR-0005, amended).
+;;; with a log of its own that the gate reads. Every child says whether it ran
+;;; under Valgrind, and a row requires yes exactly when the gate asked: the
+;;; probe, and the C oracle, print a line saying so (memcheck's preload in
+;;; /proc/self/maps); preflight prints none, so this suite reads the one new
+;;; log in the gate's directory for it, and requires that log's Command: line
+;;; to be preflight's own, whole. A child that escaped the gate fails its row
+;;; (ADR-0005, amended).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
@@ -227,13 +231,14 @@
           (list (cons 'threadsafe threadsafe))))
 
 ;; refused-lines : Symbol (U String #f) (U Symbol #f) Any (Listof String) Any
-;;                 -> (Listof Pair)
+;;                  (Listof Any) -> (Listof Pair)
 ;; LIBRARY is report-of's list for a refusal made after the version was
-;; read, else #f.
-(define (refused-lines reason path source detail candidates library)
+;; read, else #f. IRRITANTS are the condition's: the path, as the one
+;; irritant, for each refusal that has a path.
+(define (refused-lines reason path source detail candidates library irritants)
   (list (cons 'reason reason) (cons 'who 'chez-sqlite3) (cons 'path path)
         (cons 'source source) (cons 'detail detail) (cons 'candidates candidates)
-        (cons 'library library)))
+        (cons 'library library) (cons 'irritants irritants)))
 
 ;; report-of : String Symbol Report -> (Listof Any)
 ;; A refusal's library as the probe prints it: path, source, then the
@@ -244,8 +249,13 @@
 (define (loaded path source report threadsafe calls)
   (outcome 0 (loaded-lines path source report threadsafe) '() '() calls))
 
-(define (refused reason path source detail candidates library calls)
-  (outcome 1 (refused-lines reason path source detail candidates library) '() '() calls))
+(define refused
+  (case-lambda
+    ((reason path source detail candidates library calls)
+     (refused reason path source detail candidates library calls (list path)))
+    ((reason path source detail candidates library calls irritants)
+     (outcome 1 (refused-lines reason path source detail candidates library irritants)
+              '() '() calls))))
 
 ;; --- the scratch directory and the floors ----------------------------------------------
 
@@ -267,11 +277,22 @@
 
 (define (in-scratch name) (string-append scratch "/" name))
 
+;; write-text-file : String String -> (U 'written (List 'not-written String))
+;; TEXT in the file at PATH, or what went wrong; never a raise.
 (define (write-text-file path text)
-  (call-with-port (open-file-output-port path (file-options no-fail)
-                                         (buffer-mode block)
-                                         (make-transcoder (utf-8-codec)))
-    (lambda (p) (put-string p text))))
+  (guard (e (#t (list 'not-written (describe e))))
+    (call-with-port (open-file-output-port path (file-options no-fail)
+                                           (buffer-mode block)
+                                           (make-transcoder (utf-8-codec)))
+      (lambda (p) (put-string p text)))
+    'written))
+
+;; make-directory : String -> (U 'made (List 'not-made Any))
+;; mkdir -p PATH, or what went wrong; never a raise.
+(define (make-directory path)
+  (guard (e (#t (list 'not-made (describe e))))
+    (let ((answer (capture-command (list "mkdir" "-p" path))))
+      (if (and (eqv? (car answer) 0) (file-directory? path)) 'made (list 'not-made answer)))))
 
 ;; floor-values : (U (List String Natural String Natural) (List 'no-floors Any))
 ;; SQLite's floor from packaging/floors.sexp, its number as
@@ -383,10 +404,13 @@
 (define (control-library so) (report-of so 'override control-report))
 (define (below-library so) (report-of so 'override below-report))
 
-;; code-of : Symbol -> Integer
+;; code-of : Symbol -> (U Integer (List 'no-code Symbol))
 ;; A result code's value, from (chez-sqlite3 private constants), which
-;; tests/test-constants.sps holds to sqlite3.h.
-(define (code-of name) (cdr (assq name sqlite-result-codes)))
+;; tests/test-constants.sps holds to sqlite3.h. A name it lacks answers
+;; (no-code NAME), which no probe prints, so that row fails by name.
+(define (code-of name)
+  (guard (e (#t (list 'no-code name)))
+    (cdr (assq name sqlite-result-codes))))
 
 (decoy-row "control" #f '()
   "the floor itself is accepted: the report's five fields, threadsafe 2, and the load's five calls in order"
@@ -425,12 +449,24 @@
   (lambda (so) (refused 'load-failed so 'override (code-of 'nomem) '() (control-library so)
                         (every-call "initialize-fails"))))
 
+;; A second code, so that no one value passes for "not SQLITE_OK".
+(decoy-row "control" "initialize-misuse" '()
+  "sqlite3_initialize answering SQLITE_MISUSE is load-failed too, detail that code, not NOMEM's"
+  (lambda (so) (refused 'load-failed so 'override (code-of 'misuse) '() (control-library so)
+                        (every-call "initialize-misuse"))))
+
 ;; Only an exact value is a switch: a near miss, and an empty value, behave as
 ;; the control, and the log shows what the decoy read.
 (decoy-row "control" "Below-floor" '()
   "a value that is no switch behaves as the control, and the log names it"
   (lambda (so) (loaded so 'override control-report 2
                        (append (list "decoy(?Below-floor)") the-report-three
+                               (list threadsafe-call initialize-call)))))
+
+(decoy-row "control" "below-floorX" '()
+  "a value that only begins with a switch, below-floorX, is no switch: the control, and the log names it"
+  (lambda (so) (loaded so 'override control-report 2
+                       (append (list "decoy(?below-floorX)") the-report-three
                                (list threadsafe-call initialize-call)))))
 
 (decoy-row "control" "" '()
@@ -507,7 +543,8 @@
 (let ((first (so-of "control")) (second (so-of "marked")))
   (test-equal "a refusal is kept: CHEZ_SQLITE3_LIBRARY changed between references loads nothing new"
     (list 0 0 1
-          (append (refused-lines 'below-floor first 'override below-version '() (below-library first))
+          (append (refused-lines 'below-floor first 'override below-version '() (below-library first)
+                                 (list first))
                   (list (cons 'then-override second) once no-native-objects (cons 'marker 'absent)
                         valgrind-line
                         (cons 'calls (join (apply log-of "below-floor" the-report-three)))))
@@ -544,12 +581,26 @@
   'loaded
   (if (and (pair? ambient) (eqv? (car ambient) 0) real-libsqlite3) 'loaded ambient))
 
+(test-equal "the real libsqlite3: that probe ran under Valgrind exactly when the gate asked"
+  valgrind-line
+  (field ambient 'valgrind))
+
+;; oracle-runs : (Listof Pair)
+;; The (valgrind . yes) or (valgrind . no) line of every oracle run so far, or
+;; (valgrind no-oracle) of one that failed: the last rows require each.
+(define oracle-runs '())
+
 ;; oracle-of : (U String #f) -> (U (Listof (Pairof Symbol Any)) (List 'no-oracle Symbol Any))
 ;; What tests/libsqlite3-oracle.c reads from the library at PATH.
 (define (oracle-of path)
-  (if (string? path)
-      (libsqlite3-oracle getenv path '())
-      (list 'no-oracle 'no-path path)))
+  (let ((oracle (if (string? path)
+                    (libsqlite3-oracle getenv path '())
+                    (list 'no-oracle 'no-path path))))
+    (set! oracle-runs
+          (cons (or (and (list? oracle) (for-all pair? oracle) (assq 'valgrind oracle))
+                    (list 'valgrind 'no-oracle))
+                oracle-runs))
+    oracle))
 
 (define real-oracle (oracle-of real-libsqlite3))
 
@@ -614,7 +665,7 @@
 ;; --- refusals no decoy reaches ----------------------------------------------------------
 
 (test-equal "a bare name in the override is invalid-override, carrying it"
-  (refused 'invalid-override #f 'override "libsqlite3.so.0" '() #f #f)
+  (refused 'invalid-override #f 'override "libsqlite3.so.0" '() #f #f (list "libsqlite3.so.0"))
   (probe (cons (override "libsqlite3.so.0") (switch-args #f))))
 
 ;; loader-text : String -> (U String (List Symbol Any))
@@ -628,7 +679,9 @@
     (list 'loaded path)))
 
 (define text-file (in-scratch "not-a-library.so"))
-(write-text-file text-file "not a shared object\n")
+(test-equal "the text file was written"
+  'written
+  (write-text-file text-file "not a shared object\n"))
 (define text-file-refusal (loader-text text-file))
 
 (test-equal "a text file is load-failed, with the loader's message"
@@ -649,12 +702,14 @@
 
 (define raising-libdirs "tests/fixtures/raising:src")
 
-(define fixture-raise
-  "Exception in loaded-libsqlite3: the raising fixture raises a plain error, not a refusal")
+;; What the fixture raises, as the probe prints it: its &who, and the condition
+;; types it is, by name (rnrs's error: serious, error, who, message and
+;; irritants); never its text (ADR-0013, decision 9).
+(define fixture-raised '(loaded-libsqlite3 (serious error who message irritants)))
 
-(test-equal "a raise that is not a refusal: the probe prints it as raised, and exits 2"
-  (list 2 (list (cons 'raised fixture-raise)
-                (cons 'again (list (list 'raised fixture-raise) (list 'raised fixture-raise)))
+(test-equal "a raise that is not a refusal: the probe prints its who and its types, each reference again, and exits 2"
+  (list 2 (list (cons 'raised fixture-raised)
+                (cons 'again (list (cons 'raised fixture-raised) (cons 'raised fixture-raised)))
                 no-native-objects valgrind-line)
         "")
   (as-data (spawn-in raising-libdirs (switch-args #f) "tests/refusal-probe.sps" '())))
@@ -680,10 +735,18 @@
                                           (make-transcoder (utf-8-codec)))
       get-string-all)))
 
-(define world (libsqlite3-world (if (string? real-maps) real-maps #f)))
+(define world
+  (guard (e (#t (list 'raised (describe e))))
+    (libsqlite3-world (if (string? real-maps) real-maps #f))))
+
+(test-equal "the world, guix or fhs, was determined"
+  'determined
+  (if (memq world '(guix fhs)) 'determined world))
 
 (define empty-home (in-scratch "home"))
-(guard (e (#t #f)) (capture-command (list "mkdir" empty-home)))
+(test-equal "the empty HOME was made"
+  'made
+  (make-directory empty-home))
 
 (define unset-override (cons* "-u" "CHEZ_SQLITE3_LIBRARY" (switch-args #f)))
 
@@ -697,11 +760,12 @@
         (string-append empty-home "/.guix-profile/lib/libsqlite3.so.0")
         "/run/current-system/profile/lib/libsqlite3.so.0"))
 
-;; first-standard : (U String (List 'no-fhs-candidate-exists))
+;; first-standard : (U String (List 'no-fhs-candidate-exists) (List 'raised String))
 ;; The first FHS candidate that exists here, as discovery would choose it.
 (define first-standard
-  (or (find file-exists? (map car (libsqlite3-candidates 'fhs (machine-type) getenv)))
-      (list 'no-fhs-candidate-exists)))
+  (guard (e (#t (list 'raised (describe e))))
+    (or (find file-exists? (map car (libsqlite3-candidates 'fhs (machine-type) getenv)))
+        (list 'no-fhs-candidate-exists))))
 
 ;; loaded-fhs : -> Expected
 ;; The probe's whole answer when discovery chooses the first FHS candidate.
@@ -732,7 +796,7 @@
         ;; Only the three candidates no variable names are left, and none of
         ;; them exists here: the container has no /run/current-system.
         (test-equal "not-found (guix world): with no profile to search, not-found lists every candidate checked"
-          (refused 'not-found #f #f #f guix-not-found-candidates #f #f)
+          (refused 'not-found #f #f #f guix-not-found-candidates #f #f (list guix-not-found-candidates))
           (probe no-profiles))
 
         ;; GUIX_ENVIRONMENT's candidate exists, so it is chosen, but it is a
@@ -740,8 +804,12 @@
         ;; must never be tried (ADR-0002).
         (let* ((broken-profile (in-scratch "broken-profile"))
                (broken (string-append broken-profile "/lib/libsqlite3.so.0")))
-          (capture-command (list "mkdir" "-p" (string-append broken-profile "/lib")))
-          (write-text-file broken "not a shared object\n")
+          (test-equal "the broken profile's lib directory was made"
+            'made
+            (make-directory (string-append broken-profile "/lib")))
+          (test-equal "the broken profile's text file was written"
+            'written
+            (write-text-file broken "not a shared object\n"))
           (let ((refusal (loader-text broken)))
             (test-equal "discovery (guix world): a candidate that fails to load is load-failed, and the next is never tried"
               (refused 'load-failed broken 'guix-environment refusal '() #f #f)
@@ -763,7 +831,7 @@
         (probe no-profiles)))))
   (else
    (test-equal "not-found (no list on this platform): with the override unset, not-found, having no candidate"
-     (refused 'not-found #f #f #f '() #f #f)
+     (refused 'not-found #f #f #f '() #f #f (list '()))
      (probe unset-override))))
 
 ;; --- make build's preflight ----------------------------------------------------------------
@@ -772,15 +840,97 @@
 ;; which no test writes as text (ADR-0002, ADR-0013): it must equal what the
 ;; probe read for the same refusal, in a process of its own.
 
-;; preflight : (Listof String) -> (U (List Integer String String) (List 'raised String))
-(define (preflight env-args)
-  (spawn env-args "tests/preflight.sps" '()))
+;; The gate's directory of child logs, from the prefix make test-memory
+;; exports: the directory of its --log-file=DIR/%p.valgrind word; #f outside
+;; the gate.
+(define gate-log-dir
+  (let ((prefix (getenv "CHEZ_SQLITE3_GATE_CHILD")))
+    (and prefix
+         (let loop ((words (split-words prefix)))
+           (cond ((null? words) #f)
+                 ((and (string-prefix? "--log-file=" (car words))
+                       (string-suffix? "/%p.valgrind" (car words)))
+                  (let ((word (car words)))
+                    (substring word (string-length "--log-file=")
+                               (- (string-length word) (string-length "/%p.valgrind")))))
+                 (else (loop (cdr words))))))))
+
+;; gate-logs : -> (Listof String)
+;; The names in the gate's directory of child logs, sorted; none outside the
+;; gate.
+(define (gate-logs)
+  (if gate-log-dir
+      (guard (e (#t (list 'unreadable)))
+        (list-sort string<? (directory-list gate-log-dir)))
+      '()))
+
+;; command-of-log : String -> (U String (List 'no-command String))
+;; The program and arguments of the Command: line of the Valgrind log NAME in
+;; the gate's directory.
+(define (command-of-log name)
+  (guard (e (#t (list 'no-command (describe e))))
+    (let ((text (call-with-port
+                 (open-file-input-port (string-append gate-log-dir "/" name) (file-options)
+                                       (buffer-mode block) (make-transcoder (utf-8-codec)))
+                 get-string-all)))
+      (let loop ((lines (lines-of text)))
+        (cond ((null? lines) (list 'no-command name))
+              ((command-line-of (car lines)) => (lambda (command) command))
+              (else (loop (cdr lines))))))))
+
+;; lines-of : String -> (Listof String)
+(define (lines-of text)
+  (let loop ((i 0) (start 0) (found '()))
+    (cond ((= i (string-length text))
+           (reverse (if (> i start) (cons (substring text start i) found) found)))
+          ((char=? (string-ref text i) #\newline)
+           (loop (+ i 1) (+ i 1) (cons (substring text start i) found)))
+          (else (loop (+ i 1) start found)))))
+
+;; command-line-of : String -> (U String #f)
+;; What follows "==PID== Command: " on LINE, else #f.
+(define (command-line-of line)
+  (let ((marker "== Command: "))
+    (and (string-prefix? "==" line)
+         (let loop ((i 2))
+           (cond ((>= (+ i (string-length marker)) (string-length line)) #f)
+                 ((string=? (substring line i (+ i (string-length marker))) marker)
+                  (substring line (+ i (string-length marker)) (string-length line)))
+                 ((char-numeric? (string-ref line i)) (loop (+ i 1)))
+                 (else #f))))))
+
+;; preflight-in : String (Listof String) -> (List Integer String String Pair)
+;; tests/preflight.sps with LIBDIRS under ENV-ARGS: its exit status, stdout
+;; and stderr, then (valgrind . yes) when exactly one log is new in the gate's
+;; directory and its Command: line is the child's own, whole; (valgrind . no)
+;; when none is, as outside the gate; else what the new logs were. Preflight
+;; prints no such line itself: it is what make build runs.
+(define (preflight-in libdirs env-args)
+  (let* ((before (gate-logs))
+         (answer (spawn-in libdirs env-args "tests/preflight.sps" '()))
+         (after (gate-logs))
+         (new (filter (lambda (name) (not (member name before))) after))
+         (command (join (list chez "--libdirs" libdirs "--program" "tests/preflight.sps"))))
+    (append answer
+            (list (cons 'valgrind
+                        (cond ((null? new) 'no)
+                              ((and (null? (cdr new)) (equal? (command-of-log (car new)) command))
+                               'yes)
+                              (else (list 'logs new (map command-of-log new)))))))))
+
+;; preflight : (Listof String) -> (List Integer String String Pair)
+(define (preflight env-args) (preflight-in "src" env-args))
+
+;; message-runs : (Listof Pair)
+;; The valgrind line of every probe message-of ran: the last rows require each.
+(define message-runs '())
 
 ;; message-of : (Listof String) -> (U String (List 'no-message Any))
 ;; The message of the refusal the probe meets under ENV-ARGS.
 (define (message-of env-args)
   (let* ((answer (probe-with env-args '("--message" "yes")))
          (entry (field answer 'message)))
+    (set! message-runs (cons (field answer 'valgrind) message-runs))
     (if (string? (cdr entry)) (cdr entry) (list 'no-message answer))))
 
 (define counts-line "  counts:     ((block . 0) (connection . 0) (statement . 0))\n")
@@ -804,11 +954,12 @@
 
 (let ((so (so-of "control")))
   (test-equal "preflight, the control decoy: exit 0, naming its path, version and source id, then its counts"
-    (list 0 (accepted-text so 'override control-report) "")
+    (list 0 (accepted-text so 'override control-report) "" valgrind-line)
     (preflight (decoy-env "control" #f))))
 
 (test-equal "preflight, the real libsqlite3: exit 0, with the C oracle's report, then its counts"
-  (list 0 (accepted-text (or real-libsqlite3 "?") 'override (oracle-report real-oracle)) "")
+  (list 0 (accepted-text (or real-libsqlite3 "?") 'override (oracle-report real-oracle)) ""
+        valgrind-line)
   (preflight (cons (override (or real-libsqlite3 "/the-probe-loaded-nothing")) (switch-args #f))))
 
 (let* ((so (so-of "control"))
@@ -824,7 +975,8 @@
                 "  source id:  decoy-sourceid\n"
                 "  candidates: none\n"
                 "  remedy:     " (message-of env-args) "\n"
-                counts-line))
+                counts-line)
+          valgrind-line)
     (preflight env-args)))
 
 (let ((env-args (cons (override "libsqlite3.so.0") (switch-args #f))))
@@ -837,12 +989,27 @@
                 "  detail:     libsqlite3.so.0\n"
                 "  candidates: none\n"
                 "  remedy:     " (message-of env-args) "\n"
-                counts-line))
+                counts-line)
+          valgrind-line)
     (preflight env-args)))
 
-(test-equal "preflight, a raise that is not a refusal: Chez's default handler, exit 255, and no reason line"
-  (list 255 "" (string-append fixture-raise "\n"))
-  (spawn-in raising-libdirs (switch-args #f) "tests/preflight.sps" '()))
+;; reason-line? : String -> Boolean
+;; Whether some line of TEXT begins "(reason ", as a refusal's first datum does.
+(define (reason-line? text)
+  (exists (lambda (line) (string-prefix? "(reason " line)) (lines-of text)))
+
+;; A raise that is no refusal is Chez's default handler's to print, and what
+;; it prints is its own text, never asserted here (ADR-0013, decision 9): the
+;; row asserts the exit status, that nothing reached stdout, and that no
+;; refusal's reason line appeared.
+(test-equal "preflight, a raise that is not a refusal: Chez's default handler, exit 255, nothing on stdout, and no reason line"
+  (list 255 "" 'no-reason-line valgrind-line)
+  (let ((answer (preflight-in raising-libdirs (switch-args #f))))
+    (if (eq? (car answer) 'raised)
+        answer
+        (list (car answer) (cadr answer)
+              (if (reason-line? (caddr answer)) 'reason-line 'no-reason-line)
+              (cadddr answer)))))
 
 (when (and (eq? platform 'linux) (eq? world 'guix))
   (test-equal "preflight, not-found (guix world), no profile to search: exit 1, every candidate on its own line, then its counts"
@@ -857,8 +1024,22 @@
                 "    " (cadr guix-not-found-candidates) "\n"
                 "    " (caddr guix-not-found-candidates) "\n"
                 "  remedy:     " (message-of no-profiles) "\n"
-                counts-line))
+                counts-line)
+          valgrind-line)
     (preflight no-profiles)))
+
+;; --- every child said whether it ran under Valgrind -----------------------------------------
+;; The probe's own rows assert the line in their whole answers, and preflight's
+;; rows theirs. These are the children whose answers carry it among other
+;; things: the message probes, and the C oracle's runs.
+
+(test-equal "every probe that read a refusal's message ran under Valgrind exactly when the gate asked, and there were at least two"
+  (cons #t (map (lambda (run) valgrind-line) message-runs))
+  (cons (>= (length message-runs) 2) message-runs))
+
+(test-equal "every C oracle run ran under Valgrind exactly when the gate asked, and there were at least two"
+  (cons #t (map (lambda (run) valgrind-line) oracle-runs))
+  (cons (>= (length oracle-runs) 2) oracle-runs))
 
 ;; --- this process ----------------------------------------------------------------------------
 
@@ -867,11 +1048,12 @@
   (list (if (foreign-entry? "sqlite3_libversion_number") 'loaded 'not-loaded)
         (if (foreign-entry? "decoy_calls") 'loaded 'not-loaded)))
 
-(remove-temp-directory scratch)
-
 (test-equal "the scratch directory is removed"
-  'removed
-  (if (file-directory? scratch) 'left 'removed))
+  '(done removed)
+  (list (guard (e (#t (list 'raised (describe e))))
+          (remove-temp-directory scratch)
+          'done)
+        (if (file-directory? scratch) 'left 'removed)))
 
 (test-end "library-loading")
 

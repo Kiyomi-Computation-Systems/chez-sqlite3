@@ -121,9 +121,10 @@ behaviour, in a fresh process per row.
 ## Not caught here
 
 - **A child started without `gated-command`** runs outside Valgrind. Case q unwrapped passes: it
-  is the gap ADR-0005 records. `test-library-loading`'s children each say whether memcheck mapped
-  them, which catches G1 there. `test-blocks`' child and the oracle are held by no row: G1 left
-  `test-blocks` passing.
+  is the gap ADR-0005 records. The children of `test-library-loading` and `test-blocks` each say
+  whether memcheck mapped them (preflight's, which prints no such line, by the one new log in the
+  gate's directory), which catches G1 there; see "The review's fixes", M2. No other suite's
+  children are held so.
 - **The Ubuntu path of CI's install check** is read from CI's log, not asserted (the
   coordinator's ruling).
 
@@ -177,7 +178,8 @@ pattern did.
   |---|---|---|---|
   | HEAD | today's | 16 | 155 s |
   | this slice | today's | 17 | 171 s |
-  | this slice | (b) | 17 | 409 s |
+  | this slice, as built | (b) | 17 | 409 s |
+  | after the review's fixes | (b) | 18 | 404 s, in the container; 556 s on CI (run 43609564593) |
 
 - **The oracle under the gate's options** ran with 0 errors from 0 contexts. It lost nothing
   definitely, indirectly or possibly, left 3,732 bytes in 9 blocks still reachable from its
@@ -185,21 +187,154 @@ pattern did.
 
 ## The final runs
 
-In the working tree, through `scripts/guix-env`, after every change above:
+The runs below are the review's fixes' (see the section after them). In the working tree, through
+`scripts/guix-env`, on the tree the fixes leave, one run at a time:
 
-- **`make test`:** ran 17, passed 17.
-  - `test-library-loading` 60, `test-chez-sqlite3-testing` 64, `test-check-ci` 166, `test-native`
-    43, `test-blocks` 8.
-  - `check-seam`: the seam holds, 10 libraries in 10 files.
-  - `check-ci` passes.
-- **`make test-memory`:** ran 17, passed 17, in 409 s. Child logs: `test-library-loading` 53,
-  `test-blocks` 1, `test-native` 1.
-- **`make check-memory-gate`:** "failed, as it must, and its refusals held, in all 48 cases".
-- **`make check-test-fails`:** "make test failed, as it must, in all 12 cases".
-- **`make check-dev`:** ok.
-- **`make check-clean`:** ok.
+- **`make test`:** ran 18, passed 18, failed 0, hung 0, in 25.8 s.
+  - `test-library-loading` 70, `test-check-ci` 166, `test-blocks` 8.
+  - `check-seam`: the seam holds, 10 libraries in 10 files. `check-ci` passes.
+- **`make test-memory`:** ran 18, passed 18, in 404 s.
+- **`test-library-loading` alone, under the gate:** 230 s, with 55 child logs. `test-blocks` and
+  `test-native` have 1 each.
+- **`make check-memory-gate`:** "failed, as it must, and its refusals held, in all 52 cases", in
+  221 s.
+- **`test-library-loading`, plain:** 70 passed, in 6.7 s.
+- **`make check-test-fails`:** "make test failed, as it must, in all 12 cases", in 15.8 s.
+- **`make check-dev`:** ok. **`make check-clean`:** ok.
 - **`make build`:**
   - Names Guix's 3.53.1 by the override, then `  counts:     ((block . 0) (connection . 0)
     (statement . 0))`, exit 0.
-  - With the override unset, it names the same file, source `guix-environment`.
-  - With a bare name, it prints `(reason . invalid-override)` and its counts, exit 1.
+
+**Timing, the container against CI.** CI's figures are run 43609564593, as the reviewer measured
+them.
+
+| What | Container | CI |
+|---|---|---|
+| `test-library-loading` under the gate | 230 s | 308 s |
+| `make test-memory`, whole | 404 s | 556 s |
+| `make check-memory-gate` | 221 s | 262 s |
+| the memory job | not run | 14 min 3 s |
+| `test-library-loading`, plain | 6.7 s | 6 s |
+
+## The review's fixes
+
+An adversarial review of this slice found the findings below. Each was reproduced on the tree at
+`8f0af4f`, then fixed; the red runs use copies of the fixed tree with the same mutation, as above.
+Counts are from the suites' own output.
+
+### M1: a gated child that forks failed the gate
+
+- **Before.** The reviewer's parent runs `capture-command` in a gated child. With `--log-file=…/%p.valgrind`
+  Valgrind opens a second log for the fork, with a `Command:` line and no summary. `make test-memory`
+  on that parent: `FAIL … a child's Valgrind log, build/memory/parent.children/848.valgrind: the
+  log has no "Reading syms from" line …; Valgrind reported no "ERROR SUMMARY: 0 errors from 0
+  contexts"; …`, 2 child logs.
+- **Fix.** `--child-silent-after-fork=yes` is last in the gate's options, for parent and children
+  alike, in the Makefile and in `check-memory-gate`'s three spellings of them. The options block is
+  still the gate's whole, held by the `e` and `k` cases and by the evidence check.
+- **After.** The same parent passes, with 1 child log. Two new cases: `p fork`, a clean child that
+  spawns a process, passes with its one log; `p forkleak`, one that spawns, then leaks 777 bytes,
+  still fails. Both ran in `check-memory-gate` (52 cases, 4 more than before: `p fork`, `p forkleak`,
+  `p elsewhere`, `q oracle-link`).
+- **Red run (F1).** The option removed from the Makefile and the script: `p fork` and `p forkleak`
+  FAILED, 50 cases ok.
+
+### M2: twelve of `test-library-loading`'s 53 children were held by no row
+
+- **Before (P1, P2, P3).** On the tree at `8f0af4f`, each under `make test-memory` of its suite:
+  - P1, preflight run without `gated-command`: `pass`, 1 of 1.
+  - P2, `test-blocks`' child run without it: `pass`, 1 of 1.
+  - P3, the oracle run without it: `pass`, 1 of 1.
+- **Fix.**
+  - The oracle prints `(valgrind . yes|no)` as its last line, read from `/proc/self/maps`;
+    `libsqlite3-oracle` answers it after `oracle-fields`, so `test-native`'s per-field rows leave it
+    out. The suite records every oracle run's line and asserts them, at least two.
+  - The `ambient` probe's line, and every `message-of` probe's, are asserted the same way.
+  - Preflight prints no such line (it is what `make build` runs). Its caller reads the one log that
+    is new in the gate's directory, and requires its `Command:` line to be the child's own, whole.
+    Each of the six preflight rows carries `(valgrind . yes|no)` in its whole answer.
+  - `test-blocks`' dead-address child prints the line after its counts, and its row asserts it.
+- **After (A-P1, A-P2, A-P3).**
+  - P1: `test-memory: FAIL tests/test-library-loading.sps (exit 1)`: 64 passed, 6 failed, the six
+    preflight rows.
+  - P2: `FAIL tests/test-blocks.sps (exit 1)`: 7 passed, 1 failed, the dead-address row.
+  - P3: `FAIL tests/test-library-loading.sps (exit 1)`: 69 passed, 1 failed, the oracle row.
+
+### M3: the final runs and the timing table described an older tree
+
+Rerun, and the lines above rewritten from the outputs. See "The final runs".
+
+### m1: unguarded top-level code in `test-library-loading`
+
+`code-of` answers `(no-code NAME)` under a guard; `write-text-file` and `mkdir -p` (now
+`make-directory`) answer a sentinel, each with a named row (the text file, the empty HOME, the
+broken profile's directory and file); `first-standard` and `world` are guarded, with a row for the
+world; the final `remove-temp-directory` is guarded, and its row names a raise.
+
+- **X1** (`nomem` renamed in constants). Before: `Exception in cdr: #f is not a pair`, the suite
+  dies, no test named. After: 68 passed, 2 failed, both `initialize-fails` rows, named.
+
+### m2: message text was asserted
+
+The probe prints `(raised WHO TYPES)`: the condition's `who`, and a symbol for each type it is
+(`serious error who message irritants` for the fixture's `error`). The raising-probe row asserts
+that and the exit status. The preflight-raise row asserts exit 255, an empty stdout, and that no
+line of stderr begins `(reason `. No message text is asserted anywhere.
+
+### m3: one non-zero `sqlite3_initialize` code
+
+The decoy gained `initialize-misuse`, answering `SQLITE_MISUSE` (21), and a row.
+
+- **X3** (`(when (eqv? code 7)`). Before: 60 passed. After: 69 passed, 1 failed, the
+  `initialize-misuse` row.
+
+### m4: a prefix-matched decoy switch
+
+A row, `below-floorX`, behaves as the control and is logged `decoy(?below-floorX)`.
+
+- **D3** (`strncmp`). Before: 60 passed. After: 69 passed, 1 failed, the `below-floorX` row.
+
+### m5: the oracle exemption compared an unresolved path with a resolved one
+
+The evidence check resolves the `Command:` line's program with `readlink -f`, as Valgrind's is.
+
+- **Before.** A child oracle run through a symlinked directory: `FAIL … Valgrind ran
+  …/oracle/libsqlite3-oracle, not …/oracle-link/libsqlite3-oracle, the program its Command: line
+  names`.
+- **After.** It passes: case `q oracle-link`. **Red run (M5):** the resolution removed: that case
+  FAILED, 51 cases ok.
+
+### m6: the child log path was relative
+
+The child's `--log-file` is `$(CURDIR)/build/memory/<suite>.children/%p.valgrind`.
+
+- **Before.** A gated child run from `/`: the suite passed, with 0 child logs, and so the child
+  went unseen.
+- **After.** The same run leaves its 1 log. Case `p elsewhere`. **Red run (M6):** the path made
+  relative again: `p elsewhere` FAILED (`holds 0 child logs, not 1`), 51 cases ok.
+
+### m7: the stale comment at the top of the Makefile
+
+Rewritten from the final runs: most suites 7 to 12 s under Valgrind, `test-library-loading` 230 s
+here and 308 s on CI, against 6 s plain, with 600 s about twice that.
+
+### m8: `test-check-ci` anchored a line by its place
+
+The swapped-`CHEZ` row names its line as the first one below the nothreads step's header
+(`(after HEADER LINE)`), not as the seventh `CHEZ:` line. 166 passed, as before.
+
+### m9: case o's line in `check-memory-gate`'s header
+
+Restored, with what followed it at `04f8729`.
+
+### m11: the refusal's irritants
+
+The probe prints `(irritants . LIST)`, and every refusal row asserts it: the path as the one
+irritant, the value for `invalid-override`, and the candidate list for `not-found`.
+
+- **X2** (irritants dropped in `raise-library-unavailable`). Before: 60 passed. After: 36 passed,
+  34 failed.
+
+### Not changed
+
+- ADR-0005's text, which the coordinator edits.

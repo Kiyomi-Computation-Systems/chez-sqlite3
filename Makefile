@@ -41,10 +41,13 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 
 # The memory gate (ADR-0005): Valgrind, and the seconds a suite may run
 # under it before timeout kills it and make test-memory names it HUNG.
-# Valgrind runs 10 to 50 times slower than Chez alone: each suite takes 7 to
-# 12 s under it in the container (.plans/research/memory-gate/). 600 s is
-# far above that, and below CI's 60-minute job limit, so a hang is named HUNG
-# before the job is killed. make test-memory refuses a MEMORY_TIMEOUT that is
+# Valgrind runs 10 to 50 times slower than Chez alone. Most suites take 7 to
+# 12 s under it in the container (.plans/research/memory-gate/). The exception
+# is tests/test-library-loading.sps, whose 55 children each run under a
+# Valgrind of their own: 230 s in the container, 308 s on CI (run
+# 43609564593), against 6 s without it. 600 s is about twice that, and far
+# below CI's 60-minute job limit, so a hang is named HUNG before the job is
+# killed. make test-memory refuses a MEMORY_TIMEOUT that is
 # not a positive whole number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
 MEMORY_TIMEOUT ?= 600
@@ -384,14 +387,19 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # gate's Valgrind and options with a log per child, %p, in
 # build/memory/<suite>.children/. After the suite, every child's log is read
 # with the parent's rules, but that its Command: line must begin with CHEZ, or
-# name a C program called libsqlite3-oracle, the program Valgrind ran (ADR-0005,
-# amended). Valgrind follows no child itself: --trace-children was measured
-# and not taken.
+# name a C program called libsqlite3-oracle, the program Valgrind ran, its path
+# resolved with readlink -f as Valgrind's is (ADR-0005, amended). Valgrind
+# follows no child itself: --trace-children was measured and not taken. Its
+# options carry --child-silent-after-fork=yes: a child that forks before it
+# execs, as capture-command does, would otherwise leave a second log with a
+# Command: line and no summary. Each child's log path is absolute, for a child
+# that runs from another working directory.
 # Not covered (ADR-0005, amended):
 #   - a child started without gated-command runs outside Valgrind, unseen:
-#     tests/test-library-loading.sps's children each say whether they ran
-#     under memcheck, and that suite fails if one did not; no other suite's
-#     children are held so;
+#     the children of tests/test-library-loading.sps and test-blocks.sps each
+#     say whether they ran under memcheck (preflight's, which prints no such
+#     line, by the one new log in the gate's directory), and those suites fail
+#     if one did not; no other suite's children are held so;
 #   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
 #     compiled CHEZ that runs Chez as a child passes the leak plant;
 #   - its evidence holds against accident, not against a suite that means
@@ -470,7 +478,8 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	        END { if (pid == "") { print "the log has no Valgrind \"Command:\" line"; exit } \
 	          expect = chez; whose = ", the file CHEZ names"; \
 	          if (prefix && substr(got, 1, length(cmd)) != cmd) { prog = got; sub(/ .*/, "", prog); base = prog; sub(/.*\//, "", base); \
-	            if (oracle != "" && base == oracle) { expect = prog; whose = ", the program its Command: line names" } \
+	            if (oracle != "" && base == oracle) { expect = prog; whose = ", the program its Command: line names"; \
+	              if (index(prog, "\047") == 0) { rl = "readlink -f \047" prog "\047"; if ((rl | getline resolved) > 0 && resolved != "") expect = resolved; close(rl) } } \
 	            else why[++n] = "Valgrind\047s Command: line is \"" got "\", which begins neither with \"" cmd "\" nor with a program named " oracle } \
 	          else if (!prefix && got != cmd) why[++n] = "Valgrind\047s Command: line is \"" got "\", not \"" cmd "\""; \
 	          nwant = split(ENVIRON["options"], want, "\n"); same = (nopts == nwant); \
@@ -511,10 +520,10 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	  mkdir -p "$$children"; \
 	  rm -f "$$children"/*.valgrind; \
 	  echo "=== $$t"; \
-	  set -- -v --command-line-only=yes "--log-file=$$vlog" --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite; \
+	  set -- -v --command-line-only=yes "--log-file=$$vlog" --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes; \
 	  child=; \
 	  for o in "$$@"; do \
-	    case $$o in --log-file=*) o="--log-file=$$children/%p.valgrind" ;; esac; \
+	    case $$o in --log-file=*) o="--log-file=$(CURDIR)/$$children/%p.valgrind" ;; esac; \
 	    child="$$child$${child:+ }$$o"; \
 	  done; \
 	  CHEZ_SQLITE3_GATE_CHILD="$(VALGRIND) $$child" $(TIMEOUT) --foreground $(MEMORY_TIMEOUT) $(VALGRIND) "$$@" $(CHEZ) --libdirs $(LIBDIRS) --program $$t >"$$log" 2>&1; \

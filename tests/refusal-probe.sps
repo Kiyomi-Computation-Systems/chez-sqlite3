@@ -15,21 +15,27 @@
 ;;;             fields; then (threadsafe . N), (chez-sqlite3 private
 ;;;             native)'s loaded-threadsafe; and the exit status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
-;;;             (detail . D) (candidates . LIST) (library . L), and the exit
-;;;             status is 1. WHO is the condition's &who. L is #f, or the
-;;;             report read before the refusal, as the list (PATH SOURCE
-;;;             VERSION VERSION-NUMBER SOURCE-ID). With --message,
-;;;             (message . TEXT) follows: the condition's &message, which
-;;;             tests/preflight.sps prints as its remedy. Tests never assert
-;;;             it as text (ADR-0002); test-library-loading compares
-;;;             preflight's remedy line with it
-;;;   anything else raised: (raised . TEXT), and the exit status is 2
+;;;             (detail . D) (candidates . LIST) (library . L)
+;;;             (irritants . LIST), and the exit status is 1. WHO is the
+;;;             condition's &who. L is #f, or the report read before the
+;;;             refusal, as the list (PATH SOURCE VERSION VERSION-NUMBER
+;;;             SOURCE-ID). LIST of irritants is the condition's &irritants,
+;;;             or #f when it has none. With --message, (message . TEXT)
+;;;             follows: the condition's &message, which tests/preflight.sps
+;;;             prints as its remedy. Tests never assert it as text
+;;;             (ADR-0002); test-library-loading compares preflight's remedy
+;;;             line with it
+;;;   anything else raised: (raised WHO TYPES), and the exit status is 2.
+;;;             WHO is the condition's &who, or #f; TYPES lists, by name, the
+;;;             condition types it is, in a fixed order: serious, error,
+;;;             violation, assertion, warning, who, message, irritants,
+;;;             library-unavailable. Never its text (ADR-0013, decision 9)
 ;;;
 ;;; With --then-override, CHEZ_SQLITE3_LIBRARY is set to PATH after the
 ;;; first reference, and (then-override . VALUE) shows what getenv then
 ;;; reads. The two later references print one line, (again . (A B)). Each is
 ;;; `same` when the reference returned or raised the very object the first
-;;; one did (eq?), else (loaded PATH), (refused REASON) or (raised TEXT). A
+;;; one did (eq?), else (loaded PATH), (refused REASON) or (raised WHO TYPES). A
 ;;; load that ran once answers `same` twice; a load that ran again answers a
 ;;; fresh object.
 ;;;
@@ -63,7 +69,7 @@
 ;;; define types and procedures, and the counters count.
 (import (rnrs)
         (only (chezscheme) eval environment foreign-entry? foreign-procedure foreign-ref
-              display-condition putenv getenv)
+              putenv getenv)
         (chez-sqlite3 private conditions)
         (chez-sqlite3 private libsqlite3-info)
         (chez-sqlite3 private counters))
@@ -74,10 +80,28 @@
   (write (cons key value))
   (newline))
 
-;; text : Any -> String
-(define (text obj)
-  (call-with-string-output-port
-   (lambda (p) (if (condition? obj) (display-condition obj p) (write obj p)))))
+;; condition-types : Any -> (Listof Symbol)
+;; The names of the condition types OBJ is, in a fixed order; none for what
+;; is no condition.
+(define (condition-types obj)
+  (if (condition? obj)
+      (let loop ((rest (list (cons 'serious serious-condition?) (cons 'error error?)
+                             (cons 'violation violation?) (cons 'assertion assertion-violation?)
+                             (cons 'warning warning?) (cons 'who who-condition?)
+                             (cons 'message message-condition?)
+                             (cons 'irritants irritants-condition?)
+                             (cons 'library-unavailable sqlite-library-unavailable?)))
+                 (found '()))
+        (cond ((null? rest) (reverse found))
+              (((cdar rest) obj) (loop (cdr rest) (cons (caar rest) found)))
+              (else (loop (cdr rest) found))))
+      '()))
+
+;; raised-facts : Any -> (List (U Symbol #f) (Listof Symbol))
+;; What a raise is, without its text: its &who, or #f, and its types.
+(define (raised-facts obj)
+  (list (and (condition? obj) (who-condition? obj) (condition-who obj))
+        (condition-types obj)))
 
 ;; option : String -> (U String #f)
 ;; The argument after NAME on the command line, or #f.
@@ -112,7 +136,7 @@
         ((eq? (car answer) 'loaded) (list 'loaded (libsqlite3-info-path (cdr answer))))
         ((eq? (car answer) 'refused)
          (list 'refused (sqlite-library-unavailable-reason (cdr answer))))
-        (else (list 'raised (text (cdr answer))))))
+        (else (cons 'raised (raised-facts (cdr answer))))))
 
 ;; read-c-string : Natural -> String
 ;; The NUL-terminated bytes at ADDRESS, decoded as UTF-8.
@@ -153,7 +177,7 @@
        (show 'version (list-ref fields 2))
        (show 'version-number (list-ref fields 3))
        (show 'source-id (list-ref fields 4))
-       (show 'threadsafe (guard (e (#t (list 'raised (text e))))
+       (show 'threadsafe (guard (e (#t (cons 'raised (raised-facts e))))
                            (eval '(loaded-threadsafe) native)))
        0))
     ((refused)
@@ -166,11 +190,12 @@
        (show 'candidates (sqlite-library-unavailable-candidates e))
        (show 'library (let ((library (sqlite-library-unavailable-library e)))
                         (and library (info-fields library))))
+       (show 'irritants (and (irritants-condition? e) (condition-irritants e)))
        (when (option "--message")
          (show 'message (and (message-condition? e) (condition-message e))))
        1))
     (else
-     (show 'raised (text (cdr first)))
+     (show 'raised (raised-facts (cdr first)))
      2)))
 
 (let ((path (option "--then-override")))

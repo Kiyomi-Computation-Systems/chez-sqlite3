@@ -40,6 +40,8 @@
  *                      and three-byte sequences, which only a UTF-8 reading
  *                      reports as written
  *   initialize-fails   sqlite3_initialize answers SQLITE_NOMEM
+ *   initialize-misuse  sqlite3_initialize answers SQLITE_MISUSE, a second
+ *                      code, so that no single value passes for "non-zero"
  *   anything else      the control's behaviour, an empty value included
  *
  * The call log. Loading the library writes its first entry, decoy(SWITCH):
@@ -99,7 +101,8 @@ enum decoy_switch {
   LIBVERSION_NULL,
   SOURCEID_NULL,
   SOURCEID_UTF8,
-  INITIALIZE_FAILS
+  INITIALIZE_FAILS,
+  INITIALIZE_MISUSE
 };
 
 static const struct {
@@ -112,6 +115,7 @@ static const struct {
   {"sourceid-null", SOURCEID_NULL},
   {"sourceid-utf8", SOURCEID_UTF8},
   {"initialize-fails", INITIALIZE_FAILS},
+  {"initialize-misuse", INITIALIZE_MISUSE},
 };
 
 static enum decoy_switch mode = CONTROL;
@@ -186,7 +190,9 @@ int sqlite3_threadsafe(void)
 int sqlite3_initialize(void)
 {
   called("sqlite3_initialize()");
-  return mode == INITIALIZE_FAILS ? SQLITE_NOMEM : SQLITE_OK;
+  if (mode == INITIALIZE_FAILS)
+    return SQLITE_NOMEM;
+  return mode == INITIALIZE_MISUSE ? SQLITE_MISUSE : SQLITE_OK;
 }
 #endif
 
