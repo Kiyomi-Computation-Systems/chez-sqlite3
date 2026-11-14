@@ -23,6 +23,8 @@
           sqlite-library-unavailable-library
           sqlite-library-unavailable-reasons
 
+          raise-library-unavailable
+
           kind-of shown-value checked-accessor)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
@@ -99,13 +101,16 @@
   ;;   source      (U Symbol #f): where the path came from, one of
   ;;               (chez-sqlite3 private discovery)'s libsqlite3-sources, or #f
   ;;   detail      by reason: the override's value (invalid-override), the
-  ;;               loader's message (load-failed), the version string
+  ;;               loader's message, or the C name of an entry point that
+  ;;               answered NULL (load-failed), the version string
   ;;               (below-floor), 0 (not-threadsafe), the entry point's C name
   ;;               (missing-api), #f (not-found)
   ;;   candidates  (Listof String): every path checked, in order (not-found)
   ;;   library     (U Libsqlite3-Info #f): what the library reported, for a
   ;;               refusal made after its version was read (below-floor,
-  ;;               not-threadsafe, missing-api); #f before that
+  ;;               not-threadsafe); #f before that, and for a missing-api
+  ;;               refusal of a report entry point, which is refused before
+  ;;               the report exists
   (define-condition-type &sqlite-library-unavailable &chez-sqlite3-error
     unchecked-make-sqlite-library-unavailable sqlite-library-unavailable?
     (reason unchecked-sqlite-library-unavailable-reason)
@@ -148,12 +153,28 @@
     (unless (memq reason sqlite-library-unavailable-reasons)
       (assertion-violation 'make-sqlite-library-unavailable
                            "not a reason chez-sqlite3 refuses a libsqlite3 for"
-                           reason))
+                           (shown-value reason)))
     (unless (or (not library) (libsqlite3-info? library))
       (assertion-violation 'make-sqlite-library-unavailable
                            "a refusal's library is a libsqlite3-info or #f"
-                           library))
+                           (shown-value library)))
     (unchecked-make-sqlite-library-unavailable reason path source detail candidates library))
+
+  ;; raise-library-unavailable : Symbol (U String #f) (U Symbol #f) Any (Listof String)
+  ;;                              (U Libsqlite3-Info #f) String (Listof Any) -> Nothing
+  ;; The one way a private caller refuses a libsqlite3: raises a
+  ;; &sqlite-library-unavailable built with REASON, PATH, SOURCE, DETAIL,
+  ;; CANDIDATES and LIBRARY, compounded with &who chez-sqlite3, a &message
+  ;; holding MESSAGE and &irritants holding IRRITANTS, so that the default
+  ;; handler prints readable text. A REASON or LIBRARY the constructor
+  ;; refuses is an assertion violation.
+  (define (raise-library-unavailable reason path source detail candidates library
+                                     message irritants)
+    (raise (condition (make-sqlite-library-unavailable reason path source detail
+                                                       candidates library)
+                      (make-who-condition 'chez-sqlite3)
+                      (make-message-condition message)
+                      (make-irritants-condition irritants))))
 
   ;; sqlite-library-unavailable? : Any -> Boolean
   ;; sqlite-library-unavailable-reason : &sqlite-library-unavailable -> Symbol

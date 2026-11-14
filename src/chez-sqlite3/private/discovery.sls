@@ -86,12 +86,10 @@
 
   ;; refuse : Symbol (U String #f) (U Symbol #f) Any (Listof String) String
   ;;          Any -> Nothing
+  ;; A refusal made before any library was loaded: no report, one irritant.
   (define (refuse reason path source detail candidates message irritant)
-    (raise (condition (make-sqlite-library-unavailable reason path source detail
-                                                       candidates #f)
-                      (make-who-condition 'chez-sqlite3)
-                      (make-message-condition message)
-                      (make-irritants-condition (list irritant)))))
+    (raise-library-unavailable reason path source detail candidates #f message
+                               (list irritant)))
 
   ;; machine-platform : Symbol -> (U 'linux 'macos #f)
   (define (machine-platform machine-type)

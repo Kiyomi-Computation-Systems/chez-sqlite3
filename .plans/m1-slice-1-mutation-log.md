@@ -20,18 +20,19 @@ answered the symbol `stub`, and the condition types were real. The stubs were th
 
 | Suite | Red run, against the stub | Green run |
 |---|---|---|
-| `test-libsqlite3-info` | 2 passed, 7 failed | 9 passed |
+| `test-libsqlite3-info` | 1 passed, 8 failed | 9 passed |
 | `test-conditions` | 2 passed, 16 failed | 18 passed |
 | `test-load-state` | 1 passed, 13 failed | 14 passed |
 | `test-discovery` | 2 passed, 57 failed | 59 passed |
 | `test-verify` | 0 passed, 16 failed | 16 passed |
 
-The rows that passed against a stub are rows a stub can satisfy: the report's `libsqlite3-info?` is
-false for a string, and `record-rtd` of a symbol raises as it does of an opaque report; the root
-condition's rows, which use the real type; and the real-maps row that only reads `/proc/self/maps`.
-The no-secret-printed rows also pass against a stub that raises nothing, so they answer
-`no-raise`, which their expected value does not equal only when a real accessor is present. The
-mutations below are what watch each of those fail: I1 for opacity, I4, K10 for the secret.
+The rows that passed against a stub are rows a stub can satisfy. In `test-libsqlite3-info`, the one
+row is the opacity row: `record-rtd` of the symbol the stub answers for a report raises, as it does
+of an opaque report. In `test-conditions`, they are the root condition's rows, which use the real
+type. In `test-discovery`, one is the real-maps row that only reads `/proc/self/maps`. A no-secret
+row answers `no-raise` against a stub that raises nothing, which its expected value never equals,
+so it fails there. The mutations below are what watch each of those rows fail: I1 for opacity, I4
+and K10 for the secret.
 
 ## The mutations
 
@@ -244,10 +245,94 @@ caught when at least one row failed.
 ## What the records need
 
 - **ADR-0013, decision 2:** a refusal at load, which no one procedure raises, names `chez-sqlite3` in
-  its `&who` (the maintainer is amending it).
+  its `&who` (done: the maintainer amended it).
 - **ADR-0002, decision 4,** lists five reasons before its amendment; the amendment adds the sixth.
   The code's list is the amended one, in the order `invalid-override not-found load-failed below-floor
   not-threadsafe missing-api`.
 - **Owed to slice 2,** since slice 1 cannot hold them: `native`'s first definition re-raising a
   recorded failure; the order floor, then threadsafe, then every other entry point; and
   `load-failed` and `missing-api`, which slice 1 only constructs.
+
+## The review's fixes
+
+An adversarial review of this slice ran further mutations of its own, in its own driver, and found
+that many of them survived all five suites. The fixes below
+are tests, and a few lines of source: one shared refusal builder, `raise-library-unavailable`, in
+`conditions`, which `discovery` and `verify` now use in place of their private `refuse`; the
+constructor's refusals name both irritants through `shown-value`; `check-version` takes any exact integer.
+Each mutant ran again through the reviewer's driver, in its own copy of the fixed tree, and every one
+of the five suites ran. A mutant of the review's names `x-...`; a control is `ctl-...`. Counts are
+failed rows, read from the suites' own output (`# of unexpected failures`). "Before" is the tree
+at the commit before the fixes, "after" the fixed tree.
+
+Baselines, after: discovery 66, load-state 16, conditions 28, libsqlite3-info 9, verify 20 (before:
+59, 14, 18, 9, 16).
+
+| Mutant | What it changes | Before | After |
+|---|---|---|---|
+| `x-bare-override-searches-ldpath` | a non-absolute override is searched for in `LD_LIBRARY_PATH` | none | discovery 6 |
+| `x-reads-ldpath-with-override` | the override branch also reads `LD_LIBRARY_PATH` | none | discovery 1 |
+| `x-accessor-pair` | `checked-accessor` names a refused pair as itself | none | conditions 3 |
+| `x-reason-ci` | a reason matched case-insensitively | none | conditions 1 |
+| `x-reason-prefix` | a symbol starting with a reason's name is taken | none | conditions 1 |
+| `x-library-boolean` | a refusal's library may be `#t` | none | conditions 1 |
+| `x-gnu-prefix` | libc under `/gnu/` is Guix | none | discovery 1 |
+| `x-gnu-noslash` | prefix `/gnu/store` without its slash | none | discovery 1 |
+| `x-first-libc` | the first `libc.so.6` line alone decides | none | discovery 1 |
+| `x-arm32-triple` | 32-bit ARM given the aarch64 triple | none | discovery 2 |
+| `x-i3-triple` | `i3le` given the x86_64 triple | none | discovery 2 |
+| `x-nt-linux` | a `...nt` machine type gets the FHS list | none | discovery 1 |
+| `x-message-wording` | reworded messages only | conditions 7, info 3 (ten rows asserted text) | none: all five pass, as wanted |
+| `x-version-negative-refused` | the review's: a negative number is `below-floor` (now the code's own rule), so redefined here as the old natural check restored | the review's original: verify 1, since the old row expected an assertion violation | verify 1 |
+| `x-shown-pair` | `shown-value` tests `pair?` for `list?` | conditions: the suite died, 255, no test named | conditions 1, named |
+| `x-ctor-raises` | the report constructor raises | conditions, info and verify died: 255, no test named | conditions 5, info 3, verify 8, named |
+| `x-later-refusal-replaces` | a later `&sqlite-library-unavailable` replaces the first failure | none | load-state 2 |
+| `x-as-serious-own-who` | `as-serious` keeps a non-serious condition's own `&who` | none | load-state 1 |
+| `x-raise-continuable` | `load-step` raises again with `raise-continuable` | none | load-state 1 |
+| `x-verify-source-from-report` | `check-version` takes the source from the report | verify 3 | verify 5 |
+| `ctl-V3` | floor boundary `<=` | verify 4 | verify 4 |
+| `ctl-W8` | `/gnu/store/` anywhere in the path | discovery 12 | discovery 14 |
+
+"Before" for `x-bare-override-searches-ldpath`, `x-reads-ldpath-with-override`, `x-message-wording`,
+`ctl-V3`, `ctl-W8` and `x-accessor-pair` was measured again here on the commit before the fixes; the
+others are the review's own batch outputs. A rise is the new rows that also hold the rule.
+
+New mutants, for what the fixes added; each fails at least one row:
+
+| Mutant | What it changes | Before | After |
+|---|---|---|---|
+| `x-version-string-unchecked` | `check-version` does not check its version string | not a rule | verify 2 |
+| `x-rlu-no-who` | `raise-library-unavailable` has no `&who` | not built | discovery 1, conditions 2, verify 1 |
+| `x-rlu-who-curl` | its `&who` is `chez-curl` | not built | discovery 1, conditions 2, verify 1 |
+| `x-rlu-no-message` | it has no `&message` | not built | discovery 1, conditions 2, verify 1 |
+| `x-rlu-library-dropped` | it drops the report | not built | conditions 2, verify 6 |
+| `x-rlu-irritants-dropped` | it drops the irritants | not built | conditions 1 |
+| `x-rlu-raise-continuable` | it raises continuably | not built | conditions 1 |
+| `x-ctor-reason-raw` | the constructor names the raw reason | not built | conditions 3 |
+| `x-ctor-irritant-raw` | the constructor names the raw library | not built | conditions 3 |
+
+Notes on rows the review's list left out:
+
+- `x-message-wording` passes all five suites, so no row asserts message text any more (ADR-0013,
+  decision 9). Presence of a `&message` is a type, and stays asserted.
+- The review's `log-...` rebuilds of this log's own rows were not rerun: each already failed a row in
+  its batch, and the fixed suites are those rows plus more.
+- `x-version-negative-refused` of the review is the old design (a negative number refused as an
+  assertion violation) turned the other way; after the fix `check-version` refuses it as `below-floor`,
+  and the mutant here restores the old natural check, which fails verify 1.
+
+### Red run, corrected
+
+The red run of `test-libsqlite3-info` against the stub was rebuilt as the section above describes
+(every procedure answers `stub`; the stub is `s1/stubs/red-info-head` for the suite at the commit
+before the fixes, `red-info-fixed` for the fixed one): **1 passed, 8 failed**, for both. The row that
+passes is the opacity row. The table above says so now; it said 2 and 7.
+
+### What the records need
+
+- ADR-0013, decision 2: done. The maintainer amended it, and the line above says so.
+- ADR-0013, decision 9 holds in the suites now: no test of this slice reads message text.
+- Slice 2's native load uses `raise-library-unavailable` and refuses a library whose
+  `sqlite3_libversion` or `sqlite3_sourceid` answers NULL as `load-failed`, with the entry point's C
+  name as detail. A missing report entry point is `missing-api` with library `#f`, since the report
+  does not exist yet.

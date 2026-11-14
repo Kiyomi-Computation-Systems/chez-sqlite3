@@ -48,10 +48,15 @@
         (newline)))))
 
 ;; The report every call below passes. No field of it equals an argument
-;; the checks take, so only the report itself can be carried as itself.
+;; the checks take (the sources they are given are system, override and
+;; guix-home, and no number below is 9876543), so only the report itself can be
+;; carried as itself. Built under a guard: a raise at top level would end the
+;; suite with no test named, so a constructor that raises leaves a symbol, and
+;; the first row names it.
 (define report
-  (make-libsqlite3-info "/gnu/store/report-path/lib/libsqlite3.so.0" 'guix-home "report-version"
-                        1 "report-source-id"))
+  (guard (e (#t 'report-constructor-raised))
+    (make-libsqlite3-info "/gnu/store/report-path/lib/libsqlite3.so.0" 'macos-system
+                          "report-version" 9876543 "report-source-id")))
 
 ;; outcome : (-> Any) -> (U (List 'returned Any)
 ;;                          (List 'refused Symbol Any Any Any Any Any)
@@ -127,6 +132,10 @@
 
 (test-begin "verify")
 
+(test-equal "the report fixture is a libsqlite3-info"
+  #t
+  (libsqlite3-info? report))
+
 ;; --- check-version: the floor ------------------------------------------------
 
 (test-equal "the floor is 3.45.1, 3045001"
@@ -166,10 +175,27 @@
   (map (lambda (n) (outcome (lambda () (check-version "v" n path 'override report))))
        '(0 1 2999999 3037002 3044001 3044999 3045000)))
 
-(test-equal "check-version: a version number that is no natural is an assertion violation, naming no value"
-  (map (lambda (v) '(assertion-violation check-version)) '(1 2 3 4 5))
+;; sqlite3_libversion_number returns a C int, so a library can answer a
+;; negative one: below the floor, as any other integer below it.
+(test-equal "check-version: a negative version number is below-floor, not an assertion violation"
+  (map (lambda (n) `(refused below-floor ,path override "v" () the-report))
+       '(-1 -3045001 -2147483648))
+  (map (lambda (n) (outcome (lambda () (check-version "v" n path 'override report))))
+       '(-1 -3045001 -2147483648)))
+
+(test-equal "check-version: a version number that is no exact integer is an assertion violation, naming no value"
+  (map (lambda (v) '(assertion-violation check-version)) '(1 2 3 4 5 6))
   (map (lambda (v) (outcome (lambda () (check-version "v" v path 'system report))))
-       (list "3045001" #f -1 3045001.0 'x)))
+       (list "3045001" #f 3045001.0 -1.0 'x 1/2)))
+
+(test-equal "check-version: a version string that is no string is an assertion violation, at and below the floor alike"
+  (map (lambda (v) '(assertion-violation check-version)) '(1 2 3 4 5 6))
+  (map (lambda (v) (outcome (lambda () (check-version v 3045001 path 'system report))))
+       (list 3045001 #f 'v '("3.45.1") #\v (string->utf8 "v"))))
+
+(test-equal "check-version: a version string that is no string is an assertion violation below the floor too"
+  '(assertion-violation check-version)
+  (outcome (lambda () (check-version 'v 3045000 path 'system report))))
 
 ;; --- check-threadsafe: sqlite3_threadsafe() ----------------------------------
 

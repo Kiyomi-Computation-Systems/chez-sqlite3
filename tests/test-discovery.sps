@@ -140,8 +140,14 @@
 
 (define override "/opt/sqlite/lib/libsqlite3.so.0")
 
+;; LD_LIBRARY_PATH and DYLD_LIBRARY_PATH are set in every override fixture:
+;; ADR-0002 says nothing reads them, and a variable that is unset cannot show it.
+(define ld-vars
+  '(("LD_LIBRARY_PATH" . "/opt/ld/lib")
+    ("DYLD_LIBRARY_PATH" . "/opt/dyld/lib")))
+
 (define (with-override value)
-  (cons (cons "CHEZ_SQLITE3_LIBRARY" value) guix-vars))
+  (cons (cons "CHEZ_SQLITE3_LIBRARY" value) (append guix-vars ld-vars)))
 
 ;; Guix Chez's maps, cut down: libc is on the third line, after the binary,
 ;; itself under /gnu/store/.
@@ -258,6 +264,14 @@
   (map (lambda (machine) (choose guix-vars machine guix-maps everything))
        '(ta6fb ta6ob ta6s2)))
 
+;; The Windows, NetBSD and QNX machine types, in every width and threading:
+;; none ends in le, and none may be taken for Linux.
+(define other-machines '(ta6nt a6nt ti3nt i3nt ta6nb a6nb ti3nb i3nb ta6qnx ti3qnx))
+
+(test-equal "platform: the nt, nb and qnx machine types have no candidates either, not-found with an empty list"
+  (map (lambda (machine) '(refused not-found #f #f #f ())) other-machines)
+  (map (lambda (machine) (choose guix-vars machine guix-maps everything)) other-machines))
+
 ;; --- macOS --------------------------------------------------------------------
 
 (test-equal "macos: Apple's /usr/lib/libsqlite3.dylib, returned without asking exists?"
@@ -307,6 +321,13 @@
   (libsqlite3-world (string-append fhs-maps
                                    (maps-line "/opt/gnu/store/ddd-glibc/lib/libc.so.6"))))
 
+;; The prefix is /gnu/store/ whole: /gnu/ alone is not it, and neither is
+;; /gnu/store without its slash.
+(test-equal "world: libc.so.6 under /gnu/lib/ or /gnu/storex/ is fhs: the prefix is all of /gnu/store/"
+  '(fhs fhs)
+  (map (lambda (path) (libsqlite3-world (string-append fhs-maps (maps-line path))))
+       '("/gnu/lib/libc.so.6" "/gnu/storex/abc-glibc/lib/libc.so.6")))
+
 ;; The scan, with the libc line at every position of the text: first, in the
 ;; middle, last, last with no newline after it, and alone, with and without
 ;; its newline. Fillers hold a /gnu/store/ library that is not libc and an
@@ -331,6 +352,14 @@
              (string-append filler fhs-libc-line)
              (without-last-newline (string-append filler fhs-libc-line))
              fhs-libc-line)))
+
+;; "Some line" is not "the first libc line": an FHS libc ahead of a Guix one
+;; leaves the world Guix.
+(test-equal "world: an FHS libc line before a Guix one is still guix, whatever else lies between"
+  '(guix guix)
+  (map libsqlite3-world
+       (list (string-append fhs-libc-line guix-libc-line)
+             (string-append heap-line fhs-libc-line filler guix-libc-line filler))))
 
 (test-equal "world: no text, no file lines, and lines with no path are fhs"
   '(fhs fhs fhs fhs)
@@ -442,6 +471,19 @@
     ("/usr/lib/libsqlite3.so.0" . system))
   (libsqlite3-candidates 'fhs 'trv64le (env guix-vars)))
 
+(define other-linux-machines
+  '(i3le ti3le arm32le tarm32le ppc32le tppc32le rv64le trv64le la64le tla64le))
+
+(test-equal "fhs: every other Linux machine type has no triple directory, only the three plain ones"
+  (map (lambda (machine)
+         '(chose (("/usr/local/lib/libsqlite3.so.0" . system)
+                  ("/usr/lib64/libsqlite3.so.0" . system)
+                  ("/usr/lib/libsqlite3.so.0" . system))))
+       other-linux-machines)
+  (map (lambda (machine)
+         (outcome (lambda () (libsqlite3-candidates 'fhs machine (env guix-vars)))))
+       other-linux-machines))
+
 (test-equal "fhs: a Guix profile is never chosen, even when every one exists"
   `(refused not-found #f #f #f ,(map car fhs-list))
   (choose guix-vars 'ta6le fhs-maps (apply present (map car guix-list))))
@@ -472,9 +514,19 @@
   '(() () ())
   (map (lambda (world) (libsqlite3-candidates world 'ta6fb (env guix-vars))) '(#f guix fhs)))
 
-(test-equal "triple table: ta6le and a6le, tarm64le and arm64le, and no other machine type"
-  '("x86_64-linux-gnu" "x86_64-linux-gnu" "aarch64-linux-gnu" "aarch64-linux-gnu" #f #f #f #f)
-  (map linux-triple '(ta6le a6le tarm64le arm64le ti3le trv64le tarm64osx ta6osx)))
+(test-equal "triple table: ta6le and a6le, tarm64le and arm64le"
+  '("x86_64-linux-gnu" "x86_64-linux-gnu" "aarch64-linux-gnu" "aarch64-linux-gnu")
+  (map linux-triple '(ta6le a6le tarm64le arm64le)))
+
+;; The complement: every other Linux machine type Chez names, and the macOS
+;; ones. none stands for #f, which a raise would also become.
+(test-equal "triple table: no other machine type has a triple"
+  (map (lambda (m) 'none)
+       '(i3le ti3le arm32le tarm32le ppc32le tppc32le rv64le trv64le la64le tla64le
+         tarm64osx ta6osx))
+  (map (lambda (m) (guard (e (#t 'raised)) (or (linux-triple m) 'none)))
+       '(i3le ti3le arm32le tarm32le ppc32le tppc32le rv64le trv64le la64le tla64le
+         tarm64osx ta6osx)))
 
 ;; --- the sources ---------------------------------------------------------------
 
@@ -520,19 +572,38 @@
              (lambda () (choose-libsqlite3 (env guix-vars) 'ta6le #f nothing)))))
 
 ;; ADR-0002: nothing reads LD_LIBRARY_PATH or DYLD_* on chez-sqlite3's behalf.
-(test-equal "discovery reads no variable but CHEZ_SQLITE3_LIBRARY, GUIX_ENVIRONMENT, GUIX_PROFILE and HOME"
-  '("CHEZ_SQLITE3_LIBRARY" "GUIX_ENVIRONMENT" "GUIX_PROFILE" "HOME")
+;; Every variable below is set, and every path exists, so a read that fed a
+;; search would change an answer as well as the names.
+
+;; names-read : Bindings Symbol (U String #f) -> (Listof String)
+;; The names choose-libsqlite3 asked getenv for, sorted.
+(define (names-read bindings machine maps)
   (let* ((names '())
          (getenv (lambda (name)
                    (unless (member name names) (set! names (cons name names)))
-                   ((env (append guix-vars
-                                 '(("LD_LIBRARY_PATH" . "/opt/sqlite/lib")
-                                   ("DYLD_LIBRARY_PATH" . "/opt/sqlite/lib")))) name))))
-    (for-each (lambda (machine maps)
-                (outcome (lambda () (choose-libsqlite3 getenv machine maps nothing))))
-              '(ta6le ta6le tarm64osx)
-              (list guix-maps fhs-maps #f))
+                   ((env bindings) name))))
+    (outcome (lambda () (choose-libsqlite3 getenv machine maps everything)))
     (list-sort string<? names)))
+
+;; The four fixtures: Linux in a Guix world, Linux in an FHS world, macOS, and
+;; a platform with no list.
+(define world-cases
+  (list (cons 'ta6le guix-maps) (cons 'ta6le fhs-maps) (cons 'tarm64osx #f) (cons 'ta6fb #f)))
+
+(test-equal "discovery reads only CHEZ_SQLITE3_LIBRARY when a valid override is set, on every platform"
+  (map (lambda (c) '("CHEZ_SQLITE3_LIBRARY")) world-cases)
+  (map (lambda (c) (names-read (with-override override) (car c) (cdr c))) world-cases))
+
+(test-equal "discovery reads only CHEZ_SQLITE3_LIBRARY when an invalid override is set, on every platform"
+  (map (lambda (c) '("CHEZ_SQLITE3_LIBRARY")) world-cases)
+  (map (lambda (c) (names-read (with-override "libsqlite3.so.0") (car c) (cdr c))) world-cases))
+
+(test-equal "with no override, discovery reads GUIX_ENVIRONMENT, GUIX_PROFILE and HOME in a Guix world and nothing else, never LD_LIBRARY_PATH or DYLD_LIBRARY_PATH"
+  '(("CHEZ_SQLITE3_LIBRARY" "GUIX_ENVIRONMENT" "GUIX_PROFILE" "HOME")
+    ("CHEZ_SQLITE3_LIBRARY")
+    ("CHEZ_SQLITE3_LIBRARY")
+    ("CHEZ_SQLITE3_LIBRARY"))
+  (map (lambda (c) (names-read (append guix-vars ld-vars) (car c) (cdr c))) world-cases))
 
 ;; --- the real /proc/self/maps ----------------------------------------------------
 

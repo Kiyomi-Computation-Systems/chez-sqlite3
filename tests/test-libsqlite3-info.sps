@@ -42,13 +42,13 @@
         (newline)))))
 
 ;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
-;; for any other raise, or (no-raise VALUE).
+;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT) for
+;; any other raise, or (no-raise VALUE). The message is a condition's type,
+;; not its text: its wording is no contract (ADR-0013, decision 9).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
             (#t (list 'other (describe e))))
     (list 'no-raise (thunk))))
 
@@ -58,10 +58,13 @@
     (let loop ((i 0))
       (and (<= (+ i k) n) (or (string=? (substring text i (+ i k)) part) (loop (+ i 1)))))))
 
-;; Every field differs from every other.
+;; Every field differs from every other. Built under a guard: a raise at top
+;; level would end the suite with no test named, so a constructor that raises
+;; leaves a symbol, and the first row names it.
 (define info
-  (make-libsqlite3-info "/r/path/libsqlite3.so.0" 'guix-home "3.99.0-r" 3099000
-                        "2099-01-01 00:00:00 reportsourceid"))
+  (guard (e (#t 'constructor-raised))
+    (make-libsqlite3-info "/r/path/libsqlite3.so.0" 'guix-home "3.99.0-r" 3099000
+                          "2099-01-01 00:00:00 reportsourceid")))
 
 (define secret "Pr0xyS3cr3t")
 
@@ -92,17 +95,17 @@
 ;; value by its kind, or as itself when it holds no text.
 (test-equal "every accessor refuses a string by its kind, naming the accessor, not the string"
   (map (lambda (a)
-         (list 'assertion-violation (car a) "not a libsqlite3-info" '((kind string))))
+         (list 'assertion-violation (car a) '((kind string))))
        accessors)
   (map (lambda (a) (raised (lambda () ((cdr a) secret)))) accessors))
 
 (test-equal "every accessor refuses a number, #f, a list, a vector, and the report's fields as a list"
   (map (lambda (a)
-         (list (list 'assertion-violation (car a) "not a libsqlite3-info" '(5))
-               (list 'assertion-violation (car a) "not a libsqlite3-info" '(#f))
-               (list 'assertion-violation (car a) "not a libsqlite3-info" '((kind list)))
-               (list 'assertion-violation (car a) "not a libsqlite3-info" '((kind vector)))
-               (list 'assertion-violation (car a) "not a libsqlite3-info" '((kind list)))))
+         (list (list 'assertion-violation (car a) '(5))
+               (list 'assertion-violation (car a) '(#f))
+               (list 'assertion-violation (car a) '((kind list)))
+               (list 'assertion-violation (car a) '((kind vector)))
+               (list 'assertion-violation (car a) '((kind list)))))
        accessors)
   (map (lambda (a)
          (map (lambda (v) (raised (lambda () ((cdr a) v))))
@@ -110,7 +113,7 @@
                     (list "/r/path/libsqlite3.so.0" 'guix-home "3.99.0-r" 3099000 "x"))))
        accessors))
 
-(test-equal "no accessor prints the secret it refused, by write, display or display-condition"
+(test-equal "no accessor prints the secret it refused, in the text display-condition gives"
   (map (lambda (a) 'absent) accessors)
   (map (lambda (a)
          (let ((text (guard (e (#t (describe e)))
@@ -124,7 +127,7 @@
 ;; Chez's own check of a record accessor named what it refused. This row
 ;; guards the opposite: that the refusal is ours, from the accessor.
 (test-equal "an accessor of another record type's value refuses it too"
-  (map (lambda (a) (list 'assertion-violation (car a) "not a libsqlite3-info" '((kind other))))
+  (map (lambda (a) (list 'assertion-violation (car a) '((kind other))))
        accessors)
   (map (lambda (a) (raised (lambda () ((cdr a) (make-eq-hashtable))))) accessors))
 

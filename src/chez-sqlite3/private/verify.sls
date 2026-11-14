@@ -29,20 +29,25 @@
 
   ;; natural? : Any -> Boolean
   (define (natural? x)
-    (and (integer? x) (exact? x) (>= x 0)))
+    (and (exact-integer? x) (>= x 0)))
 
   ;; exact-integer? : Any -> Boolean
   (define (exact-integer? x)
     (and (number? x) (exact? x) (integer? x)))
 
-  ;; check-version : String Natural String Symbol Libsqlite3-Info -> #t
-  ;; #t when VERSION-NUM is at least the floor. Otherwise raises
-  ;; &sqlite-library-unavailable, reason below-floor, carrying PATH, SOURCE,
-  ;; VERSION-STRING as its detail, and LIBRARY. A VERSION-NUM that is no
-  ;; natural is an assertion violation.
+  ;; check-version : String Integer String Symbol Libsqlite3-Info -> #t
+  ;; #t when VERSION-NUM is at least the floor. Otherwise, any integer below
+  ;; it, a negative one too, since sqlite3_libversion_number returns a C int,
+  ;; raises &sqlite-library-unavailable, reason below-floor, carrying PATH,
+  ;; SOURCE, VERSION-STRING as its detail, and LIBRARY. A VERSION-NUM that is
+  ;; no exact integer, or a VERSION-STRING that is no string, is an assertion
+  ;; violation.
   (define (check-version version-string version-num path source library)
-    (unless (natural? version-num)
-      (assertion-violation 'check-version "the version number is not a natural"
+    (unless (string? version-string)
+      (assertion-violation 'check-version "the version string is not a string"
+                           (shown-value version-string)))
+    (unless (exact-integer? version-num)
+      (assertion-violation 'check-version "the version number is not an exact integer"
                            (shown-value version-num)))
     (cond
       ((< version-num sqlite-floor)
@@ -79,7 +84,4 @@
 
   ;; refuse : Symbol String Symbol Libsqlite3-Info Any String -> Nothing
   (define (refuse reason path source library detail message)
-    (raise (condition (make-sqlite-library-unavailable reason path source detail '() library)
-                      (make-who-condition 'chez-sqlite3)
-                      (make-message-condition message)
-                      (make-irritants-condition (list path))))))
+    (raise-library-unavailable reason path source detail '() library message (list path))))

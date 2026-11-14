@@ -94,6 +94,17 @@
                (made-serious made))))
        (list (make-warning) (make-message-condition "not serious"))))
 
+(test-equal "as-serious gives a non-serious condition that has its own who the who chez-sqlite3, whatever it held, and carries it"
+  '((chez-sqlite3 carried) (chez-sqlite3 carried))
+  (map (lambda (c)
+         (let ((made (as-serious c)))
+           (list (and (who-condition? made) (condition-who made))
+                 (if (and (irritants-condition? made) (equal? (condition-irritants made) (list c)))
+                     'carried
+                     'not-carried))))
+       (list (condition (make-warning) (make-who-condition 'someone-else))
+             (make-who-condition 'someone-else))))
+
 ;; --- recording -------------------------------------------------------------------
 
 ;; first : Any
@@ -108,18 +119,27 @@
   'recorded-what-was-raised
   (if (eq? (load-failure) first) 'recorded-what-was-raised (recorded)))
 
-(test-equal "a later load-step raises its own serious condition, unchanged, and the first stays recorded"
-  '(raised-itself first-kept)
-  (let* ((later (make-error))
-         (raised (caught (lambda () (load-step (raise later))))))
-    (list (if (eq? raised later) 'raised-itself 'raised-something-else)
-          (if (eq? (load-failure) first) 'first-kept 'replaced))))
+;; later-failures : -> (Listof Condition)
+;; Later failures, a plain error and a refusal among them: neither replaces
+;; the first. A fresh one is made for each row.
+(define (later-failures)
+  (list (make-error) (make-sqlite-library-unavailable 'not-found #f #f #f '() #f)))
 
-(test-equal "record-load-failure! keeps the first failure, and raises nothing"
-  '(no-raise first-kept)
-  (let* ((result (caught (lambda () (record-load-failure! (make-error)))))
-         (kept (if (eq? (load-failure) first) 'first-kept 'replaced)))
-    (list (if (eq? result 'no-raise) 'no-raise result) kept)))
+(test-equal "a later load-step raises its own serious condition, unchanged, and the first stays recorded, whether the later one is a plain error or a refusal"
+  '((raised-itself first-kept) (raised-itself first-kept))
+  (map (lambda (later)
+         (let ((raised (caught (lambda () (load-step (raise later))))))
+           (list (if (eq? raised later) 'raised-itself 'raised-something-else)
+                 (if (eq? (load-failure) first) 'first-kept 'replaced))))
+       (later-failures)))
+
+(test-equal "record-load-failure! keeps the first failure, and raises nothing, for a later plain error and a later refusal"
+  '((no-raise first-kept) (no-raise first-kept))
+  (map (lambda (later)
+         (let* ((result (caught (lambda () (record-load-failure! later))))
+                (kept (if (eq? (load-failure) first) 'first-kept 'replaced)))
+           (list (if (eq? result 'no-raise) 'no-raise result) kept)))
+       (later-failures)))
 
 (test-equal "record-load-failure! refuses a condition that is not serious"
   'refused
@@ -128,6 +148,17 @@
              (eq? (condition-who raised) 'record-load-failure!))
         'refused
         (if (condition? raised) (describe raised) raised))))
+
+;; A handler that returns must not make load-step return: a failure is raised,
+;; never continued. With raise-continuable, load-step would answer the
+;; handler's value, and the load would go on as if it had succeeded.
+(test-equal "load-step raises its failure, not continuably: a handler that returns gets nothing back, and the raise goes on to the next handler"
+  'raised-on
+  (guard (e (#t 'raised-on))
+    (with-exception-handler
+     (lambda (c) 'handled)
+     (lambda () (load-step (raise 'boom-continued))))
+    'returned-normally))
 
 ;; --- a library body that raises -----------------------------------------------------
 ;; Chez runs a library body that raised a serious condition again at the

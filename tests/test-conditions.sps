@@ -47,13 +47,13 @@
         (newline)))))
 
 ;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
-;; for any other raise, or (no-raise VALUE).
+;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT) for
+;; any other raise, or (no-raise VALUE). The message is a condition's type,
+;; not its text: its wording is no contract (ADR-0013, decision 9).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
             (#t (list 'other (describe e))))
     (list 'no-raise (thunk))))
 
@@ -68,10 +68,14 @@
 (define (kinds c)
   (list (error? c) (chez-sqlite3-error? c) (sqlite-library-unavailable? c)))
 
-;; A report whose every field differs from the refusal's fields below.
+;; A report whose every field differs from the refusal's fields below. Built
+;; under a guard: a raise at top level would end the suite with no test named,
+;; so a constructor that raises leaves a symbol, and the row after this
+;; definition names it.
 (define a-report
-  (make-libsqlite3-info "/opt/sqlite/lib/libsqlite3.so.0.8.6" 'guix-profile "3.37.2" 3037002
-                        "2022-01-06 13:25:41 report-source-id"))
+  (guard (e (#t 'report-constructor-raised))
+    (make-libsqlite3-info "/opt/sqlite/lib/libsqlite3.so.0.8.6" 'guix-profile "3.37.2" 3037002
+                          "2022-01-06 13:25:41 report-source-id")))
 
 ;; A refusal whose every field differs from every other field.
 (define (a-library-unavailable)
@@ -87,6 +91,10 @@
 (define secret "Pr0xyS3cr3t")
 
 (test-begin "conditions")
+
+(test-equal "the report fixture is a libsqlite3-info"
+  #t
+  (libsqlite3-info? a-report))
 
 ;; --- &chez-sqlite3-error ---------------------------------------------------
 
@@ -172,26 +180,133 @@
                                          "sqlite3_open_v2" '() a-report))))
 
 (test-equal "the constructor refuses a symbol that is not a reason"
-  '(assertion-violation make-sqlite-library-unavailable
-    "not a reason chez-sqlite3 refuses a libsqlite3 for" (library-missing))
+  '(assertion-violation make-sqlite-library-unavailable (library-missing))
   (raised (lambda ()
             (make-sqlite-library-unavailable 'library-missing #f #f #f '() #f))))
 
 (test-equal "the constructor refuses chez-curl's no-ssl, #f, a number, () and a reason spelled as a string"
-  (map (lambda (r)
-         (list 'assertion-violation 'make-sqlite-library-unavailable
-               "not a reason chez-sqlite3 refuses a libsqlite3 for" (list r)))
-       (list 'no-ssl #f 5 '() "not-found"))
+  '((assertion-violation make-sqlite-library-unavailable (no-ssl))
+    (assertion-violation make-sqlite-library-unavailable (#f))
+    (assertion-violation make-sqlite-library-unavailable (5))
+    (assertion-violation make-sqlite-library-unavailable (()))
+    (assertion-violation make-sqlite-library-unavailable ((kind string))))
   (map (lambda (r)
          (raised (lambda () (make-sqlite-library-unavailable r #f #f #f '() #f))))
        (list 'no-ssl #f 5 '() "not-found")))
 
-(test-equal "the constructor refuses a library that is neither a libsqlite3-info nor #f"
-  '(assertion-violation make-sqlite-library-unavailable
-    "a refusal's library is a libsqlite3-info or #f" ("3.45.1"))
-  (raised (lambda ()
-            (make-sqlite-library-unavailable 'below-floor "/usr/lib/libsqlite3.so.0" 'system
-                                             "3.37.2" '() "3.45.1"))))
+;; The allowlist against its whole complement, for each of the six: the
+;; symbol upper-cased, with a suffix, and missing its last character; the
+;; string; and a char, a vector and a condition besides. A reason matched
+;; case-insensitively, by prefix, or as text takes one of these.
+(define near-reasons
+  '(INVALID-OVERRIDE NOT-FOUND LOAD-FAILED BELOW-FLOOR NOT-THREADSAFE MISSING-API
+    invalid-override-x not-found-x load-failed-x below-floor-x not-threadsafe-x missing-api-x
+    invalid-overrid not-foun load-faile below-floo not-threadsaf missing-ap))
+
+(test-equal "the constructor refuses each reason upper-cased, with a suffix, or missing its last character"
+  (map (lambda (r) (list 'assertion-violation 'make-sqlite-library-unavailable (list r)))
+       near-reasons)
+  (map (lambda (r)
+         (raised (lambda () (make-sqlite-library-unavailable r #f #f #f '() #f))))
+       near-reasons))
+
+(test-equal "the constructor refuses each of the six reasons spelled as a string, naming it by its kind"
+  (map (lambda (r)
+         '(assertion-violation make-sqlite-library-unavailable ((kind string))))
+       '(1 2 3 4 5 6))
+  (map (lambda (r)
+         (raised (lambda () (make-sqlite-library-unavailable r #f #f #f '() #f))))
+       '("invalid-override" "not-found" "load-failed" "below-floor" "not-threadsafe"
+         "missing-api")))
+
+(test-equal "the constructor refuses a char, a vector and a condition as a reason"
+  '((assertion-violation make-sqlite-library-unavailable (#\n))
+    (assertion-violation make-sqlite-library-unavailable ((kind vector)))
+    (assertion-violation make-sqlite-library-unavailable ((kind other))))
+  (map (lambda (r)
+         (raised (lambda () (make-sqlite-library-unavailable r #f #f #f '() #f))))
+       (list #\n (vector 'not-found) (make-error))))
+
+(test-equal "the constructor refuses a library that is neither a libsqlite3-info nor #f, a string among them, naming it by its kind"
+  '((assertion-violation make-sqlite-library-unavailable ((kind string))))
+  (list (raised (lambda ()
+                  (make-sqlite-library-unavailable 'below-floor "/usr/lib/libsqlite3.so.0"
+                                                   'system "3.37.2" '() "3.45.1")))))
+
+(test-equal "the constructor refuses #t, a symbol, a list and a condition as a library"
+  '((assertion-violation make-sqlite-library-unavailable (#t))
+    (assertion-violation make-sqlite-library-unavailable (libsqlite3-info))
+    (assertion-violation make-sqlite-library-unavailable ((a b)))
+    (assertion-violation make-sqlite-library-unavailable ((kind other))))
+  (map (lambda (library)
+         (raised (lambda () (make-sqlite-library-unavailable 'not-found #f #f #f '() library))))
+       (list #t 'libsqlite3-info '(a b) (make-error))))
+
+;; --- raise-library-unavailable -----------------------------------------------------
+
+;; refused : (-> Any) -> Any
+;; What THUNK raised, as the whole condition: its type, who, message
+;; (whether there is one, never its text), irritants and six fields; or
+;; (other-raise ...) or (no-raise) when it raised something else or nothing.
+(define (refused thunk)
+  (guard (e ((sqlite-library-unavailable? e)
+             (list 'refused
+                   (kinds e)
+                   (serious-condition? e)
+                   (and (who-condition? e) (condition-who e))
+                   (message-condition? e)
+                   (and (irritants-condition? e) (condition-irritants e))
+                   (sqlite-library-unavailable-reason e)
+                   (sqlite-library-unavailable-path e)
+                   (sqlite-library-unavailable-source e)
+                   (sqlite-library-unavailable-detail e)
+                   (sqlite-library-unavailable-candidates e)
+                   (let ((library (sqlite-library-unavailable-library e)))
+                     (if (eq? library a-report) 'the-report library))))
+            ((and (assertion-violation? e) (who-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other-raise (describe e))))
+    (thunk)
+    'no-raise))
+
+(test-equal "raise-library-unavailable raises the whole condition: the types, who chez-sqlite3, a message, the irritants as given and the six fields, with the report"
+  '(refused (#t #t #t) #t chez-sqlite3 #t ("/p" lib 3)
+    below-floor "/opt/p/libsqlite3.so.0" guix-system "3.1.0" ("/c1" "/c2") the-report)
+  (refused (lambda ()
+             (raise-library-unavailable 'below-floor "/opt/p/libsqlite3.so.0" 'guix-system "3.1.0"
+                                        '("/c1" "/c2") a-report "any message" '("/p" lib 3)))))
+
+(test-equal "raise-library-unavailable with no path, source or report, and no irritants"
+  '(refused (#t #t #t) #t chez-sqlite3 #t ()
+    not-found #f #f #f ("/a") #f)
+  (refused (lambda ()
+             (raise-library-unavailable 'not-found #f #f #f '("/a") #f "another message" '()))))
+
+;; A handler that returns must not make the raise return: the load would go on
+;; as if the library were accepted.
+(test-equal "raise-library-unavailable never returns: a handler that returns gets nothing back, and the raise goes on to the next handler"
+  'raised-on
+  (guard (e (#t 'raised-on))
+    (with-exception-handler
+     (lambda (c) 'handled)
+     (lambda () (raise-library-unavailable 'not-found #f #f #f '() #f "m" '())))
+    'returned-normally))
+
+(test-equal "raise-library-unavailable takes each of the six reasons"
+  '(invalid-override not-found load-failed below-floor not-threadsafe missing-api)
+  (map (lambda (r)
+         (let ((c (refused (lambda ()
+                             (raise-library-unavailable r #f #f #f '() #f "m" '())))))
+           (if (and (pair? c) (eq? (car c) 'refused)) (list-ref c 6) c)))
+       '(invalid-override not-found load-failed below-floor not-threadsafe missing-api)))
+
+(test-equal "raise-library-unavailable refuses a reason or a library the constructor refuses, with an assertion violation from the constructor"
+  '((assertion-violation make-sqlite-library-unavailable (no-ssl))
+    (assertion-violation make-sqlite-library-unavailable ((kind string))))
+  (list (refused (lambda ()
+                   (raise-library-unavailable 'no-ssl #f #f #f '() #f "m" '())))
+        (refused (lambda ()
+                   (raise-library-unavailable 'not-found #f #f #f '() "3.45.1" "m" '())))))
 
 ;; The six accessors, each refusing what is not a refusal by its kind.
 (define lib-accessors
@@ -204,47 +319,56 @@
 
 ;; refusal : Symbol Any -> List
 (define (refusal who shown)
-  (list 'assertion-violation who "not a &sqlite-library-unavailable" (list shown)))
+  (list 'assertion-violation who (list shown)))
 
 (test-equal "every accessor refuses a string by its kind, naming the accessor, not the string"
   (map (lambda (a) (refusal (car a) '(kind string))) lib-accessors)
   (map (lambda (a) (raised (lambda () ((cdr a) secret)))) lib-accessors))
 
-(test-equal "every accessor refuses a plain error, the root alone, a message, #f and a number"
+(test-equal "every accessor refuses a plain error, the root alone, a message, #f, a number, a list holding a string and a vector holding one"
   (map (lambda (a)
          (list (refusal (car a) '(kind other))
                (refusal (car a) '(kind other))
                (refusal (car a) '(kind other))
                (refusal (car a) #f)
-               (refusal (car a) 5)))
+               (refusal (car a) 5)
+               (refusal (car a) '(kind list))
+               (refusal (car a) '(kind vector))))
        lib-accessors)
   (map (lambda (a)
          (map (lambda (v) (raised (lambda () ((cdr a) v))))
-              (list (make-error) (make-chez-sqlite3-error) (make-message-condition secret) #f 5)))
+              (list (make-error) (make-chez-sqlite3-error) (make-message-condition secret) #f 5
+                    (list "u" secret) (vector secret))))
        lib-accessors))
 
-(test-equal "no accessor prints the secret it refused"
-  (map (lambda (a) 'absent) lib-accessors)
+(test-equal "no accessor prints the secret it refused, bare, in a list or in a vector"
+  (map (lambda (a) '(absent absent absent)) lib-accessors)
   (map (lambda (a)
-         (let ((text (guard (e (#t (describe e)))
-                       ((cdr a) secret)
-                       'no-raise)))
-           (cond ((eq? text 'no-raise) 'no-raise)
-                 ((contains? text secret) 'printed)
-                 (else 'absent))))
+         (map (lambda (v)
+                (let ((text (guard (e (#t (describe e)))
+                              ((cdr a) v)
+                              'no-raise)))
+                  (cond ((eq? text 'no-raise) 'no-raise)
+                        ((contains? text secret) 'printed)
+                        (else 'absent))))
+              (list secret (list "u" secret) (vector secret))))
        lib-accessors))
 
 ;; --- checked-accessor --------------------------------------------------------
 
-(test-equal "checked-accessor answers the accessor's value for what the predicate holds, and refuses the rest, from WHO, naming it by shown-value"
+(test-equal "checked-accessor answers the accessor's value for what the predicate holds, and refuses the rest, from WHO, naming it by shown-value, a pair or a vector holding a string by its kind"
   '((no-raise 11)
-    (assertion-violation my-who "not a thing" ((kind string)))
-    (assertion-violation my-who "not a thing" (7)))
+    (assertion-violation my-who ((kind string)))
+    (assertion-violation my-who (7))
+    (assertion-violation my-who ((kind list)))
+    (assertion-violation my-who ((kind vector))))
   (let ((get (checked-accessor 'my-who (lambda (x) (and (pair? x) (number? (car x)))) "a thing"
                                (lambda (x) (+ 1 (car x))))))
     (list (raised (lambda () (get '(10))))
           (raised (lambda () (get secret)))
-          (raised (lambda () (get 7))))))
+          (raised (lambda () (get 7)))
+          (raised (lambda () (get (list "u" secret))))
+          (raised (lambda () (get (vector secret)))))))
 
 ;; --- a caller's value, as a refusal names it ---------------------------------
 
@@ -271,9 +395,23 @@
 ;; this library imports it, so it carries a copy of the rule. The copy is
 ;; read through an accessor's refusal.
 (test-equal "libsqlite3-info's own copy of the rule agrees with shown-value on every kind"
-  (map (lambda (v) (list 'assertion-violation 'libsqlite3-info-path "not a libsqlite3-info"
-                         (list (shown-value v))))
-       shown-values)
+  ;; Written out, not computed with shown-value: a shown-value that raised
+  ;; would end the suite with no test named.
+  '((assertion-violation libsqlite3-info-path (x))
+    (assertion-violation libsqlite3-info-path (5))
+    (assertion-violation libsqlite3-info-path (#f))
+    (assertion-violation libsqlite3-info-path (#\a))
+    (assertion-violation libsqlite3-info-path (()))
+    (assertion-violation libsqlite3-info-path ((429 503)))
+    (assertion-violation libsqlite3-info-path ((get post)))
+    (assertion-violation libsqlite3-info-path ((kind string)))
+    (assertion-violation libsqlite3-info-path ((kind list)))
+    (assertion-violation libsqlite3-info-path ((kind list)))
+    (assertion-violation libsqlite3-info-path ((kind list)))
+    (assertion-violation libsqlite3-info-path ((kind bytevector)))
+    (assertion-violation libsqlite3-info-path ((kind vector)))
+    (assertion-violation libsqlite3-info-path ((kind procedure)))
+    (assertion-violation libsqlite3-info-path ((kind other))))
   (map (lambda (v) (raised (lambda () (libsqlite3-info-path v)))) shown-values))
 
 (test-end "conditions")
