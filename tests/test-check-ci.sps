@@ -428,7 +428,7 @@
   '("MAKEFLAGS" "MFLAGS" "GNUMAKEFLAGS" "VALGRIND" "VALGRIND_OPTS" "VALGRIND_LIB"
     "MEMORY_SUITES" "MEMORY_TIMEOUT" "TEST_TIMEOUT" "LIBDIRS" "TIMEOUT" "SUITES"
     "CHEZ_SQLITE3_LIBRARY" "CHEZ_SQLITE3_DECOY" "CHEZ_SQLITE3_GATE_CHILD"
-    "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD"))
+    "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD" "CHECK_CI_ROOT"))
 
 (define make-words
   '("check-help" "check-suites" "check-pins" "check-floors" "check-ci" "test"
@@ -1556,6 +1556,115 @@
                     (string-append "check-ci: " empty "/ci.yml: is not a regular file: a link, a directory or nothing there\n"
                                    "check-ci: FAILED (problems: 1)\n"))
               (run-bare (list empty))))
+
+;; --- the execute bits ------------------------------------------------------------------
+;;
+;; CI runs a script by its path, so a lost execute bit, or a script that is not
+;; there, fails the step on a runner and nowhere else. Each row copies the real
+;; scripts/ci into a root of its own, outside the copy of ci.yml (which must be
+;; alone in its directory), changes one script there, and points check-ci at
+;; the root with CHECK_CI_ROOT. The real tree is never touched.
+
+;; The steps that run a script by its path, in the file's order: each (script
+;; job step-header run-line). Written by hand, one for each such step.
+(define script-steps
+  (list
+   (list "check-action-pins.sh" "main" "      - name: Every action is pinned to a commit"
+         "        run: scripts/ci/check-action-pins.sh .github/workflows")
+   (list "build-chez.sh" "main" "      - name: Build Chez"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "check-chez.sh" "main" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "report-sqlite.sh" "main" "      - name: Report the runner's SQLite"
+         "        run: scripts/ci/report-sqlite.sh")
+   (list "build-chez.sh" "memory" "      - name: Build Chez"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "check-chez.sh" "memory" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "build-chez.sh" "nothreads" "      - name: Build Chez without threads"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
+   (list "check-chez.sh" "nothreads" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
+   (list "build-chez.sh" "floor" "      - name: Build Chez"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "check-chez.sh" "floor" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "build-sqlite.sh" "floor" "      - name: Build SQLite at its floor"
+         "        run: scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-floor\"")
+   (list "check-sqlite.sh" "floor" "      - name: Check the SQLite this job runs"
+         "        run: scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-floor\"")
+   (list "build-chez.sh" "current" "      - name: Build Chez"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "check-chez.sh" "current" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "build-sqlite.sh" "current" "      - name: Build SQLite at the current release"
+         "        run: scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-current\" --current")
+   (list "check-sqlite.sh" "current" "      - name: Check the SQLite this job runs"
+         "        run: scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-current\" --current")))
+
+(define (noexec-msg name)
+  (string-append "runs scripts/ci/" name ", which is missing or not executable: "
+                 "a step runs it by its path, so it must be there and carry the execute bit"))
+
+;; script-problems : String -> (Listof (List Anchor String))
+(define (script-problems name)
+  (let loop ((ss script-steps) (acc '()))
+    (cond ((null? ss) (reverse acc))
+          ((string=? (car (car ss)) name)
+           (let ((s (car ss)))
+             (loop (cdr ss)
+                   (cons (list (list 'in (cadr s) (caddr s) (cadddr s)) (noexec-msg name)) acc))))
+          (else (loop (cdr ss) acc)))))
+
+(define script-names
+  '("check-action-pins.sh" "build-chez.sh" "check-chez.sh" "report-sqlite.sh"
+    "build-sqlite.sh" "check-sqlite.sh"))
+
+(define (must-run argv)
+  (let ((r (capture-command argv)))
+    (unless (and (eqv? (car r) 0))
+      (error 'must-run "a setup command failed" argv r))))
+
+;; script-row : String (Procedure String -> Void) (Listof Problem) -> Void
+;; Copies the scripts, runs ACTION on the copy's root, and checks the script's
+;; answer on the real workflow.
+(define (script-row name action problems)
+  (set! counter (+ counter 1))
+  (let* ((dir (string-append base "/r" (number->string counter)))
+         (root (string-append base "/root" (number->string counter)))
+         (result
+          (guard (c (#t (list (list 'raised (string-append name ": " (describe c))) '(not run))))
+            (mkdir dir)
+            (mkdir root)
+            (mkdir (string-append root "/scripts"))
+            (must-run (list "cp" "-R" "scripts/ci" (string-append root "/scripts/ci")))
+            (action (string-append root "/scripts/ci"))
+            (write-text (string-append dir "/ci.yml") real)
+            (list (expected dir real problems)
+                  (capture-command (list "env" (string-append "CHECK_CI_ROOT=" root)
+                                         "sh" script dir))))))
+    (test-equal name (car result) (cadr result))))
+
+(script-row "the real scripts, each executable: the workflow passes" (lambda (d) #f) '())
+
+(for-each
+ (lambda (name)
+   (script-row (string-append name " without its execute bit: every step that runs it is named")
+               (lambda (d) (must-run (list "chmod" "a-x" (string-append d "/" name))))
+               (script-problems name)))
+ script-names)
+
+(for-each
+ (lambda (name)
+   (script-row (string-append name " missing: every step that runs it is named")
+               (lambda (d) (must-run (list "rm" (string-append d "/" name))))
+               (script-problems name)))
+ '("build-chez.sh" "report-sqlite.sh"))
+
+;; floor.sh is run with sh by the other scripts, never by its path.
+(script-row "floor.sh without its execute bit: the workflow passes"
+            (lambda (d) (must-run (list "chmod" "a-x" (string-append d "/floor.sh"))))
+            '())
 
 (test-end "check-ci")
 

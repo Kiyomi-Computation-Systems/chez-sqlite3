@@ -21,8 +21,8 @@
 ;;; It does not import (chez-sqlite3 private native): Chez would run native's
 ;;; body, which is the load, before this program's guard could catch a
 ;;; refusal (AGENTS.md). It evaluates (loaded-libsqlite3) in native's
-;;; environment inside the guard instead. Until M1 slice 4 there is no public
-;;; library to load through.
+;;; environment inside the guard instead. The public (chez-sqlite3) loads
+;;; the same way, so a program cannot guard its import either.
 (import (rnrs)
         (only (chezscheme) eval environment)
         (chez-sqlite3 private conditions)

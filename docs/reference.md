@@ -358,8 +358,16 @@ Where that path came from, or `#f` when there is none.
 sqlite-library-unavailable-detail : SqliteLibraryUnavailable -> Any
 ```
 
-More about the reason: the bad override, the loader's message, the version
-found, or the name of the missing function. It is `#f` for `not-found`.
+More about the reason, by reason:
+
+- `invalid-override`: the bad value of `CHEZ_SQLITE3_LIBRARY`.
+- `load-failed`: the loader's message. Or, when SQLite loaded but misbehaved,
+  the name of the function that answered NULL, or the code
+  `sqlite3_initialize` answered instead of OK.
+- `below-floor`: the version found.
+- `not-threadsafe`: `0`, what `sqlite3_threadsafe` answered.
+- `missing-api`: the name of the missing function.
+- `not-found`: `#f`.
 
 ### `sqlite-library-unavailable-candidates`
 
