@@ -25,8 +25,8 @@ src:tests:build/scheme-libs --program …`. Then it runs each suite in `tests/` 
   out-parameter block is freed.
 - **forget, hold, wrap:** one `:memory:` database, never closed. Its handle is kept as an
   integer and dropped (forget), as an integer in a top-level variable that is live at exit
-  (hold), or in an ftype pointer that is dropped (wrap). Each runs a full collection before it
-  exits.
+  (hold), or wrapped in an ftype pointer that is then dropped (wrap). Each runs a full collection
+  before it exits.
 
 ## Output
 
@@ -36,12 +36,18 @@ chez: /gnu/store/5v2iykmw4z9r6wvq5kqbh2yx1zz1ncan-profile/bin/scheme -> /gnu/sto
 lib: /gnu/store/5v2iykmw4z9r6wvq5kqbh2yx1zz1ncan-profile/lib/libsqlite3.so.0 -> /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
 ```
 
-| Case | Plain run | Under the gate | Definitely lost | Indirectly lost | Still reachable |
-|---|---|---|---|---|---|
-| plain | exit 0, every code as expected | exit 0, 3 s | 0 | 0 | 1,752 bytes in 5 blocks |
-| forget | exit 0 | exit 9, 3 s | 840 bytes in 1 block | 75,168 bytes in 122 blocks | 1,752 bytes in 5 blocks |
-| hold | exit 0 | exit 9, 3 s | 840 bytes in 1 block | 75,168 bytes in 122 blocks | 1,752 bytes in 5 blocks |
-| wrap | exit 0 | exit 0, 3 s | 0 | 0 | 64,904 bytes in 125 blocks |
+| Case | Plain run | Under the gate | Definitely lost | Indirectly lost | Possibly lost | Still reachable |
+|---|---|---|---|---|---|---|
+| plain | exit 0, every code as expected | exit 0, 3 s | 0 | 0 | 0 | 1,752 bytes in 5 blocks |
+| forget | exit 0 | exit 9, 3 s | 840 bytes in 1 block | 75,168 bytes in 122 blocks | 0 | 1,752 bytes in 5 blocks |
+| hold | exit 0 | exit 9, 3 to 4 s | 840 bytes in 1 block | 75,168 bytes in 122 blocks | 0 | 1,752 bytes in 5 blocks |
+| wrap | exit 0 | exit 0, 3 s | 0 | 0 | 12,856 bytes in 3 blocks | 64,904 bytes in 125 blocks |
+
+The first run's table had no possibly-lost column: `measure.sh` matched Valgrind's summary lines
+by their padding, and the possibly-lost line is padded differently. M0 slice 3's review found
+it; the pattern now matches the words, and the tables here are from the rerun. In wrap, the
+three possibly-lost blocks, of 4,104, 4,376 and 4,376 bytes, were allocated by libsqlite3 under
+`sqlite3_step` (`--show-leak-kinds=possible`; the library's other frames have no symbols).
 
 Every run, under the gate:
 
@@ -53,13 +59,17 @@ first syms: /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/c
 
 The suites, under the gate:
 
-| Suite | Passes | Exit | Time | Definitely lost |
-|---|---|---|---|---|
-| `test-check-floors` | 164 | 0 | 8 s | 0 |
-| `test-chez-sqlite3-testing` | 60 | 0 | 11 s | 0 |
-| `test-counters` | 14 | 0 | 7 s | 0 |
-| `test-manifest` | 79 | 0 | 7 s | 0 |
-| `test-require-threaded` | 50 | 0 | 8 s | 0 |
+| Suite | Passes | Exit | Time, two runs | Definitely lost | Possibly lost |
+|---|---|---|---|---|---|
+| `test-check-floors` | 164 | 0 | 8 s | 0 | 0 |
+| `test-chez-sqlite3-testing` | 60 | 0 | 11 and 12 s | 0 | 0 |
+| `test-counters` | 14 | 0 | 7 and 8 s | 0 | 2,304 bytes in 8 blocks |
+| `test-manifest` | 79 | 0 | 6 and 7 s | 0 | 0 |
+| `test-require-threaded` | 50 | 0 | 8 s | 0 | 0 |
+
+`test-counters`'s eight possibly-lost blocks are glibc's thread-local storage, allocated in
+`pthread_create`: one block, 288 bytes, for a thread the suite forks (`S_fork_thread`), and seven,
+2,016 bytes, for the threads Chez's parallel collector starts (`S_gc_par_entry`).
 
 ## What it settles
 
@@ -73,7 +83,9 @@ The suites, under the gate:
   an integer is definitely lost, even while a live variable holds it: a fixnum holds an address
   shifted, so Valgrind finds no pointer to the block. In an ftype pointer, the same handle is
   still reachable and the run passes. chez-curl measured the same for a foreign block in an
-  ftype pointer (chez-curl ADR-0014, amended 2026-10-16). So whether the gate's Valgrind half
-  sees a connection left open depends on how M1 holds handles; the counters see it either way.
+  ftype pointer (chez-curl ADR-0014, amended 2026-10-16). What the dropped ftype pointer leaves
+  is still reachable or possibly lost, and the gate counts neither. So whether the gate's Valgrind
+  half sees a connection left open depends on how M1 holds handles; the counters see it either
+  way.
 - **The gate is fast enough for every run.** The five suites take 7 to 11 s each under it, about
   43 s through `make test-memory`.

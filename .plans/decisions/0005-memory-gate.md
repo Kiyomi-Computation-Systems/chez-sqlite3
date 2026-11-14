@@ -1,8 +1,8 @@
 # ADR-0005: The memory gate is Valgrind on Linux, our counters, and SQLite's own checks
 
 - **Status:** Accepted (the maintainer, 2026-11-13). The two SQLite checks are built in M1.
-  Amended 2026-11-13: what M0 slice 3 measured
-  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured)).
+  Amended 2026-11-13: what M0 slice 3 measured and built
+  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -75,10 +75,10 @@
 - **A test that raises a count on purpose lowers it again,** under `dynamic-wind`.
 - **The `memory` job will get slow.** It is split into shards when it does, as chez-curl's was.
 
-## Amendment, 2026-11-13: what M0 slice 3 measured
+## Amendment, 2026-11-13: what M0 slice 3 measured and built
 
 Measured in the pinned container before the gate was built
-([research/memory-gate/](../research/memory-gate/)).
+([research/memory-gate/](../research/memory-gate/)), then built and reviewed.
 
 - **Decision 2's "no suppressions" holds with nothing to add.** Loading libsqlite3, a WAL file
   database, `:memory:`, and an open that fails and is closed lose nothing under the gate's
@@ -88,9 +88,35 @@ Measured in the pinned container before the gate was built
 - **The context's "a handle Scheme forgot is still reachable" holds only for some shapes.** A
   `:memory:` connection never closed, its handle kept as an integer, is definitely lost to
   Valgrind (840 bytes, and 75,168 indirectly), even while a live variable holds the integer: a
-  fixnum holds an address shifted, so Valgrind finds no pointer to it. Kept in an ftype pointer,
-  the same handle is still reachable, and the run passes. So Valgrind sees a connection left open
-  only if M1 holds handles as integers. Decision 4's counters see it either way, and remain the
-  gate for what Scheme forgets.
+  fixnum holds an address shifted, so Valgrind finds no pointer to it. Wrapped in an ftype
+  pointer that is then dropped, what the handle holds is still reachable or possibly lost, which
+  the gate counts neither of, and the run passes. So Valgrind sees a connection left open only if
+  M1 holds handles as integers. Decision 4's counters see it either way, and remain the gate for
+  what Scheme forgets.
 - **`MEMORY_TIMEOUT` must be a positive whole number,** as `TEST_TIMEOUT` must: GNU `timeout`
   reads 0 as no limit.
+- **Built:** `make test-memory`, the two plants, and `make check-memory-gate`, with chez-curl's
+  cases a, b and e to m, and four of its own:
+  - **g timeout:** a `MEMORY_TIMEOUT` of 0, of nothing, or not a number is refused.
+  - **g all:** with no `MEMORY_SUITES`, every suite runs, in order. chez-curl's n held this
+    beside its shards; the review found it dropped with them.
+  - **g environment:** a `MEMORY_SUITES` from the environment is refused, since one left
+    exported would narrow every run unseen. It is given on make's command line.
+  - **o:** a tripwire. It fails while `.github/workflows` exists, until M0 slice 4 writes the case
+    that holds CI's memory job to decisions 3 and 6.
+
+  Every case runs in a private copy of the tree, so two runs, or one beside `make test-memory`,
+  share nothing.
+- **Not covered,** as in chez-curl's gate:
+  - **A child process a suite starts runs outside Valgrind,** which follows none. Decision 4 has
+    children that reach native code from M1; each must run under the gate itself, with its own
+    log, or the gate must follow children and read every process's log (harness plan, section 4).
+  - **The gate trusts the programs `VALGRIND`, `TIMEOUT` and `CHEZ` name.** A compiled `CHEZ`
+    that runs Chez as a child passes the leak plant: the first program Valgrind read is the file
+    `CHEZ` names, as decision 2 requires, and Chez runs outside it.
+  - **The evidence holds against accident, not against a suite that means harm.** A suite can
+    write its own Valgrind log, at a path it can guess.
+  - **`make -i`,** on the command line or in `MAKEFLAGS`, ignores a failing recipe, this one's as
+    any other's.
+  - **Two runs in one tree** remove each other's logs and fail, naming the wrong reason. They fail
+    closed.

@@ -11,10 +11,10 @@
 #                   output, and goes on to the suite after it
 #   b  leak         the same for the leak plant, with its loss record
 #   b  fails        a program that Valgrind finds clean but that exits 1
-#                   is named FAIL with its exit, its FAIL line with its
-#                   expected and actual values, 18 lines before its end,
-#                   and its last lines, a FAIL among them, each line once,
-#                   and no line between them
+#                   is named FAIL with its exit, then its own lines, whole:
+#                   its FAIL line with its expected and actual values, 18
+#                   lines before its end, and its last 10 lines, a FAIL
+#                   among them, each line once, and no line between them
 #   e  command      the commands test-memory hands Valgrind, whole, read by
 #                   a stand-in for Valgrind: first the run that asks it for
 #                   its default.supp, then the suite's, with -v,
@@ -28,6 +28,12 @@
 #   g  timeout      test-memory refuses a MEMORY_TIMEOUT of 0, of nothing,
 #                   and of a non-number, each by its whole message, exit 2,
 #                   running no suite
+#   g  all          with no MEMORY_SUITES, test-memory runs every
+#                   tests/test-*.sps, in make's order, and nothing else,
+#                   read from its own run, a stand-in for Valgrind running
+#                   nothing (chez-curl's n all, without the shards)
+#   g  environment  test-memory refuses a MEMORY_SUITES from the
+#                   environment, by its whole message, running no suite
 #   h  options      test-memory refuses to run while any source of options
 #                   its command line does not show is present, each in a
 #                   case of its own, planted in the case's own copy:
@@ -70,11 +76,14 @@
 #                   program or a missing feature would (fails); one that
 #                   prints "ok", then exits 2 (ok-fails); and one that exits
 #                   0, printing nothing (silent)
+#   o  ci           a tripwire until M0 slice 4 writes this case: it fails
+#                   while .github/workflows exists, so a workflow cannot run
+#                   the gate, or skip it, unchecked
 #
-# chez-curl's c, d, n and o are not here: c and d held its one suppression
+# chez-curl's c, d and n are not here: c and d held its one suppression
 # file, which this gate has none of (it passes no suppression in any
-# environment), n held its two shards, and o held CI's workflow, which
-# comes with CI in a later slice.
+# environment), and n held its two shards, all but n all, which is g all
+# here. Its o, which holds CI's memory job, comes with CI in M0 slice 4.
 #
 # Every case runs in a private copy of the tree, made under mktemp -d: the
 # working tree without .git (nor any .git below vendor/), build/ and
@@ -614,17 +623,26 @@ want_status nonzero "$status"
 want_lines "test-memory: FAIL $fails (exit 1)
 test-memory: pass $after
 $(count_line 2 1 1 0)"
-want_in "$out" "  | fails: exits 1, with no memory defect" "test-memory's own output, the program's last lines"
-want_in "$out" "  | FAIL a planted check" "test-memory's own output, the suite's FAIL line, 18 lines before its end"
-want_in "$out" "  |   expected: (planted 1)" "test-memory's own output, the FAIL's expected value"
-want_in "$out" "  |   actual:   (planted 2)" "test-memory's own output, the FAIL's actual value"
-for f in "  | FAIL a planted check" "  | FAIL a late check"; do
-  n=$(grep -cxF -- "$f" "$out")
-  [ "$n" = 1 ] || problem "test-memory's own output shows \"$f\" $n times, not once"
-done
-if grep -qxF -- "  | fails: line 1" "$out"; then
-  problem "test-memory's own output shows \"fails: line 1\", a line neither after a FAIL nor in the suite's last 10"
-fi
+# The program's own lines, whole: the FAIL 18 lines before its end with its
+# two indented lines, then its last 10, which hold the late FAIL. Lines 4 to
+# 9, fails: line 1 to 6, are neither, and none may be shown.
+wanted="  | FAIL a planted check
+  |   expected: (planted 1)
+  |   actual:   (planted 2)
+  | fails: line 7
+  | fails: line 8
+  | fails: line 9
+  | fails: line 10
+  | fails: line 11
+  | fails: line 12
+  | FAIL a late check
+  |   expected: (late 1)
+  |   actual:   (late 2)
+  | fails: exits 1, with no memory defect"
+got=$(grep '^  | ' "$out")
+[ "$got" = "$wanted" ] || problem "test-memory's own output shows other lines of the program:
+$(printf '%s\n' "$wanted" | sed 's/^/  wanted: /')
+$(printf '%s\n' "$got" | sed 's/^/  got:    /')"
 want_in "$out" "ERROR SUMMARY: 0 errors from 0 contexts" "test-memory's own output, Valgrind's verdict"
 verdict "b fails: test-memory names a program that exits 1 FAIL, with its exit, its FAIL lines and its last lines, and runs the suite after it"
 
@@ -695,6 +713,37 @@ for value in 0 '' abc; do
   fi
 done
 verdict "g timeout: test-memory refuses a MEMORY_TIMEOUT of 0, of nothing and of a non-number, each by its whole message, exit 2, running no suite"
+
+# With no MEMORY_SUITES, every suite, in make's order: $(sort) is byte
+# order. The stand-in runs nothing, so each suite fails for want of a log;
+# the lines show which ran.
+newtree
+suites=$(printf '%s\n' tests/test-*.sps | LC_ALL=C sort)
+n=$(printf '%s\n' "$suites" | grep -c '')
+[ "$n" -gt 0 ] && [ -f "$(printf '%s\n' "$suites" | head -n 1)" ] ||
+  problem "the copy holds no tests/test-*.sps, so this case checks nothing"
+gate VALGRIND="$stub"
+status=$?
+want_status nonzero "$status"
+got=$(sed -n 's/^=== //p' "$out")
+[ "$got" = "$suites" ] || problem "test-memory ran other suites than every tests/test-*.sps, in order:
+$(printf '%s\n' "$suites" | sed 's/^/  wanted: /')
+$(printf '%s\n' "$got" | sed 's/^/  got:    /')"
+wanted=$(printf '%s\n' "$suites" | while IFS= read -r t; do zero_line "$t" "$(no_log "$t")"; done)
+want_lines "$wanted
+$(count_line "$n" 0 "$n" 0)"
+verdict "g all: with no MEMORY_SUITES, test-memory runs every tests/test-*.sps, in order, and nothing else"
+
+newtree
+rm -f "$stub.argv"
+( MEMORY_SUITES=$after; export MEMORY_SUITES; gate VALGRIND="$stub" )
+status=$?
+want_status nonzero "$status"
+want_lines "test-memory: MEMORY_SUITES is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)"
+if grep -q '^=== ' "$out" || [ -e "$stub.argv" ] || [ -e "$(log_of "$after")" ]; then
+  problem "with MEMORY_SUITES in the environment, a suite ran"
+fi
+verdict "g environment: test-memory refuses a MEMORY_SUITES from the environment, by its whole message, running no suite"
 
 # ---- h: options from outside the command line ----
 # Each source is planted in the case's own copy, never in the working tree,
@@ -929,6 +978,12 @@ $(count_line 1 0 1 0)"
     *)        verdict "m awk: an awk that exits 0, printing nothing, fails a clean program, naming the evidence check" ;;
   esac
 done
+
+# ---- o: CI's memory job, a tripwire until M0 slice 4 writes the case ----
+if [ -e "$root/.github/workflows" ] || [ -L "$root/.github/workflows" ]; then
+  problem ".github/workflows exists, but the case that holds its memory job is not written yet (M0 slice 4)"
+fi
+verdict "o ci: no workflow exists until M0 slice 4 writes the case that holds its memory job" plain
 
 if [ "$fail" -eq 0 ]; then
   printf 'check-memory-gate: the memory gate failed, as it must, and its refusals held, in all %d cases\n' "$pass"

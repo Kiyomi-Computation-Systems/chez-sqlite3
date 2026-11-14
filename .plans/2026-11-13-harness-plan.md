@@ -4,7 +4,8 @@ Date: 2026-11-13
 Status: approved 2026-11-13. Amended in M0 slice 2: each test helper comes with its first
 consumer, a threaded Chez is required (brief D1), and the floors' CI rules wait for CI.
 Amended in M0 slice 3: the gate needs no suppression, so sabotage group c has nothing to hold,
-and group o comes with CI in slice 4.
+and group o comes with CI in slice 4; the review added g all, g environment and o's tripwire,
+and M1 owns the children Valgrind doesn't follow.
 Source: chez-curl at `79c6ced` (`main`), surveyed read-only. Every path below is chez-curl's
 unless it says otherwise.
 Brief: [the project brief](2026-11-13-chez-sqlite3-project-brief.md). The maintainer settled
@@ -80,6 +81,7 @@ The four parts each see something the others miss:
 | `make build` (preflight), `make dev`, `check-dev`, the refusal probe | M1 | They print what loaded. |
 | `(chez-sqlite3 private load-state)` and its suite, copied whole | M1 | It is library code. The inventory calls it generic. |
 | A leaks plant that leaks through the first real constructor, replacing slice 2's raised count | M1 | No library makes a native object before then (ADR-0007's amendment). |
+| Every child process that reaches native code runs under the gate's Valgrind, with its own log, or the gate follows children (`--trace-children=yes`, a log per process) and reads every log | M1 | Valgrind follows no child, and the refusal probes, children that load libsqlite3, are M1's (ADR-0005, amended). |
 | `check-seam`: only the FFI library may import `foreign-procedure`, `load-shared-object` or `foreign-alloc`, and nothing public imports a private library except `(chez-sqlite3)` | M1 | Its rules are about the FFI and the public library, which arrive there. Its rule against library files that aren't `.sls` came early, in slice 2's review, as a row of `test-require-threaded`. |
 | A convention suite: each foreign procedure's attributes (`__collect_safe`, `__varargs_after`) and argument types against a table (brief §3d) | M1 | chez-curl's `foreign-conventions.sls` is 1,859 lines built around its engine. We write a small one. |
 | `test-constants`: a C program compiled against `sqlite3.h` checks every constant (brief §3a) | M1 | The constants come with loading. |

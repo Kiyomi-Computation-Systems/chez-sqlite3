@@ -9,7 +9,23 @@ newest first.
 - **M0 slice 0, the records,** merged as PR #1. ADR-0001 to ADR-0009 are all accepted.
 - **M0 slice 1, the container,** merged as PR #2.
 - **M0 slice 2, the test harness,** merged as PR #3.
-- **M0 slice 3, the memory gate,** is in progress on `m0-slice-3-memory-gate`.
+- **M0 slice 3, the memory gate,** is built on `m0-slice-3-memory-gate`, waiting for its PR's
+  review:
+  - **Measured first** ([research/memory-gate/](research/memory-gate/)): Valgrind on Chez, opening
+    and closing databases through bare FFI, loses nothing and suppresses nothing, so the gate
+    passes no suppression. A forgotten handle is definitely lost when Chez holds it as an
+    integer, and passes when it is wrapped in an ftype pointer: an input to M1's design.
+  - **Built:** `make test-memory`, the two plants, and `make check-memory-gate`, 36 cases, each in
+    a private copy of the tree. A Sonnet agent adapted the check from chez-curl's.
+  - **Watched failing:** [the log](memory-gate-mutation-log.md).
+  - **Reviewed** (Opus, read-only): no blocker, two major findings, both reproduced.
+    - Nothing held `test-memory`'s default to every suite: chez-curl's case for it went with the
+      shards. Now g all, and g environment refuses a `MEMORY_SUITES` from the environment.
+    - Valgrind follows no child process, and the records didn't say so. ADR-0005 now lists what
+      the gate doesn't cover, and the harness plan gives M1 the children that reach native code.
+    - Also fixed: `b fails` compares its lines whole; o is a tripwire until slice 4; the research
+      table lacked possibly-lost figures.
+- **M0 slice 4, CI,** comes next, stacked on slice 3's branch.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs

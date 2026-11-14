@@ -87,3 +87,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
 - **CI's `memory` job carries no `if:` and no `continue-on-error:`** (ADR-0005).
+- **Valgrind follows no child process.** A suite's child that reaches native code runs under the
+  gate itself, with its own log, or the gate follows children and reads every process's log
+  (ADR-0005, amended).
+- **`make test-memory` takes `MEMORY_SUITES` from make's command line only,** and refuses one
+  from the environment (ADR-0005, amended).

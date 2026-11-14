@@ -271,9 +271,9 @@ check-test-fails: ## Plant bad suites, none at all and a stale README, in a copy
 #     undefined-value plant, and a dropped --leak-check=full hid the leak
 #     plant). make check-memory-gate holds the options themselves to
 #     ADR-0005's;
-#   - the first program it read is the file CHEZ names, so it ran Chez
-#     itself: a CHEZ that is a script runs the shell under Valgrind, and
-#     Chez outside it;
+#   - the first program it read is the file CHEZ names, not a script's
+#     interpreter: a CHEZ that is a script runs the shell under Valgrind,
+#     and Chez outside it;
 #   - it reported "ERROR SUMMARY: 0 errors from 0 contexts": a program that
 #     execs away from Valgrind, or a CHEZ script that execs Chez, exits 0
 #     with no report at all;
@@ -294,14 +294,35 @@ check-test-fails: ## Plant bad suites, none at all and a stale README, in a copy
 # to run while any VALGRIND_ variable is set (Valgrind reads VALGRIND_OPTS,
 # VALGRIND_LIB and VALGRIND_LAUNCHER) or a .valgrindrc exists in $HOME or
 # here, and hands Valgrind --command-line-only=yes, so that no .valgrindrc
-# a suite writes reaches the next. `make check-memory-gate` proves each
-# rule fails.
+# a suite writes reaches the next. It refuses a MEMORY_SUITES from the
+# environment, where one left exported would narrow every run unseen: give
+# it on make's command line. `make check-memory-gate` proves each rule
+# fails.
+#
+# Not covered (ADR-0005, amended):
+#   - a child process a suite starts runs outside Valgrind, which follows
+#     none: a suite that does native work in a child must run that child
+#     under the gate itself (harness plan, section 4);
+#   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
+#     compiled CHEZ that runs Chez as a child passes the leak plant;
+#   - its evidence holds against accident, not against a suite that means
+#     harm, which can write its own Valgrind log;
+#   - make -i, on the command line or in MAKEFLAGS, ignores a failing
+#     recipe, this one's as any other's;
+#   - two runs in one tree remove each other's logs, and fail, naming the
+#     wrong reason: run one at a time in a tree, as check-memory-gate runs
+#     each of its cases in a copy of its own.
 test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any error or definite leak, a hang, or no suite
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@case '$(MEMORY_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
 	    echo "test-memory: MEMORY_TIMEOUT is '$(MEMORY_TIMEOUT)', not a positive whole number of seconds" >&2; \
 	    exit 2 ;; \
+	esac
+	@case '$(origin MEMORY_SUITES)' in \
+	  environment*) \
+	    echo "test-memory: MEMORY_SUITES is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)" >&2; \
+	    exit 1 ;; \
 	esac
 	@if [ -z "$(strip $(MEMORY_SUITES))" ]; then \
 	  echo "test-memory: no suites: MEMORY_SUITES is empty" >&2; \
@@ -452,15 +473,18 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 # added, dropped, changed or moved, each hiding a plant where it can, and
 # requires it named; a suite that forges Valgrind's lines, and requires
 # them unread; and an awk that fails, or prints no "ok", and requires a
-# clean program to fail, naming the evidence check.
-# tests/check-memory-gate.sh lists the cases. CI runs it before
-# test-memory (ADR-0005).
+# clean program to fail, naming the evidence check. It requires a run with
+# no MEMORY_SUITES to run every suite, in order, and one with MEMORY_SUITES
+# in the environment to be refused.
+# tests/check-memory-gate.sh lists the cases. CI's memory job will run it
+# before test-memory, from M0 slice 4 (ADR-0005).
 check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' VALGRIND='$(VALGRIND)' LIBDIRS='$(LIBDIRS)' sh tests/check-memory-gate.sh
 
 # Removes build/, and nothing else: make deps' links (the links, never what
-# they name, since rm does not follow a link) and every check's scratch. The
+# they name, since rm does not follow a link), the memory gate's logs and
+# every check's scratch. The
 # path is written out, not a variable, so no make command line can point it
 # elsewhere. With no build/, it passes.
 clean: ## Remove build/, and nothing else

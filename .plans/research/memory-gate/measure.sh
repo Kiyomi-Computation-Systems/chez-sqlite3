@@ -18,7 +18,7 @@ gate() {
     "$CHEZ" --libdirs src:tests:build/scheme-libs --program "$@"
   rc=$?
   echo "exit $rc, $(( $(date +%s) - start ))s"
-  grep -E '== (ERROR SUMMARY|   definitely lost|   indirectly lost|   possibly lost|   still reachable|   suppressed)' "$log" | sed 's/^==[0-9]*== //'
+  grep -E '^==[0-9]+== +(ERROR SUMMARY|definitely lost|indirectly lost|possibly lost|still reachable|suppressed):' "$log" | sed 's/^==[0-9]*== *//'
   sed -n 's/^--[0-9]*-- Reading suppressions file: /suppressions: /p' "$log"
   sed -n 's/^--[0-9]*-- used_suppression: */used: /p' "$log"
   sed -n 's/^--[0-9]*-- Reading syms from //p' "$log" | head -n 1 | sed 's/^/first syms: /'
