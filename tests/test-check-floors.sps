@@ -34,7 +34,8 @@
         (srfi :64)
         (chez-sqlite3-testing)
         (floors)
-        (only (chezscheme) directory-list file-directory? getenv system))
+        (only (chezscheme) directory-list file-directory? getenv system
+              scheme-version-number))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -329,6 +330,13 @@
   (string-append path ": line " (number->string n)
                  " holds a backslash after a double quote, which YAML may read as an escape, and check-floors does not"))
 
+;; open-quote : String Natural -> String
+;; The complaint about line N of the workflow file PATH, which holds an odd
+;; number of double quotes.
+(define (open-quote path n)
+  (string-append path ": line " (number->string n)
+                 " holds an odd number of double quotes, so a double-quoted string goes on past it, where YAML may read an escape, and check-floors reads line by line"))
+
 ;; no-files, no-ci : String
 ;; The complaints about a workflow directory that holds no file, and one that
 ;; holds files but no ci.yml.
@@ -574,7 +582,7 @@
   '())
 
 (workflow-row "a backslash before the first double quote, and none after it: nothing to report"
-  (workflow-with "      - run: printf '%s\\n' \"x\"" "      - run: echo \\\"a")
+  (workflow-with "      - run: printf '%s\\n' \"x\"" "      - run: echo \\\"a\"")
   '())
 
 (workflow-row "a backslash in single quotes, with no double quote before it: nothing to report"
@@ -627,17 +635,25 @@
   (workflow-with "      - run: echo \"8\\x2e1\\x2e2\"")
   (list (escaped wp body-line)))
 
-(workflow-row "a backslash after a double quote that is never closed"
+(workflow-row "a backslash after a double quote that is never closed: named twice, as an escape and as a string left open"
   (workflow-with "      - run: echo \"a\\")
-  (list (escaped wp body-line)))
+  (list (escaped wp body-line) (open-quote wp body-line)))
 
 (workflow-row "a backslash in a double-quoted key"
   (workflow-with "          \"sq\\x6cite\": x")
   (list (escaped wp body-line)))
 
-(workflow-row "a backslash right after the opening quote"
+(workflow-row "a backslash right after the opening quote, of a string left open"
   (workflow-with "      - run: echo \"\\")
-  (list (escaped wp body-line)))
+  (list (escaped wp body-line) (open-quote wp body-line)))
+
+(workflow-row "a double-quoted string left open goes on over the next line, where an escape spells a floor: both lines named"
+  (workflow-with "    env:" "      CHEZ_FLOOR: \"" "        \\x31\\x30.9.1\"")
+  (list (open-quote wp (+ body-line 1)) (open-quote wp (+ body-line 2))))
+
+(workflow-row "a double-quoted string closed on its own line: nothing to report"
+  (workflow-with "    env:" "      NOTE: \"one \" and \"two\"")
+  '())
 
 (workflow-row "a backslash after the second double quote still counts"
   (workflow-with "      - run: echo \"a\" \"b\" \\")
@@ -1296,6 +1312,106 @@
   #f '("python") floor-usage)
 (floor-sh-row "two names: the usage" good '("chez" "sqlite") floor-usage)
 
+;; --- check-chez.sh ---------------------------------------------------------------------
+;;
+;; scripts/ci/check-chez.sh PREFIX asks PREFIX/bin/scheme for its version and
+;; (threaded?), against the Chez floor floor.sh reads two directories above
+;; it. The rows run copies of both scripts in a fresh tree whose floors file
+;; names the Chez this suite runs on, or one patch above it, so they hold on
+;; any threaded Chez, the floor or above. The Chez is the one CHEZ names,
+;; found through the shell as make test runs it: its directory's parent is
+;; the prefix, and its name must be scheme, as check-chez.sh asks.
+
+;; this-chez : (List Natural Natural Natural)
+(define this-chez
+  (call-with-values scheme-version-number list))
+
+;; dotted : (Listof Natural) -> String
+(define (dotted ns)
+  (let loop ((rest (cdr ns)) (text (number->string (car ns))))
+    (if (null? rest) text (loop (cdr rest) (string-append text "." (number->string (car rest)))))))
+
+;; answer : (Listof Natural) String -> String
+(define (answer ns threads)
+  (string-append "(" (number->string (car ns)) " " (number->string (cadr ns)) " "
+                 (number->string (caddr ns)) " " threads ")"))
+
+;; chez-prefix : (U String #f)
+;; The prefix of the Chez CHEZ names, or #f when that is not .../bin/scheme.
+(define chez-prefix
+  (guard (e (#t #f))
+    (let* ((found (capture-command (list "sh" "-c" "command -v \"$CHEZ\"")))
+           (path (cadr found))
+           (path (if (and (> (string-length path) 0)
+                          (char=? (string-ref path (- (string-length path) 1)) #\newline))
+                     (substring path 0 (- (string-length path) 1))
+                     path))
+           (tail "/bin/scheme")
+           (n (string-length path)) (m (string-length tail)))
+      (and (eqv? (car found) 0)
+           (> n m)
+           (string=? (substring path (- n m) n) tail)
+           (substring path 0 (- n m))))))
+
+(test-assert "check-chez.sh: CHEZ names a Chez at PREFIX/bin/scheme, which the rows below run"
+  (string? chez-prefix))
+
+;; check-chez-row : String (Listof Natural) (String -> (Listof String)) (String -> Expected) -> Unit
+;; In a tree whose Chez floor is FLOOR, sh scripts/ci/check-chez.sh with the
+;; arguments ARGS-OF gives, from the tree's root, must answer what EXPECTED-OF
+;; gives: its exit status, whole stdout and whole stderr.
+(define (check-chez-row name floor args-of expected-of)
+  (test-equal (string-append "check-chez.sh: " name)
+    '(returned same)
+    (outcome
+     (lambda ()
+       (with-tree (floors-of (string-append "\"" (dotted floor) "\"") good-sqlite)
+         (lambda (root)
+           (checked "cp" (list "cp" "scripts/ci/check-chez.sh"
+                               (string-append root "/scripts/ci/check-chez.sh")))
+           (let ((got (capture-command (append (list "sh" (string-append root "/scripts/ci/check-chez.sh"))
+                                               (args-of root))))
+                 (want (expected-of root)))
+             (if (equal? got want) 'same (list 'got got 'want want)))))))))
+
+(define (scheme-at prefix) (string-append prefix "/bin/scheme"))
+
+(define next-patch (list (car this-chez) (cadr this-chez) (+ 1 (caddr this-chez))))
+
+(define chez-usage (lambda (root) (list 2 "" "usage: check-chez.sh PREFIX [--nothreads]\n")))
+
+(check-chez-row "the Chez at the floor, threaded, passes, with its one line" this-chez
+  (lambda (root) (list chez-prefix))
+  (lambda (root)
+    (list 0 (string-append "check-chez.sh: " (scheme-at chez-prefix) " is Chez " (dotted this-chez)
+                           ", threaded: " (answer this-chez "yes") "\n")
+          "")))
+
+(check-chez-row "a threaded Chez asked for --nothreads fails, naming both answers" this-chez
+  (lambda (root) (list chez-prefix "--nothreads"))
+  (lambda (root)
+    (list 1 "" (string-append "check-chez.sh: " (scheme-at chez-prefix) " answers " (answer this-chez "yes")
+                              ", but (scheme-version-number) and (threaded?) should answer "
+                              (answer this-chez "no") "\n"))))
+
+(check-chez-row "a Chez one patch below the floor fails, naming both answers" next-patch
+  (lambda (root) (list chez-prefix))
+  (lambda (root)
+    (list 1 "" (string-append "check-chez.sh: " (scheme-at chez-prefix) " answers " (answer this-chez "yes")
+                              ", but (scheme-version-number) and (threaded?) should answer "
+                              (answer next-patch "yes") "\n"))))
+
+(check-chez-row "a prefix with no bin/scheme fails, naming the path" this-chez
+  (lambda (root) (list (string-append root "/nowhere")))
+  (lambda (root)
+    (list 1 "" (string-append "check-chez.sh: " root "/nowhere/bin/scheme is not an executable file\n"))))
+
+(check-chez-row "no prefix is a usage error" this-chez (lambda (root) '()) chez-usage)
+(check-chez-row "a second argument but --nothreads is a usage error" this-chez
+  (lambda (root) (list chez-prefix "--threads")) chez-usage)
+(check-chez-row "three arguments are a usage error" this-chez
+  (lambda (root) (list chez-prefix "--nothreads" "x")) chez-usage)
+
 ;; --- check-action-pins.sh ------------------------------------------------------------
 
 (define pin-sha "3d3c42e5aac5ba805825da76410c181273ba90b1")
@@ -1407,6 +1523,25 @@
 
 (pin-row "a directory with no file: nothing was checked"
          '() (pins-error (lambda (dir) (string-append dir " holds no file"))))
+
+;; A file grep cannot read, here a link to nothing, fails the check, naming
+;; it, after a file it could read: a file it cannot read is never skipped.
+;; grep's own line comes first, as GNU grep writes it, on the container and
+;; on CI's runner.
+(test-equal "pins: a file that cannot be read, a link to nothing after a pinned ci.yml, is named"
+  '(returned same)
+  (outcome
+   (lambda ()
+     (call-with-temp-directory
+      (lambda (dir)
+        (write-file-in dir "ci.yml" (steps the-pinned))
+        (let* ((linked (capture-command (list "ln" "-s" "nothing-here" (string-append dir "/x.yml"))))
+               (got (capture-command (list "sh" "scripts/ci/check-action-pins.sh" dir)))
+               (want (list 1 "" (string-append "grep: " dir "/x.yml: No such file or directory\n"
+                                               "check-action-pins: " dir "/x.yml cannot be read\n"))))
+          (cond ((not (equal? linked '(0 "" ""))) (list 'ln linked))
+                ((equal? got want) 'same)
+                (else (list 'got got 'want want)))))))))
 
 (pin-row "no file has a uses key: nothing was checked"
          (list (cons "ci.yml" (workflow "name: CI" "on: push")))

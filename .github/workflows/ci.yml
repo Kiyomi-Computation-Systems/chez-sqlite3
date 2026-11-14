@@ -21,15 +21,22 @@ name: CI
 #
 # This workflow states no floor. scripts/ci/build-chez.sh takes no version and
 # reads its own from packaging/floors.sexp (ADR-0008), and so does any step
-# that needs a floor, through scripts/ci/floor.sh. So nothing written here, an
-# env value or a matrix value, changes what is built or checked. `make
-# check-floors` holds every file in this directory: no line may contain either
-# floor's version, a comment included.
+# that needs a floor, through scripts/ci/floor.sh. `make check-floors` holds
+# every file in this directory: no line may contain either floor's version, a
+# comment included.
 #
 # Every action is pinned to a full commit SHA, with its tag in a comment: a
 # tag can be moved to other code, a commit cannot. The main job's first check,
 # scripts/ci/check-action-pins.sh, fails on any line with a uses key that is
-# not exactly that, whatever the key's spelling.
+# not exactly that. It reads text, so it cannot see a key spelled another
+# way.
+#
+# `make check-ci` (tests/check-ci.sh), which make test runs, holds this file
+# to the one shape it reads: these triggers, these three jobs and their keys,
+# each check as a step's whole run line, no if: but on the cache's own steps,
+# no variable that would steer a check, and no key spelled so that a text
+# check would miss it. A change to the workflow changes tests/check-ci.sh
+# with it.
 
 on:
   push:
@@ -51,12 +58,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Every Chez cache is keyed by what it holds: the floors file, which names the
-# version, the build script, the build flags (a threaded Chez and a
-# --nothreads Chez are two entries), and the runner image. A changed floor or
-# build is never served stale. Each cache is restored and saved in two steps,
-# so a build is banked even when a later step fails. Every job builds what it
+# version, the scripts that read it, build and check it, the build's name (a
+# threaded Chez and a --nothreads Chez are two entries), and the runner's OS
+# release and architecture. Each cache is restored and saved in two steps, so
+# a build is banked even when a later step fails. Every job builds what it
 # needs: a cold cache costs each job a build, once, and the first to save
-# wins.
+# wins. Whether it was built or restored, scripts/ci/check-chez.sh then asks
+# the Chez itself for its version and (threaded?), so a cache that serves
+# another build fails the job before any check runs on it.
 
 jobs:
   main:
@@ -97,7 +106,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/chez-threads
-          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/build-chez.sh') }}-${{ steps.image.outputs.id }}
+          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh') }}-${{ steps.image.outputs.id }}
 
       - name: Build Chez
         if: steps.chez.outputs.cache-hit != 'true'
@@ -109,6 +118,9 @@ jobs:
         with:
           path: ${{ runner.temp }}/chez-threads
           key: ${{ steps.chez.outputs.cache-primary-key }}
+
+      - name: Check the Chez this job runs
+        run: scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads"
 
       - name: Report the versions this run uses
         run: |
@@ -128,16 +140,25 @@ jobs:
           CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
         run: scripts/ci/report-sqlite.sh
 
-      # CHEZ is the real binary, not a symlink or a wrapper.
+      # CHEZ is the real binary, not a symlink or a wrapper. make test runs
+      # check-ci, which holds this file's shape.
       - name: Checks and suites
         env:
           CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
-        run: make check-help check-suites check-pins check-floors test check-test-fails check-clean
+        run: make check-help check-suites check-pins check-floors check-ci test check-test-fails check-clean
 
-  # The Valgrind gate, on every run (ADR-0005). check-memory-gate requires this
-  # job to run make check-memory-gate before make test-memory, each as a
-  # step's whole run line, and neither the job nor those two steps to carry
-  # an if: or a continue-on-error: key.
+      # The launcher's own tests run no Guix: stand-ins take its place. They
+      # need make test, so CHEZ too.
+      - name: The launcher's host-side tests
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+        run: sh tests/guix-env-launcher.sh
+
+  # The Valgrind gate, on every run (ADR-0005). check-ci, which make test and
+  # check-memory-gate's case o both run, requires this job to run make
+  # check-memory-gate before make test-memory, each as a step's whole run
+  # line, and neither the job nor those two steps to carry an if: or a
+  # continue-on-error: key.
   memory:
     name: memory (the Valgrind gate)
     runs-on: ubuntu-24.04
@@ -169,7 +190,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/chez-threads
-          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/build-chez.sh') }}-${{ steps.image.outputs.id }}
+          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh') }}-${{ steps.image.outputs.id }}
 
       - name: Build Chez
         if: steps.chez.outputs.cache-hit != 'true'
@@ -181,6 +202,9 @@ jobs:
         with:
           path: ${{ runner.temp }}/chez-threads
           key: ${{ steps.chez.outputs.cache-primary-key }}
+
+      - name: Check the Chez this job runs
+        run: scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads"
 
       # The gate proves nothing unless it can fail, so the planted defects run
       # first: a heap overrun and a definite leak must each fail it, by
@@ -225,7 +249,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/chez-nothreads
-          key: chez-nothreads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/build-chez.sh') }}-${{ steps.image.outputs.id }}
+          key: chez-nothreads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh') }}-${{ steps.image.outputs.id }}
 
       - name: Build Chez without threads
         if: steps.chez.outputs.cache-hit != 'true'
@@ -237,6 +261,9 @@ jobs:
         with:
           path: ${{ runner.temp }}/chez-nothreads
           key: ${{ steps.chez.outputs.cache-primary-key }}
+
+      - name: Check the Chez this job runs
+        run: scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-nothreads" --nothreads
 
       # No submodules, no deps: the check imports only src/.
       - name: Every library must be refused, by name

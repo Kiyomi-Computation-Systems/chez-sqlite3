@@ -41,11 +41,13 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 
 # The memory gate (ADR-0005): Valgrind, and the seconds a suite may run
 # under it before timeout kills it and make test-memory names it HUNG.
-# Valgrind runs 10 to 50 times slower than Chez alone. make test-memory
-# refuses a MEMORY_TIMEOUT that is not a positive whole number, as make test
-# refuses such a TEST_TIMEOUT.
+# Valgrind runs 10 to 50 times slower than Chez alone: each suite takes 7 to
+# 12 s under it in the container (.plans/research/memory-gate/). 600 s is
+# far above that, and below CI's 60-minute job limit, so a hang is named HUNG
+# before the job is killed. make test-memory refuses a MEMORY_TIMEOUT that is
+# not a positive whole number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
-MEMORY_TIMEOUT ?= 3600
+MEMORY_TIMEOUT ?= 600
 
 # The suites make test-memory runs: every suite, unless a run names others.
 MEMORY_SUITES ?= $(SUITES)
@@ -56,7 +58,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -191,8 +193,9 @@ check-pins: ## Fail unless Akku.lock, the gitlink and the checkout name one chez
 # failed or hung, or if none matched. --foreground keeps a suite in make's
 # process group, so Ctrl-C at a terminal reaches it at once, and does not
 # wait out the timeout. `make check-test-fails` proves the loop fails. The
-# checks come first: check-help, check-suites and check-floors each stop it.
-test: deps check-help check-suites check-floors ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
+# checks come first: check-help, check-suites, check-floors and check-ci each
+# stop it.
+test: deps check-help check-suites check-floors check-ci ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@case '$(TEST_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
@@ -236,6 +239,17 @@ check-suites: deps ## Fail unless every tests/test-*.sps ends with the shared ex
 check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp, and no workflow does
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows
+
+# Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
+# (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its
+# three jobs and every key in them, each check as a step's whole run line, no
+# if: but the cache's own, no variable that steers a check, and no key
+# spelled so that a text check would miss it. make test runs it, so every
+# make test, the container's self-test and CI's main job among them, holds
+# the workflow. tests/test-check-ci.sps plants each fault in a copy of the
+# real file. It reads text with sh and awk, and needs no deps.
+check-ci: ## Fail unless .github/workflows/ci.yml has the one shape tests/check-ci.sh reads
+	@sh tests/check-ci.sh .github/workflows
 
 # Imports every library under src/, private ones too, and requires each
 # import to be refused, by name, as (chez-sqlite3 private require-threaded)
@@ -494,8 +508,8 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 # clean program to fail, naming the evidence check. It requires a run with
 # no MEMORY_SUITES to run every suite, in order, and one with MEMORY_SUITES
 # in the environment to be refused.
-# tests/check-memory-gate.sh lists the cases. CI's memory job will run it
-# before test-memory, from M0 slice 4 (ADR-0005).
+# tests/check-memory-gate.sh lists the cases. CI's memory job runs it
+# before test-memory (ADR-0005).
 check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' VALGRIND='$(VALGRIND)' LIBDIRS='$(LIBDIRS)' sh tests/check-memory-gate.sh

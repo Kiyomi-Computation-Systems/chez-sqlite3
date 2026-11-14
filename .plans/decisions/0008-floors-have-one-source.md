@@ -68,10 +68,18 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
   - no line of any of them to contain either floor's version text, whatever the line is: a step,
     a cache key, a comment;
   - no line to hold a backslash after a double quote. YAML reads escapes there, so
-    `"3\x2e45\x2e1"` spells a floor without its text.
-- **chez-curl's other workflow rules are left out:** its two env keys, `node-version`, and the
-  rules against explicit keys, aliases, characters beyond ASCII and tabs. They protected rules
-  about keys, and we have none.
+    `"3\x2e45\x2e1"` spells a floor without its text;
+  - no line to hold an odd number of double quotes. A double-quoted string left open goes on
+    over the lines after it, where an escape is no longer after a quote on its own line. The
+    slice's review found this, along with the corrections below.
+- **chez-curl's two env keys and `node-version` are left out:** no env key here ever held a
+  floor, and there is no setup-node.
+- **Its explicit-key, alias, non-ASCII and tab rules were first left out too, wrongly.** The
+  reason given was that they protected rules about keys, and we had none. We have two: the
+  `uses` key that `check-action-pins.sh` reads, and the workflow's own keys. The review showed an
+  explicit `? uses` key hiding an unpinned action from the pin check, and a quoted `"if"` hiding
+  a skipped step. Those rules now live in `tests/check-ci.sh`, beside the key rules they protect
+  (ADR-0005's slice 4 amendment).
 - **The text is searched, not parsed.** An expression that builds a version, such as GitHub's
   `format()`, isn't seen. Nothing would read it: `scripts/ci/build-chez.sh` takes no version.
 - **`scripts/ci/floor.sh` is built.** It prints the `chez` or `sqlite` floor from the file and

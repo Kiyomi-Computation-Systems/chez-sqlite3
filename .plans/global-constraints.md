@@ -86,9 +86,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   runs before `make test-memory` in CI (ADR-0005).
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
-- **CI's `memory` job and its two gate steps carry no `if:` and no `continue-on-error:`,** and no
-  line of the workflow names a variable that steers the gate. `check-memory-gate` holds both
-  (ADR-0005, amended).
+- **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
+  three jobs and their keys; each check as a step's whole run line; no `if:` but the cache's own;
+  no variable that steers a check; no key spelled so a text check would miss it. A change to the
+  workflow changes `tests/check-ci.sh` with it (ADR-0005, amended).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Valgrind follows no child process.** A suite's child that reaches native code runs under the

@@ -129,14 +129,35 @@ Measured in the pinned container before the gate was built
   on a miss, through `if:`, as chez-curl's do. The rule is now that neither the job nor its two
   gate steps, `make check-memory-gate` and `make test-memory`, carry `if:` or
   `continue-on-error:`.
-- **`check-memory-gate`'s case o holds it,** replacing slice 3's tripwire. It reads
-  `.github/workflows/ci.yml` and requires:
-  - one step whose whole run line is `make test-memory`, after one whose whole run line is
-    `make check-memory-gate`, in the same job, and no other line naming either;
-  - neither of those steps, nor their job, carrying `if:` or `continue-on-error:`;
-  - no line but a comment naming a variable that would change what the gate runs or whether its
-    failure counts: `MAKEFLAGS`, `MFLAGS`, `GNUMAKEFLAGS`, `VALGRIND`, any `VALGRIND_` variable,
-    `MEMORY_SUITES`, `MEMORY_TIMEOUT`, `LIBDIRS` or `TIMEOUT`. Slice 3's review asked for this:
-    `make -i` through `MAKEFLAGS` turns a failing gate green, and a job's `env:` could narrow it.
+- **`make check-ci` holds it, and the rest of the workflow with it** (`tests/check-ci.sh`).
+  `make test` runs it, so CI's `main` job and the container's self-test do too, and
+  `check-memory-gate`'s case o requires it to pass. It holds `.github/workflows/ci.yml` to the one
+  shape it reads:
+  - the triggers, the permissions and the concurrency group, line for line, with no filters;
+  - the three jobs and only these keys in each, so no job-level `if:`, `needs:`,
+    `continue-on-error:`, `strategy:`, `container:`, `defaults:` or `env:`;
+  - only known keys in each step, so no `shell:` and no `working-directory:`;
+  - `if:` only as the cache's own test, on the build and save steps;
+  - each job's checks, each as a step's whole run line, in order. Among them are the memory
+    job's `make check-memory-gate` then `make test-memory`, the `nothreads` job's
+    `make check-nothreads`, and the pin check as `main`'s second step;
+  - no line naming `GITHUB_ENV`, `GITHUB_PATH`, or a variable that would steer a check:
+    `MAKEFLAGS`, the `VALGRIND` names, `MEMORY_SUITES`, `MEMORY_TIMEOUT`, `CHEZ_SQLITE3_LIBRARY`
+    and the like;
+  - no key spelled so that a text check would miss it: quoted, explicit (`?`), an anchor or
+    alias, a space before its colon, a flow mapping, a tab, or a character beyond ASCII.
+- **Why a shape, and why in `make test`.** As first built, case o was an awk of its own that ran
+  only in the memory job, and read keys as text. The slice's review showed what that let
+  through:
+  - deleting the memory job, which deleted case o with it;
+  - deleting the `nothreads` job or the pin step, which nothing read;
+  - `"if": false`, `? if`, an alias key, `needs:` on a skipped job, `defaults: run: shell: true
+    {0}`, a path filter on `pull_request`, and a variable written through `GITHUB_ENV` under a
+    split name. Each passed case o.
+- **What no check here can hold:** a change that deletes the workflow, or `main` and `memory`
+  with it, runs no check at all. GitHub's branch protection, requiring these jobs, is the
+  maintainer's lever for that.
+- **`MEMORY_TIMEOUT` is now 600 s.** At 3600 s, a hang would have outlived the job's 60-minute
+  limit, ending as a job timeout with no HUNG line.
 - **The job runs on every event,** on Ubuntu 24.04, against Chez built at its floor from the
   release tarball. Outside the container, as inside it, the gate passes no suppression.

@@ -55,6 +55,14 @@ told in chez-curl's `.plans/traps.md`.
   possibly-lost column. The slice's review found 12,856 bytes there in one case. The pattern now
   matches the words after any run of spaces. (chez-sqlite3)
 
+- **A reason to drop a copied rule is checked against every rule the copy keeps.** M0 slice 4
+  dropped chez-curl's explicit-key, alias, non-ASCII and tab rules from `check-floors`, reasoning
+  that they protected rules about keys and this project had none. `check-action-pins.sh`, kept in
+  the same slice, reads a key: `uses`. Reproduced: `- ? uses` then `: some-owner/some-action@main`
+  passed the pin check, which counted the 9 pinned lines and saw no tenth. The review found it;
+  the rules now live in `tests/check-ci.sh`. It is slice 2's lesson again, that a dropped piece
+  takes its protection with it, and a reason written down is no check of it. (chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

@@ -303,8 +303,14 @@
                                        ": it is a symbolic link to a directory, which this check does not follow")))))))
 
 ;; Where the trees go: one directory of this process, removed when it ends.
+;; Without one no row can run, so the suite says why and exits 1 here, before
+;; any row: a row given no directory would die naming nothing.
 (define fixtures
-  (guard (e (#t #f)) (make-process-temp-directory)))
+  (guard (e (#t (display "test-check-nothreads: no temporary directory for the fixture trees: ")
+                (display (describe e))
+                (newline)
+                (exit 1)))
+    (make-process-temp-directory)))
 
 ;; at : String -> String
 (define (at case) (string-append fixtures "/" case))

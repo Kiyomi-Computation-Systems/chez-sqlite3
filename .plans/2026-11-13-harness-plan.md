@@ -7,7 +7,8 @@ Amended in M0 slice 3: the gate needs no suppression, so sabotage group c has no
 and group o comes with CI in slice 4; the review added g all, g environment and o's tripwire,
 and M1 owns the children Valgrind doesn't follow. Amended in M0 slice 4: `check-nothreads` checks
 every library under `src/`, since M0 has no public one; `report-sqlite.sh` reports the runner's
-SQLite and checks nothing, M1's lanes holding it to its floor and header.
+SQLite and checks nothing, M1's lanes holding it to its floor and header; and, from the slice's
+review, `make check-ci`, which `make test` runs, holds the workflow's whole shape.
 Source: chez-curl at `79c6ced` (`main`), surveyed read-only. Every path below is chez-curl's
 unless it says otherwise.
 Brief: [the project brief](2026-11-13-chez-sqlite3-project-brief.md). The maintainer settled

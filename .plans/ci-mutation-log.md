@@ -52,7 +52,7 @@ alone, with this problem:
 | O6 | `check-memory-gate` runs before `test-memory` | job memory runs "make test-memory" with no "make check-memory-gate" step before it |
 | O7 | no `MAKEFLAGS` in the job's `env:` | the line names `MAKEFLAGS` |
 | O8 | no run block that names the gate | the line names the gate other than as one step's whole run line |
-| O9 | no variable written through `GITHUB_ENV` | the line names `VALGRIND_OPTS` |
+| O9 | no variable written through `GITHUB_ENV`, by its whole name | the line names `VALGRIND_OPTS`. A split name, `"MAKE""FLAGS"`, passed case o as first built; `check-ci` now refuses any line naming `GITHUB_ENV` |
 
 ## `check-nothreads` (`test-check-nothreads`)
 
@@ -104,6 +104,36 @@ each, as it should: the real workflow breaks no rule.
 | A4 | a tag in a comment after the commit | 3 |
 | A5 | a directory with no file is a failure | 1 |
 
+## After the review: `check-ci`, `check-chez.sh` and two rules
+
+The slice's review found the workflow's shape held by nothing outside the memory job, and keys
+read as text (ADR-0005's slice 4 amendment). `make check-ci` now holds the shape; a Sonnet agent
+wrote it test-first: **1 passed, 125 failed** before the script existed, then 128 passed, and two
+runs at once both passed 128 here. Case o now runs it. O1, O7 and O9 were rerun against it: each
+still fails case o, now naming `check-ci`'s problem (O1: job memory has the key
+`continue-on-error`; O7: the key `env`; O9: the line names `GITHUB_ENV`).
+
+Each mutation below failed its suite with exit 1:
+
+| Mutation | Guards | Rows that failed |
+|---|---|---|
+| C1 | `ci.yml` alone in the workflow directory | 4: a second workflow among them |
+| C2 | an explicit key, `?`, is refused | 2 |
+| C3 | an anchor or alias where a key goes is refused | 3 |
+| C4 | a quoted key is refused | 2 |
+| C5 | no line names `GITHUB_ENV` | 2: `"MAKE""FLAGS"` written to it among them |
+| C6 | a job holds only its four keys | 12 |
+| C7 | the `nothreads` job runs its build, `check-chez.sh` and `check-nothreads` | 5 |
+| C8 | the trigger, permission and concurrency blocks, line for line | 3: a path filter among them |
+| C9 | a block scalar ends at the first line no deeper than its key | 121: the unedited file among them |
+| K1 | `check-chez.sh` compares the answer whole | 2 |
+| K2 | `check-chez.sh --nothreads` asks for a Chez without threads | 1 |
+| K3 | `check-chez.sh` needs `PREFIX/bin/scheme` | 1 |
+| W10 | a double-quoted string left open fails `check-floors` | 3 |
+| A6 | a workflow file `check-action-pins.sh` cannot read is named | 1 |
+
+K1 to K3, W10 and A6 failed `test-check-floors`; C1 to C9 failed `test-check-ci`.
+
 ## Not mutated
 
 - **`scripts/ci/build-chez.sh`.** It checks its own result: the tarball's sha256 before
@@ -111,5 +141,7 @@ each, as it should: the real workflow breaks no rule.
   its first run is its test. The pinned sum was checked against the digest GitHub's releases API
   lists for the asset.
 - **`scripts/ci/report-sqlite.sh`.** It reports and checks nothing.
-- **The workflow's jobs themselves.** Their first run on CI is their red and green run, recorded
-  in [research/ci-runner/](research/ci-runner/).
+- **The workflow's jobs themselves.** Their first run on CI was green in all three
+  ([research/ci-runner/](research/ci-runner/)). No job has been seen to fail there: each job's
+  checks were watched failing locally, and `check-ci` holds the jobs to the shape that runs
+  them.

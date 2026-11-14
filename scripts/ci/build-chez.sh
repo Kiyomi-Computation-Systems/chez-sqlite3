@@ -10,9 +10,9 @@
 # it. The tarball is checked against the sha256 pinned below before anything is
 # unpacked. Threaded by default, as chez-sqlite3 needs (ADR-0001, amended);
 # --nothreads builds the Chez the nothreads lane imports the libraries on.
-# Afterwards it asks the installed scheme for its version and (threaded?),
-# and fails unless they are the floor and what was asked for: a build that
-# came out other than it was configured is no build.
+# Afterwards scripts/ci/check-chez.sh asks the installed scheme for its
+# version and (threaded?), and fails unless they are the floor and what was
+# asked for: a build that came out other than it was configured is no build.
 #
 # PREFIX must be an absolute path. Run it once for a PREFIX: it installs over
 # what is there. Nothing is installed outside PREFIX.
@@ -97,17 +97,11 @@ cd "$work/csv$version"
 make
 make install
 
-# Ask what was built. scheme-version-number answers three values, major, minor
-# and patch; a threaded build answers #t to (threaded?).
-probe=$work/probe.ss
-cat >"$probe" <<'EOF'
-(let-values (((major minor patch) (scheme-version-number)))
-  (display (list major minor patch (if (threaded?) 'yes 'no))))
-EOF
-asked=$("$prefix/bin/scheme" --script "$probe")
-expected="($(printf '%s' "$version" | tr . ' ') $want)"
-if [ "$asked" != "$expected" ]; then
-  echo "build-chez.sh: the installed $prefix/bin/scheme answers $asked, but (scheme-version-number) and (threaded?) should answer $expected" >&2
-  exit 1
+# Ask what was built: the floor, threaded or not as asked. A build that came
+# out other than it was configured is no build.
+if [ "$threads" = --nothreads ]; then
+  sh "$here/check-chez.sh" "$prefix" --nothreads
+else
+  sh "$here/check-chez.sh" "$prefix"
 fi
-echo "build-chez.sh: Chez $version built $threads into $prefix: $asked"
+echo "build-chez.sh: Chez $version built $threads into $prefix"

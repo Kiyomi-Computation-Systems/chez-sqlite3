@@ -76,20 +76,19 @@
 #                   program or a missing feature would (fails); one that
 #                   prints "ok", then exits 2 (ok-fails); and one that exits
 #                   0, printing nothing (silent)
-#   o  ci           .github/workflows/ci.yml runs the gate in one job, as
-#                   two steps whose whole run lines are "run: make
-#                   check-memory-gate" and then "run: make test-memory";
-#                   no other line names either; neither step nor the job
-#                   carries an if: or a continue-on-error:; and no line but
-#                   a comment names a variable that would change what the
-#                   gate runs or whether its failure counts: MAKEFLAGS,
-#                   MFLAGS, GNUMAKEFLAGS, VALGRIND, any VALGRIND_ variable,
-#                   MEMORY_SUITES, MEMORY_TIMEOUT, LIBDIRS or TIMEOUT
+#   o  ci           tests/check-ci.sh passes on .github/workflows, with its
+#                   one line: it holds the whole workflow, and so the memory
+#                   job's two steps, "run: make check-memory-gate" then
+#                   "run: make test-memory", with no if: or
+#                   continue-on-error: on them or their job, and no variable
+#                   that steers the gate. make test runs it too, so a
+#                   workflow that drops the memory job fails CI's main job
 #
 # chez-curl's c, d and n are not here: c and d held its one suppression
 # file, which this gate has none of (it passes no suppression in any
 # environment), and n held its two shards, all but n all, which is g all
-# here. Its o held two jobs, one per shard; ours holds one.
+# here. Its o held two jobs, one per shard, with an awk of its own; ours
+# runs check-ci, which holds the whole workflow (ADR-0005, amended).
 #
 # Every case runs in a private copy of the tree, made under mktemp -d: the
 # working tree without .git (nor any .git below vendor/), build/ and
@@ -985,61 +984,20 @@ $(count_line 1 0 1 0)"
   esac
 done
 
-# ---- o: ci.yml runs the gate in a job of its own ----
-# One awk program reads the workflow: its jobs, each job's steps, and each
-# step's run line, comments and blank lines left out. It prints each
-# problem, or "ok" alone. It reads the tree's own workflow.
-ci=$root/.github/workflows/ci.yml
-if [ ! -f "$ci" ]; then
-  problem "$ci is not a file, so nothing runs the gate in CI"
-else
-  evidence=$(awk '
-    { line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line) }
-    line == "" || line ~ /^#/ { next }
-    { word = line; gsub(/[^A-Za-z0-9_]+/, " ", word); n_w = split(word, ws, " ")
-      for (w = 1; w <= n_w; w++)
-        if (ws[w] ~ /^(MAKEFLAGS|MFLAGS|GNUMAKEFLAGS|VALGRIND|MEMORY_SUITES|MEMORY_TIMEOUT|LIBDIRS|TIMEOUT)$/ || ws[w] ~ /^VALGRIND_/)
-          why[++n] = "line " NR " names " ws[w] ", which would change what the gate runs or whether its failure counts: " line }
-    /^jobs:$/ { injobs = 1; next }
-    /^[^ ]/ { injobs = 0; next }
-    !injobs { next }
-    /^  [^ ]/ { job = line; sub(/:.*/, "", job); next }
-    /^    [^ ]/ { key = line; sub(/:.*/, "", key)
-      if (key == "if" || key == "continue-on-error") jobflag[job] = jobflag[job] " " key ":" }
-    /^      - / { step++; stepjob[step] = job; sub(/^- +/, "", line); onkey = 1 }
-    /^        [^ ]/ { onkey = 1 }
-    onkey && step { key = line; sub(/:.*/, "", key); value = line; sub(/^[^:]*: */, "", value)
-      if (key == "if" || key == "continue-on-error") stepflag[step] = stepflag[step] " " key ":"
-      if (key == "run") steprun[step] = value }
-    index(line, "test-memory") || index(line, "check-memory-gate") {
-      if (!(onkey && step && key == "run" && (value == "make check-memory-gate" || value == "make test-memory")))
-        why[++n] = "line " NR " names the gate other than as one step\047s whole run line, \"run: make check-memory-gate\" or \"run: make test-memory\": " line }
-    { onkey = 0 }
-    END {
-      want = "make test-memory"; found = 0
-      for (i = 1; i <= step; i++) if (steprun[i] == want) { found++; at = i }
-      if (found != 1) why[++n] = found " steps run \"" want "\", not one"
-      else {
-        j = stepjob[at]; gated = 0; gates = 0
-        for (i = 1; i <= step; i++) if (steprun[i] == "make check-memory-gate") gates++
-        for (i = 1; i < at; i++) if (stepjob[i] == j && steprun[i] == "make check-memory-gate") gated = i
-        if (gates != 1) why[++n] = gates " steps run \"make check-memory-gate\", not one"
-        if (!gated) why[++n] = "job " j " runs \"" want "\" with no \"make check-memory-gate\" step before it"
-        else if (stepflag[gated] != "") why[++n] = "job " j "\047s \"make check-memory-gate\" step has" stepflag[gated]
-        if (stepflag[at] != "") why[++n] = "job " j "\047s \"" want "\" step has" stepflag[at]
-        if (jobflag[j] != "") why[++n] = "job " j " has a job-level" jobflag[j] }
-      for (i = 1; i <= n; i++) print why[i]
-      if (!n) print "ok" }' "$ci")
-  checked=$?
-  if [ "$checked" -ne 0 ]; then
-    problem "the check of $ci (awk) exited $checked"
-  elif [ -z "$evidence" ]; then
-    problem "the check of $ci (awk) printed nothing"
-  elif [ "$evidence" != ok ]; then
-    problem "$evidence"
-  fi
+# ---- o: ci.yml runs the gate, as tests/check-ci.sh holds it ----
+# check-ci holds the whole workflow, the memory job among its jobs: make
+# check-memory-gate, then make test-memory, each a step's whole run line,
+# with no if: or continue-on-error: on them or their job, and no variable
+# that steers the gate. make test runs it too, so a workflow that drops this
+# job still fails CI's main job.
+wanted="check-ci: .github/workflows/ci.yml has the one shape check-ci reads"
+got=$(cd "$root" && sh tests/check-ci.sh .github/workflows 2>&1)
+status=$?
+if [ "$status" -ne 0 ] || [ "$got" != "$wanted" ]; then
+  problem "tests/check-ci.sh exited $status, printing:
+$(printf '%s\n' "$got" | sed 's/^/  | /')"
 fi
-verdict "o ci: ci.yml runs make check-memory-gate, then make test-memory, in one job, with no if:, no continue-on-error: and no variable that steers the gate" plain
+verdict "o ci: tests/check-ci.sh holds ci.yml, whose memory job runs make check-memory-gate, then make test-memory, with no if:, no continue-on-error: and no variable that steers the gate" plain
 
 if [ "$fail" -eq 0 ]; then
   printf 'check-memory-gate: the memory gate failed, as it must, and its refusals held, in all %d cases\n' "$pass"

@@ -27,8 +27,9 @@ build-essential
 
 # --- to fetch the Chez release tarball ----------------------------------------
 # scripts/ci/build-chez.sh downloads it with curl, checks its sha256, and
-# unpacks it with tar. The runner image has both already; they are listed so
-# that this file is the whole truth about a bare machine.
+# unpacks it with tar. The runner image has curl already; it is listed so that
+# this file is the whole truth about a bare machine. tar is an Essential Debian
+# package, so it needs no line here.
 ca-certificates
 curl
 

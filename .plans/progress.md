@@ -39,7 +39,20 @@ newest first.
     SQLite is 3.45.1, the floor itself, with a matching header
     ([research/ci-runner/](research/ci-runner/)). On the real `--nothreads` Chez, both libraries
     were refused by name.
-  - **Waiting for:** the slice's review.
+  - **Reviewed** (Opus, read-only): no blocker, three major findings, all reproduced. Each was a
+    hole a later edit to the workflow could pass through, not a fault in what ran:
+    - Case o ran only in the job it guards, and nothing read the `nothreads` job or the pin step.
+    - Case o read keys as text, so `"if": false`, `? if`, aliases, `needs:`, `defaults: shell:`,
+      path filters and `GITHUB_ENV` writes passed it.
+    - Dropping chez-curl's spelling rules reopened `? uses`, which hid an unpinned action from
+      the pin check. The reason recorded for dropping them was wrong.
+  - **Fixed:**
+    - `make check-ci` (a Sonnet agent, test-first: 1 passed, 125 failed, then 128 passed) holds
+      the workflow's whole shape, and `make test` runs it.
+    - Case o runs it. `scripts/ci/check-chez.sh` re-checks a Chez restored from the cache.
+    - The cache keys hash every script, and `MEMORY_TIMEOUT` is 600 s.
+    - Smaller fixes: an open double-quoted string fails `check-floors`; new rows for an
+      unreadable workflow file and for `check-chez.sh`; the launcher's tests run in `main`.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs

@@ -63,20 +63,24 @@
 ;;;     comment;
 ;;;   - a backslash after a double quote, closed or not: YAML reads escapes
 ;;;     there, so "8\x2e1\x2e2" spells a floor without its text, and this check
-;;;     reads text, line by line, and fails closed.
+;;;     reads text, line by line, and fails closed;
+;;;   - an odd number of double quotes: a double-quoted string left open at
+;;;     the line's end goes on over the lines after it, where an escape is no
+;;;     longer after a quote on its own line (M0 slice 4's review).
 ;;;
-;;; chez-curl's other workflow rules are left out: its two env keys
-;;; (CHEZ_VERSION, CURL_FLOOR_VERSION), node-version, and its explicit-key,
-;;; alias, non-ASCII and tab rules. They protected rules about keys, that no
-;;; workflow may set the env keys the build scripts once read, or the Node
-;;; version setup-node installs, and the spellings of a key YAML or GitHub
-;;; reads as another. This project has no such key: CI has no env key that
-;;; holds a floor, and no setup-node. What a workflow can spell as a floor is
-;;; its text, and the one way to spell it without its text is an escape.
+;;; chez-curl's two env keys (CHEZ_VERSION, CURL_FLOOR_VERSION) and its
+;;; node-version rule are left out: no env key here ever held a floor, and
+;;; there is no setup-node. Its explicit-key, alias, non-ASCII and tab rules
+;;; are not here either, but they are not dropped: they protect rules about
+;;; keys, and this project has two, the uses key check-action-pins.sh reads
+;;; and the keys of the workflow's shape. tests/check-ci.sh holds both, and
+;;; carries those rules (M0 slice 4's review found them first left out).
 ;;;
 ;;; The text is searched, not parsed as YAML, so a version inside a longer
 ;;; number is also the floor's text. A value that is no floor's text, as a
-;;; matrix of other versions, is not seen here: nothing reads it.
+;;; matrix of other versions, is not seen here: nothing reads it. Nor is an
+;;; expression that builds a version, as format('{0}.{1}.{2}', ...) does:
+;;; nothing would read that either, since build-chez.sh takes no version.
 (library (floors)
   (export floors-path check-floors floors-problems parse-floors read-floors file-text
           floor-text floor-numbers requirement-lines workflows-problems ci-workflow)
@@ -472,10 +476,20 @@
                        (else (find-slash (+ j 1))))))
               (else (find-quote (+ i 1)))))))
 
+  ;; odd-quotes? : String -> Boolean
+  ;; Whether LINE holds an odd number of double quotes: a double-quoted
+  ;; string is left open at its end, and goes on over the lines after it.
+  (define (odd-quotes? line)
+    (let loop ((i 0) (n 0))
+      (cond ((= i (string-length line)) (odd? n))
+            ((char=? (string-ref line i) #\") (loop (+ i 1) (+ n 1)))
+            (else (loop (+ i 1) n)))))
+
   ;; line-problems : String String (Listof String) (Listof (List String String)) -> (Listof String)
   ;; Each complaint about the lines LINES of the file at PATH, in line order:
   ;; for a line, the floors whose version text it contains, the Chez floor
-  ;; first, then a backslash after a double quote. FPATH is the floors file's
+  ;; first, then a backslash after a double quote, then an odd number of
+  ;; double quotes. FPATH is the floors file's
   ;; path, FLOORS (name version) for each floor.
   (define (line-problems path fpath lines floors)
     (let loop ((rest lines) (n 1))
@@ -496,6 +510,11 @@
                (list (string-append
                       path ": line " (number->string n)
                       " holds a backslash after a double quote, which YAML may read as an escape, and check-floors does not"))
+               '())
+           (if (odd-quotes? (car rest))
+               (list (string-append
+                      path ": line " (number->string n)
+                      " holds an odd number of double quotes, so a double-quoted string goes on past it, where YAML may read an escape, and check-floors reads line by line"))
                '())
            (loop (cdr rest) (+ n 1))))))
 

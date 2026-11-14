@@ -6,8 +6,8 @@
 # directories above this script.
 #
 # CI states no floor anywhere. This is how a step, or a script, gets one:
-# scripts/ci/build-chez.sh calls it for the version it builds, and the main
-# job for the SQLite floor it compares the runner's library with. It reads
+# scripts/ci/build-chez.sh and check-chez.sh call it for the Chez floor, and
+# scripts/ci/report-sqlite.sh for the SQLite floor it reports. It reads
 # nothing else, no argument and no environment variable, so nothing a
 # workflow says, an env key or a matrix value, can change what it prints.
 #
