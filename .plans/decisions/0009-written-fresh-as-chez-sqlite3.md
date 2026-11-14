@@ -58,3 +58,12 @@ Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
   exports. Its rule (d), that every library belongs to a family, becomes the boundary rule above.
   It drops rules (a), (b) and (j), about chez-curl's second family and its escape hatch. Each dropped
   rule is listed, with what it protected, in the slice that copies it (the M1 plan, §3.5).
+- **The names, as slice 2 left them.** `allowed-chez-names` is exactly what `src/` imports from
+  `(chezscheme)`, and `tests/test-check-seam.sps` writes it out whole. `foreign-alloc` and
+  `foreign-free` are `(chez-sqlite3 private memory)`'s alone. `load-shared-object`,
+  `foreign-procedure`, `foreign-entry`, `foreign-entry?`, `foreign-ref`, `foreign-set!`,
+  `foreign-sizeof`, `getenv`, `machine-type`, `format`, `format-condition?` and
+  `display-condition` are `(chez-sqlite3 private native)`'s alone. `define-ftype`, `lock-object`,
+  `foreign-callable` and `fork-thread` are allowed to no library. A library that imports a
+  library-only name may export no macro (rule (k)).
+

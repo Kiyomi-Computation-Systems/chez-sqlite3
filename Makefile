@@ -58,7 +58,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps build check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -134,6 +134,19 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 	done
 	@echo "deps: $(SRFI_SRC) linked into $(SRFI_LIBS)/srfi"
 
+# Loads libsqlite3 as chez-sqlite3 would, through tests/preflight.sps, and
+# names it: its path and source, its version and number, and its source id.
+# A refused libsqlite3 fails it, exit 1, with the reason, the path, the
+# detail, the candidates checked and a remedy, and, when the refusal came
+# after the version was read, that library's own report. chez-sqlite3
+# compiles nothing (ADR-0001), so this is the question an install asks. It
+# writes nothing: no build output, under src/ or anywhere. build is in
+# .PHONY: the build/ directory exists, and without it make would answer that
+# build is up to date and run nothing. make test does not depend on it.
+build: ## Load libsqlite3 as chez-sqlite3 would and name it; fail with the reason when it is refused
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --libdirs src --program tests/preflight.sps
+
 # Three places name the chez-srfi commit, and nothing else keeps them equal:
 # Akku.lock (what a consumer installs), the gitlink the superproject records
 # (what a clone checks out) and the submodule's checkout (what the tests
@@ -193,9 +206,9 @@ check-pins: ## Fail unless Akku.lock, the gitlink and the checkout name one chez
 # failed or hung, or if none matched. --foreground keeps a suite in make's
 # process group, so Ctrl-C at a terminal reaches it at once, and does not
 # wait out the timeout. `make check-test-fails` proves the loop fails. The
-# checks come first: check-help, check-suites, check-floors and check-ci each
+# checks come first: check-help, check-suites, check-seam, check-floors and check-ci each
 # stop it.
-test: deps check-help check-suites check-floors check-ci ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
+test: deps check-help check-suites check-seam check-floors check-ci ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@case '$(TEST_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
@@ -239,6 +252,19 @@ check-suites: deps ## Fail unless every tests/test-*.sps ends with the shared ex
 check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp, and no workflow does
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows
+
+# Reads every library under src/ as data, and fails on any that breaks the
+# seam (ADR-0009, amended): a library outside (chez-sqlite3) and
+# (chez-sqlite3 private ...), an import off the allowlists, a name of
+# (chezscheme) that only some libraries may import, a re-export of one, a
+# macro that could carry one out, a library off its name's path or sharing a
+# file. It reads src/ alone: tests and (chez-sqlite3-testing) import private
+# libraries. tests/test-check-seam.sps holds each rule on a fixture tree, and
+# tests/check-test-fails.sh holds that make test runs it, on src/. It imports
+# only (rnrs) and a few of Chez's own bindings, so it needs no deps.
+check-seam: ## Fail unless every library under src/ keeps to the seam: the family, the import lists and the names only some libraries may import
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --program tests/check-seam.sps src
 
 # Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
 # (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its

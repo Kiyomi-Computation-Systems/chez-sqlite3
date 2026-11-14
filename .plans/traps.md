@@ -84,6 +84,17 @@ told in chez-curl's `.plans/traps.md`.
   `check-ci`, added a slice later, had none. Each new prerequisite comes with its plant. (M0's
   closing review, chez-sqlite3)
 
+- **A scanner of forms that walks list tails finds forms that aren't there.** `test-native`'s
+  first scanner counted a 16th `foreign-procedure` form in `native.sls`: `(syntax
+  foreign-procedure)` in the binder's fender ends in a `(foreign-procedure)` tail, and so does
+  the import clause's `(only (chezscheme) … foreign-procedure …)`. Read list elements, never
+  tails. (M1 slice 2, chez-sqlite3)
+
+- **A probe that blocks a plain foreign call can't release itself.** A collection requested by
+  another thread waits for every thread, the blocked one too, so no thread of that process runs
+  until the call returns. Only another process can release it: `test-native`'s FIFO row opens
+  the FIFO from a shell. (M1 slice 2, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

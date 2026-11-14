@@ -1,0 +1,11 @@
+#!r6rs
+(library (chez-sqlite3 private native)
+  (export a b c d e f g)
+  (import (rnrs) (only (chezscheme) foreign-procedure))
+  (define a (foreign-procedure "p_first" (string int int) int))
+  (define b (foreign-procedure "p_middle" (int string int) int))
+  (define c (foreign-procedure "p_last" (int int string) int))
+  (define d (foreign-procedure "p_result" (int int int) string))
+  (define e (foreign-procedure "p_void_argument" (void) int))
+  (define f (foreign-procedure "p_void_result" (int) void))
+  (define g (foreign-procedure "p_allowed" (integer-64 int uptr) integer-64)))

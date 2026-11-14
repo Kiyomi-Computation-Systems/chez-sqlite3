@@ -54,8 +54,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `/usr/lib/libsqlite3.dylib`. Discovery is a pure function of its inputs (ADR-0002).
 - **One load, then verify, never fall through.** The report's three entry points are bound first
   (`sqlite3_libversion_number`, `sqlite3_libversion`, `sqlite3_sourceid`) *(provisional)*. Then the
-  floor is checked, then `sqlite3_threadsafe`: a single-thread build is refused. Every other
-  required entry point is then bound eagerly in the same library body. The first failure is kept
+  floor is checked, then `sqlite3_threadsafe`: a single-thread build is refused. Then
+  `sqlite3_initialize` is called once. Every other required entry point is then bound eagerly in
+  the same library body. The first failure is kept
   for the life of the process (ADR-0002, amended; ADR-0010).
 - **Refusals carry a reason symbol:** `invalid-override`, `not-found`, `load-failed`,
   `below-floor`, `not-threadsafe` or `missing-api`. Tests assert the symbol, never the text
