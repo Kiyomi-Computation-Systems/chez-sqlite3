@@ -78,3 +78,11 @@ each Chez, restored or built. `main`'s checks and suites passed, `check-ci` and 
 among them, and then its new step, the launcher's host-side tests, failed: 79 passed, 4 failed,
 each of T11b's "says why". T11b ran `make test` under `env -i`, which dropped `CHEZ`, and the
 runner has no `scheme` on `PATH` (`.plans/traps.md`). T11b now passes `CHEZ` through.
+
+## The third run
+
+Run 43545759140, with T11b fixed, restored every Chez from the cache the second run saved, and
+passed in all three jobs. Each restored Chez was asked again before anything ran on it:
+`check-chez.sh` answered `(10 4 0 yes)` in `main` and `memory`, and `(10 4 0 no)` in `nothreads`.
+The launcher's tests passed 83 of 83. With warm caches, `main` and `nothreads` took about a minute
+each, and `memory` 3 min 44 s.

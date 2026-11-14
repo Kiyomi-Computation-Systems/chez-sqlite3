@@ -53,6 +53,9 @@ newest first.
     - The cache keys hash every script, and `MEMORY_TIMEOUT` is 600 s.
     - Smaller fixes: an open double-quoted string fails `check-floors`; new rows for an
       unreadable workflow file and for `check-chez.sh`; the launcher's tests run in `main`.
+  - **CI's second run failed in `main`,** at the launcher's tests: T11b ran `make test` under
+    `env -i`, which dropped `CHEZ`, and the runner has no `scheme` on `PATH`. Reproduced, fixed,
+    and the third run passed in all three jobs, on Chez restored from the cache and re-checked.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs
