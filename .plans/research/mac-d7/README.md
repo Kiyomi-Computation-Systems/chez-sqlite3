@@ -2,8 +2,15 @@
 
 Written and run 2026-11-13 (M1 slice 0), by the maintainer, on their one Mac: macOS 26.7.1
 (25G241), arm64, Homebrew's Chez 10.4.1 (`tarm64osx`, threaded). The output, whole:
-[mac-d7.txt](mac-d7.txt). The files were checked by sha256 on the Mac before the run. macOS 14
-and 15 stay unmeasured (the M1 plan, §2).
+[mac-d7.txt](mac-d7.txt). Before the run, the maintainer's `shasum -a 256` of the two files on
+the Mac matched these, which are the files here:
+
+```
+da7254a5796bb951d8edf4864567c9ac57d900ff2e3fde59d53dc8d6a6428a02  probe.sps
+127d5d38e7c0b6fd1cc8a6e0e874d4416b9eaa720648317382fbb6cfb3a27e5f  run.sh
+```
+
+macOS 14 and 15 stay unmeasured (the M1 plan, §2).
 
 ## What it answers
 
@@ -15,7 +22,8 @@ process of its own:
 - **Its version,** version number, source id and threadsafe setting. Below 3.45.1 it is refused as
   `below-floor`, and with threadsafe 0 as `not-threadsafe`.
 - **Every compile option it reports,** read through the FFI, never from a `sqlite3` command.
-- **Which of the 45 entry points v1 binds are missing** (brief §4).
+- **Which of 45 entry points are missing:** the ones v1 was expected to bind when the probe was
+  written. ADR-0002's amendment has since dropped `sqlite3_enable_load_extension` from v1.
 - **SQLite's memory count** before an open, while open and after the close. A build with
   `DEFAULT_MEMSTATUS=0` answers 0 while open, and the gate's check needs a positive control
   (the plan, §3.6).
@@ -67,7 +75,7 @@ exited 1, and both Homebrew paths were reported absent.
   and 0 after. A check that the count returns to its baseline passes here without testing
   anything. That is the plan's §3.6, measured.
 - **`OMIT_LOAD_EXTENSION`:** `sqlite3_load_extension` and `sqlite3_enable_load_extension` are
-  missing, the only two of the 45 entry points v1 binds. `sqlite3_db_config`'s
+  missing, the only two of the 45. `sqlite3_db_config`'s
   `ENABLE_LOAD_EXTENSION` answers 21, `SQLITE_MISUSE`, and leaves the setting's cell untouched
   (-7, the probe's sentinel). SQL answers `no such function: load_extension`. So brief §2.5's
   belief is measured: Apple's SQLite is a library built without extension loading.
@@ -98,6 +106,9 @@ reaches Homebrew's.
   reach it by default, through discovery.
 - **For M1's slice 4, on the Mac:** whether `SQLITE_OPEN_FULLMUTEX` makes a connection to Apple's
   `THREADSAFE=2` library serialized, read through `sqlite3_db_mutex`.
+- **For M2:** Apple's is built with `OMIT_AUTORESET`. There, stepping a statement again after
+  `SQLITE_DONE` or an error, without a reset, answers `SQLITE_MISUSE` instead of resetting it. The
+  Mac's hand runs use this library.
 - **For M4:** extension loading's opt-in checks for `sqlite3_load_extension` before it calls
   `sqlite3_db_config`, whose answer on Apple's library is `SQLITE_MISUSE`, not a refusal it names.
 - **For M1's slice 5:** Homebrew's 3.54.1, dated 2026-10-16, is a candidate for the `current`

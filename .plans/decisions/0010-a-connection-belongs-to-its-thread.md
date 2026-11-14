@@ -1,6 +1,7 @@
 # ADR-0010: A connection belongs to the thread that opened it, and opens with SQLite's mutex
 
-- **Status:** Accepted (the maintainer, 2026-11-13: brief D2 and the `THREADSAFE=0` refusal). Proposed
+- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Decisions 3 and 4
+  were the maintainer's own, on 2026-11-13: brief D2, and the `THREADSAFE=0` refusal. Proposed first
   in the brief, §3c.
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
@@ -36,10 +37,11 @@
 ## Decision
 
 1. **A connection belongs to the thread that opened it.** It records that thread's
-   `get-thread-id`. Every verb on it, `close-database!` among them, checks the calling thread
-   first, and on any other thread raises `&sqlite-wrong-thread` before anything reaches C. The
-   connection is left as it was. M3's `sqlite3_interrupt` is the one call another thread may make
-   (brief §3c).
+   `get-thread-id`. Every verb on it, `close-database!` among them, checks the calling thread, and
+   on any other thread raises `&sqlite-wrong-thread` before anything reaches C. ADR-0012 gives the
+   order of a verb's checks. The connection is left as it was. M3's `sqlite3_interrupt` is the one
+   call another thread may make (brief §3c). SQLite says it is unsafe on a connection that is
+   closed, or might close before it returns, so M3 designs it with `close-database!`.
 2. **Statements belong to their connection's thread** (M2). The same check guards every
    statement verb.
 3. **A connection opens with `SQLITE_OPEN_FULLMUTEX`,** unless `open-database` is given

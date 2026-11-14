@@ -33,4 +33,8 @@
   (let* ([s (step stmt)]
          [answer (column-text stmt 0)])
     (printf "prepare rc ~a; step rc ~a (100 is ROW); journal_mode answers ~s~n" rc s answer))
-  (printf "finalize rc ~a; close rc ~a~n" (finalize stmt) (close db)))
+  ;; let*, not two arguments to printf: Chez fixes no order for a call's
+  ;; arguments, and a close before the finalize would answer SQLITE_BUSY.
+  (let* ([f (finalize stmt)]
+         [c (close db)])
+    (printf "finalize rc ~a; close rc ~a~n" f c)))

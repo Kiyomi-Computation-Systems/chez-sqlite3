@@ -44,6 +44,8 @@
 
 ## Amendment, 2026-11-14: what `check-seam` reads (M1's plan)
 
+Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
+
 - **`check-seam` reads `src/` alone.** The rule is about what the library exposes:
   under `src/`, only `(chez-sqlite3)` and the `(chez-sqlite3 private …)` libraries exist, and no
   library but `(chez-sqlite3)` and the private ones imports a private one.
@@ -53,5 +55,6 @@
   (M0's closing review).
 - **It is chez-curl's `check-seam`, trimmed to one family.** It keeps chez-curl's rules on
   `(chezscheme)` imports, the import allowlist, the names only some libraries may import, and
-  exports. It drops the rules about chez-curl's second family and its escape hatch. Each dropped
+  exports. Its rule (d), that every library belongs to a family, becomes the boundary rule above.
+  It drops rules (a), (b) and (j), about chez-curl's second family and its escape hatch. Each dropped
   rule is listed, with what it protected, in the slice that copies it (the M1 plan, §3.5).

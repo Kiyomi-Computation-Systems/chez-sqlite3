@@ -11,6 +11,10 @@ scripts/guix-env sh -c 'd=$(mktemp -d build/m1-probe.XXXXXX) && $CHEZ --program 
 
 Each run needs a fresh directory: in a used one, the file exists before the open.
 
+The probe's last line first passed `(finalize stmt)` and `(close db)` as two arguments to `printf`,
+whose order Chez doesn't fix; a close before the finalize would answer `SQLITE_BUSY`. M1 slice 0's
+review caught it. They are now a `let*`, and the rerun printed the same output.
+
 Output, whole (Guix's locale warning filtered):
 
 ```
@@ -23,8 +27,8 @@ finalize rc 0; close rc 0
 
 - **`sqlite3_open_v2` creates the file at open,** before any statement runs. So the open reaches
   the file system, and can block on it like `sqlite3_close` (the plan's §3.2).
-- **`PRAGMA journal_mode=wal` on a `:memory:` database answers `memory`,** with every return code
-  0. A setting is checked only by reading its row back, which needs M2's statements, so the
+- **`PRAGMA journal_mode=wal` on a `:memory:` database answers `memory`,** and no call says so:
+  prepare, finalize and close answered 0, and step answered `SQLITE_ROW`. A setting is checked only by reading its row back, which needs M2's statements, so the
   settings list moves to M3 (the plan's §2).
 
 Not measured at the floor, 3.45.1; slice 5's `floor` lane is the first place to run it there.

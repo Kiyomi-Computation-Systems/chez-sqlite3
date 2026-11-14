@@ -9,8 +9,15 @@ newest first.
 - **M0 is done.** Its five slices merged as PRs #1 to #5, and its closing review and the review's
   fixes as PR #6. CI on `main` passed in all three jobs at `d85c28c`.
 - **M1 slice 0, the plan and the records,** is on `m1-slice-0-plan`:
-  [the M1 plan](2026-11-13-m1-plan.md), accepted; ADR-0010 to ADR-0013; and amendments to
-  ADR-0002, ADR-0005, ADR-0009, the brief and these constraints.
+  [the M1 plan](2026-11-13-m1-plan.md); ADR-0010 to ADR-0013, proposed for the maintainer's
+  acceptance with its PR; and amendments to ADR-0002, ADR-0005, ADR-0009, the brief and the global
+  constraints, whose new rules are marked provisional where no choice of the maintainer's backs
+  them.
+  - **Reviewed** (Opus, read-only): no blocker, 8 major findings and 15 minor, all checked and
+    fixed. Among them: no record said which entry points are required, so Apple's library would
+    have been refused; the bind order couldn't build the report refusals carry; the records
+    claimed acceptance beyond what the maintainer had approved; and the plan's probe depended on
+    argument order. The probe was fixed and rerun, with the same output.
   - **The maintainer settled eight questions** on 2026-11-13 and 2026-11-14 (the plan, §2): the
     settings list moves to M3; `FULLMUTEX` by default, with `'no-mutex`; a `THREADSAFE=0` library is
     refused; D7 measured on the one Mac; a fieldless condition root; a closed connection raises

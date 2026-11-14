@@ -71,8 +71,8 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
 4. **Every outcome names its paths.** A loaded library is reported with its path, its source (the
    override, a Guix location, a system directory), `sqlite3_libversion` and
    `sqlite3_sourceid`. A refusal is a `&sqlite-library-unavailable` carrying a reason symbol:
-   `invalid-override`, `not-found`, `load-failed`, `below-floor` or `missing-api`. `not-found`
-   lists every candidate it checked.
+   `invalid-override`, `not-found`, `load-failed`, `below-floor` or `missing-api`, and
+   `not-threadsafe` since the 2026-11-14 amendment. `not-found` lists every candidate it checked.
 
 ### Rejected
 
@@ -110,16 +110,33 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
   path, the version and the override.
 - **A Mac whose system SQLite is below the floor** gets `below-floor`, and its remedy is the
   override. macOS 14 and 15 may be such Macs (brief D7). If M1 measures that they are, M1 revisits
-  whether macOS should get more candidates.
+  whether macOS should get more candidates. M1 measured only macOS 26, which is above the floor
+  (the amendment), so for 14 and 15 this stays open.
 - **The reason symbols are the contract.** Tests assert the reason, never the remedy text.
 
 ## Amendment, 2026-11-14: `not-threadsafe`, and what the Mac showed (M1's plan)
 
 - **A sixth reason, `not-threadsafe`.** A library whose `sqlite3_threadsafe()` answers 0 is
-  refused (ADR-0010, decision 4; the maintainer, 2026-11-13). The order of decision 3 becomes:
-  bind `sqlite3_libversion_number` and check the floor; then bind `sqlite3_threadsafe` and refuse
-  0; then bind every other required entry point. The refusal's detail is the answer, 0, and its
-  report is the library's, since the version was read first.
+  refused (ADR-0010, decision 4; the maintainer, 2026-11-13). The refusal's detail is the
+  answer, 0.
+- **What is bound, in order** (proposed in M1 slice 0, for acceptance with its PR):
+  1. **The report's three:** `sqlite3_libversion_number`, `sqlite3_libversion` and
+     `sqlite3_sourceid`, which every SQLite 3 has. The report is built from them, with the path
+     and the source: those five fields and no others. So every refusal from here on carries it.
+  2. **The floor:** `below-floor`.
+  3. **`sqlite3_threadsafe`:** `not-threadsafe`.
+  4. **Every other required entry point,** each checked with `foreign-entry?` first, else
+     `missing-api` naming it. M1's are `sqlite3_compileoption_used`,
+     `sqlite3_compileoption_get`, `sqlite3_open_v2`, `sqlite3_close`, `sqlite3_errmsg`,
+     `sqlite3_errstr`, `sqlite3_errcode`, `sqlite3_extended_errcode`, `sqlite3_next_stmt` and
+     `sqlite3_memory_used`. Each later milestone adds its own, every one present at the floor.
+  - **Optional:** `sqlite3_load_extension` (M4), which a build can omit, as Apple's does. Its
+    absence is reported where extension loading is asked for, never at the load.
+  - **Never bound:** `sqlite3_enable_load_extension`. SQLite's documentation says it turns on SQL's
+    `load_extension()` as well as the C call, which brief §2.5 rules out. M4 turns on the C call
+    alone, through `sqlite3_db_config`'s `ENABLE_LOAD_EXTENSION`.
+  - **Compile options are read, not reported:** an application asks through the exported
+    queries, which call `sqlite3_compileoption_used` (brief §2.6).
 - **Apple's SQLite, measured on the maintainer's Mac** (macOS 26.7.1, arm64;
   [research/mac-d7/](../research/mac-d7/)):
   - **It loads by absolute path with no file on disk,** as decision 1 expects: a `stat` would
@@ -129,9 +146,9 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
     and 15 stay unmeasured.
   - **It answers `THREADSAFE=2`,** so `not-threadsafe` doesn't refuse it.
   - **It is built with `OMIT_LOAD_EXTENSION`:** `sqlite3_load_extension` and
-    `sqlite3_enable_load_extension` are missing, the only two of the 45 entry points v1 binds.
-    Both are optional (decision 3), so the load accepts it, and M4 reports their absence where
-    extension loading is asked for.
+    `sqlite3_enable_load_extension` are missing, the only two of the 45 entry points the probe
+    checked. The first is optional and the second is never bound (above), so the load accepts
+    it.
 - **Homebrew's SQLite is at `/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib`,** 3.54.1 on that
   Mac. It loads by absolute path, as the override names it. Whether Homebrew also links it into
   `/opt/homebrew/lib` wasn't checked; nothing here reads that directory.

@@ -87,12 +87,12 @@ need prepared statements, and the conveniences are built on them. Nothing privat
    bound parameter, so each name and value is validated before it reaches SQL text. The list
    arrives in M3, not M1 (the maintainer, 2026-11-13): a setting is checked by reading its row
    back, which needs M2's statements. `journal_mode=wal` on a `:memory:` database answers
-   `memory` with every return code 0 ([research/m1-plan/](research/m1-plan/)).
+   `memory` while every call succeeds ([research/m1-plan/](research/m1-plan/)).
 8. **`sqlite3_config` stays out:** it is process-wide and legal only before SQLite
    initialises. `sqlite3_db_config` is reached through a few named, checked options:
    extension loading, defensive mode, double-quoted strings.
 
-## 3. Proposed, for decision records in M0
+## 3. Proposed, for decision records in M0 and M1
 
 | # | Proposal | Precedent |
 |---|---|---|

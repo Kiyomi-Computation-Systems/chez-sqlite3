@@ -1,7 +1,8 @@
 # ADR-0013: Errors are condition types under one fieldless root, and SQLite's codes are symbols
 
-- **Status:** Accepted (the maintainer, 2026-11-14: the root and the closed type). Proposed in the
-  brief, §3g.
+- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
+  chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
+  §3g.
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -37,25 +38,26 @@
        └ &sqlite-closed               no fields
    ```
 
-   `sqlite-error?` means SQLite returned a code. `chez-sqlite3-error?` catches everything the
-   library raises.
+   `sqlite-error?` means SQLite returned a code. `chez-sqlite3-error?` catches every library
+   condition. A caller's mistake is an assertion violation (decision 7), which it doesn't catch.
 2. **Every raise compounds a `&who`** naming the public procedure, so `condition-who` says which
-   call failed. `&sqlite-error` also carries a `&message` with SQLite's text, so Chez's printer
+   call failed. A refusal at load, which no one procedure raises, names `chez-sqlite3`. `&sqlite-error` also carries a `&message` with SQLite's text, so Chez's printer
    shows it, beside the field that is the contract.
 3. **`&sqlite-error`'s fields:**
    - **`code`**: the primary code as a symbol. A code's name is its C name with `SQLITE_`
      dropped, lower-cased, and `_` turned to `-`: `busy`, `cantopen`, `constraint`.
    - **`extended-code`**: the extended code as a symbol, by the same rule: `cantopen-isdir`,
      `constraint-unique`. A primary code with no extension is its own extended code: `busy`. A
-     code no table row names, newer than the headers the table was read from, is the integer
-     itself.
+     code no table row names, newer than the floor's header, is the integer itself.
    - **`message`**: `sqlite3_errmsg` for the connection, read on the owning thread right after
      the failing call, or `sqlite3_errstr` of the code when there is no connection.
    - **`sql`** and **`offset`**: the statement's text and `sqlite3_error_offset`, from M2's
      prepare. Otherwise `#f`.
-4. **One table names every code** at the floor's header, primary and extended. `test-constants`
-   checks every row against `sqlite3.h` (ADR-0001). A code the table doesn't name raises the base
-   type, never a subtype.
+4. **One table names every code in the floor's header,** 3.45.1's, primary and extended.
+   `test-constants` checks every row against the `sqlite3.h` each lane compiles with (ADR-0001). A
+   newer header may name more codes, and the table leaves those as integers. Every code's primary
+   code is its low byte, and every primary code is named, so a code the table doesn't name still
+   has a named `code`, and decision 8's class.
 5. **`&sqlite-library-unavailable`'s fields are chez-curl's six:** reason, path, source,
    detail, candidates and the report, `#f` when the refusal came before the version was read.
    The reasons are `invalid-override`, `not-found`, `load-failed`, `below-floor`,

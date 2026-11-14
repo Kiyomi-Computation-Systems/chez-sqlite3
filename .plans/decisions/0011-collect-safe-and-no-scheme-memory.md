@@ -1,7 +1,7 @@
 # ADR-0011: Calls that can block are `__collect_safe`, and nothing passed to libsqlite3 lives in Scheme memory
 
-- **Status:** Accepted (the maintainer, 2026-11-13, with the M1 plan's approval). Proposed in the
-  brief, §3d.
+- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Proposed first in
+  the brief, §3d.
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -15,10 +15,12 @@
 
 - **Chez's collector stops every thread.** A thread blocked in a plain foreign call stays
   active, so every other thread's collection waits for it. `__collect_safe` deactivates the
-  calling thread for the call (CSUG 10.4.1 §4.3). chez-curl ADR-0013 records the cost of not doing
-  so, measured through chez-libuv: 10,272 ms against a 28 ms baseline.
-- **A collection can move a string or a bytevector** while a `__collect_safe` call runs, so
-  neither may be passed to one (CSUG §4.3).
+  calling thread for the call (CSUG 10.4.1, §4.2, "Calling out of Scheme"). chez-curl ADR-0013
+  records the cost of not doing so, measured through chez-libuv: 10,272 ms against a 28 ms
+  baseline.
+- **A collection can move a string or a bytevector** while a `__collect_safe` call runs. CSUG
+  §4.2 disallows the `string` and `utf-8` types as arguments to one, and says to refrain from
+  passing collectable memory.
 - **C reads a string up to its first NUL.** A Scheme string can hold U+0000, and would then name
   a shorter file than the one the caller gave.
 - **SQLite can block:**

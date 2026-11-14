@@ -1,7 +1,8 @@
 # ADR-0012: Closing is explicit, with no guardians, and a connection's handle is an integer in a sealed record
 
-- **Status:** Accepted. The maintainer approved the handle and the open surface on 2026-11-13, and
-  the closed type and `call-with-database`'s shape on 2026-11-14. Proposed in the brief, §3e.
+- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
+  approved decision 2 (the handle) and decision 3's surface on 2026-11-13, and decision 7's type
+  and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e.
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -32,8 +33,9 @@
 ## Decision
 
 1. **Closing is explicit.** `open-database`, `close-database!` and `call-with-database` are public,
-   and there are no guardians and no finalizers. A connection never closed is a leak, and the gate
-   sees it: through the `connection` counter, and through Valgrind at exit.
+   and there are no guardians and no finalizers. A connection never closed is a leak, and the
+   `connection` counter sees it. On Linux, Valgrind should see it at exit too, if slice 4's leaks
+   plant confirms what M0 measured with bare FFI (the consequences).
 2. **The handle is an integer in an opaque, sealed record.** The `sqlite3*` address, bound as
    `uptr`, sits in a field of a `database` record whose type is opaque and sealed. The field's
    accessor stays private, so no caller can forge, copy or reuse a handle. A procedure that takes
@@ -50,8 +52,17 @@
    (open-database "app.db" 'no-mutex)
    ```
 
-   - With no mode, a connection opens read-write and creates the file. `'read-write` alone
-     doesn't create it, `'create` adds creation, and `'read-only` opens read-only.
+   - **The mode options, and the flags each gives:**
+
+     | Options | Flags |
+     |---|---|
+     | none | `READWRITE` \| `CREATE` |
+     | `'create` | `READWRITE` \| `CREATE` |
+     | `'read-write` | `READWRITE` |
+     | `'read-write 'create` | `READWRITE` \| `CREATE` |
+     | `'read-only` | `READONLY` |
+
+     So `'create` implies read-write, and `'read-write` alone doesn't create the file.
    - `'uri`, `'memory` and `'no-follow` add `SQLITE_OPEN_URI`, `SQLITE_OPEN_MEMORY` and
      `SQLITE_OPEN_NOFOLLOW`. `'no-mutex` swaps `FULLMUTEX` for `NOMUTEX` (ADR-0010).
      `SQLITE_OPEN_EXRESCODE` is always on. v1 never passes a shared-cache flag or a VFS name.
@@ -71,7 +82,8 @@
      connection stays open, still counted.
 6. **The `connection` counter** goes up when `sqlite3_open_v2` hands back a handle, failed or not,
    and down when `sqlite3_close` answers `SQLITE_OK` (ADR-0005).
-7. **A closed connection refuses every verb** with `&sqlite-closed` (ADR-0013). Each verb checks
+7. **A closed connection refuses every verb but `close-database!`** with `&sqlite-closed`
+   (ADR-0013). Each verb checks
    three things, in order, before it reaches C: that its argument is a database, that it runs on
    the owning thread (ADR-0010), and that the connection is open. A second `close-database!` on
    the owning thread does nothing and returns. The record keeps no address once closed.
@@ -83,10 +95,16 @@
      (lambda (db) …))
    ```
 
-   It opens with the options given, calls the procedure, and closes the connection when the
-   procedure returns or raises, through `dynamic-wind`. Its answer is the procedure's. The
-   procedure is checked before anything is opened. A continuation that re-enters the procedure
-   finds the connection closed.
+   It checks the procedure before anything is opened, opens with the options given, and calls the
+   procedure. Its answer is the procedure's.
+   - **When the procedure returns,** or leaves through a continuation, the connection is closed,
+     through `dynamic-wind`. A failure of that close raises.
+   - **When the procedure raises,** the connection is closed, and the procedure's condition
+     reaches the caller, unchanged. If that close fails too, its failure is not raised over the
+     procedure's: the connection stays open and counted, so the gate sees it.
+   - **A continuation that re-enters the procedure** finds the connection closed.
+   - **A raise no handler catches** ends a program through Chez's exit, which runs no after thunk.
+     The process is ending, and SQLite's files are left as a crash would leave them.
 
 ### Rejected
 
@@ -107,3 +125,7 @@
   (the M1 plan, §3.1).
 - **M3's settings list arrives as an argument that isn't a symbol,** so the options stay
   symbols.
+- **A filename starting `file:` is a URI on most builds, with or without `'uri`.** Ubuntu's,
+  Apple's and Homebrew's are compiled with `USE_URI`, and no open flag turns that off. So a
+  filename can bring in `vfs=` or `cache=shared`. Whether `open-database` refuses a `file:` name
+  given without `'uri` is decided in slice 4, with a test per build (the M1 plan, §7).
