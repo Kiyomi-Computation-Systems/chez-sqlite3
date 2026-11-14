@@ -272,7 +272,7 @@ check-nothreads: ## Fail unless every library under src/ refuses to import, by n
 # with the floors file, one at a time, in a copy of the tree, and requires
 # make test to fail on each by name. tests/check-test-fails.sh lists the
 # plants. The copy has no .git, so nothing in it runs git.
-check-test-fails: ## Plant bad suites, none at all and a stale README, in a copy; make test must fail on each, by name
+check-test-fails: ## Plant bad suites, none at all, a stale README and a bad workflow, in a copy; make test must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' sh tests/check-test-fails.sh
 

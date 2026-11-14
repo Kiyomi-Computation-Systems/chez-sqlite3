@@ -140,8 +140,8 @@ Out of v1:
 - **M0, the harness.** Trimmed from chez-curl, by [the harness
   plan](2026-11-13-harness-plan.md): the decision records, the ledger and the global
   constraints, the Guix container, the Makefile, SRFI-64 from vendored chez-srfi, the suite
-  checks and the pin checks, the counters, the Valgrind gate, and Linux CI's `main` and
-  `memory` jobs.
+  checks and the pin checks, the counters, the Valgrind gate, and Linux CI's `main`, `memory`
+  and `nothreads` jobs.
 - **M1, loading.** Discovery, the floor check, conditions, open and close, the settings list,
   `sqlite3_libversion`, compile options. SQLite's two memory checks join the gate; the `floor`
   and `current` CI lanes arrive. The Mac measurements (D7).
@@ -152,11 +152,14 @@ Out of v1:
   connections in WAL mode contending under a busy timeout.
 - **M4, extensions and `db_config`.** Loadable extensions opt-in, defensive mode, DQS. FTS5
   and JSON suites.
-- **M5, the release.** `/docs`, README, CHANGELOG, 0.1.0.
+- **M5, the release.** `/docs` finished, README, CHANGELOG, 0.1.0. `docs/reference.md` grows
+  from M1's first export on (the harness plan, §4).
 
 ## 7. The test instrument
 
-- **No network.** Tests use `:memory:` databases and temporary files under `build/`.
+- **No network.** Tests use `:memory:` databases and temporary files in a directory of the
+  process's own, under `$TMPDIR` (ADR-0007, amended): fixed paths under `build/` collided when
+  two runs shared a tree.
 - **Every suite checks the gate** (§2.4) around what it opens.
 - **Three SQLites in CI.** `main` loads the runner's own through discovery; on
   `ubuntu-24.04` that is 3.45.1, the floor (M0 verifies this). `floor` and `current` compile

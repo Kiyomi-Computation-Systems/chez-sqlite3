@@ -71,6 +71,19 @@ told in chez-curl's `.plans/traps.md`.
   container with a `PATH` of every tool but `scheme`: the same 79 and 4, then 83 with `CHEZ`
   passed through. (chez-sqlite3)
 
+- **A value has more than one spelling, and a check of its text sees one.** `check-floors`
+  refused any workflow line holding `3.45.1`. SQLite writes the same floor as `3045001`
+  (`SQLITE_VERSION_NUMBER`) and as `3450100` (`sqlite-amalgamation-3450100.zip`). M0's closing
+  review planted both in the `main` job, and `check-floors` and `check-ci` passed. Before
+  checking a value by its text, list every form its users write it in. (chez-sqlite3)
+
+- **A rule a record states is a rule only once a check holds it.** AGENTS.md and ADR-0005 said
+  `make test` runs `check-ci`. Nothing failed when the prerequisite went: `check-help`,
+  `check-test-fails` and `make test` all passed, and no `check-ci:` line appeared. The
+  prerequisites `check-suites` and `check-floors` each had a plant in `check-test-fails`;
+  `check-ci`, added a slice later, had none. Each new prerequisite comes with its plant. (M0's
+  closing review, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

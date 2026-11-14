@@ -196,6 +196,44 @@
 (define second-step-msg
   "job main's second step is not run: scripts/ci/check-action-pins.sh .github/workflows")
 
+;; finding 7: the two report steps of main
+(define vers-name "Report the versions this run uses")
+(define sql-name "Report the runner's SQLite")
+(define sql-run "scripts/ci/report-sqlite.sh")
+(define (named-n name n)
+  (string-append "job main has " (number->string n) " steps named \"" name "\", not one"))
+(define (runs-before name before)
+  (string-append "job main runs step \"" name "\" before \"" before "\", and must run it after"))
+(define (runs-after name after)
+  (string-append "job main runs step \"" name "\" after \"" after "\", and must run it before"))
+(define swapped-msg
+  (string-append "job main's step \"" sql-name "\" comes before step \"" vers-name "\", and must come after"))
+(define not-block-msg
+  (string-append "job main's step \"" vers-name "\" does not run a block: it must be run: |"))
+(define (vers-differs want got)
+  (string-append "job main's step \"" vers-name "\" has a run line that differs from the one check-ci holds: expected \""
+                 want "\", found \"" got "\""))
+(define (vers-extra got)
+  (string-append "job main's step \"" vers-name "\" has a run line it must not: \"" got "\""))
+(define (vers-early want)
+  (string-append "job main's step \"" vers-name "\" has a run block that ends early: expected \"" want "\""))
+(define sql-run-msg (string-append "job main's step \"" sql-name "\" is not run: " sql-run))
+(define sql-env-msg (string-append "job main's step \"" sql-name "\" has no env CHEZ"))
+(define vers-l1 "          \"$RUNNER_TEMP/chez-threads/bin/scheme\" --version")
+(define vers-l2 "          cc --version | head -n 1")
+(define vers-l3 "          valgrind --version")
+(define vers-l4 "          echo \"image: ${ImageOS:-unknown} ${ImageVersion:-unknown}\"")
+(define vers-l5 "          echo \"kernel: $(uname -r)\"")
+(define vers-hdr "      - name: Report the versions this run uses")
+(define sql-hdr "      - name: Report the runner's SQLite")
+(define (vers-step) (span (string-append vers-hdr "\n") (string-append vers-l5 "\n")))
+(define (sql-step) (span "      # The runner's own SQLite" (string-append "run: " sql-run "\n")))
+(define (make-run) (string-append "        run: " make-line "\n"))
+(define chk-step-text
+  (lambda ()
+    (span-after "  main:\n" "      - name: Check the Chez this job runs\n"
+                (string-append "run: " chk-t "\n"))))
+
 (define pin-run "scripts/ci/check-action-pins.sh .github/workflows")
 (define chk-t "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
 (define chk-n "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
@@ -260,7 +298,14 @@
                (apply string-append (map (lambda (p) (problem-line dir file ls p)) problems))
                "check-ci: FAILED (problems: " (number->string (length problems)) ")\n")))))
 
-(define base (make-process-temp-directory))
+;; Without a temporary directory no row can run, so the suite says why and exits
+;; 1 here, before any row: a raise at the top level names no test.
+(define base
+  (guard (e (#t (display "test-check-ci: no temporary directory for the rows' copies: ")
+                (display (describe e))
+                (newline)
+                (exit 1)))
+    (make-process-temp-directory)))
 
 (define counter 0)
 
@@ -286,9 +331,19 @@
 
 (define (insert-after old new-lines) (e old (string-append old new-lines)))
 
-(define kernel "          echo \"kernel: $(uname -r)\"\n")
-(define (after-kernel . ls)
-  (insert-after kernel (apply lines (map (lambda (l) (string-append "          " l)) ls))))
+;; The block scalar the rows plant their lines in: main's "Identify the runner
+;; image" run block, which check-ci holds to no line. (The versions step's own
+;; block is held line for line, so a planted line there is a problem of its own.)
+(define id-line "          echo \"id=${ID}-${VERSION_ID}-${RUNNER_ARCH}\" >> \"$GITHUB_OUTPUT\"\n")
+;; The text from main's first comment to the end of that block: it holds the
+;; real file's one such text, which the other two jobs' copies of the block do not.
+(define (id-span)
+  (span "      # Every line with a uses key in this directory" id-line))
+(define (in-id-block f)
+  (let ((old (id-span))) (e old (f old))))
+(define (after-id . ls)
+  (in-id-block (lambda (old)
+                 (string-append old (apply lines (map (lambda (l) (string-append "          " l)) ls))))))
 
 (define job-keys
   '("if" "needs" "continue-on-error" "strategy" "container" "services" "defaults"
@@ -384,8 +439,8 @@
          (list (e "main (checks and suites" "main\t(checks and suites"))
          (list (list "    name: main\t(checks and suites, Chez built from source)" tab-msg)))
     (row "a tab in a block scalar's content"
-         (list (e kernel "          echo \"kernel:\t$(uname -r)\"\n"))
-         (list (list "          echo \"kernel:\t$(uname -r)\"" tab-msg)))
+         (list (in-id-block (lambda (old) (replace-first old "id=$" "id=\t$"))))
+         (list (list "          echo \"id=\t${ID}-${VERSION_ID}-${RUNNER_ARCH}\" >> \"$GITHUB_OUTPUT\"" tab-msg)))
     (row "a character beyond ASCII in a structural line"
          (list (e "main (checks and suites" "ma\x131;n (checks and suites"))
          (list (list "    name: ma\x131;n (checks and suites, Chez built from source)" odd-msg)))
@@ -394,25 +449,25 @@
                   "        \x131;f: false\n        run: make test-memory\n"))
          (list (list "        \x131;f: false" odd-msg)))
     (row "a character beyond ASCII in a block scalar's content"
-         (list (e kernel "          echo \"kernel: \xe9;\"\n"))
-         (list (list "          echo \"kernel: \xe9;\"" odd-msg)))
+         (list (in-id-block (lambda (old) (replace-first old "id=$" "id=\xe9;$"))))
+         (list (list "          echo \"id=\xe9;${ID}-${VERSION_ID}-${RUNNER_ARCH}\" >> \"$GITHUB_OUTPUT\"" odd-msg)))
     (row "key-looking lines inside a block scalar are content, and pass"
-         (list (after-kernel "if: false" "? x" "\"q\": 1" "*a" "foo: {x}" "&b c: d" ))
+         (list (after-id "if: false" "? x" "\"q\": 1" "*a" "foo: {x}" "&b c: d" ))
          '())
     (row "a line dedented out of a block scalar is read again"
-         (list (insert-after kernel "        shell: bash\n"))
+         (list (in-id-block (lambda (old) (string-append old "        shell: bash\n"))))
          (list (list "        shell: bash" (step-key "shell")))))
 
    ;; --- the names no line may hold ---
    (list
     (row "GITHUB_ENV written as MAKE\"\"FLAGS"
-         (list (after-kernel "echo \"MAKE\"\"FLAGS=-i\" >> \"$GITHUB_ENV\""))
+         (list (after-id "echo \"MAKE\"\"FLAGS=-i\" >> \"$GITHUB_ENV\""))
          (list (list "          echo \"MAKE\"\"FLAGS=-i\" >> \"$GITHUB_ENV\"" (names-msg "GITHUB_ENV"))))
     (row "GITHUB_PATH in a block scalar"
-         (list (after-kernel "echo /x >> \"$GITHUB_PATH\""))
+         (list (after-id "echo /x >> \"$GITHUB_PATH\""))
          (list (list "          echo /x >> \"$GITHUB_PATH\"" (names-msg "GITHUB_PATH"))))
     (row "a word of the allowed set, SUITES_X, is no name held"
-         (list (after-kernel "echo SUITES_X MAKEFLAGSX timeout"))
+         (list (after-id "echo SUITES_X MAKEFLAGSX timeout"))
          '())
     (row "CHEZ_SQLITE3_LIBRARY at the workflow's top level"
          (list (e "permissions:\n  contents: read\n"
@@ -427,13 +482,13 @@
 
    (map (lambda (w)
           (row (string-append "a block scalar names " w)
-               (list (after-kernel (string-append "echo " w)))
+               (list (after-id (string-append "echo " w)))
                (list (list (string-append "          echo " w) (names-msg w)))))
         banned-words)
 
    (map (lambda (w)
           (row (string-append "a block scalar names " w ", a gate")
-               (list (after-kernel (string-append "echo " w)))
+               (list (after-id (string-append "echo " w)))
                (list (list (string-append "          echo " w) (gate-msg w)))))
         '("check-memory-gate" "test-memory" "check-nothreads"))
 
@@ -559,7 +614,7 @@
                   "      - name: sneak\n        run: |\n          make check-memory-gate\n\n      # The gate proves nothing unless it can fail"))
          (list (list "          make check-memory-gate" (gate-msg "check-memory-gate"))))
     (row "O9: VALGRIND_OPTS written through GITHUB_ENV"
-         (list (after-kernel "echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\""))
+         (list (after-id "echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\""))
          (list (list "          echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\"" (names-msg "GITHUB_ENV"))
                (list "          echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\"" (names-msg "VALGRIND_OPTS"))))
     (row "a trailing comment on a gate's run line"
@@ -667,6 +722,82 @@
     (row "nothreads's check-nothreads step deleted"
          (list (e (span "      # No submodules, no deps" "run: make check-nothreads\n") ""))
          (list (list "  nothreads:" (n-steps "nothreads" "make check-nothreads" 0)))))
+
+   ;; --- main's report steps (finding 7) ---
+   (list
+    (row "the versions step deleted"
+         (list (e (string-append (vers-step) "\n") ""))
+         (list (list "  main:" (named-n vers-name 0))))
+    (row "the SQLite step deleted"
+         (list (e (string-append (sql-step) "\n") ""))
+         (list (list "  main:" (named-n sql-name 0))))
+    (row "both report steps deleted"
+         (list (e (string-append (vers-step) "\n") "")
+               (e (string-append (sql-step) "\n") ""))
+         (list (list "  main:" (named-n vers-name 0))
+               (list "  main:" (named-n sql-name 0))))
+    (row "the versions step renamed"
+         (list (e vers-hdr "      - name: Report the version this run uses"))
+         (list (list "  main:" (named-n vers-name 0))))
+    (row "the SQLite step renamed"
+         (list (e sql-hdr "      - name: Report the SQLite"))
+         (list (list "  main:" (named-n sql-name 0))))
+    (row "the versions step written twice"
+         (list (e (string-append (vers-step) "\n") (string-append (vers-step) "\n" (vers-step) "\n")))
+         (list (list "  main:" (named-n vers-name 2))))
+    (row "the two report steps swapped"
+         (list (e (string-append (vers-step) "\n" (sql-step))
+                  (string-append (sql-step) "\n" (vers-step))))
+         (list (list sql-hdr swapped-msg)))
+    (row "the versions step moved after Checks and suites"
+         (list (e (string-append (vers-step) "\n") "")
+               (e (make-run) (string-append (make-run) "\n" (vers-step))))
+         (list (list vers-hdr (runs-after vers-name make-line))
+               (list sql-hdr swapped-msg)))
+    (row "the SQLite step moved after Checks and suites"
+         (list (e (string-append (sql-step) "\n") "")
+               (e (make-run) (string-append (make-run) "\n" (sql-step))))
+         (list (list sql-hdr (runs-after sql-name make-line))))
+    (row "the versions step moved before Check the Chez"
+         (list (e (string-append (chk-step-text) "\n" (vers-step))
+                  (string-append (vers-step) "\n" (chk-step-text))))
+         (list (list vers-hdr (runs-before vers-name chk-t))))
+    (row "a line at the start of the versions block"
+         (list (e (string-append vers-l1 "\n") (string-append "          echo x\n" vers-l1 "\n")))
+         (list (list "          echo x" (vers-differs vers-l1 "          echo x"))))
+    (row "a line in the middle of the versions block"
+         (list (e (string-append vers-l2 "\n") (string-append vers-l2 "\n          echo x\n")))
+         (list (list "          echo x" (vers-differs vers-l3 "          echo x"))))
+    (row "a line at the end of the versions block"
+         (list (e (string-append vers-l5 "\n") (string-append vers-l5 "\n          echo x\n")))
+         (list (list "          echo x" (vers-extra "          echo x"))))
+    (row "a comment at the end of the versions block"
+         (list (e (string-append vers-l5 "\n") (string-append vers-l5 "\n          # x\n")))
+         (list (list "          # x" (vers-extra "          # x"))))
+    (row "a line removed from the middle of the versions block"
+         (list (e (string-append vers-l3 "\n") ""))
+         (list (list vers-l4 (vers-differs vers-l3 vers-l4))))
+    (row "the last line removed from the versions block"
+         (list (e (string-append vers-l5 "\n") ""))
+         (list (list vers-l4 (vers-early vers-l5))))
+    (row "a line of the versions block changed"
+         (list (e vers-l2 "          cc --version | head -n 2"))
+         (list (list "          cc --version | head -n 2"
+                     (vers-differs vers-l2 "          cc --version | head -n 2"))))
+    (row "a line of the versions block re-indented"
+         (list (e vers-l3 "            valgrind --version"))
+         (list (list "            valgrind --version" (vers-differs vers-l3 "            valgrind --version"))))
+    (row "the versions block clipped, run: |-"
+         (list (e (span (string-append vers-hdr "\n") "run: |\n")
+                  (string-append vers-hdr "\n        run: |-\n")))
+         (list (list "        run: |-" not-block-msg)))
+    (row "the SQLite step's run line changed"
+         (list (e (string-append "run: " sql-run "\n") (string-append "run: " sql-run " --x\n")))
+         (list (list (string-append "        run: " sql-run " --x") sql-run-msg)))
+    (row "the SQLite step's env dropped"
+         (list (e (string-append sql-hdr "\n        env:\n          CHEZ: " chez-t "\n")
+                  (string-append sql-hdr "\n")))
+         (list (list sql-hdr sql-env-msg))))
 
    ;; --- cache keys ---
    (map (lambda (part)

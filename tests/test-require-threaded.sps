@@ -93,7 +93,7 @@
 ;; lock-file? : String String -> Boolean
 ;; Whether the entry NAME, at PATH, is an Emacs lock file: named .#..., and a
 ;; symbolic link to nothing, which Chez cannot load. It is the rule of
-;; tests/check-seam.sps. A regular file or a directory named .#... is no lock
+;; chez-curl's tests/check-seam.sps. A regular file or a directory named .#... is no lock
 ;; file: Chez loads a library from .#g.sls as it does from g.sls, so the scan
 ;; reads it. Nor is a link that resolves.
 (define (lock-file? path name)

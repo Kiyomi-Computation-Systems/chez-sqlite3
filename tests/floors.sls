@@ -68,6 +68,17 @@
 ;;;     the line's end goes on over the lines after it, where an escape is no
 ;;;     longer after a quote on its own line (M0 slice 4's review).
 ;;;
+;;;   - the SQLite floor's two numeric forms, each as a whole run of digits:
+;;;     SQLITE_VERSION_NUMBER, the version as X*1000000 + Y*1000 + Z
+;;;     (sqlite3_libversion_number), and the amalgamation's file name number,
+;;;     X, then Y and Z each as two digits, then 00 (for 3.45.1, the amalgamation
+;;;     is sqlite-amalgamation-3450100.zip). Both are computed from the floor
+;;;     in the file, never written here. A form is found only when the
+;;;     character on each side of it, if there is one, is no ASCII letter or
+;;;     digit, since a hex digest holds such runs inside longer ones. The Chez
+;;;     floor has no numeric form: Chez names its releases by the dotted
+;;;     version alone, in its tarball (csv10.4.0.tar.gz) and its tag (v10.4.0).
+;;;
 ;;; chez-curl's two env keys (CHEZ_VERSION, CURL_FLOOR_VERSION) and its
 ;;; node-version rule are left out: no env key here ever held a floor, and
 ;;; there is no setup-node. Its explicit-key, alias, non-ASCII and tab rules
@@ -77,7 +88,8 @@
 ;;; carries those rules (M0 slice 4's review found them first left out).
 ;;;
 ;;; The text is searched, not parsed as YAML, so a version inside a longer
-;;; number is also the floor's text. A value that is no floor's text, as a
+;;; number is also the floor's text; the numeric forms are the exception, found
+;;; as whole runs of digits only. A value that is no floor's text, as a
 ;;; matrix of other versions, is not seen here: nothing reads it. Nor is an
 ;;; expression that builds a version, as format('{0}.{1}.{2}', ...) does:
 ;;; nothing would read that either, since build-chez.sh takes no version.
@@ -485,12 +497,47 @@
             ((char=? (string-ref line i) #\") (loop (+ i 1) (+ n 1)))
             (else (loop (+ i 1) n)))))
 
-  ;; line-problems : String String (Listof String) (Listof (List String String)) -> (Listof String)
+  ;; digit-or-letter? : Char -> Boolean
+  ;; Whether C is an ASCII letter or digit.
+  (define (digit-or-letter? c)
+    (or (and (char>=? c #\0) (char<=? c #\9))
+        (and (char>=? c #\a) (char<=? c #\z))
+        (and (char>=? c #\A) (char<=? c #\Z))))
+
+  ;; whole-run? : String String -> Boolean
+  ;; Whether FORM, a run of digits, is somewhere in TEXT with no ASCII letter
+  ;; or digit on its left, if it has a left, and none on its right. Every
+  ;; position is tried: a form that fails at one may stand at a later one.
+  (define (whole-run? text form)
+    (let ((n (string-length text)) (m (string-length form)))
+      (let loop ((i 0))
+        (cond ((> (+ i m) n) #f)
+              ((and (string=? (substring text i (+ i m)) form)
+                    (or (= i 0) (not (digit-or-letter? (string-ref text (- i 1)))))
+                    (or (= (+ i m) n) (not (digit-or-letter? (string-ref text (+ i m))))))
+               #t)
+              (else (loop (+ i 1)))))))
+
+  ;; sqlite-forms : Floors -> (Listof (List String String))
+  ;; The SQLite floor in FLOORS, X.Y.Z, as its numeric forms, each as the name
+  ;; the messages give it and its digits: SQLITE_VERSION_NUMBER,
+  ;; X*1000000 + Y*1000 + Z, then the amalgamation's file name number, X*1000000
+  ;; + Y*10000 + Z*100 (X, then Y and Z as two digits each, then 00).
+  (define (sqlite-forms floors)
+    (let* ((parts (floor-numbers floors 'sqlite))
+           (x (car parts)) (y (cadr parts)) (z (caddr parts)))
+      (list (list "version-number"
+                  (number->string (+ (* x 1000000) (* y 1000) z)))
+            (list "amalgamation"
+                  (number->string (+ (* x 1000000) (* y 10000) (* z 100)))))))
+
+  ;; line-problems : String String (Listof String) (Listof (List String String (Listof (List String String)))) -> (Listof String)
   ;; Each complaint about the lines LINES of the file at PATH, in line order:
-  ;; for a line, the floors whose version text it contains, the Chez floor
-  ;; first, then a backslash after a double quote, then an odd number of
-  ;; double quotes. FPATH is the floors file's
-  ;; path, FLOORS (name version) for each floor.
+  ;; for a line, for each floor, the Chez floor first, its version text if the
+  ;; line contains it, then its numeric forms (name digits) that the line
+  ;; holds as a whole run of digits; then a backslash after a double quote,
+  ;; then an odd number of double quotes. FPATH is the floors file's path,
+  ;; FLOORS (name version forms) for each floor.
   (define (line-problems path fpath lines floors)
     (let loop ((rest lines) (n 1))
       (if (null? rest)
@@ -498,13 +545,25 @@
           (append
            (apply append
                   (map (lambda (floor)
-                         (if (contains? (car rest) (cadr floor))
-                             (list (string-append
-                                    path ": line " (number->string n) " contains the "
-                                    (car floor) " floor " (cadr floor)
-                                    ", which no workflow line may write: the CI scripts read it from "
-                                    fpath))
-                             '()))
+                         (append
+                          (if (contains? (car rest) (cadr floor))
+                              (list (string-append
+                                     path ": line " (number->string n) " contains the "
+                                     (car floor) " floor " (cadr floor)
+                                     ", which no workflow line may write: the CI scripts read it from "
+                                     fpath))
+                              '())
+                          (apply append
+                                 (map (lambda (form)
+                                        (if (whole-run? (car rest) (cadr form))
+                                            (list (string-append
+                                                   path ": line " (number->string n) " contains "
+                                                   (cadr form) ", the " (car form) " form of the "
+                                                   (car floor) " floor " (cadr floor)
+                                                   ", which no workflow line may write: the CI scripts read it from "
+                                                   fpath))
+                                            '()))
+                                      (caddr floor)))))
                        floors))
            (if (backslash-after-quote? (car rest))
                (list (string-append
@@ -529,9 +588,13 @@
   ;; (line-problems).
   (define (workflows-problems fpath wdir workflows floors)
     (let* ((ci-path (string-append wdir "/" ci-workflow))
-           ;; (name version) for each floor.
+           ;; (name version forms) for each floor: forms are the numeric forms
+           ;; of the SQLite floor, and none for the Chez floor.
            (rows (map (lambda (row)
-                        (list (cadr row) (floor-text floors (car row))))
+                        (list (cadr row) (floor-text floors (car row))
+                              (if (eq? (car row) 'sqlite)
+                                  (sqlite-forms floors)
+                                  '())))
                       workflow-floors))
            (sorted (list-sort (lambda (a b) (string<? (car a) (car b))) workflows)))
       (if (null? workflows)

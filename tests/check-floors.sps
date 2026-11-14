@@ -5,8 +5,11 @@
 ;;; each problem, unless README.org's Requirements section states the floors in
 ;;; packaging/floors.sexp (the lines (floors)'s requirement-lines writes from
 ;;; the file, whole, as one list), and no line of any file in the workflow
-;;; directory contains either floor's version text or holds a backslash after
-;;; a double quote: CI states no floor, and scripts/ci/floor.sh reads them from
+;;; directory contains either floor's version text, contains the SQLite
+;;; floor's version number or amalgamation number as a whole run of digits
+;;; (3045001, 3450100 for 3.45.1), holds a backslash after a double quote, or
+;;; holds an odd number of double quotes, a double-quoted string left open at
+;;; the line's end: CI states no floor, and scripts/ci/floor.sh reads them from
 ;;; the file. The rules are in (floors); this program reads the files, prints,
 ;;; and exits. tests/test-check-floors.sps holds each rule on texts and runs
 ;;; this program on fixture directories.
@@ -20,8 +23,9 @@
 ;;; It fails closed, because a check that passes on nothing is vacuous. It
 ;;; names, and exits 1 on, a file or directory it cannot read, a floors file
 ;;; with a problem, a README with no "** Requirements" section or the wrong list
-;;; in it, a workflow directory that holds no file or no ci.yml, and a floor or
-;;; a backslash after a double quote written anywhere in it. A file it cannot
+;;; in it, a workflow directory that holds no file or no ci.yml, and a floor, a
+;;; numeric form of the SQLite floor, a backslash after a double quote or an
+;;; odd number of double quotes written anywhere in it. A file it cannot
 ;;; read does not stop it comparing the others.
 ;;;
 ;;; It prints one line on a pass, to stdout, naming the files it read under the

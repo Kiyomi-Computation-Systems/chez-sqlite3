@@ -375,15 +375,24 @@
                                     (lambda () (raised (lambda () (capture-command (list "touch" marker))))))))
          (list answer (if (file-exists? marker) 'ran 'absent)))))))
 
-(test-equal "capture-command: its directory's mode is 700"
-  '(0 "drwx------")
+(test-equal "capture-command: its directory is the only one in the scratch directory, with mode 700"
+  (list 0 'only-one-dir-mode-700 "")
   (call-with-temp-directory
    (lambda (dir)
-     (let ((answer (call-with-env "TMPDIR" dir
-                                  (lambda ()
-                                    (capture-command
-                                     (list "sh" "-c" "ls -ld \"$1\"/chez-sqlite3-testing-*" "sh" dir))))))
-       (list (car answer) (substring (cadr answer) 0 (min 10 (string-length (cadr answer)))))))))
+     (let* ((n (current-capture dir))
+            (answer (call-with-env
+                     "TMPDIR" dir
+                     (lambda ()
+                       (capture-command
+                        (list "sh" "-c"
+                              "for d in \"$1\"/*; do printf '%s %s\\n' \"$(ls -ld \"$d\" | cut -c1-10)\" \"${d##*/}\"; done"
+                              "sh" dir))))))
+       (list (car answer)
+             (if (equal? (cadr answer)
+                         (string-append "drwx------ " (capture-name (+ n 1)) "\n"))
+                 'only-one-dir-mode-700
+                 (cadr answer))
+             (caddr answer))))))
 
 (test-equal "capture-command: a raise after its directory is made still removes it"
   '((other-raise "the shell did not create a capture file") ())
@@ -536,10 +545,10 @@
    (lambda (base)
      (let ((victim (string-append base "/victim")))
        (capture-command (list "mkdir" "-p" (string-append victim "/sub")))
-       (let ((first (refusal (lambda () (remove-temp-directory victim)))))
-         (list first
-               (if (file-exists? victim) 'left 'removed)
-               (refusal (lambda () (remove-temp-directory victim)))))))))
+       (let* ((first (refusal (lambda () (remove-temp-directory victim))))
+              (gone (if (file-exists? victim) 'left 'removed))
+              (second (refusal (lambda () (remove-temp-directory victim)))))
+         (list first gone second))))))
 
 ;; with-fake-rm : String (-> Any) -> Any
 ;; THUNK with an rm ahead of the real one on PATH that removes nothing and
