@@ -56,7 +56,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -228,13 +228,31 @@ check-suites: deps ## Fail unless every tests/test-*.sps ends with the shared ex
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs $(LIBDIRS) --program tests/check-suites.sps $(SUITES)
 
-# Holds README.org's Requirements section to packaging/floors.sexp, the one
-# file that writes the floors (ADR-0008, tests/check-floors.sps). The workflow
-# rules come with CI, in M0 slice 4. It needs no deps: (floors) imports only
-# (rnrs) and a few of Chez's own bindings.
-check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp
+# Holds README.org's Requirements section, and every file under
+# .github/workflows, to packaging/floors.sexp, the one file that writes the
+# floors (ADR-0008, tests/check-floors.sps): the README must state them, and
+# no workflow may. It needs no deps: (floors) imports only (rnrs) and a few
+# of Chez's own bindings.
+check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp, and no workflow does
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
-	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org
+	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows
+
+# Imports every library under src/, private ones too, and requires each
+# import to be refused, by name, as (chez-sqlite3 private require-threaded)
+# refuses a Chez that is not threaded: a syntax violation from chez-sqlite3,
+# whose message starts with the refusal's marker. Every library under src/
+# imports require-threaded first (ADR-0001, amended), so every one must be
+# refused, and M0 has no public library yet. It fails if it finds no
+# library, and names each one that loaded or raised something else
+# (tests/check-nothreads.sps). tests/test-check-nothreads.sps holds each rule
+# on a fixture tree. On the threaded Chez that make test runs, every import
+# loads, so this FAILS there, naming each library: that is its red run, and
+# why make test does not run it. CI runs it on a Chez built with --nothreads
+# (.github/workflows/ci.yml). It imports only (rnrs) and a few of Chez's own
+# bindings, so it needs no deps.
+check-nothreads: ## Fail unless every library under src/ refuses to import, by name, on this Chez; CI runs it on a --nothreads Chez
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --program tests/check-nothreads.sps src
 
 # Plants bad suites, a leaking one among them, and a README that disagrees
 # with the floors file, one at a time, in a copy of the tree, and requires
