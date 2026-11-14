@@ -1,6 +1,7 @@
 # ADR-0009: Written fresh, as `(chez-sqlite3)`, with nothing copied from Thunderchez
 
-- **Status:** Accepted (the maintainer, 2026-11-13)
+- **Status:** Accepted (the maintainer, 2026-11-13). Amended 2026-11-14: what `check-seam` reads
+  ([amendment](#amendment-2026-11-14-what-check-seam-reads-m1s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3's library names and the provenance of its code
 - **Settles:** brief §2.1 and §2.3
@@ -40,3 +41,20 @@
 - **`check-seam` (M1) enforces the private boundary:** nothing public imports a
   `(chez-sqlite3 private …)` library except `(chez-sqlite3)` itself.
 - **The assessment's defect list is a test plan** for M1 and M2.
+
+## Amendment, 2026-11-14: what `check-seam` reads (M1's plan)
+
+Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
+
+- **`check-seam` reads `src/` alone.** The rule is about what the library exposes:
+  under `src/`, only `(chez-sqlite3)` and the `(chez-sqlite3 private …)` libraries exist, and no
+  library but `(chez-sqlite3)` and the private ones imports a private one.
+- **Tests and the test helpers may import private libraries.** `(chez-sqlite3-testing)` and
+  `test-counters` already import `(chez-sqlite3 private counters)`, and each private library's
+  suite imports the library it tests. The plants and the probes call `foreign-alloc` directly
+  (M0's closing review).
+- **It is chez-curl's `check-seam`, trimmed to one family.** It keeps chez-curl's rules on
+  `(chezscheme)` imports, the import allowlist, the names only some libraries may import, and
+  exports. Its rule (d), that every library belongs to a family, becomes the boundary rule above.
+  It drops rules (a), (b) and (j), about chez-curl's second family and its escape hatch. Each dropped
+  rule is listed, with what it protected, in the slice that copies it (the M1 plan, §3.5).

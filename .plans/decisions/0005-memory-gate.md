@@ -4,7 +4,9 @@
   Amended 2026-11-13: what M0 slice 3 measured and built
   ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)), CI's memory job
   (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)), and M0's closing
-  review ([amendment](#amendment-2026-11-13-m0s-closing-review)).
+  review ([amendment](#amendment-2026-11-13-m0s-closing-review)). Amended 2026-11-14: a library
+  that keeps no memory count (M1's plan,
+  [amendment](#amendment-2026-11-14-a-library-that-keeps-no-memory-count-m1s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -198,3 +200,32 @@ Measured in the pinned container before the gate was built
   library never loads libsqlite3, so that `check-suites`, `check-test-fails`' copy and the
   launcher's `env -i` runs can import it. The plan now follows decision 5. `sqlite3_memory_used`
   is asked only in a process that loaded the library, as M1 decides.
+
+## Amendment, 2026-11-14: a library that keeps no memory count (M1's plan)
+
+- **Apple's SQLite keeps no memory count.** It is built with `DEFAULT_MEMSTATUS=0`, and
+  `sqlite3_memory_used` answered 0 before an open, while a database was open, and after the close
+  ([research/mac-d7/](../research/mac-d7/)). A check that the count returns to its baseline would
+  pass there without testing anything.
+- **So the memory check has a positive control, and the control is the check's own** (proposed
+  in M1 slice 0, for acceptance with its PR). At a suite's exit, in a process that loaded
+  libsqlite3, the check opens a `:memory:` connection of its own, reads the count while it is
+  open, and closes it. If the count rose, the library counts, and the check runs: the count must
+  be back at its baseline. If it didn't rise, the check is unavailable. A suite that opens
+  nothing still runs the control, so on Linux the check is never unavailable for want of an
+  open. The control is read, not the compile option, which `sqlite3_config` could override at
+  runtime.
+- **A suite that finds the check unavailable reports it, by name, and passes on its other checks**
+  (the maintainer, 2026-11-14). Its verdict line names the check as unavailable, so the result is
+  never a silent pass. On the Mac, the hand runs reach Apple's library through discovery and are
+  read that way.
+- **Which libraries count.** Guix's 3.53.1 was seen to: 0, then 61,360 while open, then 0
+  ([control-guix.txt](../research/mac-d7/control-guix.txt)). So was Homebrew's 3.54.1: 0, 66,848,
+  0. Ubuntu's 3.45.1, CI's `main` and `memory` library, is only inferred to: `DEFAULT_MEMSTATUS`
+  isn't among its 58 options ([research/ci-runner/](../research/ci-runner/)), and it has never
+  opened a connection under a suite. The `floor` and `current` lanes of slice 5 must not set
+  `DEFAULT_MEMSTATUS=0`, and their assertion of the options they built checks that.
+- **Where it runs:** only in a process that loaded libsqlite3 (the closing review's amendment).
+  Slice 4 of M1 builds it. On 3.53.1 and 3.54.1 the count came back to its value before the first
+  open after one open, query and close (above). Whether 3.45.1's does, or needs a baseline taken
+  after the first cycle (decision 5), is measured on CI's runner first.
