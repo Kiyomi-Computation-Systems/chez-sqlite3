@@ -1,0 +1,45 @@
+libversion 3.53.1
+1- and 2-byte, model as-accepted: checked 65792, mismatches 5 (+ 263 holding a NUL)
+  ((9 11) sqlite #t)
+  ((10 11) sqlite #t)
+  ((12 11) sqlite #t)
+  ((13 11) sqlite #t)
+  ((32 11) sqlite #t)
+1- and 2-byte, model amended: checked 65792, mismatches 0 (+ 263 holding a NUL)
+3-byte, model as-accepted: checked 16777216, mismatches 66 (+ 67114 holding a NUL)
+  ((9 9 11) sqlite #t)
+  ((9 10 11) sqlite #t)
+  ((9 11 9) sqlite #t)
+  ((9 11 10) sqlite #t)
+  ((9 11 11) sqlite #t)
+  ((9 11 12) sqlite #t)
+  ((9 11 13) sqlite #t)
+  ((9 11 32) sqlite #t)
+  ((9 11 59) sqlite #t)
+  ((9 12 11) sqlite #t)
+  ((9 13 11) sqlite #t)
+  ((9 32 11) sqlite #t)
+3-byte, model amended: checked 16777216, mismatches 0 (+ 67114 holding a NUL)
+4- to 6-byte, over 14 bytes, model as-accepted: checked 8105776, mismatches 56354 (+ 0 holding a NUL)
+  ((32 11 32 32) sqlite #t)
+  ((9 11 32 32) sqlite #t)
+  ((10 11 32 32) sqlite #t)
+  ((12 11 32 32) sqlite #t)
+  ((13 11 32 32) sqlite #t)
+  ((32 11 9 32) sqlite #t)
+  ((9 11 9 32) sqlite #t)
+  ((10 11 9 32) sqlite #t)
+  ((12 11 9 32) sqlite #t)
+  ((13 11 9 32) sqlite #t)
+  ((32 11 10 32) sqlite #t)
+  ((9 11 10 32) sqlite #t)
+4- to 6-byte, over 14 bytes, model amended: checked 8105776, mismatches 0 (+ 0 holding a NUL)
+tail of "select 1; select 2": rc 0, tail offset 9
+tail of "select 1 ; x": rc 0, tail offset 10
+tail of "select 1;;": rc 0, tail offset 9
+tail of "select 1 -- c\n; x": rc 0, tail offset 15
+tail of "select 1/* c */; x": rc 0, tail offset 16
+tail of "select 1": rc 0, tail offset 8
+tail of "select 1;": rc 0, tail offset 9
+tail of "select 1; \v": rc 0, tail offset 9
+tail of "select 1;\v": rc 0, tail offset 9
