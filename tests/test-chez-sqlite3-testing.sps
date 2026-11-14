@@ -12,7 +12,7 @@
         (srfi :64)
         (only (chezscheme) parameterize record-writer getenv putenv directory-list
               file-directory? make-time sleep fork-thread make-mutex with-mutex
-              real-time iota get-process-id mkdir)
+              real-time iota get-process-id mkdir disable-interrupts enable-interrupts)
         ;; Chez's own current-error-port is a parameter; (rnrs)'s takes no
         ;; argument, and reads the same port.
         (prefix (only (chezscheme) current-error-port) chez:)
@@ -420,6 +420,54 @@
             (answer (call-with-env "TMPDIR" (string-append dir "/missing")
                                    (lambda () (raised (lambda () (capture-command (list "touch" marker))))))))
        (list answer (if (file-exists? marker) 'ran 'absent))))))
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once. 1 outside any section.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, as depth-N, and the raise: a
+;; condition with a who and irritants as (who-and-irritants WHO IRRITANTS),
+;; anything else as described. The handler escapes, so nothing returns into
+;; the raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let* ((depth (interrupt-depth))
+               (what (if (and (who-condition? c) (irritants-condition? c))
+                         (list 'who-and-irritants (condition-who c) (condition-irritants c))
+                         (list 'other (describe c)))))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   what))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+;; The directory is made, and its name recorded, in a critical section, so
+;; no escape leaves one the cleanup cannot see; the refusal follows the
+;; section. A raise inside it would reach a handler with interrupts still
+;; disabled (M1's closing review).
+(test-equal "capture-command: with no scratch directory to write in, it raises after its critical section: a handler of it runs at depth 1, naming capture-command and the directory it could not make"
+  '((raised-at-depth depth-1 (who-and-irritants capture-command (under-missing))) absent)
+  (call-with-temp-directory
+   (lambda (dir)
+     (let* ((marker (string-append dir "/ran"))
+            (missing (string-append dir "/missing"))
+            (r (call-with-env "TMPDIR" missing
+                              (lambda () (handler-depth (lambda () (capture-command (list "touch" marker))))))))
+       (list (if (and (eq? (car r) 'raised-at-depth) (eq? (car (caddr r)) 'who-and-irritants)
+                      (let ((irritants (caddr (caddr r))))
+                        (and (= (length irritants) 1) (string? (car irritants))
+                             (prefix? (string-append missing "/") (car irritants)))))
+                 (list (car r) (cadr r) (list 'who-and-irritants (cadr (caddr r)) '(under-missing)))
+                 r)
+             (if (file-exists? marker) 'ran 'absent))))))
 
 (test-equal "call-with-temp-directory: PROC gets the path of an empty directory, and the directory is gone after"
   '((#t #t ()) removed)

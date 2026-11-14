@@ -17,7 +17,12 @@
 ;;;                  sqlite-compile-options against native's raw loop, whole,
 ;;;                  in order; sqlite-compile-option? against native's raw
 ;;;                  sqlite3_compileoption_used for every name and its
-;;;                  variants; its refusals by who and irritants
+;;;                  variants; its refusals by who and irritants, raised
+;;;                  outside any critical section: a with-exception-handler
+;;;                  handler of one runs at depth 1. Under an engine, at
+;;;                  every fuel from 1 to 40 ticks a slice, where an expiry
+;;;                  once freed its C string's block, it answers as native
+;;;                  does
 ;;;
 ;;; Reached through eval under a guard, as tests/test-native.sps reaches
 ;;; native, so a refused library fails rows by name. No expected value is #f:
@@ -27,7 +32,7 @@
         (rnrs mutable-pairs)
         (rnrs mutable-strings)
         (srfi :64)
-        (only (chezscheme) library-exports)
+        (only (chezscheme) library-exports disable-interrupts enable-interrupts make-engine)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (chez-sqlite3 private libsqlite3-info))
@@ -315,6 +320,105 @@
          (b (attempt (lambda () (sqlite-compile-option? 'threadsafe))))
          (c (attempt (lambda () (sqlite-compile-option? "THREAD\x0;SAFE")))))
     (list a b c (native-counts))))
+
+;; --- raised after the section, and engines ----------------------------------------------------
+;; A raise made inside a critical section reaches a with-exception-handler
+;; handler with interrupts still disabled (M1's closing review measured what
+;; that costs). The handler reads its depth, as depth-N: 1 outside any
+;; section.
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, and what it raised, as attempt
+;; names it. The handler escapes, so nothing returns into the raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let* ((depth (interrupt-depth))
+               (what (attempt (lambda () (raise c)))))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   what))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+(test-equal "sqlite-compile-option? raises its refusals outside any critical section: a handler of what is no string, and of U+0000, runs at depth 1"
+  (list '(raised-at-depth depth-1 (assertion-violation sqlite-compile-option? (not-a-string 42)))
+        '(raised-at-depth depth-1 (assertion-violation sqlite-compile-option? ((kind string))))
+        zero-counts)
+  (let* ((a (handler-depth (lambda () (sqlite-compile-option? 42))))
+         (b (handler-depth (lambda () (sqlite-compile-option? "THREAD\x0;SAFE")))))
+    (list a b (native-counts))))
+
+;; run-engine : (-> Any) Positive-Integer Positive-Integer -> (U (List Any Natural) (List 'unfinished Natural))
+;; THUNK run in an engine of FUEL ticks a slice, resumed each time it expires
+;; until it completes: its answer and how many times it expired; or
+;; (unfinished CAP) once it has expired CAP times.
+(define (run-engine thunk fuel cap)
+  (let loop ((engine (make-engine thunk)) (expired 0))
+    (if (>= expired cap)
+        (list 'unfinished cap)
+        (engine fuel
+                (lambda (left . answers) (list (car answers) expired))
+                (lambda (next) (loop next (+ expired 1)))))))
+
+;; fuels : Positive-Integer -> (Listof Positive-Integer)
+;; 1 to N.
+(define (fuels n)
+  (let loop ((i n) (found '()))
+    (if (= i 0) found (loop (- i 1) (cons i found)))))
+
+;; first-option : String
+;; The first option the library lists, by its name; a name no build has
+;; when there is none, so the engine row fails by value.
+(define first-option
+  (if (and (pair? raw-options) (string? (car raw-options)))
+      (option-name (car raw-options))
+      "CHEZ_SQLITE3_NO_OPTION_LISTED"))
+
+;; options-under-engine : Positive-Integer -> (U (List Any Natural) (List 'unfinished Natural))
+;; sqlite-compile-option? of the first option listed, then of a name no
+;; build has, in an engine of FUEL ticks a slice.
+(define (options-under-engine fuel)
+  (run-engine (lambda ()
+                (attempt (lambda ()
+                           (let* ((listed (yes-no (sqlite-compile-option? first-option)))
+                                  (unknown (yes-no (sqlite-compile-option? "CHEZ_SQLITE3_NO_SUCH_OPTION"))))
+                             (list listed unknown)))))
+              fuel 100000))
+
+;; An engine's expiry unwinds every dynamic-wind it is inside, and its resume
+;; rewinds them: an expiry inside the C string's extent would free its block,
+;; and the resume would find it freed. Before sqlite-compile-option? held the
+;; string in a critical section, the two calls here were refused at every
+;; fuel from 1 to 40 ticks a slice (measured on Chez 10.4.0). An engine spends
+;; no ticks inside a critical section (measured), so they now expire only
+;; outside it: at 1 tick a slice they still expire.
+(test-equal "sqlite-compile-option? under an engine of every fuel from 1 to 40 ticks a slice: yes for the first option listed and no for a name no build has, the engine of 1 tick expired, and every count is zero after"
+  (list (map (lambda (fuel) (list fuel '(yes no))) (fuels 40)) 'expired zero-counts)
+  (let loop ((rest (fuels 40)) (found '()))
+    (if (null? rest)
+        (let ((at-one (options-under-engine 1)))
+          (list (reverse found)
+                (if (and (pair? (cdr at-one)) (integer? (cadr at-one)) (> (cadr at-one) 0))
+                    'expired
+                    (list 'at-fuel-1 at-one))
+                (native-counts)))
+        (let ((run (options-under-engine (car rest))))
+          (loop (cdr rest)
+                (cons (if (eq? (car run) 'unfinished)
+                          (list (car rest) run)
+                          (list (car rest) (car run)))
+                      found))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

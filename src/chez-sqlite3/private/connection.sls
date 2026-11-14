@@ -25,6 +25,17 @@
 ;;; collect (ADR-0011's amendment), so sqlite3_open_v2 and sqlite3_close run
 ;;; there too.
 ;;;
+;;; Nothing raises inside a section, nor inside call-with-database's critical
+;;; after thunk. A raise there would reach a with-exception-handler handler
+;;; with interrupts still disabled, where an engine never expires and another
+;;; thread's collection waits for the handler (M1's closing review). So each
+;;; answers data, and the raise follows it. A raise from a call made inside
+;;; one, the open's string helpers, count-down! or call-with-open-handle's
+;;; procedure, is caught there and raised again after it, the same object.
+;;; The open's section holds the filename's whole C string, so no engine's
+;;; expiry unwinds the string's block and finds it freed on resuming: a
+;;; program under engines takes open-database (ADR-0012, amended).
+;;;
 ;;;   the count   up when sqlite3_open_v2 hands back a handle, failed or not;
 ;;;               down when sqlite3_close answers SQLITE_OK (ADR-0012,
 ;;;               decision 6)
@@ -82,22 +93,38 @@
       (unless (eqv? owner caller)
         (raise-wrong-thread who owner caller))))
 
-  ;; call-with-open-handle : Symbol Any (Positive-Integer -> A) -> A
-  ;; PROC's answer, given DB's handle, once DB is checked: a database, else an
-  ;; assertion violation from WHO; on its owning thread, else
-  ;; &sqlite-wrong-thread from WHO; open, else &sqlite-closed from WHO. The
-  ;; checks and PROC run in one critical section, so the handle cannot be
-  ;; closed between the check and its use. A WHO that is no symbol and a PROC
-  ;; that is no procedure are assertion violations first.
+  ;; call-with-open-handle : Symbol Any (Positive-Integer -> A ...) -> A ...
+  ;; PROC's answers, given DB's handle, once DB is checked: a database, else
+  ;; an assertion violation from WHO; on its owning thread, else
+  ;; &sqlite-wrong-thread from WHO; open, else &sqlite-closed from WHO. A WHO
+  ;; that is no symbol and a PROC that is no procedure are assertion
+  ;; violations first.
+  ;;
+  ;; The first two checks come before the critical section: a database's
+  ;; type, its owner, which is immutable, and the caller's own thread id
+  ;; cannot change. The open check and PROC run in the section, so the handle
+  ;; cannot be closed between the check and its use. PROC runs with
+  ;; interrupts disabled, so it keeps to the C call and its reads, and answers
+  ;; data: what it raises is caught in the section and raised again after it,
+  ;; the same object, with raise. So a raise-continuable from PROC cannot be
+  ;; resumed (the maintainer, 2026-11-14).
   (define (call-with-open-handle who db proc)
     (check-who 'call-with-open-handle who)
     (unless (procedure? proc)
       (assertion-violation who "not a procedure" 'not-a-procedure (shown-value proc)))
-    (critical-section
-     (check-owned who db)
-     (let ((handle (unchecked-database-handle db)))
-       (unless handle (raise-closed who))
-       (proc handle))))
+    (check-owned who db)
+    (let ((outcome
+           (critical-section
+            (let ((handle (unchecked-database-handle db)))
+              (if (not handle)
+                  '(closed)
+                  (guard (c (#t (list 'raised c)))
+                    (call-with-values (lambda () (proc handle))
+                      (lambda answers (cons 'answered answers)))))))))
+      (case (car outcome)
+        ((answered) (apply values (cdr outcome)))
+        ((closed) (raise-closed who))
+        (else (raise (cadr outcome))))))
 
   ;; --- a failure's details -------------------------------------------------------------
 
@@ -154,34 +181,53 @@
                                   'file-uri-without-uri-option (shown-value copy)))
            (values copy flags))))))
 
+  ;; open-outcome : Symbol String Natural
+  ;;                -> (U (List 'opened Database) (List 'failed Integer String)
+  ;;                      (List 'raised Any))
+  ;; NAME, a checked copy, opened with FLAGS and owned by this thread: the
+  ;; database; or the failure's extended code and message, its handle
+  ;; closed; or what a call raised, call-with-c-string's refusal of U+0000,
+  ;; from WHO before anything is allocated, among them. One critical section
+  ;; holds the C string's whole extent: the open, the read of its
+  ;; out-pointer, the count and the record, or else the failure's details and
+  ;; its handle's close. So no handle is ever left uncounted, and no engine's
+  ;; expiry frees the string between the open's calls. It raises nothing.
+  (define (open-outcome who name flags)
+    (critical-section
+     (guard (c (#t (list 'raised c)))
+       (call-with-c-string who name
+         (lambda (c-name)
+           (let-values (((rc handle)
+                         (call-with-out-pointer who
+                           (lambda (slot) (sqlite3-open-v2 c-name slot flags 0)))))
+             (cond
+               ((eqv? handle 0) (cons 'failed (details-of rc 0)))
+               (else
+                (count-up! 'connection)
+                (if (eqv? rc sqlite-ok)
+                    (list 'opened (make-database handle (get-thread-id)))
+                    (let ((details (details-of rc handle)))
+                      (when (eqv? (sqlite3-close handle) sqlite-ok)
+                        (count-down! 'connection))
+                      (cons 'failed details)))))))))))
+
+  ;; opened-database : Symbol (U (List 'opened Database) (List 'failed Integer String)
+  ;;                             (List 'raised Any)) -> Database
+  ;; OUTCOME's database; or its failure, &sqlite-error from WHO; or what it
+  ;; caught, raised again. Called after the section that made OUTCOME.
+  (define (opened-database who outcome)
+    (case (car outcome)
+      ((opened) (cadr outcome))
+      ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))
+      (else (raise (cadr outcome)))))
+
   ;; open-connection : Symbol String Natural -> Database
   ;; A database opened on NAME, a checked copy, with FLAGS, owned by this
   ;; thread; or &sqlite-error from WHO. NAME holding U+0000 is
   ;; call-with-c-string's refusal, from WHO, before anything is allocated.
-  ;; The open, the read of its out-pointer, the count and the record, or
-  ;; else the failure's details and its handle's close, are one critical
-  ;; section: no handle is ever left uncounted.
+  ;; Each is raised after the open's critical section.
   (define (open-connection who name flags)
-    (let ((outcome
-           (call-with-c-string who name
-             (lambda (c-name)
-               (critical-section
-                (let-values (((rc handle)
-                              (call-with-out-pointer who
-                                (lambda (slot) (sqlite3-open-v2 c-name slot flags 0)))))
-                  (cond
-                    ((eqv? handle 0) (cons 'failed (details-of rc 0)))
-                    (else
-                     (count-up! 'connection)
-                     (if (eqv? rc sqlite-ok)
-                         (list 'opened (make-database handle (get-thread-id)))
-                         (let ((details (details-of rc handle)))
-                           (when (eqv? (sqlite3-close handle) sqlite-ok)
-                             (count-down! 'connection))
-                           (cons 'failed details)))))))))))
-      (if (eq? (car outcome) 'opened)
-          (cadr outcome)
-          (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))))
+    (opened-database who (open-outcome who name flags)))
 
   ;; open-database : String Symbol ... -> Database
   ;; FILENAME opened with OPTIONS, owned by the calling thread
@@ -201,7 +247,9 @@
           (loop (sqlite3-next-stmt handle statement) (+ n 1)))))
 
   ;; close-connection : Symbol Any -> Void
-  ;; DB closed, for WHO; nothing when it is closed already.
+  ;; DB closed, for WHO; nothing when it is closed already. A count-down
+  ;; that finds the count at zero is count-down!'s double free, raised once
+  ;; the connection is closed and its handle cleared.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
@@ -216,14 +264,16 @@
                           (if (eqv? rc sqlite-ok)
                               (begin
                                 (set-database-handle! db #f)
-                                (count-down! 'connection)
-                                '(closed))
+                                (guard (c (#t (list 'double-free c)))
+                                  (count-down! 'connection)
+                                  '(closed)))
                               (cons 'failed (details-of rc handle)))))))))))
       (case (car outcome)
         ((untracked)
          (assertion-violation who "the connection has statements chez-sqlite3 does not track"
                               'untracked-statements (cadr outcome)))
         ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))
+        ((double-free) (raise (cadr outcome)))
         (else (if #f #f)))))
 
   ;; close-database! : Database -> Void
@@ -253,14 +303,17 @@
   ;;   - a continuation that re-enters PROC finds the connection closed.
   ;; A raise is told from an escape by a handler around PROC that records it
   ;; and hands it on in place, with raise-continuable; PROC's return, or a
-  ;; handler outside that returns, clears it. The before thunk does nothing,
-  ;; and never clears it: a guard whose clauses do not match re-enters the
+  ;; handler outside that returns, clears it. The before thunks do nothing,
+  ;; and never clear it: a guard whose clauses do not match re-enters the
   ;; extent to raise again, and the close on the way out again must still be
   ;; contained. The open sits in the body with the variable the after thunk
-  ;; reads, in one critical section, and the winder is Chez's critical form,
-  ;; so no interrupt that escapes falls between the open and the close. An
-  ;; engine's expiry is an escape: the connection does not survive one.
-  ;; Everything raised names call-with-database.
+  ;; reads, in one critical section that answers the open's outcome, raised
+  ;; after it; and the winder is Chez's critical form, so no interrupt that
+  ;; escapes falls between the open and the close. Its after thunk closes and
+  ;; records a close's failure, raising nothing; a plain winder around it
+  ;; raises that failure once the critical one is left, unless PROC is
+  ;; raising. An engine's expiry is an escape: the connection does not survive
+  ;; one. Everything raised names call-with-database.
   (define (call-with-database filename . rest)
     (let ((who 'call-with-database))
       (when (null? rest)
@@ -270,23 +323,37 @@
           (assertion-violation who "the last argument is the procedure" 'not-a-procedure
                                (shown-value proc)))
         (let-values (((name flags) (prepared-open who filename options)))
-          (let ((db #f) (raising #f))
-            (dynamic-wind #t
+          (let ((db #f) (raising #f) (close-failure #f))
+            (dynamic-wind
               (lambda () #f)
               (lambda ()
-                (critical-section (set! db (open-connection who name flags)))
-                (with-exception-handler
-                 (lambda (c)
-                   (set! raising (list c))
-                   (call-with-values
-                    (lambda () (raise-continuable c))
-                    (lambda answers (set! raising #f) (apply values answers))))
-                 (lambda ()
-                   (call-with-values
-                    (lambda () (proc db))
-                    (lambda answers (set! raising #f) (apply values answers))))))
+                (dynamic-wind #t
+                  (lambda () #f)
+                  (lambda ()
+                    (opened-database who
+                                     (critical-section
+                                      (let ((outcome (open-outcome who name flags)))
+                                        (when (eq? (car outcome) 'opened)
+                                          (set! db (cadr outcome)))
+                                        outcome)))
+                    (with-exception-handler
+                     (lambda (c)
+                       (set! raising (list c))
+                       (call-with-values
+                        (lambda () (raise-continuable c))
+                        (lambda answers (set! raising #f) (apply values answers))))
+                     (lambda ()
+                       (call-with-values
+                        (lambda () (proc db))
+                        (lambda answers (set! raising #f) (apply values answers))))))
+                  (lambda ()
+                    (when db
+                      (set! close-failure
+                            (guard (e (#t (list e)))
+                              (close-connection who db)
+                              #f))))))
               (lambda ()
-                (when db
-                  (if raising
-                      (guard (e (#t #f)) (close-connection who db))
-                      (close-connection who db)))))))))))
+                (let ((failure close-failure))
+                  (set! close-failure #f)
+                  (when (and failure (not raising))
+                    (raise (car failure))))))))))))

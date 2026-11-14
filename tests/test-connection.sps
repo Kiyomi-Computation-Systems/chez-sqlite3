@@ -38,6 +38,21 @@
 ;;;   call-with-database
 ;;;                  return, raise, escape and re-entry, and each with a close
 ;;;                  that fails, the procedure checked before anything opens
+;;;   after the section
+;;;                  every raise is made after the critical section that
+;;;                  decided it, never inside one: a with-exception-handler
+;;;                  handler of it runs with interrupts enabled, at depth 1
+;;;                  (disable-interrupts answers 1 outside any section, 2 in
+;;;                  one). A guard clause runs after unwinding, so only a
+;;;                  handler sees it. A row per site: call-with-open-handle's
+;;;                  three refusals and its procedure's raise, which reaches
+;;;                  the caller as the same object, raised again;
+;;;                  call-with-database's open and its close; open-database's
+;;;                  own; and close-database!'s count-down, made a double free
+;;;                  by a count-down! this suite makes first
+;;;   engines        open-database under an engine, at every fuel from 1 to 60
+;;;                  ticks a slice, past the 44 where an expiry once unwound
+;;;                  the open's string block and found it freed on resuming
 ;;;
 ;;; &sqlite-closed has no public verb in M1 but close-database!, which does
 ;;; nothing on a closed connection (ADR-0012, decision 7). So it is reached
@@ -58,7 +73,7 @@
         (rnrs eval)
         (srfi :64)
         (only (chezscheme) foreign-procedure fork-thread make-mutex with-mutex sleep make-time
-              get-thread-id current-directory)
+              get-thread-id current-directory disable-interrupts enable-interrupts make-engine)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -201,6 +216,48 @@
         (let ((a-database (guard (e (#t #f)) (database? r))))
           (when a-database (guard (e (#t #f)) (close-database! r)))
           (list (list 'no-raise (if a-database 'a-database r)) seen)))))
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once. 1 outside any section.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, as depth-N, and what it raised;
+;; the handler escapes, so nothing returns into the raise. A symbol, so ids
+;; never takes a depth for a thread id. (no-raise VALUE) when THUNK raises
+;; nothing, a database it answered closed first.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let* ((depth (interrupt-depth))
+               (what (what-raised c)))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   what))))
+      (lambda ()
+        (let ((r (thunk)))
+          (when (guard (e (#t #f)) (database? r)) (guard (e (#t #f)) (close-database! r)))
+          (list 'no-raise (if (guard (e (#t #f)) (database? r)) 'a-database r))))))))
+
+;; run-engine : (-> Any) Positive-Integer Positive-Integer -> (U (List Any Natural) (List 'unfinished Natural))
+;; THUNK run in an engine of FUEL ticks a slice, resumed each time it expires
+;; until it completes: its answer and how many times it expired; or
+;; (unfinished CAP) once it has expired CAP times, so a run that never ends
+;; fails its row by name.
+(define (run-engine thunk fuel cap)
+  (let loop ((engine (make-engine thunk)) (expired 0))
+    (if (>= expired cap)
+        (list 'unfinished cap)
+        (engine fuel
+                (lambda (left . answers) (list (car answers) expired))
+                (lambda (next) (loop next (+ expired 1)))))))
 
 ;; in-dir : (String -> Any) -> Any
 (define (in-dir proc)
@@ -985,6 +1042,229 @@
   (let ((r (attempt (lambda ()
                       (call-with-database ":memory:" (lambda (db) (close-database! db) 'closed-inside))))))
     (list r (native-counts))))
+
+;; --- raised after the section -------------------------------------------------------------------
+;; A raise made inside a critical section reaches a with-exception-handler
+;; handler with interrupts still disabled: there an engine never expires,
+;; and another thread's collection waits for the handler to end (measured by
+;; M1's closing review). So every raise follows the section that decided it.
+;; Each row's handler reads its depth, written depth-N so no thread id is
+;; taken for it, and what was raised: depth-1, and the site's own refusal.
+
+(test-equal "call-with-open-handle refuses what is no database, and a closed connection, after its critical section: a handler of either runs at depth 1, and the procedure never runs"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'test-connection '(not-a-database x)))
+        (list 'raised-at-depth 'depth-1 (list 'closed 'test-connection 'message))
+        'proc-not-run zero-counts)
+  (let* ((ran 'proc-not-run)
+         (a (handler-depth (lambda () (with-handle 'x (lambda (h) (set! ran 'proc-ran) h)))))
+         (closed (attempt (lambda () (let ((db (open-database ":memory:"))) (close-database! db) db))))
+         (b (handler-depth (lambda () (with-handle closed (lambda (h) (set! ran 'proc-ran) h))))))
+    (list a b ran (native-counts))))
+
+(test-equal "call-with-open-handle refuses another thread after its critical section: that thread's handler runs at depth 1, and the procedure never runs"
+  (list (list (list 'raised-at-depth 'depth-1
+                    (list 'wrong-thread 'test-connection 'message 'main 'the-thread))
+              'another-thread)
+        'proc-not-run 'closed zero-counts)
+  (let ((db #f) (ran 'proc-not-run))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((r (from-another-thread
+                      db (lambda (db)
+                           (handler-depth (lambda () (with-handle db (lambda (h) (set! ran 'proc-ran) h)))))))
+                  (closed (attempt (lambda () (close-database! db) 'closed))))
+             (list r ran closed (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+;; A condition no other row raises, with a who and irritants of its own.
+(define from-proc
+  (condition (make-assertion-violation) (make-who-condition 'test-proc)
+             (make-message-condition "a raise this suite plants in a procedure")
+             (make-irritants-condition '(planted))))
+
+(test-equal "call-with-open-handle raises its procedure's raise again after its critical section: a handler of it runs at depth 1, and a guard gets that very object"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'test-proc '(planted)))
+        'the-same-object 'closed zero-counts)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((a (handler-depth (lambda () (with-handle db (lambda (h) (raise from-proc))))))
+                  (b (guard (e ((eq? e from-proc) 'the-same-object)
+                               (#t (list 'another (what-raised e))))
+                       (with-handle db (lambda (h) (raise from-proc)))
+                       'no-raise))
+                  (closed (attempt (lambda () (close-database! db) 'closed))))
+             (list a b closed (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+;; The procedure answers data (ADR-0012, amended): what it raises is raised
+;; again with raise, so a raise-continuable from it cannot be resumed (the
+;; maintainer, 2026-11-14). A handler that returns from that raise gets the
+;; &non-continuable R6RS raises in its place.
+(test-equal "call-with-open-handle: a warning its procedure raises with raise-continuable is raised again with raise, after the section; the handler runs once, its return is a &non-continuable, and the procedure does not go on"
+  (list 'non-continuable 'handler-ran-on-a-warning 'proc-did-not-go-on 'closed zero-counts)
+  (let ((db #f) (ran 'handler-not-run) (went-on 'proc-did-not-go-on))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((r (guard (e ((non-continuable-violation? e) 'non-continuable)
+                               (#t (list 'other (what-raised e))))
+                       (with-exception-handler
+                        (lambda (c)
+                          (set! ran (if (eq? ran 'handler-not-run)
+                                        (if (warning? c) 'handler-ran-on-a-warning 'handler-ran-on-another)
+                                        'handler-ran-twice))
+                          'handled)
+                        (lambda ()
+                          (with-handle db
+                            (lambda (h)
+                              (let ((answer (raise-continuable (make-warning))))
+                                (set! went-on (list 'proc-went-on answer))
+                                answer)))))))
+                  (closed (attempt (lambda () (close-database! db) 'closed))))
+             (list r ran went-on closed (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+(test-equal "call-with-open-handle answers every value its procedure answers, and gives it the handle, an exact positive integer"
+  (list '(first second) 'exact-positive-integer 'closed zero-counts)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((answers (call-with-values (lambda () (with-handle db (lambda (h) (values 'first 'second))))
+                             list))
+                  (handle (with-handle db (lambda (h)
+                                            (if (and (integer? h) (exact? h) (> h 0)) 'exact-positive-integer h))))
+                  (closed (attempt (lambda () (close-database! db) 'closed))))
+             (list answers handle closed (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+(test-equal "open-database raises after its critical section: a handler of a failed open, and of U+0000, runs at depth 1"
+  (list (list 'raised-at-depth 'depth-1
+              (list 'sqlite-error 'open-database 'cantopen 'cantopen 'string 'none 'none
+                    'message-is-the-field))
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'open-database '((kind string))))
+        zero-counts)
+  (in-dir (lambda (dir)
+            (let* ((a (handler-depth (lambda () (open-database (string-append dir "/no-such-directory/x.db")))))
+                   (b (handler-depth (lambda () (open-database (nul-name (string-append dir "/x.db") 1))))))
+              (list a b (native-counts))))))
+
+(test-equal "call-with-database's open raises after its critical section: a handler of a failed open, and of U+0000, runs at depth 1, and the procedure never runs"
+  (list (list 'raised-at-depth 'depth-1
+              (list 'sqlite-error 'call-with-database 'cantopen 'cantopen 'string 'none 'none
+                    'message-is-the-field))
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'call-with-database '((kind string))))
+        'proc-not-run zero-counts)
+  (in-dir (lambda (dir)
+            (let* ((ran 'proc-not-run)
+                   (proc (lambda (db) (set! ran 'proc-ran) 'ran))
+                   (a (handler-depth
+                       (lambda () (call-with-database (string-append dir "/no-such-directory/x.db") proc))))
+                   (b (handler-depth
+                       (lambda () (call-with-database (nul-name (string-append dir "/x.db") 1) proc)))))
+              (list a b ran (native-counts))))))
+
+(test-equal "call-with-database raises its close's failure after the critical after thunk, on a return and on an escape: a handler of it runs at depth 1; the connection stays open"
+  (list (list (list 'raised-at-depth 'depth-1
+                    (list 'assertion-violation 'call-with-database '(untracked-statements 1)))
+              while-open 'still-open 0 'closed zero-counts)
+        (list (list 'raised-at-depth 'depth-1
+                    (list 'assertion-violation 'call-with-database '(untracked-statements 1)))
+              while-open 'still-open 0 'closed zero-counts))
+  (let* ((returned
+          (with-failing-close
+           (lambda (spoil!)
+             (handler-depth
+              (lambda () (call-with-database ":memory:" (lambda (db) (spoil! db) 'returned)))))))
+         (escaped
+          (with-failing-close
+           (lambda (spoil!)
+             (handler-depth
+              (lambda ()
+                (call/cc
+                 (lambda (k)
+                   (call-with-database ":memory:" (lambda (db) (spoil! db) (k 'escaped)))))))))))
+    (list returned escaped)))
+
+;; The close's count-down finds the count at zero when this suite has taken
+;; the connection's count away first: count-down! refuses that as a double
+;; free, inside close-database!'s section, once the handle is closed and
+;; cleared (the review's plant, made from a suite).
+(test-equal "close-database! raises its count-down's double free after its critical section: a handler of it runs at depth 1; the connection is closed, and the count stays at zero"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'count-down! '(double-free connection)))
+        (list 'raised (list 'closed 'test-connection 'message))
+        zero-counts)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (count-down! 'connection)
+           (let* ((r (handler-depth (lambda () (close-database! db) 'closed)))
+                  (after (attempt (lambda () (with-handle db (lambda (h) 'still-open))))))
+             (list r after (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+;; --- engines --------------------------------------------------------------------------------------
+;; An engine's expiry unwinds every dynamic-wind it is inside, and its resume
+;; rewinds them: an expiry inside the open's C string would free its block,
+;; and the resume would find it freed. Before the open held its string in a
+;; critical section, an engine of 1 to 44 ticks a slice expired inside it at
+;; every fuel, and the open was refused (measured on Chez 10.4.0, where the
+;; open and close of :memory: took some 90 ticks). An engine spends no ticks
+;; inside a critical section (measured: a loop of 1,000 there, at 10 ticks a
+;; slice, never expired), so the open now expires only outside its section:
+;; at 1 tick a slice it still expires.
+
+;; fuels : Positive-Integer -> (Listof Positive-Integer)
+;; 1 to N.
+(define (fuels n)
+  (let loop ((i n) (found '()))
+    (if (= i 0) found (loop (- i 1) (cons i found)))))
+
+;; open-close-under-engine : Positive-Integer -> (U (List Any Natural) (List 'unfinished Natural))
+;; An open of :memory: and its close, in an engine of FUEL ticks a slice.
+(define (open-close-under-engine fuel)
+  (run-engine (lambda ()
+                (guard (e (#t (list 'raised (what-raised e))))
+                  (let ((db (open-database ":memory:")))
+                    (close-database! db)
+                    'opened-and-closed)))
+              fuel 100000))
+
+(test-equal "open-database and close-database! under an engine of every fuel from 1 to 60 ticks a slice: each opens and closes, the engine of 1 tick expired, and every count is zero after"
+  (list (map (lambda (fuel) (list fuel 'opened-and-closed)) (fuels 60)) 'expired zero-counts)
+  (let loop ((rest (fuels 60)) (found '()))
+    (if (null? rest)
+        (let ((at-one (open-close-under-engine 1)))
+          (list (reverse found)
+                (if (and (pair? (cdr at-one)) (integer? (cadr at-one)) (> (cadr at-one) 0))
+                    'expired
+                    (list 'at-fuel-1 at-one))
+                (native-counts)))
+        (let ((run (open-close-under-engine (car rest))))
+          (loop (cdr rest)
+                (cons (if (eq? (car run) 'unfinished)
+                          (list (car rest) run)
+                          (list (car rest) (car run)))
+                      found))))))
 
 (test-equal "every count is zero at the end"
   zero-counts
