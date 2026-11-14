@@ -17,6 +17,10 @@
 #   leaks        a suite whose tests pass,     make test names it FAIL, and
 #                but which counts a            suite-exit-status names the
 #                statement it never frees      count left (ADR-0005)
+#   seam         a private library that        check-seam names the import,
+#                imports foreign-alloc, a      and no suite runs
+#                name no library may import
+#                yet
 #   floors       README's Chez line says       check-floors names the line,
 #                10.3.0, not the floor         and no suite runs
 #   ci           job memory given a            check-ci names the key, and
@@ -33,8 +37,9 @@
 # A case requires a non-zero exit, and compares the lines starting
 # "check-suites: " or "test: " as a whole: check-suites' verdict, the plant's
 # outcome, the after-suite's pass line, and the count. The leaks case also
-# compares the lines starting "suite-exit-status: ", the floors case those
-# starting "check-floors: ", and the ci case those starting "check-ci: ".
+# compares the lines starting "suite-exit-status: ", the seam case those
+# starting "check-seam: ", the floors case those starting "check-floors: ",
+# and the ci case those starting "check-ci: ".
 #
 # The copy is the working tree without .git, build/ and .claude/ (Claude
 # Code's local state, which can hold whole worktrees), and with the
@@ -301,6 +306,32 @@ run_case "leaks: a suite whose tests pass, but which leaves a statement counted,
 
 # The plant is gone, so only the after-suite is left to check.
 rm -f "${copy:?}/${plant:?}"
+
+# The seam case: a library under the copy's src/ imports a name from
+# (chezscheme) that no library may import yet. Without check-seam among make
+# test's prerequisites, or with it reading a directory but src/, no check sees
+# the plant and make test passes: the case fails then (traps.md: each new
+# prerequisite comes with its plant). check-seam passes before and after: the
+# plant is removed.
+cat >"$plant_dir/seam" <<'EOF'
+#!r6rs
+;;; Planted by tests/check-test-fails.sh: a private library that allocates
+;;; foreign memory itself, which only (chez-sqlite3 private memory) may, and
+;;; which no allowlist names yet.
+(library (chez-sqlite3 private planted)
+  (export planted)
+  (import (chez-sqlite3 private require-threaded)
+          (rnrs)
+          (only (chezscheme) foreign-alloc))
+  (define planted 1))
+EOF
+cp "$plant_dir/seam" "$copy/src/chez-sqlite3/private/planted.sls"
+run_case "seam: check-seam names a private library that imports foreign-alloc, and no suite runs" \
+  "$(checked 1
+     echo 'check-seam: src/chez-sqlite3/private/planted.sls: (chez-sqlite3 private planted) imports foreign-alloc from (chezscheme), but allowed-chez-names in tests/check-seam.sps does not list it'
+     echo 'check-seam: FAILED (problems: 1)')" \
+  '^(check-suites|check-seam|test): '
+rm -f "${copy:?}/src/chez-sqlite3/private/planted.sls"
 
 # The floors case: the copy's README states an older Chez than the floors
 # file does. The file's floor is read from the file, so this script is no

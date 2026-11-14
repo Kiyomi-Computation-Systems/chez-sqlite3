@@ -1,0 +1,670 @@
+#!r6rs
+;;; make check-seam: reads every .sls file under the directory named on the
+;;; command line (make passes src) as data, with Chez's reader, and evaluates
+;;; nothing. It names, with the file and the import or the export, each
+;;; library that breaks one of these rules (ADR-0009, amended):
+;;;
+;;;   (c) a library imports (chezscheme) other than as (only (chezscheme)
+;;;       name ...), or names in that list one that is not in
+;;;       allowed-chez-names, or imports (rnrs eval). Those reach a library by
+;;;       a route this check does not read: a body (import ...), include,
+;;;       eval, load, $primitive. (scheme) is (chezscheme) under another name;
+;;;   (d) the boundary: a library under src/ is (chez-sqlite3), the public
+;;;       library, or (chez-sqlite3 private name ...), a private one, and
+;;;       nothing else. The test helpers, (chez-sqlite3-testing), live in
+;;;       tests/ and are no part of it, nor is (chez-sqlite3 util). With
+;;;       nothing else under src/, no library but (chez-sqlite3) and the
+;;;       private ones can import a private one, so that needs no rule of its
+;;;       own. Tests may import private libraries: they are never read;
+;;;   (e) a library imports a library that is not on the import allowlist:
+;;;       the (rnrs ...) libraries but (rnrs eval), (only (chezscheme) name
+;;;       ...), and the (chez-sqlite3 ...) libraries. Any other,
+;;;       (chezscheme csv7) and a third-party library among them, could reach
+;;;       a library by a route this check does not read;
+;;;   (f) a library imports, from (chezscheme), a name that only some libraries
+;;;       may import, and is not one of them. library-only-chez-names holds
+;;;       each such name with the libraries that alone may import it: the
+;;;       blocks' foreign-alloc and foreign-free for (chez-sqlite3 private
+;;;       memory); load-shared-object, foreign-procedure, foreign-entry,
+;;;       foreign-entry?, foreign-ref and foreign-set! for (chez-sqlite3
+;;;       private native), which alone calls into libsqlite3, and with
+;;;       getenv and machine-type reads the world discovery is given. A name
+;;;       no library may import is not in allowed-chez-names at all, so it is
+;;;       refused everywhere, the libraries above among them: define-ftype
+;;;       (v1 reads no C struct, and a function ftype would bind a C entry
+;;;       point around foreign-procedure), lock-object (ADR-0011 rejected it),
+;;;       foreign-callable and foreign-callable-entry-point (v1 has no
+;;;       callbacks), fork-thread (a connection belongs to its caller's
+;;;       thread);
+;;;   (g) a library exports a name it imports from (chezscheme), as an
+;;;       identifier or as the internal name of a (rename (internal
+;;;       external)) spec. Otherwise a library rule (f) lets import a name
+;;;       could hand it on to one that may not, and any library could hand
+;;;       allowed-chez-names past the seam to a consumer. The names a library
+;;;       imports from (chezscheme) are those of its (only (chezscheme) name
+;;;       ...) import sets: rule (c) refuses every other import set of
+;;;       (chezscheme), each wrapper among them, so no prefix or rename makes
+;;;       a local name this rule does not see. An export spec that is neither
+;;;       an identifier nor (rename (internal external) ...), the only two
+;;;       Chez accepts, is an export it cannot read;
+;;;   (h) a library imports a (chez-sqlite3 ...) library that no library
+;;;       under the directory defines. Chez would load it from another
+;;;       directory on its library path, and the suites' path holds tests/:
+;;;       a library there, which no rule here reads, could bind anything. A
+;;;       library counts as defined wherever under the directory it stands:
+;;;       rule (i) then fails any that is not at its name's path, alone in
+;;;       its file;
+;;;   (i) a file holds more than one library, or a library stands anywhere
+;;;       but its name's path: (chez-sqlite3 private extra) in
+;;;       chez-sqlite3/private/extra.sls, (chez-sqlite3) in chez-sqlite3.sls.
+;;;       Chez looks for a library at that path in each library directory in
+;;;       turn, so one defined elsewhere under the directory could satisfy
+;;;       rule (h) while another directory supplied the library Chez loads;
+;;;   (k) a library that imports a name from library-only-chez-names exports
+;;;       no name it binds with define-syntax at the top of its body (inside a
+;;;       begin too). Rule (g) does not see a macro whose template uses the
+;;;       name: (define-syntax call (syntax-rules () ((_ x) (foreign-alloc
+;;;       x)))), exported, would hand foreign-alloc to every library. Internal
+;;;       macros are legal. Syntax bound any other way, a let-syntax or a
+;;;       macro-defining macro, is not read: such a library is held by review.
+;;;
+;;; The letters are chez-curl's, where rules (a), (b) and (j) belonged to its
+;;; two families and its escape hatch. This project has one family and no
+;;; hatch, so there is no (a), (b) or (j); (k) is new.
+;;;
+;;; The lists are allowlists: a name or a library that is not on one fails,
+;;; so a route nobody thought of is closed until a reviewer opens it.
+;;; allowed-chez-names holds exactly the names src/ imports from (chezscheme),
+;;; and a name of library-only-chez-names joins it when its library lands and
+;;; imports it; rnrs-libraries holds the standard libraries.
+;;; tests/test-check-seam.sps runs this program on a tree for each rule.
+;;;
+;;; A library is a (chez-sqlite3 ...) library when the first identifier of its
+;;; name is chez-sqlite3, so (chez-sqlite3) is one and (chez-sqlite3-testing)
+;;; is not. Imports are found through the import-set wrappers for, only,
+;;; except, prefix, rename and library, and a version reference after a name
+;;; is dropped. Tests are exempt by never being read: they live in tests/,
+;;; not under src/.
+;;;
+;;; It fails closed, because a check that passes on nothing is vacuous. It
+;;; names, and exits 1 on, each of these:
+;;;
+;;;   - no .sls file under the directory;
+;;;   - a symbolic link to a directory, which it does not follow;
+;;;   - a file Chez could load as a library that it does not read: one ending
+;;;     in an extension of (library-extensions) but .sls, source (.ss, .scm,
+;;;     .sch, .chezscheme.sls) or compiled (.so, .chezscheme.so);
+;;;   - a file it cannot read as data, or that holds an #!eof literal, which
+;;;     would end the reading early;
+;;;   - a datum that is not a (library <name> (export ...) (import ...) ...)
+;;;     form, the file's first or any later one: every library form in a file
+;;;     is checked;
+;;;   - an import it cannot read, which includes one nested deeper than
+;;;     max-depth;
+;;;   - an export it cannot read.
+;;;
+;;; A name starting with .# is skipped when it is a dangling symbolic link:
+;;; Emacs leaves one, a lock file, beside a source it has open. A regular file
+;;; or a directory named .#..., or a link that resolves, is no lock file. Chez
+;;; loads a library from .#g.sls as it does from g.sls, so each is read and
+;;; checked like any other.
+;;;
+;;; It prints one verdict on a pass, to stdout, or each problem and then a
+;;; count of them on a failure, to stderr. It exits 0 or 1, never a count.
+(import (rnrs)
+        (only (chezscheme) directory-list file-directory? file-symbolic-link?
+              display-condition library-extensions parameterize print-graph))
+
+;; family-prefix? : (Listof Symbol) -> Boolean
+;; Whether NAME is a (chez-sqlite3 ...) library name: its first identifier.
+(define (family-prefix? name)
+  (and (pair? name) (eq? (car name) 'chez-sqlite3)))
+
+;; public-name? : (Listof Symbol) -> Boolean
+;; (chez-sqlite3), the one public library.
+(define (public-name? name)
+  (equal? name '(chez-sqlite3)))
+
+;; private-name? : (Listof Symbol) -> Boolean
+;; (chez-sqlite3 private name ...), with at least one identifier after private.
+(define (private-name? name)
+  (and (pair? name) (pair? (cdr name)) (pair? (cddr name))
+       (eq? (car name) 'chez-sqlite3) (eq? (cadr name) 'private)))
+
+;; chez-names : (Listof (Listof Symbol))
+;; The names Chez knows its own library by. (scheme) is (chezscheme).
+(define chez-names '((chezscheme) (scheme)))
+
+;; allowed-chez-names : (Listof Symbol)
+;; The only names a library under src/ may import from (chezscheme): exactly
+;; those src/ imports today. Anything else in (chezscheme) can reach a library
+;; this check does not read: import is a body form there, include pulls in a
+;; file, eval, interpret, top-level-value and $primitive run code built at run
+;; time, load a file. Adding a name is a reviewed change to the seam
+;; (ADR-0009), and tests/test-check-seam.sps requires the list to equal the
+;; names src/ imports, so an unused name cannot stay.
+;; critical-section, make-mutex and with-mutex guard the counters' counts, and
+;; keep an interrupt that escapes from falling between a native object's
+;; making and its count: they run no code built at run time, and reach no
+;; library. threaded?, scheme-version and scheme-version-number are
+;; require-threaded's questions, asked of the Chez running it.
+(define allowed-chez-names
+  '(critical-section make-mutex scheme-version scheme-version-number threaded? with-mutex))
+
+;; library-only-chez-names : (Listof (Pairof Symbol (Listof (Listof Symbol))))
+;; Rule (f). Each entry is a name, then one or more libraries that alone may
+;; import it from (chezscheme): any other library that does fails. Neither
+;; (chez-sqlite3 private memory) nor (chez-sqlite3 private native) exists yet,
+;; and an entry may name a library that does not: it records the layout. A name
+;; joins allowed-chez-names only when its library lands and imports it, and
+;; until then it is refused everywhere as unlisted.
+;; foreign-alloc and foreign-free belong to memory, whose blocks are counted: a
+;; block allocated anywhere else is one the counters cannot see. native alone
+;; calls into libsqlite3: foreign-procedure binds an entry point,
+;; foreign-entry and foreign-entry? ask for one, load-shared-object loads the
+;; library (a second one, or anything else, loaded elsewhere would escape
+;; ADR-0002's one load), and foreign-ref and foreign-set! read and write
+;; foreign memory, the copy of every string passed to libsqlite3 (ADR-0011)
+;; among it. getenv and machine-type are the inputs discovery is given, read
+;; by native alone so that discovery stays a pure function (ADR-0002).
+;; get-thread-id is not here: ADR-0010's library has no name yet.
+;; Adding a name or a library is a reviewed change to the seam (ADR-0009).
+(define library-only-chez-names
+  '((foreign-alloc (chez-sqlite3 private memory))
+    (foreign-free (chez-sqlite3 private memory))
+    (load-shared-object (chez-sqlite3 private native))
+    (foreign-procedure (chez-sqlite3 private native))
+    (foreign-entry (chez-sqlite3 private native))
+    (foreign-entry? (chez-sqlite3 private native))
+    (foreign-ref (chez-sqlite3 private native))
+    (foreign-set! (chez-sqlite3 private native))
+    (getenv (chez-sqlite3 private native))
+    (machine-type (chez-sqlite3 private native))))
+
+;; rnrs-libraries : (Listof (Listof Symbol))
+;; The standard libraries a library under src/ may import: R6RS's, but for
+;; (rnrs eval), which eval-libraries names. tests/test-check-seam.sps requires
+;; the list to equal the (rnrs ...) libraries Chez has, but that one.
+(define rnrs-libraries
+  '((rnrs) (rnrs base) (rnrs arithmetic bitwise) (rnrs arithmetic fixnums)
+    (rnrs arithmetic flonums) (rnrs bytevectors) (rnrs conditions)
+    (rnrs control) (rnrs enums) (rnrs exceptions) (rnrs files)
+    (rnrs hashtables) (rnrs io ports) (rnrs io simple) (rnrs lists)
+    (rnrs mutable-pairs) (rnrs mutable-strings) (rnrs programs) (rnrs r5rs)
+    (rnrs records inspection) (rnrs records procedural)
+    (rnrs records syntactic) (rnrs sorting) (rnrs syntax-case) (rnrs unicode)))
+
+;; eval-libraries : (Listof (Listof Symbol))
+;; The standard libraries no library under src/ may import. They are named
+;; apart from the others on the allowlist for a message of their own.
+(define eval-libraries '((rnrs eval)))
+
+;; unread-extensions : (Listof String)
+;; The endings of a file Chez could load as a library, but this check does not
+;; read. Chez's own list, (library-extensions), pairs each source extension
+;; with its compiled one. All but .sls are here, and the longest comes first,
+;; so a file is named for its longest ending.
+(define unread-extensions
+  (list-sort
+   (lambda (a b) (> (string-length a) (string-length b)))
+   (fold-left (lambda (found ext) (if (member ext found) found (cons ext found)))
+              '()
+              (remp (lambda (ext) (string=? ext ".sls"))
+                    (apply append (map (lambda (pair) (list (car pair) (cdr pair)))
+                                       (library-extensions)))))))
+
+;; wrappers : (Listof Symbol)
+;; The import-set forms that wrap one import set, in their second element.
+;; (library <reference>) wraps a reference, and is handled apart.
+(define wrappers '(for only except prefix rename))
+
+;; max-depth : Natural
+;; How deep wrappers may nest. A cyclic datum (#0=(only #0# x)) nests for ever.
+(define max-depth 32)
+
+;; written : Any -> String
+;; print-graph makes write label a cyclic datum, #0=(only #0# x), where it
+;; would warn on stderr and then do the same.
+(define (written datum)
+  (call-with-string-output-port
+    (lambda (p) (parameterize ((print-graph #t)) (write datum p)))))
+
+;; abbreviated : Any -> String
+;; DATUM written, cut to 57 characters and three dots when over 60.
+(define (abbreviated datum)
+  (let ((text (written datum)))
+    (if (> (string-length text) 60)
+        (string-append (substring text 0 57) "...")
+        text)))
+
+;; describe : Any -> String
+(define (describe obj)
+  (call-with-string-output-port
+    (lambda (p) (if (condition? obj) (display-condition obj p) (write obj p)))))
+
+;; suffix? : String String -> Boolean
+(define (suffix? s suffix)
+  (let ((n (string-length s)) (m (string-length suffix)))
+    (and (>= n m) (string=? (substring s (- n m) n) suffix))))
+
+;; prefix? : String String -> Boolean
+(define (prefix? s prefix)
+  (let ((n (string-length s)) (m (string-length prefix)))
+    (and (>= n m) (string=? (substring s 0 m) prefix))))
+
+;; joined : String (Pairof String (Listof String)) -> String
+;; The strings, a separator between each two. There is always one.
+(define (joined separator strings)
+  (fold-left (lambda (text s) (string-append text separator s))
+             (car strings)
+             (cdr strings)))
+
+;; unread-ending : String -> (U String #f)
+;; The first of unread-extensions NAME ends with.
+(define (unread-ending name)
+  (find (lambda (ext) (suffix? name ext)) unread-extensions))
+
+;; read-data : String -> (U (List 'data (Listof Any)) (List 'unreadable String))
+(define (read-data path)
+  (guard (e (#t (list 'unreadable (describe e))))
+    (call-with-port (open-file-input-port path (file-options) (buffer-mode block)
+                                          (make-transcoder (utf-8-codec)))
+      (lambda (port)
+        (let loop ((found '()))
+          (let ((datum (read port)))
+            (cond ((not (eof-object? datum)) (loop (cons datum found)))
+                  ((port-eof? port) (list 'data (reverse found)))
+                  (else (error 'read "an #!eof literal ends the reading before the end of the file")))))))))
+
+;; lock-file? : String String -> Boolean
+;; Whether the entry NAME, at PATH, is an Emacs lock file: named .#..., and a
+;; symbolic link to nothing. Chez cannot load a dangling link, so skipping it
+;; hides no library.
+(define (lock-file? path name)
+  (and (prefix? name ".#")
+       (file-symbolic-link? path)
+       (not (file-exists? path))))
+
+;; walk : String -> (List (Listof String) (Listof String) (Listof String))
+;; Under DIR, as paths: the .sls files, the symbolic links to directories, and
+;; the files with an unread-extensions ending. A lock-file? is skipped.
+(define (walk dir)
+  (let loop ((names (directory-list dir)) (files '()) (links '()) (unread '()))
+    (if (null? names)
+        (list files links unread)
+        (let ((path (string-append dir "/" (car names))))
+          (cond
+            ((lock-file? path (car names))
+             (loop (cdr names) files links unread))
+            ((file-directory? path #f)
+             (let ((below (walk path)))
+               (loop (cdr names)
+                     (append (car below) files)
+                     (append (cadr below) links)
+                     (append (caddr below) unread))))
+            ((file-directory? path)
+             (loop (cdr names) files (cons path links) unread))
+            ((unread-ending (car names))
+             (loop (cdr names) files links (cons path unread)))
+            ((suffix? (car names) ".sls")
+             (loop (cdr names) (cons path files) links unread))
+            (else (loop (cdr names) files links unread)))))))
+
+;; reference-name : Any -> (U (Listof Symbol) #f)
+;; The name in a library reference: its leading identifiers, so a version
+;; reference after them is dropped. #f when it has none.
+(define (reference-name ref)
+  (and (list? ref)
+       (let loop ((rest ref) (found '()))
+         (if (and (pair? rest) (symbol? (car rest)))
+             (loop (cdr rest) (cons (car rest) found))
+             (and (pair? found) (reverse found))))))
+
+;; spec-name : Any Natural -> (U (Listof Symbol) #f)
+;; The one library an import spec imports, looking through the wrappers. #f
+;; when it is no import spec this check can read.
+(define (spec-name spec depth)
+  (cond
+    ((or (not (list? spec)) (null? spec) (> depth max-depth)) #f)
+    ((eq? (car spec) 'library)
+     (and (= (length spec) 2) (reference-name (cadr spec))))
+    ((memq (car spec) wrappers)
+     (and (>= (length spec) 2) (spec-name (cadr spec) (+ depth 1))))
+    (else (reference-name spec))))
+
+;; headed? : Symbol Any -> Boolean
+(define (headed? key form)
+  (and (list? form) (pair? form) (eq? (car form) key)))
+
+;; library-form? : Any -> Boolean
+(define (library-form? datum)
+  (and (list? datum)
+       (>= (length datum) 4)
+       (eq? (car datum) 'library)
+       (reference-name (cadr datum))
+       (headed? 'export (caddr datum))
+       (headed? 'import (cadddr datum))
+       #t))
+
+;; chez-only-names : Import-Spec -> (U (Listof Any) #f)
+;; The names in SPEC when it is (only (chezscheme) name ...), and #f for any
+;; other import set. (only (scheme) ...) is another set, and so is an only
+;; over a wrapper of (chezscheme). SPEC is one spec-name has read, so it is a
+;; list, and an only has at least its import set.
+(define (chez-only-names spec)
+  (and (eq? (car spec) 'only)
+       (equal? (reference-name (cadr spec)) '(chezscheme))
+       (cddr spec)))
+
+;; cannot-read : String (Listof Symbol) Any -> String
+(define (cannot-read path name spec)
+  (string-append path ": " (written name)
+                 " has an import it cannot read: " (abbreviated spec)))
+
+;; name-complaints : String (Listof Symbol) Symbol -> (Listof String)
+;; What is wrong with the library NAME importing ID from (chezscheme): none, or
+;; one. ID is not in allowed-chez-names, or it is in library-only-chez-names
+;; and NAME is not among the libraries listed with it.
+(define (name-complaints path name id)
+  (let ((only (assq id library-only-chez-names)))
+    (cond
+      ((not (memq id allowed-chez-names))
+       (list (string-append path ": " (written name) " imports "
+                            (symbol->string id)
+                            " from (chezscheme), but allowed-chez-names in"
+                            " tests/check-seam.sps does not list it")))
+      ((and only (not (member name (cdr only))))
+       (list (string-append path ": " (written name) " imports "
+                            (symbol->string id)
+                            " from (chezscheme), but library-only-chez-names in"
+                            " tests/check-seam.sps allows it only in "
+                            (joined ", " (map written (cdr only))))))
+      (else '()))))
+
+;; chez-complaints : String (Listof Symbol) Any -> (Listof String)
+;; What is wrong with SPEC, an import set of (chezscheme) or (scheme), in the
+;; library NAME: its shape, or else each name in it that is not in
+;; allowed-chez-names, or that library-only-chez-names keeps from NAME, in order.
+(define (chez-complaints path name spec)
+  (let ((names (chez-only-names spec)))
+    (cond
+      ((not names)
+       (list (string-append path ": " (written name) " imports "
+                            (abbreviated spec)
+                            ", but (chezscheme), and its alias (scheme), may be"
+                            " imported only as (only (chezscheme) name ...)")))
+      ((not (for-all symbol? names))
+       (list (cannot-read path name spec)))
+      (else
+       (apply append (map (lambda (id) (name-complaints path name id)) names))))))
+
+;; undefined-complaints : String (Listof Symbol) (Listof Symbol) (Listof (Listof Symbol))
+;;                        -> (Listof String)
+;; Rule (h): the library NAME imports IMPORTED, a (chez-sqlite3 ...) library, and
+;; DEFINED, the libraries defined under the directory, lacks it.
+(define (undefined-complaints path name imported defined)
+  (if (member imported defined)
+      '()
+      (list (string-append path ": " (written name) " imports " (written imported)
+                           ", but no library under src/ defines it, so Chez would load it"
+                           " from elsewhere on its library path, which this check does not read"))))
+
+;; import-complaints : String (Listof Symbol) Any (Listof (Listof Symbol)) -> (Listof String)
+;; What is wrong with the import set SPEC of the library NAME. DEFINED is
+;; the libraries defined under the directory.
+(define (import-complaints path name spec defined)
+  (let ((imported (spec-name spec 0)))
+    (cond
+      ((not imported)
+       (list (cannot-read path name spec)))
+      ((member imported chez-names)
+       (chez-complaints path name spec))
+      ((member imported eval-libraries)
+       (list (string-append path ": " (written name) " imports "
+                            (written imported)
+                            ", but no library under src/ may import "
+                            (written imported))))
+      ((member imported rnrs-libraries)
+       '())
+      ;; Rule (h): every other (chez-sqlite3 ...) import must be defined here.
+      ;; A library that is no part of the family but is defined is refused
+      ;; once, at its definition, by rule (d).
+      ((family-prefix? imported)
+       (undefined-complaints path name imported defined))
+      (else
+       (list (string-append path ": " (written name) " imports "
+                            (written imported)
+                            ", but a library under src/ may import only the"
+                            " (rnrs ...) libraries except (rnrs eval),"
+                            " (only (chezscheme) name ...), and (chez-sqlite3 ...)"
+                            " libraries"))))))
+
+;; chez-imported : (Listof Any) -> (Listof Symbol)
+;; The names SPECS, a library's import sets, take from (chezscheme): each
+;; identifier in each (only (chezscheme) name ...) among them. Rule (c)
+;; refuses any other import set of (chezscheme), so these are the local
+;; names (chezscheme) binds in the library.
+(define (chez-imported specs)
+  (apply append
+         (map (lambda (spec)
+                (let ((names (and (member (spec-name spec 0) chez-names)
+                                  (chez-only-names spec))))
+                  (if names (filter symbol? names) '())))
+              specs)))
+
+;; export-pairs : Any -> (U (Listof (Pair Symbol Symbol)) #f)
+;; The (internal . external) names the export spec SPEC exports: an
+;; identifier exports itself, and (rename (internal external) ...) each
+;; pair. #f when SPEC is neither, the only two Chez accepts.
+(define (export-pairs spec)
+  (cond
+    ((symbol? spec) (list (cons spec spec)))
+    ((and (list? spec) (pair? spec) (eq? (car spec) 'rename)
+          (for-all (lambda (pair)
+                     (and (list? pair) (= (length pair) 2)
+                          (symbol? (car pair)) (symbol? (cadr pair))))
+                   (cdr spec)))
+     (map (lambda (pair) (cons (car pair) (cadr pair))) (cdr spec)))
+    (else #f)))
+
+;; syntax-names : (Listof Any) -> (Listof Symbol)
+;; The names the top-level forms FORMS bind with define-syntax, inside a begin
+;; too. Syntax bound any other way is not read (rule (k)).
+(define (syntax-names forms)
+  (apply append
+         (map (lambda (form)
+                (cond ((and (list? form) (= (length form) 3) (eq? (car form) 'define-syntax)
+                            (symbol? (cadr form)))
+                       (list (cadr form)))
+                      ((and (list? form) (pair? form) (eq? (car form) 'begin))
+                       (syntax-names (cdr form)))
+                      (else '())))
+              forms)))
+
+;; only-imported : (Listof Symbol) -> (Listof Symbol)
+;; The names IDS that library-only-chez-names holds, once each, in order.
+(define (only-imported ids)
+  (let loop ((rest ids) (found '()))
+    (cond ((null? rest) (reverse found))
+          ((and (assq (car rest) library-only-chez-names) (not (memq (car rest) found)))
+           (loop (cdr rest) (cons (car rest) found)))
+          (else (loop (cdr rest) found)))))
+
+;; export-complaints : String (Listof Symbol) Any -> (Listof String)
+;; Rules (g) and (k): what is wrong with the export clause of the library form
+;; FORM, named NAME, in export order. Each spec it cannot read, each name
+;; exported that the library imports from (chezscheme), and each name exported
+;; that it binds with define-syntax when it imports a library-only name.
+(define (export-complaints path name form)
+  (let* ((chez (chez-imported (cdr (cadddr form))))
+         (guarded (only-imported chez))
+         (macros (syntax-names (cddddr form))))
+    (apply append
+           (map (lambda (spec)
+                  (let ((pairs (export-pairs spec)))
+                    (if (not pairs)
+                        (list (string-append path ": " (written name)
+                                             " has an export it cannot read: "
+                                             (abbreviated spec)))
+                        (apply append
+                               (map (lambda (pair)
+                                      (let ((what (if (eq? (car pair) (cdr pair))
+                                                      (symbol->string (car pair))
+                                                      (string-append (symbol->string (car pair))
+                                                                     " as " (symbol->string (cdr pair))))))
+                                        (cond
+                                          ((memq (car pair) chez)
+                                           (list (string-append
+                                                  path ": " (written name) " exports " what
+                                                  ", but it imports " (symbol->string (car pair))
+                                                  " from (chezscheme), and no library under src/"
+                                                  " may export a name it imports from (chezscheme)")))
+                                          ((and (memq (car pair) macros) (pair? guarded))
+                                           (list (string-append
+                                                  path ": " (written name) " exports " what
+                                                  ", a macro it binds with define-syntax, but it imports "
+                                                  (joined ", " (map symbol->string guarded))
+                                                  " from (chezscheme), which only some libraries may"
+                                                  " import: the macro could hand them on to a library"
+                                                  " that may not")))
+                                          (else '()))))
+                                    pairs)))))
+                (cdr (caddr form))))))
+
+;; library-complaints : String Any (Listof (Listof Symbol)) -> (Listof String)
+;; What is wrong with the library form FORM, read from PATH: its place in the
+;; family (rule (d)), then its imports, in import order, then its exports, in
+;; export order.
+(define (library-complaints path form defined)
+  (let ((name (reference-name (cadr form))))
+    (append
+     (if (or (public-name? name) (private-name? name))
+         '()
+         (list (string-append path ": " (written name)
+                              " is outside the family: a library under src/ must be"
+                              " (chez-sqlite3) or (chez-sqlite3 private name ...)")))
+     (apply append
+            (map (lambda (spec) (import-complaints path name spec defined))
+                 (cdr (cadddr form))))
+     (export-complaints path name form))))
+
+;; data-complaints : String (Listof Any) (Listof (Listof Symbol)) -> (Listof String)
+(define (data-complaints path data defined)
+  (if (null? data)
+      (list (string-append path ": it holds no datum, so it holds no library form"))
+      (let loop ((rest data) (n 1))
+        (if (null? rest)
+            '()
+            (append (if (library-form? (car rest))
+                        (library-complaints path (car rest) defined)
+                        (list (string-append path ": datum " (number->string n)
+                                             " is " (abbreviated (car rest))
+                                             ", not a library form")))
+                    (loop (cdr rest) (+ n 1)))))))
+
+;; defined-libraries : (Listof String) -> (Listof (Listof Symbol))
+;; The name of every library form in FILES, those it can read.
+(define (defined-libraries files)
+  (apply append
+         (map (lambda (path)
+                (let ((found (read-data path)))
+                  (if (eq? (car found) 'data)
+                      (map (lambda (form) (reference-name (cadr form)))
+                           (filter library-form? (cadr found)))
+                      '())))
+              files)))
+
+;; library-path : String (Listof Any) -> String
+;; Where Chez, given ROOT as its one library directory (--libdirs src),
+;; looks for the library NAME: ROOT, then NAME's identifiers joined by /,
+;; then a source ending of (library-extensions). Rule (e)'s companion check
+;; refuses every ending but .sls under ROOT, so .sls is the one it loads.
+(define (library-path root name)
+  (string-append root "/"
+                 (joined "/" (map (lambda (part) (if (symbol? part) (symbol->string part) (written part)))
+                                  name))
+                 ".sls"))
+
+;; placement-complaints : String (Listof Any) String -> (Listof String)
+;; Rule (i): the file at PATH holds exactly one library, LIBRARIES being
+;; its library forms, and each stands at its name's path below ROOT.
+(define (placement-complaints path libraries root)
+  (append
+   (if (> (length libraries) 1)
+       (list (string-append path ": it holds " (number->string (length libraries))
+                            " libraries, but Chez loads one library from a file, so each file"
+                            " under src/ holds exactly one"))
+       '())
+   (apply append
+          (map (lambda (form)
+                 (let* ((name (reference-name (cadr form)))
+                        (want (library-path root name)))
+                   (if (string=? path want)
+                       '()
+                       (list (string-append path ": " (written name) " is defined here, but Chez"
+                                            " loads it from " want ", its name's path")))))
+               libraries))))
+
+;; check-file : String (Listof (Listof Symbol)) String -> (Pair (Listof String) Natural)
+;; The complaints about the file at PATH, and how many libraries it holds.
+;; DEFINED is the libraries defined under ROOT, the directory.
+(define (check-file path defined root)
+  (let ((found (read-data path)))
+    (if (eq? (car found) 'data)
+        (cons (append (data-complaints path (cadr found) defined)
+                      (placement-complaints path (filter library-form? (cadr found)) root))
+              (length (filter library-form? (cadr found))))
+        (cons (list (string-append path ": it cannot be read as data: " (cadr found)))
+              0))))
+
+;; say : Port String -> Unit
+(define (say port text)
+  (put-string port (string-append "check-seam: " text "\n")))
+
+;; main : (Listof String) -> Unit
+(define (main args)
+  (if (not (= (length args) 1))
+      (begin
+        (say (current-error-port) "usage: scheme --program tests/check-seam.sps DIR")
+        (exit 1))
+      (let* ((root (car args))
+             (found (if (file-directory? root) (walk root) (list '() '() '())))
+             (files (list-sort string<? (car found)))
+             (links (list-sort string<? (cadr found)))
+             (unread (list-sort string<? (caddr found)))
+             (defined (defined-libraries files))
+             (results (map (lambda (path) (check-file path defined root)) files))
+             (complaints
+              (append
+               (if (null? files)
+                   (list (string-append "no libraries: " root
+                                        " holds no .sls file, so there is no seam to check"))
+                   '())
+               (map (lambda (link)
+                      (string-append link ": it is a symbolic link to a directory,"
+                                     " which this check does not follow"))
+                    links)
+               (map (lambda (path)
+                      (string-append path ": Chez could load a library from a file"
+                                     " ending in " (unread-ending path)
+                                     ", and this check does not read one;"
+                                     " rename it or keep it out of src/"))
+                    unread)
+               (apply append (map car results)))))
+        (cond
+          ((null? complaints)
+           (say (current-output-port)
+                (string-append "the seam holds ("
+                               (number->string (apply + (map cdr results)))
+                               " libraries in "
+                               (number->string (length files))
+                               " files checked)"))
+           (exit 0))
+          (else
+           (for-each (lambda (c) (say (current-error-port) c)) complaints)
+           (say (current-error-port)
+                (string-append "FAILED (problems: "
+                               (number->string (length complaints)) ")"))
+           (exit 1))))))
+
+(main (cdr (command-line)))
