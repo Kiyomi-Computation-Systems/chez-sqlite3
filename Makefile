@@ -39,9 +39,24 @@ TEST_TIMEOUT ?= 300
 # GNU timeout. Homebrew's coreutils installs it as gtimeout on macOS.
 TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtimeout 2>/dev/null),timeout)
 
+# The memory gate (ADR-0005): Valgrind, and the seconds a suite may run
+# under it before timeout kills it and make test-memory names it HUNG.
+# Valgrind runs 10 to 50 times slower than Chez alone. make test-memory
+# refuses a MEMORY_TIMEOUT that is not a positive whole number, as make test
+# refuses such a TEST_TIMEOUT.
+VALGRIND ?= valgrind
+MEMORY_TIMEOUT ?= 3600
+
+# The suites make test-memory runs: every suite, unless a run names others.
+MEMORY_SUITES ?= $(SUITES)
+
+# Where make test-memory writes each suite's logs: <suite>.log, the suite's
+# own output, and <suite>.valgrind, Valgrind's.
+MEMORY_LOGS := build/memory
+
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-test-fails clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-floors check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -229,8 +244,247 @@ check-test-fails: ## Plant bad suites, none at all and a stale README, in a copy
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' sh tests/check-test-fails.sh
 
+# Runs every MEMORY_SUITES suite under Valgrind, in order, each under
+# timeout, and goes on after a failure (ADR-0005). timeout wraps Valgrind
+# and never sits between it and Chez: Valgrind checks only the command it
+# is handed. A suite's own output goes to build/memory/<suite>.log, and
+# Valgrind writes its report to build/memory/<suite>.valgrind (--log-file),
+# where nothing the suite prints can reach. Two suites with one name would
+# share both, so test-memory refuses them. One line names each suite's
+# outcome: pass, FAIL with its exit status (9 is Valgrind's: an error, or a
+# definite leak), or HUNG when timeout killed it (exit 124).
+#
+# Valgrind runs with -v, and a suite that exits 0 passes only when its
+# Valgrind log, and nothing else, shows what Valgrind checked, else it
+# FAILs, naming each thing wrong. One awk program reads the log, and prints
+# the things wrong, or "ok" alone when it finds none: a suite passes only
+# on that line and awk's exit status 0, so an awk that fails, or prints
+# nothing, FAILs it, naming the check. It checks that:
+#   - the log exists: each run removes the one before;
+#   - Valgrind's "Command:" line is CHEZ, the libraries and the suite, so
+#     Valgrind ran this suite;
+#   - its "Valgrind options:" list is exactly the options test-memory
+#     hands it, in order: -v, --command-line-only=yes, the suite's
+#     --log-file and ADR-0005's four flags. So nothing VALGRIND, CHEZ or a
+#     stand-in for Valgrind adds, drops or changes gets past it (measured
+#     in chez-curl: --undef-value-errors=no through VALGRIND hid an
+#     undefined-value plant, and a dropped --leak-check=full hid the leak
+#     plant). make check-memory-gate holds the options themselves to
+#     ADR-0005's;
+#   - the first program it read is the file CHEZ names, not a script's
+#     interpreter: a CHEZ that is a script runs the shell under Valgrind,
+#     and Chez outside it;
+#   - it reported "ERROR SUMMARY: 0 errors from 0 contexts": a program that
+#     execs away from Valgrind, or a CHEZ script that execs Chez, exits 0
+#     with no report at all;
+#   - the suppressions files it read are exactly its own default.supp: the
+#     gate passes none (ADR-0005). Its own default.supp is the one it names
+#     in a run on true, with VALGRIND_LIB unset.
+# A FAIL also prints, from Valgrind's log, its first error, the definite
+# loss, the suppressed total and its error summary, and, unless the exit
+# was Valgrind's, the suite's FAIL lines with the indented lines after
+# each, its expected and actual values, every one, then its last 10 lines,
+# each line once and no other, so a CI log says why, and names the tests
+# that failed. It fails if any suite failed or hung, or if none was named.
+#
+# Valgrind also takes options and files that its command line does not
+# show, and one of them can hide a leak (measured in chez-curl: a
+# suppression in VALGRIND_OPTS, in a .valgrindrc, or in the default.supp of
+# a directory VALGRIND_LIB names, each hid the planted one). So it refuses
+# to run while any VALGRIND_ variable is set (Valgrind reads VALGRIND_OPTS,
+# VALGRIND_LIB and VALGRIND_LAUNCHER) or a .valgrindrc exists in $HOME or
+# here, and hands Valgrind --command-line-only=yes, so that no .valgrindrc
+# a suite writes reaches the next. It refuses a MEMORY_SUITES from the
+# environment, where one left exported would narrow every run unseen: give
+# it on make's command line. `make check-memory-gate` proves each rule
+# fails.
+#
+# Not covered (ADR-0005, amended):
+#   - a child process a suite starts runs outside Valgrind, which follows
+#     none: a suite that does native work in a child must run that child
+#     under the gate itself (harness plan, section 4);
+#   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
+#     compiled CHEZ that runs Chez as a child passes the leak plant;
+#   - its evidence holds against accident, not against a suite that means
+#     harm, which can write its own Valgrind log;
+#   - make -i, on the command line or in MAKEFLAGS, ignores a failing
+#     recipe, this one's as any other's;
+#   - two runs in one tree remove each other's logs, and fail, naming the
+#     wrong reason: run one at a time in a tree, as check-memory-gate runs
+#     each of its cases in a copy of its own.
+test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any error or definite leak, a hang, or no suite
+	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
+	@case '$(MEMORY_TIMEOUT)' in \
+	  '' | *[!0-9]* | 0*) \
+	    echo "test-memory: MEMORY_TIMEOUT is '$(MEMORY_TIMEOUT)', not a positive whole number of seconds" >&2; \
+	    exit 2 ;; \
+	esac
+	@case '$(origin MEMORY_SUITES)' in \
+	  environment*) \
+	    echo "test-memory: MEMORY_SUITES is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)" >&2; \
+	    exit 1 ;; \
+	esac
+	@if [ -z "$(strip $(MEMORY_SUITES))" ]; then \
+	  echo "test-memory: no suites: MEMORY_SUITES is empty" >&2; \
+	  exit 1; \
+	fi; \
+	refused=0; \
+	for v in $$(env | sed -n 's/^\(VALGRIND_[A-Za-z0-9_]*\)=.*/\1/p'); do \
+	  case $$v in \
+	    VALGRIND_OPTS) why="Valgrind would add it to the gate's options" ;; \
+	    VALGRIND_LIB) why="Valgrind would take its tool, its preloads and its default.supp from there" ;; \
+	    *) why="Valgrind reads its VALGRIND_ variables, and no command line shows them" ;; \
+	  esac; \
+	  echo "test-memory: $$v is set ($$(printenv $$v)): $$why; unset it (ADR-0005)" >&2; \
+	  refused=1; \
+	done; \
+	for rc in $${HOME:+"$$HOME/.valgrindrc"} ./.valgrindrc; do \
+	  if [ -e "$$rc" ]; then \
+	    echo "test-memory: $$rc exists: Valgrind would add its options to the gate's; remove it (ADR-0005)" >&2; \
+	    refused=1; \
+	  fi; \
+	done; \
+	seen=; \
+	for t in $(MEMORY_SUITES); do \
+	  name=$$(basename "$$t" .sps); \
+	  for u in $$seen; do \
+	    if [ "$$(basename "$$u" .sps)" = "$$name" ]; then \
+	      echo "test-memory: $$u and $$t share the name $$name, so they would share $(MEMORY_LOGS)/$$name.log and $(MEMORY_LOGS)/$$name.valgrind; rename one (ADR-0005)" >&2; \
+	      refused=1; \
+	    fi; \
+	  done; \
+	  seen="$$seen $$t"; \
+	done; \
+	[ $$refused -eq 0 ] || exit 1; \
+	vgdefault=$$(env -u VALGRIND_LIB $(firstword $(VALGRIND)) -v --command-line-only=yes true 2>&1 | sed -n 's/^--[0-9]*-- Reading suppressions file: //p'); \
+	case $$vgdefault in \
+	  /*/default.supp) ;; \
+	  *) vgdefault=; ;; \
+	esac; \
+	if [ -z "$$vgdefault" ] || [ "$$(printf '%s\n' "$$vgdefault" | wc -l)" -ne 1 ]; then \
+	  echo "test-memory: $(firstword $(VALGRIND)) -v, run on true, named no one default.supp of its own" >&2; \
+	  exit 1; \
+	fi; \
+	allowed=$$vgdefault; \
+	chez=$$(readlink -f "$$(command -v $(CHEZ))"); \
+	mkdir -p $(MEMORY_LOGS); \
+	passed=0; failed=0; hung=0; \
+	for t in $(MEMORY_SUITES); do \
+	  name=$$(basename "$$t" .sps); \
+	  log=$(MEMORY_LOGS)/$$name.log; \
+	  vlog=$(MEMORY_LOGS)/$$name.valgrind; \
+	  rm -f "$$log" "$$vlog"; \
+	  echo "=== $$t"; \
+	  set -- -v --command-line-only=yes "--log-file=$$vlog" --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite; \
+	  $(TIMEOUT) --foreground $(MEMORY_TIMEOUT) $(VALGRIND) "$$@" $(CHEZ) --libdirs $(LIBDIRS) --program $$t >"$$log" 2>&1; \
+	  rc=$$?; \
+	  why=; \
+	  if [ $$rc -eq 0 ] && [ ! -f "$$vlog" ]; then \
+	    why="Valgrind wrote no log, $$vlog"; \
+	  elif [ $$rc -eq 0 ]; then \
+	    evidence=$$(options=$$(printf '%s\n' "$$@") awk -v cmd="$(CHEZ) --libdirs $(LIBDIRS) --program $$t" -v chez="$$chez" -v allowed="$$allowed" \
+	      'pid == "" && /^==[0-9]+== Command: / { pid = $$0; sub(/^==/, "", pid); sub(/==.*/, "", pid); \
+	          got = $$0; sub(/^==[0-9]+== Command: /, "", got); syms = "--" pid "-- Reading syms from "; \
+	          supps = "--" pid "-- Reading suppressions file: "; mine = "==" pid "== "; \
+	          head = "--" pid "-- Valgrind options:"; option = "--" pid "--    "; next } \
+	        pid == "" { next } \
+	        listing && index($$0, option) == 1 { opts[++nopts] = substr($$0, length(option) + 1); next } \
+	        listing { listing = 0; listed = 1 } \
+	        !listed && $$0 == head { listing = 1; next } \
+	        index($$0, syms) == 1 && ran == "" { ran = substr($$0, length(syms) + 1) } \
+	        index($$0, supps) == 1 { f = substr($$0, length(supps) + 1); read = (read == "" ? f : read ", " f) } \
+	        index($$0, mine "ERROR SUMMARY: ") == 1 { summary = substr($$0, length(mine) + 1) } \
+	        END { if (pid == "") { print "the log has no Valgrind \"Command:\" line"; exit } \
+	          if (got != cmd) why[++n] = "Valgrind\047s Command: line is \"" got "\", not \"" cmd "\""; \
+	          nwant = split(ENVIRON["options"], want, "\n"); same = (nopts == nwant); \
+	          for (i = 1; i <= nwant; i++) if (opts[i] != want[i]) same = 0; \
+	          if (!same) { g = ""; for (i = 1; i <= nopts; i++) g = g (i > 1 ? " " : "") opts[i]; \
+	            w = ""; for (i = 1; i <= nwant; i++) w = w (i > 1 ? " " : "") want[i]; \
+	            why[++n] = "Valgrind\047s options are [" g "], not the gate\047s [" w "]" } \
+	          if (ran == "") why[++n] = "the log has no \"Reading syms from\" line, so it does not show what Valgrind ran"; \
+	          else if (ran != chez) why[++n] = "Valgrind ran " ran ", not " chez ", the file CHEZ names"; \
+	          if (summary !~ /^ERROR SUMMARY: 0 errors from 0 contexts( |$$)/) \
+	            why[++n] = "Valgrind reported no \"ERROR SUMMARY: 0 errors from 0 contexts\""; \
+	          if (read != allowed) why[++n] = "Valgrind read the suppressions files [" read "], and the gate allows exactly [" allowed "]"; \
+	          for (i = 1; i <= n; i++) printf "%s%s", (i > 1 ? "; " : ""), why[i]; \
+	          if (n) print ""; else print "ok" }' "$$vlog"); \
+	    checked=$$?; \
+	    if [ $$checked -ne 0 ]; then \
+	      why="the evidence check (awk) exited $$checked"; \
+	    elif [ -z "$$evidence" ]; then \
+	      why='the evidence check (awk) printed no "ok" line'; \
+	    elif [ "$$evidence" != ok ]; then \
+	      why=$$evidence; \
+	    fi; \
+	  fi; \
+	  if [ $$rc -eq 0 ] && [ -z "$$why" ]; then \
+	    echo "test-memory: pass $$t"; passed=$$((passed + 1)); \
+	  elif [ $$rc -eq 124 ]; then \
+	    echo "test-memory: HUNG $$t (no exit within $(MEMORY_TIMEOUT)s)"; hung=$$((hung + 1)); \
+	  else \
+	    if [ $$rc -eq 0 ]; then \
+	      echo "test-memory: FAIL $$t (exit 0, but $$why)"; \
+	    elif [ $$rc -eq 9 ]; then \
+	      echo "test-memory: FAIL $$t (exit 9, Valgrind's: an error or a definite leak)"; \
+	    else \
+	      echo "test-memory: FAIL $$t (exit $$rc)"; \
+	    fi; \
+	    failed=$$((failed + 1)); \
+	    echo "  log: $$log"; \
+	    echo "  Valgrind's log: $$vlog"; \
+	    if [ ! -f "$$vlog" ]; then echo "  (Valgrind wrote no log)"; else \
+	    awk '/^==[0-9]+== Command: / { body = 1; next } \
+	      !body || !/^==[0-9]+==/ { next } \
+	      { line = $$0; sub(/^==[0-9]+== ?/, "", line) } \
+	      line == "" { if (inerr) { inerr = 0; done = 1 }; cand = ""; next } \
+	      !done && !inerr && cand != "" && line ~ /^ +at 0x/ { inerr = 1; first[++n] = cand } \
+	      inerr && n < 16 { first[++n] = $$0 } \
+	      !inerr { cand = (line ~ /^[^ ]/) ? $$0 : "" } \
+	      line ~ /^ *definitely lost: / { lost = $$0 } \
+	      line ~ /^ *suppressed: / { hidden = $$0 } \
+	      line ~ /^ERROR SUMMARY: / { summary = $$0 } \
+	      END { for (i = 1; i <= n; i++) print "  " first[i]; \
+	            if (lost != "") print "  " lost; \
+	            if (hidden != "") print "  " hidden; \
+	            if (summary != "") print "  " summary; \
+	            else print "  (the log holds no Valgrind ERROR SUMMARY)" }' "$$vlog"; \
+	    fi; \
+	    if [ $$rc -ne 9 ]; then \
+	      awk '{ line[NR] = $$0 } \
+	        END { from = NR - 9; if (from < 1) from = 1; \
+	          for (i = 1; i < from; i++) { \
+	            if (line[i] ~ /^FAIL /) inside = 1; else if (line[i] !~ /^  /) inside = 0; \
+	            if (inside) print line[i] } \
+	          for (i = from; i <= NR; i++) print line[i] }' "$$log" | sed 's/^/  | /'; \
+	    fi; \
+	  fi; \
+	done; \
+	echo "test-memory: ran $$((passed + failed + hung)), passed $$passed, failed $$failed, hung $$hung"; \
+	[ $$failed -eq 0 ] && [ $$hung -eq 0 ]
+
+# Plants a heap overrun and a definite leak (tests/memory-plant-*.sps) and
+# requires make test-memory to fail on each, by name, with Valgrind's own
+# report. It requires the commands handed to Valgrind to carry no
+# suppression, and test-memory to name a hang and refuse no suite. It plants
+# each source of options test-memory's command line does not show, each in
+# a copy, and requires test-memory to refuse it; a suppressions file the
+# gate does not pass, and requires it named; a run with no evidence that
+# Valgrind checked Chez on the suite, and requires it to fail; an option
+# added, dropped, changed or moved, each hiding a plant where it can, and
+# requires it named; a suite that forges Valgrind's lines, and requires
+# them unread; and an awk that fails, or prints no "ok", and requires a
+# clean program to fail, naming the evidence check. It requires a run with
+# no MEMORY_SUITES to run every suite, in order, and one with MEMORY_SUITES
+# in the environment to be refused.
+# tests/check-memory-gate.sh lists the cases. CI's memory job will run it
+# before test-memory, from M0 slice 4 (ADR-0005).
+check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name
+	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
+	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' VALGRIND='$(VALGRIND)' LIBDIRS='$(LIBDIRS)' sh tests/check-memory-gate.sh
+
 # Removes build/, and nothing else: make deps' links (the links, never what
-# they name, since rm does not follow a link) and every check's scratch. The
+# they name, since rm does not follow a link), the memory gate's logs and
+# every check's scratch. The
 # path is written out, not a variable, so no make command line can point it
 # elsewhere. With no build/, it passes.
 clean: ## Remove build/, and nothing else

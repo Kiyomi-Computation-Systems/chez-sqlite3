@@ -49,6 +49,12 @@ told in chez-curl's `.plans/traps.md`.
   printed the guix command and passed, with no container run. Only `1` is a dry run now, and T9
   checks that 0 runs guix. chez-curl's launcher shares the gap. (chez-sqlite3)
 
+- **A pattern written against a tool's padding misses a line padded otherwise.** M0 slice 3's
+  measurement matched Valgrind's leak summary as `==N==` and four spaces before each kind.
+  Valgrind right-aligns the kinds, so "possibly lost" has six, and the first table had no
+  possibly-lost column. The slice's review found 12,856 bytes there in one case. The pattern now
+  matches the words after any run of spaces. (chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
