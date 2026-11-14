@@ -41,6 +41,13 @@ newest first.
   `call-with-database` with thread ownership, the first `(chez-sqlite3)`, SQLite's memory check in
   the gate, `test-never-loads`, the leaks plant through `open-database`, and `docs/reference.md`.
 - **Next: M1 slice 5,** the `floor` and `current` lanes, then M1's closing review.
+- **Owed to M1's closing review, found on the way:**
+  - `test-counters`' `count-up!` and `count-down!` refusal rows, from M0, still assert message
+    text (slice 4's review fixes, noted in its log).
+  - A checkout path holding whitespace would split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: nothing
+    refuses one (slice 3's review fixes).
+  - `test-reference` holds each entry's name and shape, not its type text, now that it reads no
+    comment (slice 4's review): a wrong type with the right `->` passes it.
 - **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
   `nothreads` is the maintainer's call (ADR-0005, amended).
 

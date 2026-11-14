@@ -27,10 +27,18 @@
 ;;;                   is a loader, nor any library an allowlist names
 ;;;
 ;;; An allowlist that gained a loader, with an import to match, passes the
-;;; first row and fails the last two.
+;;; first row and fails the last two. A loader that the data cannot see, a
+;;; helper library under tests/ that imports (chez-sqlite3), say, is seen by
+;;; the last row, which runs a child:
+;;;
+;;;   the child       a fresh Chez imports (chez-sqlite3-testing) and
+;;;                   references every export of it, so its body runs, then
+;;;                   prints how many it referenced, (exit-checks) and
+;;;                   whether /proc/self/maps names a libsqlite3: no check
+;;;                   registered, and no library mapped
 (import (rnrs)
         (srfi :64)
-        (only (chezscheme) directory-list file-directory? file-symbolic-link?)
+        (only (chezscheme) directory-list file-directory? file-symbolic-link? getenv library-exports)
         (chez-sqlite3-testing))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -223,6 +231,60 @@
            (list reached
                  (filter (lambda (name) (member name loaders)) (sorted (adjoin named '())))
                  (filter (lambda (name) (member name loaders)) reached))))))
+
+;; --- the behaviour: a child that uses every export ----------------------------
+
+(define chez (getenv "CHEZ"))
+
+;; The names (chez-sqlite3-testing) exports, as Chez lists them, sorted.
+(define testing-exports
+  (guard (e (#t (list (string->symbol (describe e)))))
+    (sorted (library-exports '(chez-sqlite3-testing)))))
+
+;; write-text : String String -> Void
+(define (write-text path text)
+  (call-with-port
+   (open-file-output-port path (file-options no-fail) (buffer-mode block)
+                          (make-transcoder (utf-8-codec)))
+   (lambda (p) (put-string p text))))
+
+;; child-program : (Listof Symbol) -> String
+;; A program that imports the testing library, and the counters for
+;; exit-checks, makes a list of every name in NAMES, and prints (COUNT CHECKS
+;; MAPPED): how many it referenced, what exit-checks answers, and yes or no
+;; for a libsqlite3 in /proc/self/maps.
+(define (child-program names)
+  (string-append
+   "#!r6rs\n"
+   "(import (rnrs) (chez-sqlite3-testing) (chez-sqlite3 private counters))\n"
+   "(define referenced (list " (apply string-append (map (lambda (n) (string-append (symbol->string n) " ")) names)) "))\n"
+   "(define (mapped?)\n"
+   "  (let ((maps (call-with-port\n"
+   "               (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
+   "                                     (make-transcoder (utf-8-codec)))\n"
+   "               get-string-all))\n"
+   "        (needle \"libsqlite3\"))\n"
+   "    (let loop ((i 0))\n"
+   "      (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
+   "            ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
+   "            (else (loop (+ i 1)))))))\n"
+   "(write (list (length referenced) (exit-checks) (mapped?)))\n"
+   "(newline)\n"
+   "(exit 0)\n"))
+
+;; run-child : (Listof Symbol) -> (U (List Integer String String) (List 'raised String))
+(define (run-child names)
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (base)
+       (let ((program (string-append base "/child.sps")))
+         (write-text program (child-program names))
+         (capture-command
+          (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program)))))))
+
+(test-equal "a child that references every export of (chez-sqlite3-testing) runs its body, and registers no exit check and maps no libsqlite3: it prints the count of names, (), and no"
+  (list 0 (string-append "(" (number->string (length testing-exports)) " () no)\n") "")
+  (run-child testing-exports))
 
 (test-end "never-loads")
 

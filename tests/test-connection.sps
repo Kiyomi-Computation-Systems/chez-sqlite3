@@ -756,6 +756,18 @@
              (list r ran closed (native-counts))))))
       (lambda () (undo! '() (if db (list db) '()))))))
 
+(test-equal "call-with-open-handle from another thread on a closed connection still raises &sqlite-wrong-thread from its who, not &sqlite-closed: the thread is checked before the connection is, and its procedure never runs"
+  (list (list (list 'raised (list 'wrong-thread 'test-connection 'message 'main 'the-thread))
+              'another-thread)
+        'proc-not-run zero-counts)
+  (let ((ran 'proc-not-run))
+    (attempt
+     (lambda ()
+       (let ((db (open-database ":memory:")))
+         (close-database! db)
+         (let ((r (from-another-thread db (lambda (db) (with-handle db (lambda (h) (set! ran 'proc-ran) h))))))
+           (list r ran (native-counts))))))))
+
 ;; The owner is the thread that opened, not the main one: a forked thread
 ;; opens, hands the database over, and closes it once the main thread has
 ;; tried. Each wait is bounded, and the thread closes its connection however
@@ -817,6 +829,24 @@
               'no-raise))
          (after (attempt (lambda () (with-handle kept (lambda (h) 'still-open))))))
     (list r after (native-counts))))
+
+(test-equal "call-with-database: a warning the procedure raises with raise-continuable reaches an outer handler that returns, and the procedure goes on with the value it returned; the connection is then closed, and every count is zero"
+  (list '(proc-saw handled) 'handler-ran-on-a-warning (list 'raised (list 'closed 'test-connection 'message))
+        zero-counts)
+  (let* ((kept #f) (ran 'handler-not-run)
+         (r (attempt
+             (lambda ()
+               (with-exception-handler
+                (lambda (c)
+                  (set! ran (if (warning? c) 'handler-ran-on-a-warning 'handler-ran-on-another))
+                  'handled)
+                (lambda ()
+                  (call-with-database ":memory:"
+                    (lambda (db)
+                      (set! kept db)
+                      (list 'proc-saw (raise-continuable (make-warning))))))))))
+         (after (attempt (lambda () (with-handle kept (lambda (h) 'still-open))))))
+    (list r ran after (native-counts))))
 
 ;; with-failing-close : ((Database -> Any) -> Any) -> Any
 ;; RUN given a procedure that makes an untracked statement on its database,

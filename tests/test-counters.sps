@@ -50,6 +50,14 @@
 (define not-a-kind "not a kind of native object chez-sqlite3 counts")
 (define double-free "more objects of this kind freed than made: a double free")
 
+;; refused : (-> Any) -> (U (List 'assertion-violation Symbol (Listof Any)) (List 'other String) (List 'no-raise Any))
+;; THUNK's assertion violation as its who and irritants alone, never its message.
+(define (refused thunk)
+  (guard (e ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other (describe e))))
+    (list 'no-raise (thunk))))
+
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 
 ;; counts-with : (Listof (Pairof Symbol Integer)) -> (Listof (Pairof Symbol Integer))
@@ -190,12 +198,12 @@
   '()
   (exit-checks))
 
-(test-equal "register-exit-check! refuses a name that is no symbol, and a check that is no procedure, as assertion violations, and registers nothing"
-  (list (list 'assertion-violation 'register-exit-check! "an exit check's name is a symbol" '("memory"))
-        (list 'assertion-violation 'register-exit-check! "an exit check is a procedure" '(memory (pass "x")))
+(test-equal "register-exit-check! refuses a name that is no symbol, and a check that is no procedure, as assertion violations naming who and irritants, never the text, and registers nothing"
+  (list (list 'assertion-violation 'register-exit-check! '(not-a-name "memory"))
+        (list 'assertion-violation 'register-exit-check! '(not-a-procedure memory (pass "x")))
         '())
-  (let* ((a (raised (lambda () (register-exit-check! "memory" (lambda () '(pass "x"))))))
-         (b (raised (lambda () (register-exit-check! 'memory '(pass "x")))))
+  (let* ((a (refused (lambda () (register-exit-check! "memory" (lambda () '(pass "x"))))))
+         (b (refused (lambda () (register-exit-check! 'memory '(pass "x")))))
          (after (exit-checks)))
     (list a b after)))
 

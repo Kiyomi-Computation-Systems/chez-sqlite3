@@ -1,43 +1,49 @@
 #!r6rs
 ;;; docs/reference.md holds one entry for every export of (chez-sqlite3), and
-;;; nothing else, each with the signature its source comment gives.
+;;; nothing else, each with a NAME : TYPE line whose type fits what the name
+;;; is.
 ;;;
-;;; The oracle for the names: src/chez-sqlite3.sls, read as data, its export
-;;; clause. The oracle for the signatures: the comment above each export in
-;;; that file, ";; NAME : TYPE". This is the one place a test reads a code
-;;; comment. AGENTS.md says not to, because a comment can be wrong without a
-;;; test noticing. Here the comment is the contract: the plan (section 5)
-;;; makes the source's signature the one the reference is held to, so the
-;;; reference is wrong when it differs from it, not the other way about. The
-;;; export clause itself is read as data, never from a comment.
+;;; The oracles: the names (chez-sqlite3) exports, as Chez's library-exports
+;;; lists them, never as the library's text writes them; and what each name
+;;; is, as Chez evaluates it in the library's environment: a procedure, or
+;;; another value (syntax, too, which this library exports none of, would
+;;; fail the suite). No code comment is read. And the page, read as
+;;; CommonMark is: its ATX headings outside fenced blocks, and the lines of
+;;; each fenced block whose info string's first word is text, in any case.
 ;;;
 ;;; The shape the page is held to:
 ;;; - a ### heading is an entry: one name in code, as "### `open-database`";
 ;;;   it runs to the next heading of level 1, 2 or 3. A ### heading of any
 ;;;   other shape fails, by its line;
 ;;; - an entry holds exactly one text block, of one line, "NAME : TYPE", the
-;;;   same NAME as its heading, and TYPE the source comment's, character for
-;;;   character;
-;;; - no name is the heading of two entries.
+;;;   same NAME as its heading; a procedure's TYPE holds ->, and a value's
+;;;   does not;
+;;; - every export has exactly one entry, and every entry is an export.
+;;;
+;;; Out of its reach, with no oracle but a reader's reading of the code: a
+;;; type that is wrong, so long as a procedure's holds -> and a value's does
+;;; not.
 ;;;
 ;;; The page is read as CommonMark is: its ATX headings outside fenced
 ;;; blocks, and each fenced block, opened by up to three spaces and three or
 ;;; more backticks or tildes, closed by a fence of its own character, at
 ;;; least as long, and nothing after. One no fence closes runs to the page's
 ;;; end. A block's language is its info string's first word, in any case.
-;;; The reader is held to all of it on texts of the suite's own, and the
-;;; source reader too, before either reads a file.
+;;; The reader is held to all of it on texts of the suite's own before it
+;;; reads a file.
 ;;;
-;;; Names and signatures are compared as whole sorted lists, with the
-;;; missing, the extra and the differing each asserted empty on its own, so a
-;;; failure shows what differs. No assertion depends on an order. Each
-;;; computation that can raise runs under a guard that answers what was
-;;; raised, since SRFI-64 turns a raise in the actual expression into #f; no
-;;; expected value is #f. make test runs every suite from the repository
-;;; root.
+;;; Names are compared as whole sorted lists, with the missing, the extra
+;;; and the differing each asserted empty on its own, so a failure shows what
+;;; differs. No assertion depends on an order. Each computation that can
+;;; raise runs under a guard that answers what was raised, since SRFI-64
+;;; turns a raise in the actual expression into #f; no expected value is #f.
+;;; make test runs every suite from the repository root.
 (import (rnrs)
+        (rnrs eval)
         (srfi :64)
-        (chez-sqlite3-testing))
+        (chez-sqlite3-testing)
+        (only (chezscheme) library-exports copy-environment interaction-environment)
+        (prefix (only (chezscheme) eval) chez:))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -213,30 +219,44 @@
            (list 'lines (length (cadddr (car texts)))))
           (else (car (cadddr (car texts)))))))
 
-;; --- the source: exports and signatures ---------------------------------------------
+;; --- the oracle: exports and what each is ----------------------------------------
 
-;; exports-of : (Listof Any) -> (Listof Symbol)
-;; The names of the export clause of the one library form read from the source.
-(define (exports-of data)
-  (let* ((form (car data))
-         (clause (find (lambda (c) (and (pair? c) (eq? (car c) 'export))) (cddr form))))
-    (cdr clause)))
+;; The library, as Chez names it.
+(define library '(chez-sqlite3))
 
-;; signature-lines : String (Listof Symbol) -> (Listof (Pair Symbol (Listof String)))
-;; For each NAME, every line of the source's text, up to its import clause,
-;; that is a comment ";; NAME : TYPE" (any indent), as "NAME : TYPE".
-(define (signature-lines text names)
-  (let* ((lines (let take ((ls (text-lines text)) (out '()))
-                  (if (or (null? ls) (starts? (trim (car ls)) "(import"))
-                      (reverse out)
-                      (take (cdr ls) (cons (trim (car ls)) out)))))
-         (comments (filter (lambda (l) (starts? l ";; ")) lines)))
-    (map (lambda (name)
-           (let ((lead (string-append ";; " (symbol->string name) " : ")))
-             (cons name
-                   (map (lambda (l) (substring l 3 (string-length l)))
-                        (filter (lambda (l) (starts? l lead)) comments)))))
-         names)))
+;; exports-of : (Listof Symbol) -> (U (Listof String) (List 'raised String))
+;; The names the library exports, as Chez's library-exports lists them,
+;; sorted; the library is first imported into an environment, so Chez has
+;; it. Or (raised WHAT) for a raise.
+(define (exports-of library)
+  (guard (e (#t (list 'raised (describe e))))
+    (environment library)
+    (list-sort string<? (map symbol->string (library-exports library)))))
+
+;; kind-in : Environment String -> (U 'syntax 'procedure 'value (List 'raised String))
+;; What NAME is, as Chez evaluates it in ENV: syntax, when evaluating it is
+;; a syntax violation; a procedure; a value; or (raised WHAT) for any other
+;; raise.
+(define (kind-in env name)
+  (guard (e ((syntax-violation? e) 'syntax)
+            (#t (list 'raised (describe e))))
+    (let ((v (eval (string->symbol name) env)))
+      (if (procedure? v) 'procedure 'value))))
+
+;; has-arrow? : String -> Boolean
+;; Whether the type holds ->.
+(define (has-arrow? type)
+  (let loop ((i 0))
+    (cond ((> (+ i 2) (string-length type)) #f)
+          ((string=? (substring type i (+ i 2)) "->") #t)
+          (else (loop (+ i 1))))))
+
+;; line-type : String String -> (U String #f)
+;; The TYPE of a line "NAME : TYPE" for this NAME, else #f.
+(define (line-type name line)
+  (let ((lead (string-append name " : ")))
+    (and (starts? line lead)
+         (substring line (string-length lead) (string-length line)))))
 
 ;; --- the readers, on texts of the suite's own ------------------------------------------
 
@@ -280,52 +300,43 @@
   '(lines 2)
   (entry-signature (list 1 "t" 'n (list '(block 1 "text" ("a" "b") #t)))))
 
-(test-equal "signature-lines: a comment of any indent, the name and the space-colon-space after it whole, nothing past the import clause"
-  '((f "f : A -> B") (g) (f? "f? : Any -> Boolean"))
-  (signature-lines
-              (string-append "(library (x)\n  (export\n   ;; f : A -> B\n   f\n"
-                             "   ;; fx : C -> D\n   ;;  f : not\n   ;; f? : Any -> Boolean\n   f?)\n"
-                             "  (import\n   ;; g : late\n")
-                             '(f g f?)))
+(test-equal "kind-in: a procedure, a value, syntax, and a name that is none, as Chez evaluates each"
+  '(procedure value syntax raised)
+  (let ((env (guard (e (#t #f))
+               (let ((env (copy-environment (interaction-environment) #t)))
+                 (chez:eval '(define seven 7) env)
+                 env))))
+    (list (kind-in env "car")
+          (kind-in env "seven")
+          (kind-in env "else")
+          (let ((k (kind-in env "no-such-name-here"))) (if (pair? k) (car k) k)))))
 
-(test-equal "exports-of: the export clause of the library form, whatever follows it"
-  '(a b!)
-  (exports-of '((library (x) (export a b!) (import (rnrs)) (define c 1)))))
+(test-equal "has-arrow?, line-type: an arrow anywhere in a type; a line's type only after its own NAME and the space-colon-space"
+  '(#t #f #t #f "X -> Y" #f #f)
+  (list (has-arrow? "A -> B") (has-arrow? "A - > B") (has-arrow? "->") (has-arrow? "-")
+        (line-type "f" "f : X -> Y") (line-type "f" "fx : X -> Y") (line-type "f" "f: X -> Y")))
 
-;; --- the page and the source ---------------------------------------------------------
+;; --- the page and the library ---------------------------------------------------------
 
-(define reference-path "docs/reference.md")
-(define source-path "src/chez-sqlite3.sls")
+;; page-text : (U String (List 'unreadable String))
+(define page-text
+  (guard (e (#t (list 'unreadable (describe e)))) (slurp "docs/reference.md")))
 
-;; page-text, source-text : (U String (List 'unreadable String))
-(define (read-or-describe path)
-  (guard (e (#t (list 'unreadable (describe e)))) (slurp path)))
-(define page-text (read-or-describe reference-path))
-(define source-text (read-or-describe source-path))
+(define export-names (exports-of library))
 
-(define source-data
-  (guard (e (#t (list 'unreadable (describe e))))
-    (call-with-port
-     (open-file-input-port source-path (file-options) (buffer-mode block)
-                           (make-transcoder (utf-8-codec)))
-     (lambda (port)
-       (let loop ((found '()))
-         (let ((datum (read port)))
-           (if (eof-object? datum) (reverse found) (loop (cons datum found)))))))))
-
-(define export-names
-  (guard (e (#t (list (string->symbol (string-append "unreadable: " (describe e))))))
-    (exports-of source-data)))
+;; Each export, with what Chez evaluates it to, in the library's environment.
+(define library-env (guard (e (#t #f)) (environment library)))
+(define every-export
+  (if (and library-env (list? export-names) (for-all string? export-names))
+      (map (lambda (n) (cons n (kind-in library-env n))) export-names)
+      '()))
 
 (define entries
   (if (string? page-text) (page-entries (page-items page-text)) '()))
 
-(define (symbols->strings l) (map symbol->string l))
-
-;; the entry names the page has, those it has twice, and the headings that are no entry
+;; the entry names the page has, and the headings that are no entry
 (define entry-names (map symbol->string (filter symbol? (map caddr entries))))
 (define bad-headings (map (lambda (e) (list (car e) (cadr e))) (filter (lambda (e) (not (caddr e))) entries)))
-(define exported (symbols->strings export-names))
 
 ;; duplicates : (Listof String) -> (Listof String)
 ;; The members that occur more than once, sorted, each once.
@@ -337,18 +348,25 @@
                    ((member (car rest) seen) (loop (cdr rest) seen))
                    (else (loop (cdr rest) (cons (car rest) seen))))))))
 
-;; difference : (Listof String) (Listof String) -> (Listof String)
+;; difference : (Listof String) -> (Listof String) -> (Listof String)
 ;; The members of A that B lacks, sorted.
 (define (difference a b)
   (sort-strings (filter (lambda (x) (not (member x b))) a)))
 
-(test-equal "docs/reference.md and src/chez-sqlite3.sls are read"
-  '(read read)
-  (list (if (string? page-text) 'read page-text) (if (string? source-text) 'read source-text)))
+(test-equal "the exports are read, Chez evaluates each to a procedure or a value, and docs/reference.md reads and holds entries"
+  'read
+  (cond ((not (and (list? export-names) (for-all string? export-names))) (list 'exports export-names))
+        ((null? export-names) 'no-exports)
+        ((not library-env) 'no-environment)
+        ((exists (lambda (x) (not (memq (cdr x) '(procedure value)))) every-export)
+         (list 'kinds (filter (lambda (x) (not (memq (cdr x) '(procedure value)))) every-export)))
+        ((not (string? page-text)) page-text)
+        ((null? entries) 'the-page-holds-no-entry)
+        (else 'read)))
 
-(test-equal "the source's export clause names no name twice"
+(test-equal "the library exports no name twice"
   '()
-  (duplicates exported))
+  (duplicates export-names))
 
 (test-equal "every ### heading is one name in code (by its line and text)"
   '()
@@ -360,47 +378,38 @@
 
 (test-equal "every export has an entry: the exports with none"
   '()
-  (difference exported entry-names))
+  (difference export-names entry-names))
 
 (test-equal "every entry is an export: the entries that are none"
   '()
-  (difference entry-names exported))
+  (difference entry-names export-names))
 
 (test-equal "the entries are the exports, as whole sorted lists"
-  (sort-strings exported)
+  (sort-strings export-names)
   (sort-strings entry-names))
 
 ;; --- the signatures ----------------------------------------------------------------------
 
-(define source-signatures (signature-lines (if (string? source-text) source-text "") export-names))
+;; wrong-lines : (Listof (List String Symbol Any))
+;; Each export whose entry's one text line is not "NAME : TYPE" with its own
+;; NAME, or whose TYPE disagrees with what the export is: a procedure's holds
+;; ->, and a value's does not. As (name kind what the entry holds).
+(define (wrong-lines)
+  (apply append
+         (map (lambda (x)
+                (let ((entry (find (lambda (e) (equal? (caddr e) (string->symbol (car x)))) entries)))
+                  (if (not entry)
+                      '()
+                      (let* ((line (entry-signature entry))
+                             (type (and (string? line) (line-type (car x) line))))
+                        (cond ((not type) (list (list (car x) (cdr x) line)))
+                              ((eq? (has-arrow? type) (eq? (cdr x) 'procedure)) '())
+                              (else (list (list (car x) (cdr x) line))))))))
+              every-export)))
 
-(test-equal "every export has exactly one signature comment in the source (the exports with none, or more)"
+(test-equal "each entry holds one line NAME : TYPE of its own name, whose TYPE holds -> for a procedure and not for a value, as Chez evaluates each: the entries that do not, as (name kind line)"
   '()
-  (map car (filter (lambda (p) (not (= (length (cdr p)) 1))) source-signatures)))
-
-;; the pairs (NAME . SIGNATURE) of the source and of the page, whole
-(define expected-pairs
-  (map (lambda (p) (cons (symbol->string (car p)) (if (null? (cdr p)) "" (cadr p))))
-       source-signatures))
-(define actual-pairs
-  (map (lambda (e)
-         (cons (if (caddr e) (symbol->string (caddr e)) (cadr e)) (entry-signature e)))
-       entries))
-
-(define (pair<? a b) (string<? (car a) (car b)))
-
-(test-equal "an entry's signature is its source comment's, character for character: the entries that differ, each with both"
-  '()
-  (map (lambda (p)
-         (list (car p) 'source (cdr (assoc (car p) expected-pairs)) 'page (cdr p)))
-       (filter (lambda (p)
-                 (let ((want (assoc (car p) expected-pairs)))
-                   (and want (not (equal? (cdr want) (cdr p))))))
-               actual-pairs)))
-
-(test-equal "the signatures, whole: every export with the source's, as the page has it"
-  (list-sort pair<? expected-pairs)
-  (list-sort pair<? (filter (lambda (p) (assoc (car p) expected-pairs)) actual-pairs)))
+  (wrong-lines))
 
 (test-end "reference")
 

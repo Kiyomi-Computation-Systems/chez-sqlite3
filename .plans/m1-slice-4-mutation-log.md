@@ -428,7 +428,9 @@ libraries); 12 caught, and one equivalent on every library measured.
   Mac's hand runs reach Apple's library, where the native children expect the unavailable line.
 - **A check that never returns.** `suite-exit-status` runs each check to its end; make test's
   timeout names a hang.
-- **Children that reach native code.** `test-chez-sqlite3-testing`'s four native children and
+- **Children that reach native code. Superseded:** the integration section below runs each such
+  child under the gate's own Valgrind, through `gated-command`; what follows is what stood before.
+  `test-chez-sqlite3-testing`'s four native children and
   `check-test-fails`' leaks plant load libsqlite3 outside Valgrind, as `test-native`'s oracle does.
   Slice 3 decides how the gate covers children (ADR-0005, amended).
 - **The never-loads check reads imports, not behaviour.** A library body that reached libsqlite3
@@ -510,3 +512,47 @@ the plans are untouched.
 - **`make check-memory-gate`:** 54 cases, all held, cases `a` and `b` (the connection plant) and
   `p` and `q` (slice 3's children) among them.
 - **`make check-test-fails`:** all 12 cases. **`make check-dev`**, **`make build`:** ok.
+
+## The review's fixes
+
+An adversarial review of slice 4 found nine mutants that passed, r1 to r9 and r6b; this section
+reproduces the ones its fixes answer. Each ran in a copy of the worktree (no `.git`), through the
+copy's `scripts/guix-env`, under the scratchpad's `s4-fix/NAME/`, with the review's spec, on the
+suite named. "Before" is the review's count; "after" is the count with the fix, read from the
+suite's output. The unmutated suites with the fixes pass: test-connection 47, test-never-loads 5,
+test-chez-sqlite3-testing 75, test-memory-check 15, test-counters 17, test-docs 49, test-reference
+14.
+
+| Mutant | Suite | Before | After |
+|---|---|---|---|
+| r2: the closed check moved before the thread check in `call-with-open-handle` | test-connection | 45 passed, 0 failed | 45 passed, 1 failed (the closed-from-another-thread row) |
+| r4: `(<= open before)` to `(<= open baseline)` | test-memory-check | passed | 13 passed, 2 failed (the two new `memory-check-outcome` rows) |
+| r6b: a helper library under `tests/chez-sqlite3-testing/` that imports `(chez-sqlite3)` | test-never-loads | 4 passed, 0 failed | 4 passed, 1 failed (the child that references every export) |
+| r7: the exit checks run after the counts are read | test-chez-sqlite3-testing | passed | 74 passed, 1 failed (the bump check row); the child printed `(0 ...)` and no counts line |
+| r8: `raise-continuable` to `raise` in `call-with-database` | test-connection | passed | 46 passed, 1 failed (the warning row) |
+| r9: the register-exit-check! refusal's message reworded | test-counters | failed, as the suite read the text | 17 passed: the row asserts who and irritants only |
+| r9b: the irritant `not-a-name` changed to `not-a-nam` | test-counters | n/a | 16 passed, 1 failed |
+
+- **Finding 1, the docs.** `docs/reference.md` now says the load runs before a `guard` in its form
+  is in place, and shows the `eval` inside the guard. `test-docs` runs two children with
+  `CHEZ_SQLITE3_LIBRARY` naming a file that is not there, through `gated-command`, each printing
+  its `(valgrind . yes|no)` line: the docs' own guard, read from the page, ran to its end and
+  printed `no-sqlite`; the same call made directly inside a guard died before its first line,
+  printing nothing; a control with the library present ran to its end. Mutations on the docs:
+  the guard's `eval` removed, and its answer changed, each failed 2 rows (47 passed).
+- **Finding 2.** `test-never-loads` has a behaviour row: a child imports `(chez-sqlite3-testing)`,
+  references every export `library-exports` lists, and prints `(9 () no)`: how many, `(exit-checks)`,
+  and whether `/proc/self/maps` names a libsqlite3.
+- **Finding 6.** `register-exit-check!`'s refusals now lead their irritants with `not-a-name` and
+  `not-a-procedure`: a one-line edit of `src/chez-sqlite3/private/counters.sls`, plus its comment.
+  Two other rows of test-counters (`count-up!` and `count-down!` refusals) still assert a message,
+  `not-a-kind` and `double-free`; not in the review's list, and left.
+
+### Final runs (with the fixes)
+
+All through `scripts/guix-env`, rc 0 each:
+
+- **`make test`:** `ran 25, passed 25, failed 0, hung 0`.
+- **`make test-memory`:** `ran 25, passed 25, failed 0, hung 0`.
+- **`make check-memory-gate`:** all 54 cases held. **`make check-test-fails`:** all 12 cases.
+  **`make check-dev`**, **`make build`:** ok, counts all zero.

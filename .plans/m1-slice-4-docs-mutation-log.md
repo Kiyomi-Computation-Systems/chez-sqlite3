@@ -36,3 +36,31 @@ suites, since its name sits in a heading's code span.
 
 `make test` does not need `.git` or the submodule's git state: a copy made
 with `tar --exclude=.git` runs every suite.
+
+## The review's fixes: test-reference no longer reads comments
+
+`tests/test-reference.sps` compared each entry's signature with the comment above the export in
+`src/chez-sqlite3.sls`, against AGENTS.md. It now follows chez-curl's `tests/test-reference.sps`: the
+exports are what Chez's `library-exports` lists for `(chez-sqlite3)`, what each name is comes from
+`eval` in the library's environment (procedure or value), every export has one entry and every
+entry is an export, and a procedure's `NAME : TYPE` line has a `->` in its TYPE, a value's none.
+The suite holds 14 tests now (it held 16), `test-docs` 49 (it held 45: four rows for the load).
+`test-docs` also runs its examples in order, through a named let, and `reference.md` no longer
+states the floor, nor says a guard catches a load.
+
+Each mutation of the table above was rerun in a copy, on `test-reference` and `test-docs`:
+
+| Mutation | Copy | Result |
+|---|---|---|
+| An entry dropped | `d-dropped` | test-reference: 2 failed (every export has an entry; the entries are the exports); test-docs passed |
+| An extra entry | `d-extra` | test-reference: 2 failed; test-docs: 1 failed (the code-span name check) |
+| A broken link | `d-badlink` | test-docs: 2 failed |
+| A broken anchor | `d-badanchor` | test-docs: 1 failed |
+| A wrong stated result (`;; => refused` to `refusedx`) | `d-wrongresult` | test-docs: 1 failed |
+| A signature changed by one character, `-> String` to `-> Strin` | `d-signature-one-char` | **no longer applies**: passes in both suites. The type text is not compared with anything now, since the only oracle was the source's comment. Held instead by the two rows below |
+| The arrow removed from a procedure's type | `d-no-arrow` | test-reference: 1 failed (new) |
+| The line's name changed (`sqlite-versio : ...`) | `d-wrong-name` | test-reference: 1 failed (new) |
+| The docs' guard around a direct call | `d-guard-direct` | test-docs: 2 failed (new) |
+| The docs' guard answering another symbol | `d-guard-answer` | test-docs: 2 failed (new) |
+
+The remaining out-of-reach case: a type that is wrong while its arrow is where it should be.

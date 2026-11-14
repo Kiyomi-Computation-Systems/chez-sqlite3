@@ -329,8 +329,9 @@ Measured in the pinned container before the gate was built
   amalgamation, the count came back to its value after `sqlite3_initialize`, 0, after every open
   and close measured: `:memory:` (61,360 and 57,232 bytes while open), a WAL file with a blob
   (154,472 and 150,272), and a failed open (1,376 and 1,304). A 3.45.1 build with
-  `DEFAULT_MEMSTATUS=0` never moved, and every suite named the check unavailable and passed. CI's
-  Ubuntu 3.45.1 is measured by its first run with this check.
+  `DEFAULT_MEMSTATUS=0` never moved, and every suite named the check unavailable and passed. On
+  CI, Ubuntu's 3.45.1 passed it in every suite that loads libsqlite3: "the count is back at its
+  baseline, 0 bytes" (PR #11's run, 2026-11-14).
 - **The testing library never loads libsqlite3, and a check holds it:** `test-never-loads` holds
   `(chez-sqlite3-testing)`'s and the counters' imports to exact allowlists, works out which
   libraries load libsqlite3 from `src/`'s imports, and checks what the testing library can reach.
@@ -338,5 +339,7 @@ Measured in the pinned container before the gate was built
   imports, `system` say, is held by review.
 - **The leaks plant goes through `open-database`:** `check-test-fails`' leaks case fails on the
   counters (`connection 1`) and the memory check; `check-memory-gate`'s connection plant fails
-  under Valgrind, its loss record's stack through `sqlite3_open_v2`.
+  under Valgrind, its loss record's stack through libsqlite3. A 3.45.1 build with symbols shows
+  `sqlite3_open_v2` there; Guix's stripped library shows `???` frames inside `libsqlite3.so`, and
+  the gate accepts either.
 

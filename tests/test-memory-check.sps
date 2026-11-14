@@ -103,6 +103,17 @@
         (memory-check-outcome 700 700 650 700)
         (memory-check-outcome 1200 0 0 0)))
 
+;; Unavailable is decided by the count before the control and the count while
+;; it was open, never by the baseline: a baseline above a rise that did count,
+;; and a baseline below a count that did not rise, each told from the other.
+(test-equal "the count rose while the control was open, though it stayed below the baseline: the library keeps a count, so the check runs, and the count after is not the baseline: fail, never unavailable"
+  (list 'fail (fail-text 0 1200))
+  (memory-check-outcome 1200 0 500 0))
+
+(test-equal "the count did not rise while the control was open, though it is above the baseline: unavailable, never a verdict from the baseline"
+  (list 'unavailable (unavailable-text 700 700))
+  (memory-check-outcome 0 700 700 700))
+
 ;; --- make-memory-check: the control, through stub bindings ------------------------
 ;; Each stub logs its call. The C string is at 4096, the out-pointer's slot at
 ;; 8192, and the handle the slot holds is given per row.

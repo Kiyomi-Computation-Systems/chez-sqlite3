@@ -58,7 +58,7 @@
         (srfi :64)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
-        (only (chezscheme) directory-list file-directory?))
+        (only (chezscheme) directory-list file-directory? getenv))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -799,21 +799,34 @@
 
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 
+;; each-in-order : (A -> B) (Listof A) -> (Listof B)
+;; F applied to each item, first to last, and the answers in that order. An
+;; example's run has effects, so it never goes through map, which calls its
+;; procedure in no fixed order.
+(define (each-in-order f items)
+  (let loop ((rest items) (out '()))
+    (if (null? rest)
+        (reverse out)
+        (let ((answer (f (car rest))))
+          (loop (cdr rest) (cons answer out))))))
+
 ;; runs : (Listof (List String Natural Any Any))
 ;; Each runnable block of every Markdown page: its page, its line, what
 ;; check-run said, and the native counts when it was done.
 (define runs
   (apply append
-         (map (lambda (p)
-                (map (lambda (b)
-                       (let* ((result (if run-env
-                                          (check-run (block-lines b) run-env)
-                                          '(bad no-environment)))
-                              (counts (native-counts)))
-                         (list p (block-line b) result counts)))
-                     (filter (lambda (b) (eq? (scheme-mark b (org-page? p)) 'run))
-                             (scheme-blocks p))))
-              pages)))
+         (each-in-order
+          (lambda (p)
+            (each-in-order
+             (lambda (b)
+               (let* ((result (if run-env
+                                  (check-run (block-lines b) run-env)
+                                  '(bad no-environment)))
+                      (counts (native-counts)))
+                 (list p (block-line b) result counts)))
+             (filter (lambda (b) (eq? (scheme-mark b (org-page? p)) 'run))
+                     (scheme-blocks p))))
+          pages)))
 
 (test-equal "the docs have runnable examples at all"
   'some
@@ -888,6 +901,113 @@
                                           export-strings)))
                   (map (lambda (n) (list p n)) bad)))
               pages)))
+
+;; --- the load a guard cannot catch ------------------------------------------------------------------
+;; docs/reference.md says a library that fails to load is caught by an eval
+;; inside the guard, and not by a guard around a direct call, since the load
+;; runs at the program's start or before the form's guard is in place. A
+;; child of each kind, with CHEZ_SQLITE3_LIBRARY naming a file that is not
+;; there, shows both. Each runs through gated-command, so under make
+;; test-memory the gate's own Valgrind runs it, and says so on its last line.
+
+(define chez (getenv "CHEZ"))
+
+;; The file the override names, which is not there.
+(define missing-library "/no/such/directory/libsqlite3.so")
+
+;; The block of docs/reference.md that shows the guard around an eval: the
+;; one Scheme block of the page that holds an (environment '(chez-sqlite3)).
+(define docs-guard-blocks
+  (filter (lambda (b)
+            (search (joined (block-lines b)) "(environment '(chez-sqlite3))" 0))
+          (scheme-blocks "docs/reference.md")))
+
+;; docs-guard : (U Datum (List 'blocks Natural))
+;; The datum of that block, as the docs show it.
+(define docs-guard
+  (if (= (length docs-guard-blocks) 1)
+      (let ((d (datums (joined (block-lines (car docs-guard-blocks))))))
+        (if (= (length d) 1) (car d) (list 'blocks (length d))))
+      (list 'blocks (length docs-guard-blocks))))
+
+;; Prints whether this process runs under memcheck: its preload is in /proc/self/maps.
+(define valgrind-printer
+  (string-append
+   "(write (cons 'valgrind\n"
+   "            (guard (e (#t 'no-maps))\n"
+   "              (let ((maps (call-with-port\n"
+   "                           (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
+   "                                                 (make-transcoder (utf-8-codec)))\n"
+   "                           get-string-all))\n"
+   "                    (needle \"vgpreload_memcheck\"))\n"
+   "                (let loop ((i 0))\n"
+   "                  (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
+   "                        ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
+   "                        (else (loop (+ i 1)))))))))\n"
+   "(newline)\n"))
+
+;; The last line a child prints: yes exactly when the gate asked.
+(define valgrind-line
+  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
+
+;; write-text : String String -> Void
+(define (write-text path text)
+  (call-with-port
+   (open-file-output-port path (file-options no-fail) (buffer-mode block)
+                          (make-transcoder (utf-8-codec)))
+   (lambda (p) (put-string p text))))
+
+;; child : (U String #f) String -> (U (List Integer String String) (List 'raised String))
+;; A program of BODY, after its imports, run in a fresh Chez, with
+;; CHEZ_SQLITE3_LIBRARY set to OVERRIDE, or as the environment has it for #f,
+;; and the status, stdout and stderr it gave.
+(define (child override body)
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (base)
+       (let ((program (string-append base "/child.sps")))
+         (write-text program
+                     (string-append "#!r6rs\n(import (rnrs) (rnrs eval) (chez-sqlite3))\n"
+                                    body "\n" valgrind-printer))
+         (capture-command
+          (append (if override
+                      (list "env" (string-append "CHEZ_SQLITE3_LIBRARY=" override))
+                      '())
+                  (gated-command getenv
+                                 (list chez "--libdirs" "src:tests:build/scheme-libs"
+                                       "--program" program)))))))))
+
+;; shown : Datum -> String
+(define (shown d)
+  (call-with-string-output-port (lambda (p) (write d p))))
+
+(test-equal "a program that evals a loading call inside the guard the docs show, with the library missing, catches the refusal: it ran to its end, and printed what the guard answered"
+  (list 0 (string-append "start\nno-sqlite\n" valgrind-line) "")
+  (child missing-library
+         (string-append "(display \"start\\n\")\n(write " (shown docs-guard) ")\n(newline)")))
+
+(test-equal "the docs show one guard around an eval, and it answers no-sqlite when the library is missing"
+  '(guard (e ((sqlite-library-unavailable? e) 'no-sqlite))
+     (eval '(sqlite-version) (environment '(chez-sqlite3))))
+  docs-guard)
+
+(test-equal "a program that calls a loading procedure directly inside a guard, with the library missing, dies before its first line, and the guard catches nothing: its stdout is empty"
+  '(died "")
+  (let ((answer (child missing-library
+                       (string-append
+                        "(display \"start\\n\")\n"
+                        "(write (guard (e ((sqlite-library-unavailable? e) 'caught)) (sqlite-version)))\n"
+                        "(newline)"))))
+    (if (and (pair? answer) (integer? (car answer)))
+        (list (if (zero? (car answer)) 'ran 'died) (cadr answer))
+        answer)))
+
+(test-equal "the same program with the library there, a control, runs to its end: the version it prints is a string, and its first line prints too"
+  (list 0 (string-append "start\n#t\n" valgrind-line) "")
+  (child #f
+         (string-append "(display \"start\\n\")\n"
+                        "(write (guard (e ((sqlite-library-unavailable? e) 'caught)) (string? (sqlite-version))))\n"
+                        "(newline)")))
 
 (test-end "docs")
 

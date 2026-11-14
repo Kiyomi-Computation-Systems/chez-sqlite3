@@ -54,7 +54,8 @@ does not create the file. `read-only` cannot be given with `read-write` or
 
 Three mistakes are assertion violations, and nothing is opened: an option
 that is not in the table, an option given twice, and `read-only` with
-`read-write` or `create`. So is a name that is not a string.
+`read-write` or `create`. So is a name that is not a string, or one that
+holds U+0000.
 
 A name that starts with `file:` is a URI, so it needs the `uri` option, and
 is refused without it. To open a file really named `file:x.db`, write
@@ -110,7 +111,9 @@ call-with-database : String Symbol ... (Database -> A ...) -> A ...
 Opens a database as `open-database` does, calls the procedure, last of the
 arguments, with the connection, and gives the procedure's answers. The
 connection is closed when the procedure returns, raises, or leaves through a
-continuation. A raise reaches the caller unchanged.
+continuation. A raise reaches the caller unchanged. Its refusals are
+`open-database`'s: a name that is not a string or holds U+0000, and a bad
+option, are assertion violations, and nothing is opened.
 
 ```scheme run
 (call-with-database ":memory:" (lambda (db) (database? db)))
@@ -142,9 +145,20 @@ Whether the value is a connection, open or closed.
 
 ## The library
 
-These report on the SQLite library that was found and loaded. The first one
-you call loads it. If none can be loaded, it raises a condition that
+These report on the SQLite library that was found and loaded. The load runs
+once, when the first of them, or `open-database` or `call-with-database`, is
+first used. If no library can be loaded, the load raises a condition that
 `sqlite-library-unavailable?` holds.
+
+That load runs when your program starts, or when the form that names one of
+those procedures is evaluated: before any `guard` in that form is in place.
+So a `guard` around a direct call cannot catch it, and the program dies. To
+catch it, call through `eval` inside the `guard`, which needs `(rnrs eval)`:
+
+```scheme
+(guard (e ((sqlite-library-unavailable? e) 'no-sqlite))
+  (eval '(sqlite-version) (environment '(chez-sqlite3))))
+```
 
 ### `sqlite-version`
 
@@ -163,7 +177,7 @@ sqlite-version-number : -> Natural
 The version as one number: 3.53.1 is `3053001`.
 
 ```scheme run
-(>= (sqlite-version-number) 3045001)
+(> (sqlite-version-number) 3000000)
 ;; => #t
 ```
 
@@ -198,8 +212,8 @@ sqlite-compile-option? : String -> Boolean
 ```
 
 Whether the library was compiled with the option. The name may have its
-`SQLITE_` prefix or not, and any case. A name that is not a string is an
-assertion violation.
+`SQLITE_` prefix or not, and any case. A name that is not a string, or one
+that holds U+0000, is an assertion violation.
 
 ```scheme run
 (sqlite-compile-option? "THREADSAFE")
@@ -310,7 +324,8 @@ sqlite-library-unavailable? : Any -> Boolean
 ```
 
 Whether the value says SQLite could not be loaded. It loads nothing itself,
-so a program can use it to test for a missing library.
+so naming it starts no load. Use it in a `guard` around an `eval` of the call
+that loads, as [The library](#the-library) shows.
 
 ### `sqlite-library-unavailable-reason`
 

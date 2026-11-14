@@ -102,11 +102,13 @@
   maintainer's review.
 - **`code`'s type is `(U Symbol Integer)`.** Decision 4's "every primary code is named" holds for
   today's primaries; a future low byte the table doesn't name answers the integer.
-- **Every refusal's irritants lead with a symbol naming its rule:** `not-a-string`,
+- **Slice 4's refusals lead their irritants with a symbol naming the rule:** `not-a-string`,
   `unknown-option`, `option-given-twice`, `contradictory-options`,
   `file-uri-without-uri-option`, `not-a-database`, `untracked-statements`, `not-a-procedure` and
-  the rest. So no two refusals share their who and irritants, and decision 9 holds without reading
-  a message.
+  the rest, and `register-exit-check!`'s after slice 4's review. Native's earlier refusals don't:
+  `call-with-c-string`'s U+0000 refusal names the string by its kind alone, `((kind string))`.
+  Each still differs from every other by its who or irritants, so decision 9 holds without
+  reading a message.
 - **`&sqlite-wrong-thread` and `&sqlite-closed` carry a fixed `&message`,** whose presence the rows
   assert, never its text.
 - **`&sqlite-closed` can't be reached through the public surface in M1:** its one verb,

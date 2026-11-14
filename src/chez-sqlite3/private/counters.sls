@@ -106,13 +106,16 @@
   ;; register-exit-check! : Symbol (-> (List Symbol String)) -> Void
   ;; CHECK, under NAME, for every suite-exit-status from now on, after the
   ;; checks registered before it. There is no way to drop one. A NAME that is
-  ;; no symbol and a CHECK that is no procedure are assertion violations, and
-  ;; nothing is registered. A NAME given twice registers two checks.
+  ;; no symbol and a CHECK that is no procedure are assertion violations,
+  ;; whose irritants begin with a rule symbol, not-a-name or not-a-procedure,
+  ;; and nothing is registered. A NAME given twice registers two checks.
   (define (register-exit-check! name check)
     (unless (symbol? name)
-      (assertion-violation 'register-exit-check! "an exit check's name is a symbol" name))
+      (assertion-violation 'register-exit-check! "an exit check's name is a symbol"
+                           'not-a-name name))
     (unless (procedure? check)
-      (assertion-violation 'register-exit-check! "an exit check is a procedure" name check))
+      (assertion-violation 'register-exit-check! "an exit check is a procedure"
+                           'not-a-procedure name check))
     (locked lock (lambda () (set! checks (cons (cons name check) checks)))))
 
   ;; exit-checks : -> (Listof (Pairof Symbol (-> (List Symbol String))))
