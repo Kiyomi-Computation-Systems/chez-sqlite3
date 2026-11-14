@@ -25,6 +25,9 @@
 #                private memory) may import
 #   floors       README's Chez line says       check-floors names the line,
 #                10.3.0, not the floor         and no suite runs
+#   floors-script a script under            check-floors names its line, and
+#                scripts/ci that writes       no suite runs
+#                the SQLite floor
 #   ci           job memory given a            check-ci names the key, and
 #                continue-on-error key         no suite runs
 #   no-suites    every suite deleted           make test refuses to pass
@@ -41,7 +44,8 @@
 # outcome, the after-suite's pass line, and the count. The leaks case also
 # compares the lines starting "suite-exit-status: ", whole, the counts in
 # them included, the seam case those
-# starting "check-seam: ", the floors case those starting "check-floors: ",
+# starting "check-seam: ", the floors and floors-script cases those
+# starting "check-floors: ",
 # and the ci case those starting "check-ci: ".
 #
 # The copy is the working tree without .git, build/ and .claude/ (Claude
@@ -55,7 +59,7 @@
 # check-suites and the testing library need no other, and load no
 # libsqlite3 (the M1 plan, §3.7; tests/test-never-loads.sps holds the
 # imports). README.org and packaging/floors.sexp are the tree's own, and
-# agree, so check-floors passes in every case but floors.
+# agree, so check-floors passes in every case but floors and floors-script.
 #
 # The leaks plant opens a connection through (chez-sqlite3)'s open-database
 # and drops the record, as a caller that never closed it would. Its src/ is
@@ -402,6 +406,25 @@ run_case "floors: check-floors names a README that states another Chez floor, an
      echo 'check-floors: FAILED (problems: 1)')" \
   '^(check-suites|check-floors|test): '
 cp "$root/README.org" "$copy/README.org"
+
+# The floors-script case: a script in the copy's scripts/ci writes the SQLite
+# floor, read from the copy's floors file. check-floors reads every file under
+# scripts/ci, so it names the line. Without scripts/ci among the directories
+# check-floors is run on (the Makefile's fourth argument), no check sees the
+# plant and make test passes: the case fails then (traps.md: each new
+# prerequisite comes with its plant). check-floors passes before and after: the
+# plant is removed.
+sqlite_floor=$(sed -n 's/^ *(sqlite "\([0-9.]*\)").*$/\1/p' "$root/packaging/floors.sexp")
+case "$sqlite_floor" in
+  "" | *[!0-9.]*) bad "floors-script: could not read the SQLite floor from packaging/floors.sexp"; sqlite_floor=0.0.0 ;;
+esac
+printf '#!/bin/sh\n# the floor is %s\n' "$sqlite_floor" >"$copy/scripts/ci/plant.sh"
+run_case "floors-script: check-floors names a script under scripts/ci that writes the SQLite floor, and no suite runs" \
+  "$(checked 1
+     echo "check-floors: scripts/ci/plant.sh: line 2 contains the SQLite floor $sqlite_floor, which no CI script may write: they read it from packaging/floors.sexp"
+     echo 'check-floors: FAILED (problems: 1)')" \
+  '^(check-suites|check-floors|test): '
+rm -f "${copy:?}/scripts/ci/plant.sh"
 
 # The ci case: the copy's workflow gives job memory a job-level
 # continue-on-error key, which would let the Valgrind gate fail and the run
