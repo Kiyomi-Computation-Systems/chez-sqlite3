@@ -5,6 +5,8 @@
   and decision 8's shape on 2026-11-14. Proposed first in the brief, §3e. Amended 2026-11-14:
   what slice 4 built ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: the statements a connection
   holds (M2's plan, [amendment](#amendment-2026-11-14-the-statements-a-connection-holds-m2s-plan)).
+  Amended 2026-11-14, proposed: raised after the section (M1's closing review,
+  [amendment](#amendment-2026-11-14-raised-after-the-section-m1s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -201,3 +203,75 @@ finalize's failure, is the maintainer's own choice (R1, 2026-11-14,
   3 builds on the contract it settles, and this amendment cites its PR once merged.
 - **A failed close raises `&sqlite-busy` there,** a `&sqlite-error`: ADR-0013's subtypes, amended
   the same day, class every raise.
+
+## Amendment, 2026-11-14: raised after the section (M1's closing review)
+
+Proposed in M1's closing review. The maintainer approved its scope and the procedure's contract on
+2026-11-14. The amendment itself awaits the maintainer's acceptance.
+
+- **The rule.** Nothing raises inside `critical-section`, or inside a critical `dynamic-wind`
+  thunk, in any library under `src/` or in `(chez-sqlite3-testing)`. Code there answers data, and
+  the raise follows the section. A raise from a call made there is caught inside the section and
+  raised again after it, as the same object.
+- **Why.** A `with-exception-handler` handler runs in the raise's dynamic extent, before anything
+  unwinds. For a raise inside a section, it runs at interrupt depth 2, and depth 3 where two
+  sections nest. There, the closing review measured on `497d45b`:
+  - an engine never expired: one run inside such a handler was killed after 10 s;
+  - another thread's `collect-rendezvous` waited more than 11 s behind such a handler, against
+    1 ms behind a handler for a raise outside a section.
+
+  A `guard` clause unwinds first, and runs at depth 1. The M2 session found the first two sites,
+  and the M1 session reproduced them on `2579a0d`.
+- **The sites, nine:**
+  1. `call-with-open-handle`'s refusals and its procedure's raise;
+  2. `call-with-database`'s open, and its U+0000 refusal;
+  3. `call-with-database`'s close, from its critical after thunk;
+  4. `close-connection`'s double free;
+  5. `free-foreign-block!`'s refusal of a block that isn't live, and its double free;
+  6. `foreign-block`'s allocation failure;
+  7. `call-with-block`'s refusal of a re-entry;
+  8. the testing library's `make-capture-directory`;
+  9. `call-with-block`'s failed free, when its procedure had freed the block, which was found
+     while fixing the eight.
+- **`call-with-open-handle`:**
+  - **It checks the database and its owner before the section.** Neither can change: the record's
+    type, its immutable owner field, and the caller's own thread id.
+  - **In the section are the open check and the procedure.** The procedure answers data. What it
+    raises is caught, and raised again after the section with `raise`, so a `raise-continuable`
+    from it can't be resumed (the maintainer, 2026-11-14). It runs with interrupts off, so it
+    keeps to the C call and its reads.
+  - **This replaces slice 4's** "its three checks … and the procedure in one critical section".
+    It is still the handle's only accessor, and it is the contract M2's statement verbs build on.
+- **The open holds the filename's C string, the open, the out-parameter's read and `count-up!` in
+  one critical section.**
+  - **Before,** an engine's expiry could land between the string's block and the open. It freed
+    the block, and the resume refused the open: at fuel 20, 50 opens of 50, and over fuel 20 to
+    400, at 54 of 381 sizes.
+  - **Now** `open-database` completes at every fuel from 1 to 60, and `sqlite-compile-option?` at
+    every fuel from 1 to 40. So slice 4's "a program under engines takes `open-database`" holds,
+    as `docs/reference.md` says.
+  - **A U+0000 in the filename is refused as before,** by `call-with-c-string`: caught in the
+    section and raised after it, with the same who and irritants.
+- **`call-with-database`: decision 8 is unchanged.**
+  - Its open answers data in its section, and raises after it.
+  - Its critical after thunk closes and records any failure, raising nothing.
+  - A plain `dynamic-wind` around it raises that failure, unless the procedure is raising.
+  - The procedure runs outside any section, so its warnings stay resumable.
+- **The double frees and memory's refusals are raised after their sections:**
+  - `close-connection`'s `count-down!`;
+  - `free-foreign-block!`'s refusal and its `count-down!`;
+  - `foreign-block`'s allocation failure. `foreign-alloc` raises it, and never answers 0, so the
+    branch for 0 is gone.
+
+  Each keeps its who and irritants.
+- **Held by:**
+  - a row per site, whose handler reads the depth and expects 1, with a no-raise sentinel distinct
+    from it;
+  - engine rows over fuel 1 to 60 for the open, and 1 to 40 for `sqlite-compile-option?`;
+  - rows for the procedure's raise: the same object, a warning not resumed, several values
+    answered.
+
+  The rows failed on the code before. Each of 18 mutations moved one raise back inside its section,
+  or one string's extent out of it, and each was caught
+  ([the log](../m1-closing-review-mutation-log.md)).
+- **The M2-plan amendment's last bullets are met here.** M2 slice 3 builds on this contract.

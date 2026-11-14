@@ -49,6 +49,15 @@ Proposed record is marked *(provisional)* until that record is accepted.
   (ADR-0011).
   - **`sqlite3_reset` and `sqlite3_finalize` join them in M2,** measured waiting in the busy
     handler, and M2's four are held by behaviour too (ADR-0011 amended).
+- **Nothing raises inside `critical-section`, or inside a critical `dynamic-wind` thunk,** in
+  `src/` or in the testing library. Code there answers data; a raise from a call made there is
+  caught in the section and raised again after it, as the same object.
+  - A `with-exception-handler` handler of a raise inside a section runs with interrupts disabled.
+    There an engine never expires, and another thread's collection waits.
+  - `call-with-open-handle`'s procedure answers data, and what it raises can't be resumed.
+  - A C string that a caller under engines uses lives, whole, in one section: the open,
+    `sqlite-compile-option?`, and M2's prepare.
+  - A row per site holds the rule (ADR-0012 and ADR-0011, amended by M1's closing review).
 
 ## Loading libsqlite3
 
@@ -179,7 +188,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   reset, and a count below zero raises (ADR-0005).
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
   five jobs and their keys; each check as a step's whole run line; only the checkout and cache
-  actions, each cache restored before its build and saved before its check; no `if:` but the
+  actions, each cache restored before its build and saved before its check; every script a step
+  runs by its path there and executable; no `if:` but the
   cache's own;
   no line naming a variable that steers a check; no key spelled so a text check would miss it. It
   holds against a mistaken edit, not a deliberate one: a step can compute any name. A change to

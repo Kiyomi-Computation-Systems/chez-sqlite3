@@ -5,6 +5,8 @@
   ([amendment](#amendment-2026-11-14-what-m1-slice-2-measured)). Amended
   2026-11-14: strings SQLite reads to a NUL, and counted values (M2's plan,
   [amendment](#amendment-2026-11-14-strings-sqlite-reads-to-a-nul-and-counted-values-m2s-plan)).
+  Amended 2026-11-14, proposed: the helpers raise after their sections (M1's closing review,
+  [amendment](#amendment-2026-11-14-the-helpers-raise-after-their-sections-m1s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -146,3 +148,23 @@ floor, 3.45.1, with the same results ([research/m2-plan/](../research/m2-plan/),
   - a prepare, under the other's `begin exclusive`, **on a fresh connection only:** one that had
     read the schema first answered 0 at once, and a fresh one waited 1502 ms and answered 5
     (measured).
+
+## Amendment, 2026-11-14: the helpers raise after their sections (M1's closing review)
+
+Proposed in M1's closing review, with [ADR-0012's amendment](0012-explicit-close-and-the-handle.md#amendment-2026-11-14-raised-after-the-section-m1s-closing-review), which states the rule and why.
+
+- **`call-with-block`'s critical thunks raise nothing.**
+  - A re-entry is refused from a plain before thunk outside them.
+  - A failed free is raised from a plain after thunk: the not-live refusal, when the procedure
+    had freed its own block.
+  - An allocation failure is recorded in the critical before thunk, and raised by the body.
+- **A caller under engines holds a C string's whole extent in one section.** An engine's expiry
+  inside the extent freed the block, and the resume was refused. The open does this, and so does
+  `sqlite-compile-option?`. So will M2's prepare, which gets it inside `call-with-open-handle`'s
+  procedure.
+- **`foreign-block` raises `foreign-alloc`'s refusal after its section.** `foreign-alloc` raises
+  an assertion violation on a failed `malloc`, with the string `"foreign-alloc"` as its who. It
+  never answers 0.
+- **Not refused:** a procedure that frees `call-with-out-pointer`'s slot makes the helper read
+  freed memory after the procedure returns. No caller does this. A row that did was seen only by
+  the memory gate, as an `Invalid read of size 8`.

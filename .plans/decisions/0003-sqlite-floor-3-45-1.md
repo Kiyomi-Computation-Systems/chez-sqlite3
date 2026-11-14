@@ -1,6 +1,8 @@
 # ADR-0003: The SQLite floor is 3.45.1
 
-- **Status:** Accepted (the maintainer, 2026-11-13)
+- **Status:** Accepted (the maintainer, 2026-11-13). Amended 2026-11-14, and accepted by the
+  maintainer that day: decision 3 is built (M1 slice 5,
+  [amendment](#amendment-2026-11-14-decision-3-is-built-m1-slice-5)).
 - **Date:** 2026-11-13
 - **Scope:** every SQLite chez-sqlite3 loads
 - **Settles:** brief §2.2

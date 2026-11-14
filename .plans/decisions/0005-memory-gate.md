@@ -13,6 +13,12 @@
   [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)), and SQLite's memory check
   (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)). Amended 2026-11-14:
   statements, and the decoy's cost (M2's plan, [amendment](#amendment-2026-11-14-statements-and-the-decoys-cost-m2s-plan)).
+  Amended 2026-11-14, and accepted by the maintainer that day: a checkout path holding whitespace
+  ([amendment](#amendment-2026-11-14-a-checkout-path-holding-whitespace-owed-to-m1s-closing-review)),
+  and the `floor` and `current` lanes (M1 slice 5,
+  [amendment](#amendment-2026-11-14-the-floor-and-current-lanes-m1-slice-5)). Amended 2026-11-14,
+  proposed: the CI scripts' execute bits (M1's closing review,
+  [amendment](#amendment-2026-11-14-the-ci-scripts-execute-bits-m1s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -432,3 +438,15 @@ Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
   That is arithmetic, not a measurement: M2 slice 2 measures it on CI. Past 450 s, three quarters
   of the limit, the suite is split in two, each under the limit alone. The consequences' shards
   answer the job's total time, 14 minutes of 60 so far, which this doesn't approach.
+
+## Amendment, 2026-11-14: the CI scripts' execute bits (M1's closing review)
+
+- **`check-ci` refuses a step whose whole run line begins `scripts/ci/NAME`,** unless that file is
+  there and executable.
+  - The workflow runs each such script by its path. A row that runs a script with `sh` never sees
+    a lost bit.
+  - At the review, `chmod -x` on four of them passed every check and every suite.
+  - `floor.sh` is run with `sh` by the other scripts, so it isn't held.
+- **The files are read under `CHECK_CI_ROOT`,** the repository root when it is unset, so that
+  `test-check-ci`'s rows can point it at a copy. The name joins the words no workflow line may
+  hold, since it would point the rule at another tree.
