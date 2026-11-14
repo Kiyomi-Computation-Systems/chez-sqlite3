@@ -69,3 +69,12 @@ order holds on a real `--nothreads` build.
   So a test that depends on a compile option holds in one lane and not the other: `USE_URI`
   decides whether a `file:` name is a URI, and the variable limit decides how many parameters a
   statement may bind. M1 reads options through the FFI, never assumes them.
+
+## The second run
+
+Run 43544889798, after the review's fixes, rebuilt Chez cold: the cache keys now hash every script
+that reads, builds or checks it. `memory` and `nothreads` passed, and `check-chez.sh` passed on
+each Chez, restored or built. `main`'s checks and suites passed, `check-ci` and the new suite
+among them, and then its new step, the launcher's host-side tests, failed: 79 passed, 4 failed,
+each of T11b's "says why". T11b ran `make test` under `env -i`, which dropped `CHEZ`, and the
+runner has no `scheme` on `PATH` (`.plans/traps.md`). T11b now passes `CHEZ` through.

@@ -63,6 +63,14 @@ told in chez-curl's `.plans/traps.md`.
   the rules now live in `tests/check-ci.sh`. It is slice 2's lesson again, that a dropped piece
   takes its protection with it, and a reason written down is no check of it. (chez-sqlite3)
 
+- **`env -i` in a test drops the variable that names a tool, and the default may only work
+  here.** The launcher's T11b ran `make test` under `env -i`, so `CHEZ` fell back to the
+  Makefile's default, `scheme` on `PATH`. The host and the container have one; CI's runner keeps
+  Chez in `$RUNNER_TEMP`, on no `PATH`. On CI's second run, `make test` stopped at its
+  prerequisites, and T11b's four "says why" checks failed: 79 passed, 4 failed. Reproduced in the
+  container with a `PATH` of every tool but `scheme`: the same 79 and 4, then 83 with `CHEZ`
+  passed through. (chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
