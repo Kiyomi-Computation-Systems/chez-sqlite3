@@ -5,9 +5,10 @@
 ;;;
 ;;;   &chez-sqlite3-error          the root, fieldless, under &error
 ;;;   &sqlite-library-unavailable  libsqlite3 was refused (ADR-0002)
-;;;
-;;; &sqlite-error, &sqlite-wrong-thread and &sqlite-closed join them in later
-;;; slices.
+;;;   &sqlite-error                SQLite answered a code that is an error
+;;;   &sqlite-wrong-thread         a connection used off the thread that
+;;;                                opened it (ADR-0010)
+;;;   &sqlite-closed               a connection used once closed (ADR-0012)
 ;;;
 ;;; A raise may compound one with &who, &message and &irritants, so that the
 ;;; default handler prints readable text. Tests assert the reason symbol and
@@ -25,10 +26,23 @@
 
           raise-library-unavailable
 
+          &sqlite-error make-sqlite-error sqlite-error?
+          sqlite-error-code sqlite-error-extended-code sqlite-error-message
+          sqlite-error-sql sqlite-error-offset
+          raise-sqlite-error
+
+          &sqlite-wrong-thread make-sqlite-wrong-thread sqlite-wrong-thread?
+          sqlite-wrong-thread-owner sqlite-wrong-thread-caller
+          raise-wrong-thread
+
+          &sqlite-closed make-sqlite-closed sqlite-closed?
+          raise-closed
+
           kind-of shown-value checked-accessor)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
-          (chez-sqlite3 private libsqlite3-info))
+          (chez-sqlite3 private libsqlite3-info)
+          (only (chez-sqlite3 private constants) sqlite-result-code-name sqlite-primary-code-name))
 
   ;; make-chez-sqlite3-error : -> &chez-sqlite3-error
   ;; chez-sqlite3-error? : Any -> Boolean
@@ -178,6 +192,160 @@
                       (make-message-condition message)
                       (make-irritants-condition irritants))))
 
+  ;; --- &sqlite-error (ADR-0013, decision 3) -------------------------------------
+  ;;
+  ;;   code           the primary code's name: its C name without SQLITE_,
+  ;;                  lower-cased, _ turned to -, by (chez-sqlite3 private
+  ;;                  constants)' table; the integer when no row names it
+  ;;   extended-code  the extended code's name by the same rule; a primary
+  ;;                  code with no extension is its own
+  ;;   message        sqlite3_errmsg for the connection, or sqlite3_errstr of
+  ;;                  the code when there is none
+  ;;   sql, offset    the statement's text and its error offset, from M2's
+  ;;                  prepare; #f otherwise, as in all of M1
+  (define-condition-type &sqlite-error &chez-sqlite3-error
+    unchecked-make-sqlite-error sqlite-error?
+    (code unchecked-sqlite-error-code)
+    (extended-code unchecked-sqlite-error-extended-code)
+    (message unchecked-sqlite-error-message)
+    (sql unchecked-sqlite-error-sql)
+    (offset unchecked-sqlite-error-offset))
+
+  (define sqlite-error-code
+    (checked-accessor 'sqlite-error-code sqlite-error? "an &sqlite-error"
+                      unchecked-sqlite-error-code))
+  (define sqlite-error-extended-code
+    (checked-accessor 'sqlite-error-extended-code sqlite-error? "an &sqlite-error"
+                      unchecked-sqlite-error-extended-code))
+  (define sqlite-error-message
+    (checked-accessor 'sqlite-error-message sqlite-error? "an &sqlite-error"
+                      unchecked-sqlite-error-message))
+  (define sqlite-error-sql
+    (checked-accessor 'sqlite-error-sql sqlite-error? "an &sqlite-error"
+                      unchecked-sqlite-error-sql))
+  (define sqlite-error-offset
+    (checked-accessor 'sqlite-error-offset sqlite-error? "an &sqlite-error"
+                      unchecked-sqlite-error-offset))
+
+  ;; exact-integer? : Any -> Boolean
+  (define (exact-integer? x) (and (integer? x) (exact? x)))
+
+  ;; exact-natural? : Any -> Boolean
+  (define (exact-natural? x) (and (exact-integer? x) (>= x 0)))
+
+  ;; refuse-field : Symbol Symbol String Any -> Nothing
+  ;; WHO's refusal of VALUE for FIELD: an assertion violation, "not WHAT",
+  ;; whose irritants are FIELD, then VALUE by shown-value, so two refusals
+  ;; from one WHO are told apart without their message.
+  (define (refuse-field who field what value)
+    (assertion-violation who (string-append "not " what) field (shown-value value)))
+
+  ;; make-sqlite-error : (U Symbol Integer) (U Symbol Integer) String (U String #f)
+  ;;                     (U Natural #f) -> &sqlite-error
+  ;; Each field checked, in order; a field of the wrong kind is refused by
+  ;; refuse-field.
+  (define (make-sqlite-error code extended-code message sql offset)
+    (unless (or (symbol? code) (exact-integer? code))
+      (refuse-field 'make-sqlite-error 'code "a code's name or an exact integer" code))
+    (unless (or (symbol? extended-code) (exact-integer? extended-code))
+      (refuse-field 'make-sqlite-error 'extended-code "a code's name or an exact integer"
+                    extended-code))
+    (unless (string? message)
+      (refuse-field 'make-sqlite-error 'message "a string" message))
+    (unless (or (not sql) (string? sql))
+      (refuse-field 'make-sqlite-error 'sql "a string or #f" sql))
+    (unless (or (not offset) (exact-natural? offset))
+      (refuse-field 'make-sqlite-error 'offset "an exact natural or #f" offset))
+    (unchecked-make-sqlite-error code extended-code message sql offset))
+
+  ;; check-raise-who : Symbol Any -> Void
+  ;; HELPER's refusal of a WHO that is no symbol.
+  (define (check-raise-who helper who)
+    (unless (symbol? who)
+      (refuse-field helper 'who "a symbol" who)))
+
+  ;; raise-sqlite-error : Symbol Integer String (U String #f) (U Natural #f) -> Nothing
+  ;; The one way a private caller raises SQLite's answer: an &sqlite-error
+  ;; whose code and extended code are EXTENDED's names, from constants' table,
+  ;; with MESSAGE, SQL and OFFSET, compounded with &who WHO and a &message
+  ;; holding MESSAGE, so the default handler prints SQLite's text. A WHO that
+  ;; is no symbol, an EXTENDED that is no exact integer, and one whose low
+  ;; byte is SQLITE_OK, SQLITE_ROW or SQLITE_DONE, which are no errors, are
+  ;; assertion violations from raise-sqlite-error; a field the constructor
+  ;; refuses, one from make-sqlite-error.
+  (define (raise-sqlite-error who extended message sql offset)
+    (check-raise-who 'raise-sqlite-error who)
+    (unless (exact-integer? extended)
+      (refuse-field 'raise-sqlite-error 'extended-code "an exact integer" extended))
+    (when (memv (bitwise-and extended 255) '(0 100 101))
+      (assertion-violation 'raise-sqlite-error "not a code SQLite answers for an error"
+                           'not-an-error extended))
+    (let* ((c (make-sqlite-error (sqlite-primary-code-name extended)
+                                 (sqlite-result-code-name extended) message sql offset))
+           (compound (condition c (make-who-condition who) (make-message-condition message))))
+      (raise compound)))
+
+  ;; --- &sqlite-wrong-thread (ADR-0010, decision 1; ADR-0013, decision 6) ---------
+  ;;
+  ;;   owner   the get-thread-id of the thread that opened the connection
+  ;;   caller  the get-thread-id of the thread that used it
+  (define-condition-type &sqlite-wrong-thread &chez-sqlite3-error
+    unchecked-make-sqlite-wrong-thread sqlite-wrong-thread?
+    (owner unchecked-sqlite-wrong-thread-owner)
+    (caller unchecked-sqlite-wrong-thread-caller))
+
+  (define sqlite-wrong-thread-owner
+    (checked-accessor 'sqlite-wrong-thread-owner sqlite-wrong-thread? "an &sqlite-wrong-thread"
+                      unchecked-sqlite-wrong-thread-owner))
+  (define sqlite-wrong-thread-caller
+    (checked-accessor 'sqlite-wrong-thread-caller sqlite-wrong-thread? "an &sqlite-wrong-thread"
+                      unchecked-sqlite-wrong-thread-caller))
+
+  ;; make-sqlite-wrong-thread : Natural Natural -> &sqlite-wrong-thread
+  ;; OWNER and CALLER checked, each an exact natural, as a thread id is.
+  (define (make-sqlite-wrong-thread owner caller)
+    (unless (exact-natural? owner)
+      (refuse-field 'make-sqlite-wrong-thread 'owner "a thread id" owner))
+    (unless (exact-natural? caller)
+      (refuse-field 'make-sqlite-wrong-thread 'caller "a thread id" caller))
+    (unchecked-make-sqlite-wrong-thread owner caller))
+
+  ;; raise-wrong-thread : Symbol Natural Natural -> Nothing
+  ;; An &sqlite-wrong-thread of OWNER and CALLER, compounded with &who WHO and
+  ;; a &message. A WHO that is no symbol is an assertion violation from
+  ;; raise-wrong-thread; an id the constructor refuses, one from it.
+  (define (raise-wrong-thread who owner caller)
+    (check-raise-who 'raise-wrong-thread who)
+    (let* ((c (make-sqlite-wrong-thread owner caller))
+           (compound (condition c (make-who-condition who)
+                                (make-message-condition
+                                 "a connection belongs to the thread that opened it, and is used on that thread alone"))))
+      (raise compound)))
+
+  ;; --- &sqlite-closed (ADR-0012, decision 7; ADR-0013, decision 6) ----------------
+
+  ;; make-sqlite-closed : -> &sqlite-closed
+  ;; sqlite-closed? : Any -> Boolean
+  (define-condition-type &sqlite-closed &chez-sqlite3-error
+    make-sqlite-closed sqlite-closed?)
+
+  ;; raise-closed : Symbol -> Nothing
+  ;; An &sqlite-closed, compounded with &who WHO and a &message. A WHO that is
+  ;; no symbol is an assertion violation from raise-closed.
+  (define (raise-closed who)
+    (check-raise-who 'raise-closed who)
+    (raise (condition (make-sqlite-closed) (make-who-condition who)
+                      (make-message-condition "the connection is closed"))))
+
+  ;; sqlite-error? : Any -> Boolean
+  ;; sqlite-error-code : &sqlite-error -> (U Symbol Integer)
+  ;; sqlite-error-extended-code : &sqlite-error -> (U Symbol Integer)
+  ;; sqlite-error-message : &sqlite-error -> String
+  ;; sqlite-error-sql : &sqlite-error -> (U String #f)
+  ;; sqlite-error-offset : &sqlite-error -> (U Natural #f)
+  ;; sqlite-wrong-thread? : Any -> Boolean
+  ;; sqlite-wrong-thread-owner : &sqlite-wrong-thread -> Natural
+  ;; sqlite-wrong-thread-caller : &sqlite-wrong-thread -> Natural
   ;; sqlite-library-unavailable? : Any -> Boolean
   ;; sqlite-library-unavailable-reason : &sqlite-library-unavailable -> Symbol
   ;; sqlite-library-unavailable-path : &sqlite-library-unavailable -> (U String #f)

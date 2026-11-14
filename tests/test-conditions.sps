@@ -1,20 +1,25 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private conditions): the root every library
-;;; condition sits under, and the one condition M1's loading raises
-;;; (ADR-0013, ADR-0002).
+;;; condition sits under, and the four M1 raises (ADR-0013, ADR-0002).
 ;;;
 ;;;   &chez-sqlite3-error           the fieldless root, under &error
 ;;;   &sqlite-library-unavailable   libsqlite3 was refused: six reasons, what
 ;;;                                 the refusal is about, and the library's own
 ;;;                                 report once its version was read
+;;;   &sqlite-error                 SQLite answered a code: its names, from the
+;;;                                 integer, its message, sql and offset
+;;;   &sqlite-wrong-thread          a verb off its connection's thread: the
+;;;                                 owner's and the caller's ids
+;;;   &sqlite-closed                a verb on a closed connection
 ;;;
 ;;; Then kind-of, shown-value and checked-accessor, which name a caller's
 ;;; value by its kind where a refusal would print it, and the agreement of
 ;;; (chez-sqlite3 private libsqlite3-info)'s private copy of shown-value's
 ;;; rule with shown-value's own.
 ;;;
-;;; &sqlite-error, &sqlite-wrong-thread and &sqlite-closed come in later
-;;; slices, with the rows that keep them apart.
+;;; The kinds are held as a whole matrix, so no type can sit under another.
+;;; A refusal is asserted by its who and its irritants, never its message;
+;;; each new refusal names the field or the rule first among its irritants.
 ;;;
 ;;; Each expected value is one the code under test cannot produce by failing.
 ;;; SRFI-64 turns a raise in the actual expression into #f, so no expected
@@ -413,6 +418,211 @@
     (assertion-violation libsqlite3-info-path ((kind procedure)))
     (assertion-violation libsqlite3-info-path ((kind other))))
   (map (lambda (v) (raised (lambda () (libsqlite3-info-path v)))) shown-values))
+
+;; --- &sqlite-error, &sqlite-wrong-thread and &sqlite-closed (M1 slice 4) ----------------------
+;; Each fixture field holds a value no other field holds. Every refusal names
+;; the field or the rule it broke first among its irritants, so two refusals
+;; from one who are told apart without their message (ADR-0013, decision 9).
+
+;; an-sqlite-error, a-wrong-thread, a-closed : -> Condition
+(define (an-sqlite-error)
+  (make-sqlite-error 'busy 'busy-snapshot "fixture message" "SELECT fixture" 7))
+(define (a-wrong-thread) (make-sqlite-wrong-thread 3 5))
+(define (a-closed) (make-sqlite-closed))
+
+;; kinds-of : Any -> (Listof Boolean)
+;; error?, assertion-violation?, chez-sqlite3-error?, sqlite-error?,
+;; sqlite-library-unavailable?, sqlite-wrong-thread? and sqlite-closed?.
+(define (kinds-of c)
+  (list (error? c) (assertion-violation? c) (chez-sqlite3-error? c) (sqlite-error? c)
+        (sqlite-library-unavailable? c) (sqlite-wrong-thread? c) (sqlite-closed? c)))
+
+;; built : (-> Any) -> Any
+;; THUNK's answer, or (raised TEXT): a constructor that raises names its row.
+(define (built thunk)
+  (guard (e (#t (list 'raised (describe e)))) (thunk)))
+
+(test-equal "the kinds, whole: each of the four library conditions is an error and a chez-sqlite3-error, of its own type alone, and no assertion violation; the root alone is no type below it; an assertion violation and a plain error are no library condition"
+  '((#t #f #t #t #f #f #f)
+    (#t #f #t #f #t #f #f)
+    (#t #f #t #f #f #t #f)
+    (#t #f #t #f #f #f #t)
+    (#t #f #t #f #f #f #f)
+    (#f #t #f #f #f #f #f)
+    (#t #f #f #f #f #f #f))
+  (map (lambda (thunk) (let ((c (built thunk))) (if (condition? c) (kinds-of c) c)))
+       (list an-sqlite-error a-library-unavailable a-wrong-thread a-closed make-chez-sqlite3-error
+             make-assertion-violation make-error)))
+
+(test-equal "an sqlite-error carries its code, extended code, message, sql and offset"
+  '(busy busy-snapshot "fixture message" "SELECT fixture" 7)
+  (built (lambda ()
+           (let ((c (an-sqlite-error)))
+             (list (sqlite-error-code c) (sqlite-error-extended-code c) (sqlite-error-message c)
+                   (sqlite-error-sql c) (sqlite-error-offset c))))))
+
+(test-equal "an sqlite-error's codes may be integers, a code no table row names, and its sql and offset absent, compared as the symbol none"
+  '(29 25358 "m" none none)
+  (built (lambda ()
+           (let ((c (make-sqlite-error 29 25358 "m" #f #f)))
+             (list (sqlite-error-code c) (sqlite-error-extended-code c) (sqlite-error-message c)
+                   (if (eq? (sqlite-error-sql c) #f) 'none 'some)
+                   (if (eq? (sqlite-error-offset c) #f) 'none 'some))))))
+
+(test-equal "a wrong-thread carries its owner and its caller"
+  '(3 5)
+  (built (lambda ()
+           (let ((c (a-wrong-thread)))
+             (list (sqlite-wrong-thread-owner c) (sqlite-wrong-thread-caller c))))))
+
+(define new-accessors
+  (list (cons 'sqlite-error-code sqlite-error-code)
+        (cons 'sqlite-error-extended-code sqlite-error-extended-code)
+        (cons 'sqlite-error-message sqlite-error-message)
+        (cons 'sqlite-error-sql sqlite-error-sql)
+        (cons 'sqlite-error-offset sqlite-error-offset)
+        (cons 'sqlite-wrong-thread-owner sqlite-wrong-thread-owner)
+        (cons 'sqlite-wrong-thread-caller sqlite-wrong-thread-caller)))
+
+(test-equal "every new accessor refuses another type's condition, the root alone, a string by its kind, a number and a list holding a string, from the accessor, by shown-value"
+  (map (lambda (a)
+         (list (refusal (car a) '(kind other))
+               (refusal (car a) '(kind other))
+               (refusal (car a) '(kind other))
+               (refusal (car a) '(kind string))
+               (refusal (car a) 5)
+               (refusal (car a) '(kind list))))
+       new-accessors)
+  (map (lambda (a)
+         (map (lambda (v) (raised (lambda () ((cdr a) v))))
+              (list (if (memq (car a) '(sqlite-wrong-thread-owner sqlite-wrong-thread-caller))
+                        (an-sqlite-error)
+                        (a-wrong-thread))
+                    (a-closed) (make-chez-sqlite3-error) secret 5 (list "u" secret))))
+       new-accessors))
+
+(test-equal "make-sqlite-error refuses each field it is not given the right kind of, naming the field and the value by shown-value"
+  '((assertion-violation make-sqlite-error (code (kind string)))
+    (assertion-violation make-sqlite-error (code 1.5))
+    (assertion-violation make-sqlite-error (extended-code (kind string)))
+    (assertion-violation make-sqlite-error (extended-code #f))
+    (assertion-violation make-sqlite-error (message 5))
+    (assertion-violation make-sqlite-error (message #f))
+    (assertion-violation make-sqlite-error (sql 5))
+    (assertion-violation make-sqlite-error (offset -1))
+    (assertion-violation make-sqlite-error (offset (kind string))))
+  (list (raised (lambda () (make-sqlite-error "busy" 'busy "m" #f #f)))
+        (raised (lambda () (make-sqlite-error 1.5 'busy "m" #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy "busy" "m" #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy #f "m" #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy 5 #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy #f #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy "m" 5 #f)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy "m" #f -1)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy "m" #f "7")))))
+
+(test-equal "make-sqlite-wrong-thread refuses an owner or a caller that is no exact natural, naming which"
+  '((assertion-violation make-sqlite-wrong-thread (owner -1))
+    (assertion-violation make-sqlite-wrong-thread (owner (kind string)))
+    (assertion-violation make-sqlite-wrong-thread (caller 1.5))
+    (assertion-violation make-sqlite-wrong-thread (caller #f)))
+  (list (raised (lambda () (make-sqlite-wrong-thread -1 5)))
+        (raised (lambda () (make-sqlite-wrong-thread "3" 5)))
+        (raised (lambda () (make-sqlite-wrong-thread 3 1.5)))
+        (raised (lambda () (make-sqlite-wrong-thread 3 #f)))))
+
+;; --- the raise helpers -------------------------------------------------------------------
+
+;; compound : (-> Any) -> Any
+;; What THUNK raised, as the whole compound: its kinds, its who, whether it
+;; has a message and irritants (never the text), and its own fields; an
+;; assertion violation as (assertion-violation WHO IRRITANTS); or no-raise.
+(define (compound thunk)
+  (guard (e ((chez-sqlite3-error? e)
+             (append (list (kinds-of e)
+                           (and (who-condition? e) (condition-who e))
+                           (if (message-condition? e) 'message 'no-message)
+                           (if (irritants-condition? e) 'irritants 'no-irritants))
+                     (cond ((sqlite-error? e)
+                            (list (sqlite-error-code e) (sqlite-error-extended-code e)
+                                  (sqlite-error-message e)
+                                  (if (and (message-condition? e)
+                                           (equal? (condition-message e) (sqlite-error-message e)))
+                                      'message-is-the-field
+                                      'message-differs)
+                                  (or (sqlite-error-sql e) 'none) (or (sqlite-error-offset e) 'none)))
+                           ((sqlite-wrong-thread? e)
+                            (list (sqlite-wrong-thread-owner e) (sqlite-wrong-thread-caller e)))
+                           (else '()))))
+            ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other-raise (describe e))))
+    (thunk)
+    'no-raise))
+
+(test-equal "raise-sqlite-error raises the whole condition: an sqlite-error from the who given, with a message that is the message field, no irritants, its sql and offset as given"
+  '((#t #f #t #t #f #f #f) open-database message no-irritants
+    cantopen cantopen-symlink "unable to open database file" message-is-the-field "SELECT 1" 4)
+  (compound (lambda ()
+              (raise-sqlite-error 'open-database 1550 "unable to open database file" "SELECT 1" 4))))
+
+;; The names, from the integer: primary and extended, a code with no
+;; extension, the floor's newest, an extended code no row names, and a
+;; primary no row names.
+(test-equal "raise-sqlite-error names the code and the extended code from the integer, by constants' table, whole"
+  '((cantopen cantopen) (cantopen cantopen-symlink) (constraint constraint-unique) (busy busy)
+    (busy busy-snapshot) (ioerr ioerr-in-page) (cantopen 25358) (29 29) (error error-missing-collseq))
+  (map (lambda (code)
+         (let ((c (compound (lambda () (raise-sqlite-error 'w code "m" #f #f)))))
+           (if (and (list? c) (> (length c) 5) (pair? (car c)))
+               (list (list-ref c 4) (list-ref c 5))
+               c)))
+       '(14 1550 2067 5 517 8714 25358 29 257)))
+
+(test-equal "raise-sqlite-error refuses a code that is no error, ok, row and done and the extended codes of ok, and one that is no exact integer, naming the rule"
+  '((assertion-violation raise-sqlite-error (not-an-error 0))
+    (assertion-violation raise-sqlite-error (not-an-error 100))
+    (assertion-violation raise-sqlite-error (not-an-error 101))
+    (assertion-violation raise-sqlite-error (not-an-error 256))
+    (assertion-violation raise-sqlite-error (not-an-error 512))
+    (assertion-violation raise-sqlite-error (extended-code 1.5))
+    (assertion-violation raise-sqlite-error (extended-code busy))
+    (assertion-violation raise-sqlite-error (extended-code (kind string))))
+  (map (lambda (code) (compound (lambda () (raise-sqlite-error 'w code "m" #f #f))))
+       (list 0 100 101 256 512 1.5 'busy "14")))
+
+(test-equal "raise-sqlite-error refuses a who that is no symbol, and a message the constructor refuses, from the constructor"
+  '((assertion-violation raise-sqlite-error (who (kind string)))
+    (assertion-violation make-sqlite-error (message 5)))
+  (list (compound (lambda () (raise-sqlite-error "w" 14 "m" #f #f)))
+        (compound (lambda () (raise-sqlite-error 'w 14 5 #f #f)))))
+
+(test-equal "raise-wrong-thread raises a wrong-thread from the who given, with a message, no irritants, and its owner and caller"
+  '((#t #f #t #f #f #t #f) close-database! message no-irritants 11 13)
+  (compound (lambda () (raise-wrong-thread 'close-database! 11 13))))
+
+(test-equal "raise-closed raises a closed from the who given, with a message, no irritants and no fields"
+  '((#t #f #t #f #f #f #t) call-with-open-handle message no-irritants)
+  (compound (lambda () (raise-closed 'call-with-open-handle))))
+
+(test-equal "raise-wrong-thread and raise-closed refuse a who that is no symbol; raise-wrong-thread an id the constructor refuses, from the constructor"
+  '((assertion-violation raise-wrong-thread (who (kind string)))
+    (assertion-violation raise-closed (who 5))
+    (assertion-violation make-sqlite-wrong-thread (owner -2)))
+  (list (compound (lambda () (raise-wrong-thread "close-database!" 1 2)))
+        (compound (lambda () (raise-closed 5)))
+        (compound (lambda () (raise-wrong-thread 'w -2 2)))))
+
+(test-equal "no raise helper returns: a handler that returns gets nothing back, and what goes on to the next handler is the &non-continuable R6RS raises for it"
+  '(non-continuable non-continuable non-continuable)
+  (map (lambda (thunk)
+         (guard (e ((non-continuable-violation? e) 'non-continuable)
+                   (#t (list 'other-raise (describe e))))
+           (with-exception-handler (lambda (c) 'handled) thunk)
+           'returned-normally))
+       (list (lambda () (raise-sqlite-error 'w 14 "m" #f #f))
+             (lambda () (raise-wrong-thread 'w 1 2))
+             (lambda () (raise-closed 'w)))))
 
 (test-end "conditions")
 

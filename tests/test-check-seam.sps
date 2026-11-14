@@ -75,12 +75,12 @@
 
 ;; table-allowed : (Listof Symbol)
 ;; The names src/ imports from (chezscheme) today: counters', require-threaded's,
-;; memory's and native's.
+;; memory's, native's and connection's.
 (define table-allowed
   '(critical-section display-condition dynamic-wind foreign-alloc foreign-entry?
     foreign-free foreign-procedure foreign-ref foreign-set! foreign-sizeof format
-    format-condition? getenv load-shared-object machine-type make-mutex scheme-version
-    scheme-version-number threaded? with-mutex))
+    format-condition? get-thread-id getenv load-shared-object machine-type make-mutex
+    scheme-version scheme-version-number threaded? with-mutex))
 
 ;; table-only : (Listof (Pair Symbol (Listof (Listof Symbol))))
 ;; The library-only entries. foreign-entry's library, native, does not import it.
@@ -98,7 +98,8 @@
     (foreign-sizeof (chez-sqlite3 private native))
     (format (chez-sqlite3 private native))
     (format-condition? (chez-sqlite3 private native))
-    (display-condition (chez-sqlite3 private native))))
+    (display-condition (chez-sqlite3 private native))
+    (get-thread-id (chez-sqlite3 private connection))))
 
 ;; table-general : (Listof Symbol)
 ;; The allowed names no entry keeps to its libraries: those any library under
@@ -920,9 +921,10 @@
 ;; The libraries each library-only name is imported by, one library holding every name: the listed
 ;; ones, the public library, a private one, and near names of the listed ones.
 (define only-libraries
-  '((chez-sqlite3 private memory) (chez-sqlite3 private native) (chez-sqlite3)
-    (chez-sqlite3 private counters) (chez-sqlite3 private other)
-    (chez-sqlite3 private memory extra) (chez-sqlite3 private native extra)))
+  '((chez-sqlite3 private memory) (chez-sqlite3 private native) (chez-sqlite3 private connection)
+    (chez-sqlite3) (chez-sqlite3 private counters) (chez-sqlite3 private other)
+    (chez-sqlite3 private memory extra) (chez-sqlite3 private native extra)
+    (chez-sqlite3 private connection extra)))
 
 (test-equal "each library-only name is refused in every library but the one listed for it, whole output (variant)"
   'as-expected
@@ -947,14 +949,15 @@
 
 ;; reexporters : (Listof (Pair (Listof Symbol) (Listof Symbol)))
 ;; Each library with the names it may import (variant): counters the names any library
-;; may, and memory and native each its own.
+;; may, and memory, native and connection each its own.
 (define reexporters
   (list (cons '(chez-sqlite3 private counters) table-general)
         (cons '(chez-sqlite3 private memory) '(foreign-alloc foreign-free))
         (cons '(chez-sqlite3 private native)
               '(load-shared-object foreign-procedure foreign-entry foreign-entry?
                 foreign-ref foreign-set! getenv machine-type foreign-sizeof format
-                format-condition? display-condition))))
+                format-condition? display-condition))
+        (cons '(chez-sqlite3 private connection) '(get-thread-id))))
 
 (test-equal "each name allowed, in the library that may import it, refuses a re-export, plain and renamed, whole output (variant)"
   'as-expected
