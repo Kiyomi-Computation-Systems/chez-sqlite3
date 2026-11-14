@@ -229,6 +229,9 @@
 (define (vers-step) (span (string-append vers-hdr "\n") (string-append vers-l5 "\n")))
 (define (sql-step) (span "      # The runner's own SQLite" (string-append "run: " sql-run "\n")))
 (define (make-run) (string-append "        run: " make-line "\n"))
+(define install-hdr "      - name: The install check, by discovery")
+(define (install-step)
+  (span "      # ADR-0002's install check." "        run: make build\n"))
 (define chk-step-text
   (lambda ()
     (span-after "  main:\n" "      - name: Check the Chez this job runs\n"
@@ -239,7 +242,8 @@
 (define chk-n "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
 (define bld-n "scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
 (define make-line
-  "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-clean")
+  "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean")
+(define build-run "make build")
 (define launcher "sh tests/guix-env-launcher.sh")
 
 ;; --- rows ---------------------------------------------------------------------------
@@ -354,11 +358,12 @@
 (define banned-words
   '("MAKEFLAGS" "MFLAGS" "GNUMAKEFLAGS" "VALGRIND" "VALGRIND_OPTS" "VALGRIND_LIB"
     "MEMORY_SUITES" "MEMORY_TIMEOUT" "TEST_TIMEOUT" "LIBDIRS" "TIMEOUT" "SUITES"
-    "CHEZ_SQLITE3_LIBRARY"))
+    "CHEZ_SQLITE3_LIBRARY" "CHEZ_SQLITE3_DECOY" "CHEZ_SQLITE3_GATE_CHILD"
+    "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD"))
 
 (define make-words
   '("check-help" "check-suites" "check-pins" "check-floors" "check-ci" "test"
-    "check-test-fails" "check-clean"))
+    "check-test-fails" "check-dev" "check-clean"))
 
 (define (without-word line word)
   (let* ((at (find-sub line (string-append " " word) 0)))
@@ -658,7 +663,9 @@
     (row "the CHEZ path of nothreads swapped to main's"
          (list (e (string-append "      - name: Every library must be refused, by name\n        env:\n          CHEZ: " chez-n "\n")
                   (string-append "      - name: Every library must be refused, by name\n        env:\n          CHEZ: " chez-t "\n")))
-         (list (list (list (string-append "          CHEZ: " chez-t) 6) (env-chez "nothreads" chez-n))))
+;; The swapped line is the seventh of its text: main has four, the install
+;; check's among them, and memory two.
+         (list (list (list (string-append "          CHEZ: " chez-t) 7) (env-chez "nothreads" chez-n))))
     (row "an if with another value"
          (list (e (string-append "        if: steps.chez.outputs.cache-hit != 'true'\n        run: " bld-n "\n")
                   (string-append "        if: false\n        run: " bld-n "\n")))
@@ -711,6 +718,40 @@
          (list (let ((hdr "      - name: Report the versions this run uses\n"))
                  (e (span-after "  main:\n" "      - name: Check the Chez this job runs\n" hdr) hdr)))
          (list (list "  main:" (n-steps "main" chk-t 0))))
+    ;; ADR-0002's install check: make build, a step of its own, after
+    ;; check-chez and before the make line.
+    (row "main's install check deleted"
+         (list (e (string-append (install-step) "\n") ""))
+         (list (list "  main:" (n-steps "main" build-run 0))))
+    (row "main's install check written twice"
+         (list (e (string-append (install-step) "\n")
+                  (string-append (install-step) "\n" (install-step) "\n")))
+         (list (list "  main:" (n-steps "main" build-run 2))))
+    (row "main's install check moved after Checks and suites"
+         (list (e (string-append (install-step) "\n") "")
+               (e (make-run) (string-append (make-run) "\n" (install-step))))
+         (list (list (string-append "        run: " make-line) (out-of-order "main" make-line build-run))))
+    (row "main's install check moved before Check the Chez"
+         (list (e (string-append (install-step) "\n") "")
+               (e (string-append (chk-step-text) "\n" (vers-step))
+                  (string-append (install-step) "\n" (chk-step-text) "\n" (vers-step))))
+         (list (list "        run: make build" (out-of-order "main" build-run chk-t))))
+    (row "an if on main's install check"
+         (list (e (string-append install-hdr "\n") (string-append install-hdr "\n        if: always()\n")))
+         (list (list "        if: always()" if-bad)
+               (list "        if: always()" if-wrong)
+               (list "        if: always()" (step-has-if "main" build-run))))
+    (row "main's install check with an argument, make build X"
+         (list (e "        run: make build\n" "        run: make build X\n"))
+         (list (list "  main:" (n-steps "main" build-run 0))))
+    (row "main's install check as a block scalar"
+         (list (e "        run: make build\n" "        run: |\n          make build\n"))
+         (list (list "  main:" (n-steps "main" build-run 0))))
+    (row "an env key CC on main's install check"
+         (list (insert-after (string-append install-hdr "\n        env:\n          CHEZ: " chez-t "\n")
+                             "          CC: gcc\n"))
+         (list (list "          CC: gcc" (names-msg "CC"))
+               (list "          CC: gcc" (env-key "CC"))))
     (row "memory's check-chez step deleted"
          (list (let ((hdr "      # The gate proves nothing unless it can fail, so the planted defects run\n"))
                  (e (span-after "  memory:\n" "      - name: Check the Chez this job runs\n" hdr) hdr)))

@@ -58,7 +58,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps build check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps build dev check-dev check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -138,7 +138,9 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 # names it: its path and source, its version and number, and its source id.
 # A refused libsqlite3 fails it, exit 1, with the reason, the path, the
 # detail, the candidates checked and a remedy, and, when the refusal came
-# after the version was read, that library's own report. chez-sqlite3
+# after the version was read, that library's own report. Its last line, on
+# either stream, is its counts, all zero (ADR-0005, decision 4);
+# tests/test-library-loading.sps holds the whole output. chez-sqlite3
 # compiles nothing (ADR-0001), so this is the question an install asks. It
 # writes nothing: no build output, under src/ or anywhere. build is in
 # .PHONY: the build/ directory exists, and without it make would answer that
@@ -146,6 +148,25 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 build: ## Load libsqlite3 as chez-sqlite3 would and name it; fail with the reason when it is refused
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs src --program tests/preflight.sps
+
+# Runs make deps and make build, then a REPL with the suites' library path:
+# chez-sqlite3's own libraries, (chez-sqlite3-testing) and SRFI-64. A refused
+# libsqlite3 stops make at build, before any REPL starts. Until M1 slice 4
+# there is no public library: import (chez-sqlite3 private native) to load.
+dev: deps build ## Start a REPL with the suites' library path, after make build; a refused libsqlite3 stops it
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --libdirs $(LIBDIRS)
+
+# Runs make dev through make, in a fresh copy of the tree with no build/, with
+# forms piped into its REPL. It requires build's report, the banner, and two
+# lines those forms print only once (chez-sqlite3 private native), its report's
+# library, (chez-sqlite3-testing) and (srfi :64) have imported, naming the
+# version and path build named. With CHEZ_SQLITE3_LIBRARY naming no file, make
+# dev must fail with build's refusal before any REPL starts
+# (tests/check-dev.sh).
+check-dev: ## Fail unless make dev runs build, then a REPL with the suites' libraries; a refused libsqlite3 must stop it
+	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
+	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' sh tests/check-dev.sh
 
 # Three places name the chez-srfi commit, and nothing else keeps them equal:
 # Akku.lock (what a consumer installs), the gitlink the superproject records
@@ -357,10 +378,20 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # it on make's command line. `make check-memory-gate` proves each rule
 # fails.
 #
+# Each suite's children that reach native code run under the gate's own
+# Valgrind: the suite starts each through (chez-sqlite3-testing)'s
+# gated-command, which reads CHEZ_SQLITE3_GATE_CHILD, exported here, the
+# gate's Valgrind and options with a log per child, %p, in
+# build/memory/<suite>.children/. After the suite, every child's log is read
+# with the parent's rules, but that its Command: line must begin with CHEZ, or
+# name a C program called libsqlite3-oracle, the program Valgrind ran (ADR-0005,
+# amended). Valgrind follows no child itself: --trace-children was measured
+# and not taken.
 # Not covered (ADR-0005, amended):
-#   - a child process a suite starts runs outside Valgrind, which follows
-#     none: a suite that does native work in a child must run that child
-#     under the gate itself (harness plan, section 4);
+#   - a child started without gated-command runs outside Valgrind, unseen:
+#     tests/test-library-loading.sps's children each say whether they ran
+#     under memcheck, and that suite fails if one did not; no other suite's
+#     children are held so;
 #   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
 #     compiled CHEZ that runs Chez as a child passes the leak plant;
 #   - its evidence holds against accident, not against a suite that means
@@ -425,23 +456,7 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	fi; \
 	allowed=$$vgdefault; \
 	chez=$$(readlink -f "$$(command -v $(CHEZ))"); \
-	mkdir -p $(MEMORY_LOGS); \
-	passed=0; failed=0; hung=0; \
-	for t in $(MEMORY_SUITES); do \
-	  name=$$(basename "$$t" .sps); \
-	  log=$(MEMORY_LOGS)/$$name.log; \
-	  vlog=$(MEMORY_LOGS)/$$name.valgrind; \
-	  rm -f "$$log" "$$vlog"; \
-	  echo "=== $$t"; \
-	  set -- -v --command-line-only=yes "--log-file=$$vlog" --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite; \
-	  $(TIMEOUT) --foreground $(MEMORY_TIMEOUT) $(VALGRIND) "$$@" $(CHEZ) --libdirs $(LIBDIRS) --program $$t >"$$log" 2>&1; \
-	  rc=$$?; \
-	  why=; \
-	  if [ $$rc -eq 0 ] && [ ! -f "$$vlog" ]; then \
-	    why="Valgrind wrote no log, $$vlog"; \
-	  elif [ $$rc -eq 0 ]; then \
-	    evidence=$$(options=$$(printf '%s\n' "$$@") awk -v cmd="$(CHEZ) --libdirs $(LIBDIRS) --program $$t" -v chez="$$chez" -v allowed="$$allowed" \
-	      'pid == "" && /^==[0-9]+== Command: / { pid = $$0; sub(/^==/, "", pid); sub(/==.*/, "", pid); \
+	evidence_awk='pid == "" && /^==[0-9]+== Command: / { pid = $$0; sub(/^==/, "", pid); sub(/==.*/, "", pid); \
 	          got = $$0; sub(/^==[0-9]+== Command: /, "", got); syms = "--" pid "-- Reading syms from "; \
 	          supps = "--" pid "-- Reading suppressions file: "; mine = "==" pid "== "; \
 	          head = "--" pid "-- Valgrind options:"; option = "--" pid "--    "; next } \
@@ -453,19 +468,62 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	        index($$0, supps) == 1 { f = substr($$0, length(supps) + 1); read = (read == "" ? f : read ", " f) } \
 	        index($$0, mine "ERROR SUMMARY: ") == 1 { summary = substr($$0, length(mine) + 1) } \
 	        END { if (pid == "") { print "the log has no Valgrind \"Command:\" line"; exit } \
-	          if (got != cmd) why[++n] = "Valgrind\047s Command: line is \"" got "\", not \"" cmd "\""; \
+	          expect = chez; whose = ", the file CHEZ names"; \
+	          if (prefix && substr(got, 1, length(cmd)) != cmd) { prog = got; sub(/ .*/, "", prog); base = prog; sub(/.*\//, "", base); \
+	            if (oracle != "" && base == oracle) { expect = prog; whose = ", the program its Command: line names" } \
+	            else why[++n] = "Valgrind\047s Command: line is \"" got "\", which begins neither with \"" cmd "\" nor with a program named " oracle } \
+	          else if (!prefix && got != cmd) why[++n] = "Valgrind\047s Command: line is \"" got "\", not \"" cmd "\""; \
 	          nwant = split(ENVIRON["options"], want, "\n"); same = (nopts == nwant); \
 	          for (i = 1; i <= nwant; i++) if (opts[i] != want[i]) same = 0; \
 	          if (!same) { g = ""; for (i = 1; i <= nopts; i++) g = g (i > 1 ? " " : "") opts[i]; \
 	            w = ""; for (i = 1; i <= nwant; i++) w = w (i > 1 ? " " : "") want[i]; \
 	            why[++n] = "Valgrind\047s options are [" g "], not the gate\047s [" w "]" } \
 	          if (ran == "") why[++n] = "the log has no \"Reading syms from\" line, so it does not show what Valgrind ran"; \
-	          else if (ran != chez) why[++n] = "Valgrind ran " ran ", not " chez ", the file CHEZ names"; \
+	          else if (ran != expect) why[++n] = "Valgrind ran " ran ", not " expect whose; \
 	          if (summary !~ /^ERROR SUMMARY: 0 errors from 0 contexts( |$$)/) \
 	            why[++n] = "Valgrind reported no \"ERROR SUMMARY: 0 errors from 0 contexts\""; \
 	          if (read != allowed) why[++n] = "Valgrind read the suppressions files [" read "], and the gate allows exactly [" allowed "]"; \
 	          for (i = 1; i <= n; i++) printf "%s%s", (i > 1 ? "; " : ""), why[i]; \
-	          if (n) print ""; else print "ok" }' "$$vlog"); \
+	          if (n) print ""; else print "ok" }'; \
+	excerpt_awk='/^==[0-9]+== Command: / { body = 1; next } \
+	      !body || !/^==[0-9]+==/ { next } \
+	      { line = $$0; sub(/^==[0-9]+== ?/, "", line) } \
+	      line == "" { if (inerr) { inerr = 0; done = 1 }; cand = ""; next } \
+	      !done && !inerr && cand != "" && line ~ /^ +at 0x/ { inerr = 1; first[++n] = cand } \
+	      inerr && n < 16 { first[++n] = $$0 } \
+	      !inerr { cand = (line ~ /^[^ ]/) ? $$0 : "" } \
+	      line ~ /^ *definitely lost: / { lost = $$0 } \
+	      line ~ /^ *suppressed: / { hidden = $$0 } \
+	      line ~ /^ERROR SUMMARY: / { summary = $$0 } \
+	      END { for (i = 1; i <= n; i++) print "  " first[i]; \
+	            if (lost != "") print "  " lost; \
+	            if (hidden != "") print "  " hidden; \
+	            if (summary != "") print "  " summary; \
+	            else print "  (the log holds no Valgrind ERROR SUMMARY)" }'; \
+	mkdir -p $(MEMORY_LOGS); \
+	passed=0; failed=0; hung=0; \
+	for t in $(MEMORY_SUITES); do \
+	  name=$$(basename "$$t" .sps); \
+	  log=$(MEMORY_LOGS)/$$name.log; \
+	  vlog=$(MEMORY_LOGS)/$$name.valgrind; \
+	  children=$(MEMORY_LOGS)/$$name.children; \
+	  rm -f "$$log" "$$vlog"; \
+	  mkdir -p "$$children"; \
+	  rm -f "$$children"/*.valgrind; \
+	  echo "=== $$t"; \
+	  set -- -v --command-line-only=yes "--log-file=$$vlog" --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite; \
+	  child=; \
+	  for o in "$$@"; do \
+	    case $$o in --log-file=*) o="--log-file=$$children/%p.valgrind" ;; esac; \
+	    child="$$child$${child:+ }$$o"; \
+	  done; \
+	  CHEZ_SQLITE3_GATE_CHILD="$(VALGRIND) $$child" $(TIMEOUT) --foreground $(MEMORY_TIMEOUT) $(VALGRIND) "$$@" $(CHEZ) --libdirs $(LIBDIRS) --program $$t >"$$log" 2>&1; \
+	  rc=$$?; \
+	  why=; \
+	  if [ $$rc -eq 0 ] && [ ! -f "$$vlog" ]; then \
+	    why="Valgrind wrote no log, $$vlog"; \
+	  elif [ $$rc -eq 0 ]; then \
+	    evidence=$$(options=$$(printf '%s\n' "$$@") awk -v cmd="$(CHEZ) --libdirs $(LIBDIRS) --program $$t" -v prefix=0 -v chez="$$chez" -v allowed="$$allowed" "$$evidence_awk" "$$vlog"); \
 	    checked=$$?; \
 	    if [ $$checked -ne 0 ]; then \
 	      why="the evidence check (awk) exited $$checked"; \
@@ -475,6 +533,27 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	      why=$$evidence; \
 	    fi; \
 	  fi; \
+	  childwhy=; bad=; \
+	  if [ $$rc -ne 124 ]; then \
+	    for c in "$$children"/*.valgrind; do \
+	      [ -e "$$c" ] || continue; \
+	      cwhy=; \
+	      cevidence=$$(options=$$(printf '%s\n' $$child) awk -v cmd="$(CHEZ) " -v prefix=1 -v oracle=libsqlite3-oracle -v chez="$$chez" -v allowed="$$allowed" "$$evidence_awk" "$$c"); \
+	      cchecked=$$?; \
+	      if [ $$cchecked -ne 0 ]; then \
+	        cwhy="the evidence check (awk) exited $$cchecked"; \
+	      elif [ -z "$$cevidence" ]; then \
+	        cwhy='the evidence check (awk) printed no "ok" line'; \
+	      elif [ "$$cevidence" != ok ]; then \
+	        cwhy=$$cevidence; \
+	      fi; \
+	      if [ -n "$$cwhy" ]; then \
+	        childwhy="$$childwhy$${childwhy:+; }a child's Valgrind log, $$c: $$cwhy"; \
+	        bad="$$bad $$c"; \
+	      fi; \
+	    done; \
+	  fi; \
+	  if [ $$rc -eq 0 ] && [ -n "$$childwhy" ]; then why="$$why$${why:+; }$$childwhy"; fi; \
 	  if [ $$rc -eq 0 ] && [ -z "$$why" ]; then \
 	    echo "test-memory: pass $$t"; passed=$$((passed + 1)); \
 	  elif [ $$rc -eq 124 ]; then \
@@ -491,22 +570,12 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    echo "  log: $$log"; \
 	    echo "  Valgrind's log: $$vlog"; \
 	    if [ ! -f "$$vlog" ]; then echo "  (Valgrind wrote no log)"; else \
-	    awk '/^==[0-9]+== Command: / { body = 1; next } \
-	      !body || !/^==[0-9]+==/ { next } \
-	      { line = $$0; sub(/^==[0-9]+== ?/, "", line) } \
-	      line == "" { if (inerr) { inerr = 0; done = 1 }; cand = ""; next } \
-	      !done && !inerr && cand != "" && line ~ /^ +at 0x/ { inerr = 1; first[++n] = cand } \
-	      inerr && n < 16 { first[++n] = $$0 } \
-	      !inerr { cand = (line ~ /^[^ ]/) ? $$0 : "" } \
-	      line ~ /^ *definitely lost: / { lost = $$0 } \
-	      line ~ /^ *suppressed: / { hidden = $$0 } \
-	      line ~ /^ERROR SUMMARY: / { summary = $$0 } \
-	      END { for (i = 1; i <= n; i++) print "  " first[i]; \
-	            if (lost != "") print "  " lost; \
-	            if (hidden != "") print "  " hidden; \
-	            if (summary != "") print "  " summary; \
-	            else print "  (the log holds no Valgrind ERROR SUMMARY)" }' "$$vlog"; \
+	    awk "$$excerpt_awk" "$$vlog"; \
 	    fi; \
+	    for c in $$bad; do \
+	      echo "  a child's Valgrind log: $$c"; \
+	      awk "$$excerpt_awk" "$$c"; \
+	    done; \
 	    if [ $$rc -ne 9 ]; then \
 	      awk '{ line[NR] = $$0 } \
 	        END { from = NR - 9; if (from < 1) from = 1; \

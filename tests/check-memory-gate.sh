@@ -76,7 +76,33 @@
 #                   program or a missing feature would (fails); one that
 #                   prints "ok", then exits 2 (ok-fails); and one that exits
 #                   0, printing nothing (silent)
-#   o  ci           tests/check-ci.sh passes on .github/workflows, with its
+#   p  children     a child that reaches native code runs under the gate's
+#                   own Valgrind, through (chez-sqlite3-testing)'s
+#                   gated-command, with a log of its own, and the gate reads
+#                   it (ADR-0005, amended). Each parent below loses nothing
+#                   and ignores its child's exit status, so only the child's
+#                   log can fail it. Each runs plainly first, exit 0 and its
+#                   one line (plain). A child that leaks the leak plant's 777
+#                   bytes fails its parent, naming the child's log, with
+#                   Valgrind's loss record in the log and in test-memory's
+#                   output (leak); so does one that overruns the overrun
+#                   plant's 23-byte block (overrun). A clean child passes,
+#                   and leaves its one log (clean)
+#   q  child        every rule the parent's log is held to holds for each
+#      evidence     child's: a Valgrind that drops --leak-check=full for
+#                   children alone hides the child's leak, and fails it by
+#                   name (options); a child whose command begins neither
+#                   with CHEZ nor with a C program named libsqlite3-oracle,
+#                   the suites' oracle, fails (other); such a C program that
+#                   leaks the plant's 777 bytes fails, by name, and one that
+#                   loses nothing passes (oracle); a child that prints a clean ERROR SUMMARY
+#                   on stderr, then execs away, fails: its log has none
+#                   (forged); a child log an earlier run left is never read
+#                   (stale). And a child run without gated-command runs
+#                   outside Valgrind, and the gate cannot see it: its leak
+#                   passes (unwrapped). That is the gap ADR-0005 records;
+#                   tests/test-library-loading.sps closes it for its own
+#                   children, each of which must say it ran under memcheck
 #                   one line: it holds the whole workflow, and so the memory
 #                   job's two steps, "run: make check-memory-gate" then
 #                   "run: make test-memory", with no if: or
@@ -117,8 +143,9 @@ cd "$root" || exit 2
 
 # The inner make starts afresh: nothing of an outer make's flags or
 # command-line variables reaches it, nor a list of suites from the
-# environment, which test-memory reads.
-unset MAKEFLAGS MFLAGS MAKELEVEL MEMORY_SUITES
+# environment, which test-memory reads, nor a child prefix of an outer
+# test-memory's, which gated-command reads.
+unset MAKEFLAGS MFLAGS MAKELEVEL MEMORY_SUITES CHEZ_SQLITE3_GATE_CHILD
 
 MAKE=${MAKE:-make}
 TIMEOUT=${TIMEOUT:-timeout}
@@ -356,6 +383,86 @@ cat >"$kit/forge.sps" <<'EOF'
 (exit 1)
 EOF
 
+# The parents of cases p and q. Each runs one child and ignores the child's
+# exit status, so a red gate can only mean the gate read the child's log.
+for how in leak overrun clean forged other unwrapped stale; do
+  case $how in
+    leak)      run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps"))' ;;
+    overrun)   run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-overrun.sps"))' ;;
+    clean)     run="(gated-command getenv (list (getenv \"CHEZ\") \"--program\" \"$after\"))" ;;
+    forged)    run="(gated-command getenv (list (getenv \"CHEZ\") \"--program\" \"$forge\"))" ;;
+    other)     run="(gated-command getenv (list \"env\" (getenv \"CHEZ\") \"--program\" \"$after\"))" ;;
+    unwrapped) run='(list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps")' ;;
+    stale)     run='(gated-command getenv (list (getenv "CHEZ") "--program" "tests/memory-plant-leak.sps"))' ;;
+  esac
+  cat >"$kit/child-$how.sps" <<EOF
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: runs one child, and ignores its
+;;; exit status, so that only Valgrind's log of the child can fail it.
+(import (rnrs) (only (chezscheme) getenv) (chez-sqlite3-testing))
+(capture-command $run)
+(display "child-$how: ran its child")
+(newline)
+(exit 0)
+EOF
+done
+
+# A C program named as the suites' oracle is, for case q oracle: given leak,
+# it loses a 777-byte block; given nothing, it loses nothing.
+mkdir "$kit/oracle"
+cat >"$kit/oracle/plant.c" <<'EOF'
+#include <stdlib.h>
+#include <string.h>
+int main(int argc, char **argv)
+{
+  if (argc > 1 && strcmp(argv[1], "leak") == 0) {
+    void *volatile block = malloc(777);
+    block = 0;
+    (void)block;
+  }
+  return 0;
+}
+EOF
+${CC:-cc} -O0 -o "$kit/oracle/libsqlite3-oracle" "$kit/oracle/plant.c" 2>"$tmp/cc.err" || {
+  echo "check-memory-gate: could not compile case q's oracle plant:" >&2
+  sed 's/^/  | /' "$tmp/cc.err" >&2
+  exit 2
+}
+for how in oracle-leak oracle-clean; do
+  case $how in
+    oracle-leak) arg=' "leak"' ;;
+    *)           arg='' ;;
+  esac
+  cat >"$kit/child-$how.sps" <<EOF
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: runs one child, a C program named
+;;; libsqlite3-oracle, through gated-command, and ignores its exit status.
+(import (rnrs) (only (chezscheme) getenv current-directory) (chez-sqlite3-testing))
+(capture-command (gated-command getenv (list (string-append (current-directory) "/$scratch/oracle/libsqlite3-oracle")$arg)))
+(display "child-$how: ran its child")
+(newline)
+(exit 0)
+EOF
+done
+
+# A Valgrind that drops --leak-check=full from a child's options alone: one
+# whose --log-file is under a .children directory. The parent's options
+# pass as they came.
+cat >"$kit/valgrind-childdrop" <<EOF
+#!/bin/sh
+child=
+for arg in "\$@"; do
+  case \$arg in --log-file=*.children/*) child=yes ;; esac
+done
+n=\$#
+for arg in "\$@"; do
+  if [ -n "\$child" ] && [ "\$arg" = --leak-check=full ]; then continue; fi
+  set -- "\$@" "\$arg"
+done
+shift "\$n"
+exec "$vgbin" "\$@"
+EOF
+
 # A stand-in for Valgrind: it appends the name of the process that started
 # it, then each argument, one per line, then a line "--", to
 # <itself>.argv. It names a default.supp, as Valgrind -v does, so that
@@ -553,6 +660,34 @@ zero_line() {
   shift
   for extra in "$@"; do why="$why; $extra"; done
   printf 'test-memory: FAIL %s (exit 0, but %s)\n' "$suite" "$why"
+}
+
+# want_lines_pid WANTED: as want_lines, with each child log's pid read as
+# PID, since a pid differs from run to run.
+want_lines_pid() {
+  got=$(grep '^test-memory: ' "$out" | sed 's|\.children/[0-9][0-9]*\.valgrind|.children/PID.valgrind|g')
+  if [ "$got" != "$1" ]; then
+    problem "make test-memory's lines differ:
+$(printf '%s\n' "$1" | sed 's/^/  wanted: /')
+$(printf '%s\n' "$got" | sed 's/^/  got:    /')"
+  fi
+}
+
+# children_of SUITE: the directory of SUITE's children's Valgrind logs.
+children_of() { printf '%s/%s.children' "$logs" "$(basename "$1" .sps)"; }
+
+# want_children SUITE N: SUITE's run left exactly N child logs.
+want_children() {
+  found=$(ls "$(children_of "$1")" 2>/dev/null | grep -c '\.valgrind$')
+  [ "$found" -eq "$2" ] || problem "$(children_of "$1") holds $found child logs, not $2"
+}
+
+# child_why SUITE PROBLEM: one child log's problem, as test-memory words it.
+child_why() { printf "a child's Valgrind log, %s/PID.valgrind: %s" "$(children_of "$1")" "$2"; }
+
+# child_options SUITE: the options test-memory hands a child's Valgrind.
+child_options() {
+  printf '%s' "-v --command-line-only=yes --log-file=$(children_of "$1")/%p.valgrind --error-exitcode=9 --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite"
 }
 
 # A suite's two logs: its own output, and Valgrind's.
@@ -983,6 +1118,141 @@ $(count_line 1 0 1 0)"
     *)        verdict "m awk: an awk that exits 0, printing nothing, fails a clean program, naming the evidence check" ;;
   esac
 done
+
+# ---- p: a child that reaches native code runs under the gate, which reads its log ----
+for how in leak overrun; do
+  newtree
+  parent=$scratch/child-$how.sps
+  line="child-$how: ran its child"
+  plain=$("$CHEZ" --libdirs "$LIBDIRS" --program "$parent" 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] || problem "it exited $rc without Valgrind"
+  [ "$plain" = "$line" ] || problem "its output, without Valgrind, is not the one line \"$line\":
+$(printf '%s\n' "$plain" | sed 's/^/  | /')"
+  verdict "p plain: $parent exits 0 without Valgrind, and prints only its line" plain
+done
+
+for how in leak overrun; do
+  newtree
+  parent=$scratch/child-$how.sps
+  gate MEMORY_SUITES="$parent $after"
+  status=$?
+  want_status nonzero "$status"
+  want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "$no_zero")")
+test-memory: pass $after
+$(count_line 2 1 1 0)"
+  want_children "$parent" 1
+  want_in "$(vlog_of "$parent")" "ERROR SUMMARY: 0 errors from 0 contexts" "the parent's own Valgrind log, so only the child failed it"
+  case $how in
+    overrun) markers="Invalid write of size 1
+0 bytes after a block of size 23 alloc'd" ;;
+    *)       markers="777 bytes in 1 blocks are definitely lost in loss record" ;;
+  esac
+  markers="$markers
+ERROR SUMMARY: 1 errors from 1 contexts"
+  clog=$(ls "$(children_of "$parent")"/*.valgrind 2>/dev/null | head -n 1)
+  while IFS= read -r m; do
+    want_in "${clog:-$(children_of "$parent")/none}" "$m" "the child's Valgrind log"
+    want_in "$out" "$m" "test-memory's own output"
+  done <<EOF
+$markers
+EOF
+  want_in "$out" "  a child's Valgrind log: $(children_of "$parent")/" "test-memory's own output, naming the child's log"
+  verdict "p $how: a child that $( [ $how = leak ] && echo 'leaks 777 bytes' || echo 'overruns a 23-byte block') fails its clean parent, naming the child's log, with Valgrind's report in it and in test-memory's output, and the suite after it runs"
+done
+
+newtree
+gate MEMORY_SUITES="$scratch/child-clean.sps"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $scratch/child-clean.sps
+$(count_line 1 1 0 0)"
+want_children "$scratch/child-clean.sps" 1
+verdict "p clean: a clean child passes its parent, and leaves its one log"
+
+# ---- q: each child's log is held to the parent's rules ----
+newtree
+parent=$scratch/child-leak.sps
+gate MEMORY_SUITES="$parent" VALGRIND="$scratch/valgrind-childdrop"
+status=$?
+want_status nonzero "$status"
+want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "$(other_options "$(child_options "$parent" | sed 's/ --leak-check=full / /')" "$(child_options "$parent")")")")
+$(count_line 1 0 1 0)"
+clog=$(ls "$(children_of "$parent")"/*.valgrind 2>/dev/null | head -n 1)
+want_in "${clog:-$(children_of "$parent")/none}" "ERROR SUMMARY: 0 errors from 0 contexts" "the child's Valgrind log, so the edit hid the leak"
+verdict "q options: a Valgrind that drops --leak-check=full for children alone hides the child's leak, and fails it by name"
+
+newtree
+parent=$scratch/child-other.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status nonzero "$status"
+want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "Valgrind's Command: line is \"env $CHEZ --program $after\", which begins neither with \"$CHEZ \" nor with a program named libsqlite3-oracle; $(ran_other "$(readlink -f "$(command -v env)")" "$(readlink -f "$(command -v "$CHEZ")")"); $no_zero")")
+$(count_line 1 0 1 0)"
+verdict "q other: a child whose command begins neither with CHEZ nor with the oracle, here env, which execs Chez away from Valgrind, fails, by name"
+
+newtree
+parent=$scratch/child-oracle-leak.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status nonzero "$status"
+want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "$no_zero")")
+$(count_line 1 0 1 0)"
+want_children "$parent" 1
+want_in "$out" "777 bytes in 1 blocks are definitely lost in loss record" "test-memory's own output"
+verdict "q oracle: a C child named libsqlite3-oracle that loses 777 bytes fails its parent, by name"
+
+newtree
+parent=$scratch/child-oracle-clean.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $parent
+$(count_line 1 1 0 0)"
+want_children "$parent" 1
+verdict "q oracle: a C child named libsqlite3-oracle that loses nothing passes, and leaves its one log"
+
+newtree
+parent=$scratch/child-forged.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status nonzero "$status"
+want_lines_pid "$(zero_line "$parent" "$(child_why "$parent" "$no_zero")")
+$(count_line 1 0 1 0)"
+verdict "q forged: a child that prints a clean ERROR SUMMARY, then execs away, fails: its own log has none"
+
+newtree
+parent=$scratch/child-stale.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status nonzero "$status"
+want_children "$parent" 1
+cat >"$parent" <<'EOF'
+#!r6rs
+;;; Written by tests/check-memory-gate.sh, over its first version: runs no
+;;; child.
+(import (rnrs))
+(display "child-stale: ran no child")
+(newline)
+(exit 0)
+EOF
+gate_keep MEMORY_SUITES="$parent"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $parent
+$(count_line 1 1 0 0)"
+want_children "$parent" 0
+verdict "q stale: a child log an earlier run left is never read: the run after it, with no child, passes and leaves none"
+
+newtree
+parent=$scratch/child-unwrapped.sps
+gate MEMORY_SUITES="$parent"
+status=$?
+want_status 0 "$status"
+want_lines "test-memory: pass $parent
+$(count_line 1 1 0 0)"
+want_children "$parent" 0
+verdict "q unwrapped: a child run without gated-command runs outside Valgrind, and its leak passes: the gap ADR-0005 records"
 
 # ---- o: ci.yml runs the gate, as tests/check-ci.sh holds it ----
 # check-ci holds the whole workflow, the memory job among its jobs: make

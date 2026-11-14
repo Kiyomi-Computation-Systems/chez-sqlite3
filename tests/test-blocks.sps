@@ -10,10 +10,11 @@
 ;;;
 ;;; The dead-address row runs a child Chez: a free that ran anyway would make
 ;;; glibc abort, and a child's abort fails that row by name, not the whole
-;;; suite with SIGABRT. The child runs outside Valgrind, which follows no
-;;; child, and reaches malloc and free only: it never loads libsqlite3. It
+;;; suite with SIGABRT. It reaches malloc and free only: it never loads
+;;; libsqlite3. It runs through gated-command, so under make test-memory the
+;;; gate's own Valgrind runs it, with a log of its own (ADR-0005, amended). It
 ;;; prints its counts, and this suite asserts them zero (ADR-0005, decision
-;;; 4). How a child runs under the gate is M1 slice 3's choice.
+;;; 4).
 ;;;
 ;;; A test that raises a count on purpose lowers it again under dynamic-wind,
 ;;; and this suite exits through suite-exit-status, which fails it if any
@@ -186,8 +187,9 @@
          (call-with-port (open-file-output-port program (file-options) (buffer-mode block)
                                                 (make-transcoder (utf-8-codec)))
            (lambda (p) (put-string p dead-address-program)))
-         (capture-command (list (getenv "CHEZ") "--libdirs" "src:tests:build/scheme-libs"
-                                "--program" program)))))))
+         (capture-command (gated-command getenv
+                                         (list (getenv "CHEZ") "--libdirs" "src:tests:build/scheme-libs"
+                                               "--program" program))))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

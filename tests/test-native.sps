@@ -44,9 +44,10 @@
 ;;; value here is #f. Effects run in order, through let* and named lets,
 ;;; never map (AGENTS.md).
 ;;;
-;;; The oracle is a child process, and runs outside Valgrind. It is C reading
-;;; SQLite, not chez-sqlite3's native layer, and keeps no counts. So are the
-;;; shells the FIFO row starts.
+;;; The oracle is a child process: C reading SQLite, not chez-sqlite3's native
+;;; layer, and it keeps no counts. Under make test-memory it runs under the
+;;; gate's own Valgrind (tests/libsqlite3-oracle.sls). The shells the FIFO row
+;;; starts run outside it.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)

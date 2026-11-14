@@ -13,6 +13,8 @@
 ;;;   remove-temp-directory
 ;;;                      a directory and all it holds, removed
 ;;;   run-until          step until a predicate holds, capped by steps
+;;;   gated-command      a Chez child's command, under the memory gate's
+;;;                      own Valgrind when make test-memory asks for it
 ;;;   describe           a raised object as text, for evidence
 ;;;
 ;;; Each helper comes with its first consumer. chez-curl's (curl-testing) has
@@ -24,7 +26,7 @@
 (library (chez-sqlite3-testing)
   (export suite-exit-form suite-exit-status
           capture-command call-with-temp-directory make-process-temp-directory
-          remove-temp-directory run-until describe)
+          remove-temp-directory run-until gated-command describe)
   (import (rnrs)
           (srfi :64)
           (chez-sqlite3 private counters)
@@ -344,6 +346,41 @@
             ((>= taken max-steps) 'iterations-exhausted)
             (else (step) (loop (+ taken 1))))))
 
+  ;; --- gated-command -------------------------------------------------------
+
+  ;; gated-command : (String -> (U String #f)) (Listof String) -> (Listof String)
+  ;; ARGV, the command of a child that reaches native code, as the memory
+  ;; gate runs it. make test-memory exports CHEZ_SQLITE3_GATE_CHILD to each
+  ;; suite: Valgrind and the gate's own options, a log of the child's own
+  ;; among them (ADR-0005, amended). When GETENV reads it, its words, cut at
+  ;; whitespace as make cuts VALGRIND, come first, so the child runs under the
+  ;; gate and the gate reads its log; when it is unset, ARGV comes back
+  ;; unchanged. Valgrind runs Chez itself: nothing comes between them. A
+  ;; value that holds no word is an assertion violation, since it would run
+  ;; the child outside Valgrind unseen; so is an ARGV that is not a
+  ;; non-empty list of strings. Pure: GETENV is the only input.
+  (define (gated-command getenv argv)
+    (unless (and (pair? argv) (list? argv) (for-all string? argv))
+      (assertion-violation 'gated-command "a command is a non-empty list of strings" argv))
+    (let ((prefix (getenv "CHEZ_SQLITE3_GATE_CHILD")))
+      (if (not prefix)
+          argv
+          (let ((words (whitespace-words prefix)))
+            (when (null? words)
+              (assertion-violation 'gated-command
+                                   "CHEZ_SQLITE3_GATE_CHILD is set but holds no word, so no Valgrind would run the child"
+                                   prefix))
+            (append words argv)))))
+
+  ;; whitespace-words : String -> (Listof String)
+  ;; TEXT cut at each run of spaces, tabs and newlines, empty pieces dropped.
+  (define (whitespace-words text)
+    (let loop ((i 0) (start 0) (found '()))
+      (define (piece) (if (> i start) (cons (substring text start i) found) found))
+      (cond ((= i (string-length text)) (reverse (piece)))
+            ((memv (string-ref text i) '(#\space #\tab #\newline))
+             (loop (+ i 1) (+ i 1) (piece)))
+            (else (loop (+ i 1) start found)))))
 
   ;; --- describe ------------------------------------------------------------
 
