@@ -19,7 +19,7 @@
 ;;; and this suite exits through suite-exit-status, which fails it if any
 ;;; count is left. Each expected value is one the code under test cannot
 ;;; produce by failing: SRFI-64 makes #f of a raise in the actual expression,
-;;; so none is #f, and each refusal is compared, who, message and irritants,
+;;; so none is #f, and each refusal is compared, who and irritants,
 ;;; against a no-raise sentinel.
 (import (rnrs)
         (srfi :64)
@@ -47,19 +47,17 @@
         (newline)))))
 
 ;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
+;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT)
 ;; for any other raise, or (no-raise VALUE).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
             (#t (list 'other (describe e))))
     (list 'no-raise (thunk))))
 
-;; The two refusals' messages, whole, written here and not read from the library.
-(define not-a-size "a block's size is a positive exact integer")
-(define not-live "not a live block")
+;; A refusal is compared by its kind, who and irritants, never its message
+;; text (ADR-0013, decision 9).
 
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 
@@ -117,11 +115,11 @@
   (with-block 16 (lambda (block) (poke! block (iota-from 1 16)) (peek block 16))))
 
 (test-equal "foreign-block refuses a size that is no positive exact integer: 0, -1, 1.5, 8.0, and \"8\" named by its kind, counting nothing"
-  (list (list 'assertion-violation 'foreign-block not-a-size '(0))
-        (list 'assertion-violation 'foreign-block not-a-size '(-1))
-        (list 'assertion-violation 'foreign-block not-a-size '(1.5))
-        (list 'assertion-violation 'foreign-block not-a-size '(8.0))
-        (list 'assertion-violation 'foreign-block not-a-size '((kind string)))
+  (list (list 'assertion-violation 'foreign-block '(0))
+        (list 'assertion-violation 'foreign-block '(-1))
+        (list 'assertion-violation 'foreign-block '(1.5))
+        (list 'assertion-violation 'foreign-block '(8.0))
+        (list 'assertion-violation 'foreign-block '((kind string)))
         zero-counts)
   (let* ((a (raised (lambda () (foreign-block 0))))
          (b (raised (lambda () (foreign-block -1))))
@@ -146,8 +144,8 @@
     (list both one-left none tiny-live (native-counts))))
 
 (test-equal "free-foreign-block! refuses what is no address at all, a symbol as itself and a string by its kind, and counts nothing"
-  (list (list 'assertion-violation 'free-foreign-block! not-live '(x))
-        (list 'assertion-violation 'free-foreign-block! not-live '((kind string)))
+  (list (list 'assertion-violation 'free-foreign-block! '(x))
+        (list 'assertion-violation 'free-foreign-block! '((kind string)))
         zero-counts)
   (let* ((a (raised (lambda () (free-foreign-block! 'x))))
          (b (raised (lambda () (free-foreign-block! "4096")))))
@@ -166,7 +164,7 @@
    "(define (try thunk)\n"
    "  (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)\n"
    "                  (irritants-condition? e))\n"
-   "             (list (condition-who e) (condition-message e)\n"
+   "             (list (condition-who e)\n"
    "                   (if (equal? (condition-irritants e) (list block)) 'that-block (condition-irritants e)))))\n"
    "    (thunk)\n"
    "    'no-raise))\n"
@@ -178,8 +176,8 @@
 (test-equal "free-foreign-block! refuses a dead address, freed already or never allocated, before free runs: in a child Chez, which goes on to print its counts, all zero"
   (list 0
         (string-append
-         "((free-foreign-block! \"" not-live "\" that-block) (free-foreign-block! \"" not-live
-         "\" (4096)) ((block . 0) (connection . 0) (statement . 0)))\n")
+         "((free-foreign-block! that-block) (free-foreign-block! (4096)) "
+         "((block . 0) (connection . 0) (statement . 0)))\n")
         "")
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory

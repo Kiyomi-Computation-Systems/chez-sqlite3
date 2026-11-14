@@ -165,3 +165,9 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
   - **A missing report entry point is `missing-api` with library `#f`,** since the report doesn't
     exist yet. A build with `SQLITE_OMIT_COMPILEOPTION_DIAGS` lacks `sqlite3_compileoption_used`,
     and is refused `missing-api`.
+  - **`foreign-entry?` asks the whole process, not the chosen file** (slice 2's review). A probe
+    loaded one object exporting `xfoo` and `xbar`, then another exporting `xfoo` alone:
+    `(foreign-entry? "xbar")` answered `#t`, and the binding called the first object's. So in a
+    process that already holds another SQLite, a `missing-api` check passes on that SQLite's
+    entry, and native would bind from two libraries. chez-sqlite3 assumes it is the only SQLite
+    a process loads. Slice 3 runs every decoy case in a fresh process.

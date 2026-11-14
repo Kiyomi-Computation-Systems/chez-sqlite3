@@ -25,7 +25,15 @@ newest first.
     `call-with-database` takes its procedure last.
   - **Brief D7 is measured** on macOS 26.7.1 ([research/mac-d7/](research/mac-d7/)). Apple's SQLite
     is 3.51.0, loads from the dyld cache by path, and has no extension loading and no memory count.
-- **Next: M1 slice 1, the pure core.** Slices 1 to 4 are stacked, each branch on the one before.
+- **M1 slice 1, the pure core,** is PR #8, stacked on PR #7: discovery, load-state, the loading
+  conditions, the report and the checks. Reviewed (Opus): the code sound, 17 mutations every suite
+  passed, all now caught.
+- **M1 slice 2, the load and the checks of the FFI,** is on `m1-slice-2-load`, stacked on slice 1:
+  `check-seam`, the constants and their header check, the native load with its C oracle and
+  `make build`, and the convention suite. Reviewed (Opus): no blocker; message-text assertions had
+  come back, and a keyword alias hid a binding from the convention suite. Both fixed, with every
+  surviving mutant rerun; the refusal paths only a decoy can reach are owed to slice 3.
+- **Next: slices 3 and 4,** each stacked on the one before.
 - **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
   `nothreads` is the maintainer's call (ADR-0005, amended).
 

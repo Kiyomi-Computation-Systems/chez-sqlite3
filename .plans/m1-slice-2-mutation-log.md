@@ -153,6 +153,22 @@ six field rows and the compile-option row, exit 1. A missing compiler never skip
 - **N4b, `sqlite3_close` plain:** the convention suite's.
 - **The copy made before the check** in `call-with-c-string` was not mutated. Seeing it needs another
   thread to change the string between a check and an encoding.
+- **Refusal paths one good library never reaches**, found by the adversarial review (R5 to R7, and the
+  paths it named beside them). Each is owed to M1 slice 3's decoy, which drives them by behaviour:
+  - **R5, `initialize`'s answer unchecked:** `(unless (eqv? code 0)` read `(unless #t`. 44 passed.
+  - **R6, the NULL-libversion refusal dropped:** `(or (c-string->string (raw-libversion)) (answered-null ...))`
+    read `(c-string->string (raw-libversion))`. 44 passed.
+  - **R7, `missing-api` always with library `#f`:** `required-entry` raising with `#f` where it was given
+    the report. 44 passed.
+  - **The loader's `load-failed`**, from `load-shared-object` refusing a path: no suite loads a bad file.
+  - **Step 0's re-raise** of a failure an earlier run of the body recorded: it needs a second reference to
+    a body that raised, in one process, which a good library never gives. The suite reads that step's
+    shape as data, and no more.
+  - **`invalid-override` and `not-found` through native:** `test-discovery` holds the choice, and
+    native's use of it is a `call-with-values` the load-steps row reads as data.
+  - **`not-threadsafe` at the call site:** `check-threadsafe` is `test-verify`'s, and that the call site
+    passes the one answer `loaded-threadsafe` gives is held as data (the load-steps row and the
+    `loaded-threadsafe` row), not by a refusal.
 
 ## The final runs
 
@@ -241,3 +257,78 @@ table with one row changed in turn, so any real fault in `src/` or the table bre
 - **A Chez type a later Chez adds** is outside the complement list until someone adds it. The suite
   asks Chez 10.4 that each listed type is accepted, so the list can't hold a type this Chez lacks, but
   it can't enumerate one it lacks a name for.
+
+## The review's fixes
+
+An adversarial review of this slice found its test findings, and these are the fixes. Each reviewer
+mutant ran again, in a copy of the fixed tree under
+`/tmp/claude-1000/-home-kishu-src-chez-sqlite3/2a34ce20-2ac8-4a34-9128-3ab6746e1074/scratchpad/s2-fix/`
+(`R1` to `R11`, `N11`, `N16`; each has its `.old`, `.new` and `.log`, and `R11` and `R10` are built by a
+script and have their own copy only), through that copy's `scripts/guix-env`, on the suites named.
+Counts are read from the outputs. The reviewer's copies, with the "before" logs, are in `s2-review/`.
+Unmutated, after the fixes: `test-native` 44, `test-blocks` 8, `test-conventions` 40 (before: 43, 8, 34).
+
+### The fixes
+
+- **Messages are never asserted** (ADR-0013, decision 9). `test-native` and `test-blocks` compare a
+  refusal by its kind, who and irritants. The six messages of `test-native` and the two of `test-blocks`
+  are gone, the dead-address child's expected output included: it prints who and irritants only. No row
+  lost its power: every refusal in them already differed by who or by irritants (the NUL refusal's
+  `((kind string))` from `call-with-c-string`'s own who; a re-entry's `()` from every other; `c-string->string`'s
+  three by their irritants `x`, `-1`, `1.5`; the two `foreign-block` and two `free-foreign-block!` ones by
+  who and irritants).
+- **A keyword alias hides a binding.** `tests/foreign-conventions.sls` counts every occurrence of the
+  symbol `foreign-procedure` in each file, quoted or not, and allows three: the head of a form it reads,
+  the one `(only (chezscheme) ...)` import entry, and the one `(syntax foreign-procedure)` in a fender of
+  `bind-required`'s `syntax-case`. Each other is a `(stray-reference FILE)`, and `violations` lists them
+  after the per-form violations. Six new fixtures: `stray-alias`, `stray-define`, `stray-quoted`,
+  `stray-syntax` (a second mention in the fender), `stray-other-macro` (the mention in another macro's
+  fender), and `permitted` (the three allowed places, no violation); and the `decoys` fixture now names
+  three strays, the syntax mention outside `bind-required`, the quoted symbol and a list's last element.
+- **Step names.** The load-steps row's data reads the report's `libsqlite3-info-version` and
+  `libsqlite3-info-version-number` too, so a floor check fed a constant changes a row. A new row holds
+  `loaded-threadsafe`'s body to the threadsafe step's variable, found as the step whose expression is
+  `(raw-threadsafe)`.
+- **Top-level code.** `code-of` answers `(no-code NAME)` under a `guard`, so `ok`, `cantopen` and `ioerr`
+  cannot end the suite unnamed.
+- **Two rows that relied on malloc's reuse.** The NUL-written row and the zeroed-slot row take the
+  address of the block they free, and assert that the new block is at it. Where it is not (Valgrind never
+  reuses a block at once) the row prints `UNAVAILABLE`, its name and why, and is skipped with `test-skip`:
+  a skip is its own result, and `suite-exit-status` counts it neither way. It is never a pass.
+- **`constants.sls`** begins `#!r6rs`.
+
+### The mutants
+
+| Mutant | Before | After |
+|---|---|---|
+| R1: `loaded-threadsafe` answers 1 | `test-native` 43 passed | `test-native` 43 passed, 1 failed: the `loaded-threadsafe` row |
+| R2: `(define-syntax fp (identifier-syntax foreign-procedure))` and a binding through it | `test-conventions` 34, `test-native` 43, `check-seam` holds: all pass | `test-conventions` 33 passed, 7 failed: `src: no violation`, `actual: ((stray-reference "chez-sqlite3/private/native.sls"))`, and the six sweeps. `test-native` 44 and `check-seam` (10 libraries) still pass: the convention suite is the rule's |
+| R3: the NUL message reworded | `test-native` 7 failed (the seven U+0000 rows) | `test-native` 44 passed |
+| R4: the floor check fed `3045001` | `test-native` 43 passed | `test-native` 43 passed, 1 failed: the load-steps row |
+| R5: `initialize`'s answer unchecked | passes | passes: owed to slice 3 (above) |
+| R6: the NULL-libversion refusal dropped | passes | passes: owed to slice 3 |
+| R7: `missing-api` always with library `#f` | passes | passes: owed to slice 3 |
+| R8: `cantopen` renamed `cant-open` in constants | `test-native` died, `Exception in cdr: #f is not a pair`, exit 255, no row named | `test-native` 43 passed, 1 failed: the missing-directory open row, `actual: (raised "Exception in sqlite3_errstr: invalid foreign-procedure argument (no-code cantopen)")`. `test-constants` 35 passed, 4 failed (the header rows) |
+| R9: `foreign-free` dropped from `free-foreign-block!` | `test-blocks` 8, `test-native` 43 passed | `test-blocks` 8 passed, `test-native` 42 passed with the two reuse rows skipped (the block is never freed, so it is never handed back). A block never freed is the memory gate's to see; this mutant was not run under it |
+| R10: `critical-section` around the blocked open, in the test | not rebuilt by the reviewer's log | `test-native` 44 passed: P3 (above) found the call safe in a critical section; not a defect |
+| R10b: `sqlite3_open_v2` plain | `test-native` 1 failed, the FIFO row (LN4) | `test-native` 43 passed, 1 failed: the FIFO row. `test-conventions` 33 passed, 7 failed: `src: no violation` and six sweeps |
+| R11: every assertion message reworded (nine) | `test-native` 12 failed, `test-blocks` 3 failed | `test-native` 44, `test-blocks` 8 and `test-conventions` 40 passed |
+| N11: the out-pointer not zeroed | `test-native` 1 failed | `test-native` 43 passed, 1 failed: the zeroed-slot row, on Linux where the reuse holds |
+| N16: the NUL not written | `test-native` 4 failed | `test-native` 40 passed, 4 failed: the same four, the NUL-written row among them |
+
+### The checks of the logs
+
+- **The seam log's final run** said 8 suites and 2 libraries in 2 files. A copy of `857df95` (its
+  `git archive`, with `vendor/chez-srfi` copied in), run on 2026-11-14 through `scripts/guix-env`:
+  `make test` ran 13, passed 13; `check-seam: the seam holds (7 libraries in 7 files checked)`;
+  `test-check-seam` 67; `make check-test-fails` all 12 cases. The seam log's line is corrected.
+- **The constants log**, one row, in a copy of `d4be824`: the unmutated `test-constants` passes 30
+  (the 3.53.1 header, the subset note printed), and C1, `ioerr-short-read` 523, passes 26 and fails 4:
+  the values row, the unique-values row, the extended-code row and the name-of-code row. As logged.
+
+### The final runs
+
+- **`make test`:** ran 17, passed 17. `test-native` 44, `test-blocks` 8, `test-conventions` 40; every other
+  suite unchanged. `check-seam: the seam holds (10 libraries in 10 files checked)`.
+- **`make check-test-fails`:** `make test failed, as it must, in all 12 cases`.
+- **`make test-memory`:** ran 17, passed 17. `test-native` passed 42 under Valgrind: 0 errors from 0 contexts, 0 bytes definitely lost, 15,256 bytes in 11 blocks still reachable, as before. Its two reuse rows printed `UNAVAILABLE` and were skipped, as they must be where Valgrind never hands back the block just freed. `test-blocks` 8, 0 errors, 224 bytes in 4 blocks.

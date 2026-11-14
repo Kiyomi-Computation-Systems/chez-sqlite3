@@ -24,7 +24,10 @@ mutation. The counts below are read from the outputs.
   6 cases run the variant program), the directory-of-cases row, 8 rows of the exact lists, 10 generated
   runs (the two complements, the positions, the two matrices), 2 empty and missing directory rows, 2
   usage rows, and 2 setup rows. The chez-curl fixtures that were dropped are named in the copy table.
-- **`make test`:** 8 suites passed, `check-seam: the seam holds (2 libraries in 2 files checked)`.
+- **`make test`:** 13 suites passed, `check-seam: the seam holds (7 libraries in 7 files checked)`.
+  Corrected on 2026-11-14 from a rerun in a copy of `857df95`, its `git archive` with `vendor/chez-srfi`
+  copied in, through `scripts/guix-env`: the line first said 8 suites and 2 libraries in 2 files, which
+  that tree does not give. `test-check-seam` still passes 67 there.
 - **`make check-test-fails`:** `make test failed, as it must, in all 12 cases`, the new `seam` case
   among them.
 

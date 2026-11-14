@@ -15,7 +15,9 @@
 ;;;   scan-tree            every foreign-procedure form under a directory,
 ;;;                        read as data, each with the library it sits in
 ;;;   violations           the scan held against a table: what a suite
-;;;                        asserts is empty
+;;;                        asserts is empty. It also names every other
+;;;                        occurrence of the symbol foreign-procedure, as a
+;;;                        stray-reference
 ;;;
 ;;; The reader evaluates nothing and fails closed. It reads every .sls under
 ;;; the directory as data, so a comment or a string holding the words is no
@@ -24,6 +26,14 @@
 ;;; foreign-procedure among its names both begin with the symbol, and neither
 ;;; is a form. A form is read from its end: the result type, the argument
 ;;; types, the entry name, and whatever precedes the entry is its convention.
+;;;
+;;; A binding can hide behind a name for the keyword: (define-syntax fp
+;;; (identifier-syntax foreign-procedure)) binds nothing the scan reads. So the
+;;; scan also counts every occurrence of the symbol in a file, quoted or not,
+;;; and allows three: the head of a form it reads; the entry of a library's
+;;; (import (only (chezscheme) ...)) clause; and the one (syntax
+;;; foreign-procedure) in a fender of (define-syntax bind-required ...)'s
+;;; syntax-case. Each other is a (stray-reference FILE).
 (library (foreign-conventions)
   (export conventions-table
           row-name row-prototype row-arguments row-result row-convention row-records
@@ -146,6 +156,85 @@
           ((vector? x) (foreign-forms (vector->list x)))
           (else '())))
 
+  ;; symbol-count : Any -> Natural
+  ;; Every occurrence of the symbol foreign-procedure in X, in any position:
+  ;; head, element, improper tail, quoted, in a vector.
+  (define (symbol-count x)
+    (cond ((eq? x 'foreign-procedure) 1)
+          ((pair? x) (+ (symbol-count (car x)) (symbol-count (cdr x))))
+          ((vector? x) (symbol-count (vector->list x)))
+          (else 0)))
+
+  ;; forms-headed : Symbol Any -> (Listof Pair)
+  ;; Every list headed by HEAD in X, in reading order, none looked for inside
+  ;; another; as foreign-forms, for any symbol.
+  (define (forms-headed head x)
+    (cond ((and (pair? x) (eq? (car x) head)) (list x))
+          ((pair? x)
+           (let loop ((rest x) (found '()))
+             (if (pair? rest)
+                 (loop (cdr rest) (append found (forms-headed head (car rest))))
+                 found)))
+          (else '())))
+
+  ;; has-subform? : Any Any -> Boolean
+  ;; Whether FORM is X, or an element of X, or of an element of it, and so on:
+  ;; never a tail.
+  (define (has-subform? form x)
+    (or (equal? x form)
+        (and (pair? x)
+             (let loop ((rest x))
+               (and (pair? rest)
+                    (or (has-subform? form (car rest)) (loop (cdr rest))))))))
+
+  ;; import-allowance : Any -> (U 0 1)
+  ;; 1 when DATUM is an (import ...), or a library holding one, with an
+  ;; (only (chezscheme) ... foreign-procedure ...) clause.
+  (define (import-allowance datum)
+    (define (clause-names? c)
+      (and (list? c) (>= (length c) 2) (eq? (car c) 'only) (equal? (cadr c) '(chezscheme))
+           (memq 'foreign-procedure (cddr c))
+           #t))
+    (define (import-names? f)
+      (and (pair? f) (list? f) (eq? (car f) 'import) (exists clause-names? (cdr f))))
+    (cond ((import-names? datum) 1)
+          ((and (pair? datum) (list? datum) (eq? (car datum) 'library)
+                (exists import-names? (cdr datum)))
+           1)
+          (else 0)))
+
+  ;; fender-allowance : Any -> (U 0 1)
+  ;; 1 when DATUM is a library holding (define-syntax bind-required ...) with
+  ;; a syntax-case clause (PATTERN FENDER TEMPLATE) whose FENDER holds
+  ;; (syntax foreign-procedure).
+  (define (fender-allowance datum)
+    (define (fender-has-syntax? clause)
+      (and (list? clause) (= (length clause) 3)
+           (has-subform? '(syntax foreign-procedure) (cadr clause))))
+    (define (case-has-fender? form)
+      (and (list? form) (>= (length form) 3) (exists fender-has-syntax? (cdddr form))))
+    (define (binder? e)
+      (and (pair? e) (list? e) (>= (length e) 3) (eq? (car e) 'define-syntax)
+           (eq? (cadr e) 'bind-required)
+           (exists case-has-fender? (forms-headed 'syntax-case e))))
+    (if (and (pair? datum) (list? datum) (eq? (car datum) 'library) (exists binder? (cdr datum)))
+        1
+        0))
+
+  ;; stray-references : String (Listof Any) -> (Listof (List 'stray-reference String))
+  ;; One (stray-reference FILE) for each occurrence of foreign-procedure in
+  ;; the data of FILE that is not the head of a form foreign-forms reads, the
+  ;; one import entry, or the one fender mention.
+  (define (stray-references file data)
+    (let* ((total (apply + (map symbol-count data)))
+           (heads (apply + (map (lambda (d) (length (foreign-forms d))) data)))
+           (imports (min 1 (apply + (map import-allowance data))))
+           (fenders (min 1 (apply + (map fender-allowance data)))))
+      (let loop ((n (- total heads imports fenders)) (found '()))
+        (if (<= n 0)
+            found
+            (loop (- n 1) (cons (list 'stray-reference file) found))))))
+
   ;; source-files : String String -> (Listof String)
   ;; The paths, relative to ROOT and sorted, of every .sls under ROOT/DIR.
   (define (source-files root dir)
@@ -186,6 +275,15 @@
                                            (foreign-forms datum)))
                                     data))
                         (list (list 'unreadable file)))))
+                (source-files root ""))))
+
+  ;; scan-strays : String -> (Listof (List 'stray-reference String))
+  ;; Every stray-reference in every readable .sls under ROOT, in file order.
+  (define (scan-strays root)
+    (apply append
+           (map (lambda (file)
+                  (let ((data (read-data (string-append root "/" file))))
+                    (if data (stray-references file data) '())))
                 (source-files root ""))))
 
   ;; --- the checks ---------------------------------------------------------------------
@@ -272,9 +370,10 @@
   ;; What is wrong between the forms under ROOT and TABLE, each one named, in
   ;; this order: per file and form, a form outside native, an entry or type
   ;; lists that are not literal, a type outside the allowlists, a form with no
-  ;; row, and a mismatch of convention, arguments or result; then each C name
-  ;; bound twice; then each row with no form; and (unreadable FILE) where a
-  ;; file could not be read. Empty when all is as the table says.
+  ;; row, and a mismatch of convention, arguments or result; then each
+  ;; (stray-reference FILE), one for each other occurrence of the symbol
+  ;; foreign-procedure; then each C name bound twice; then each row with no
+  ;; form; and (unreadable FILE) where a file could not be read. Empty when all is as the table says.
   (define (violations root table)
     (let* ((items (scan-tree root))
            (entries (bound-entries items)))
@@ -285,6 +384,7 @@
                          (form-violations (cadr item) (caddr item) (cadddr item) table)
                          (list item)))
                    items))
+       (scan-strays root)
        (let loop ((rest entries) (seen '()) (found '()))
          (cond ((null? rest) (reverse found))
                ((member (car rest) seen)

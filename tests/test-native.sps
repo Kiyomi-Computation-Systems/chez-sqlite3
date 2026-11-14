@@ -145,13 +145,12 @@
           (loop (cdr items) (cons answer found))))))
 
 ;; raised : (-> Any) -> Any
-;; What THUNK raised: (assertion-violation WHO MESSAGE IRRITANTS), (other TEXT)
+;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT)
 ;; for any other raise, or (no-raise VALUE).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
             (#t (list 'other (describe e))))
     (list 'no-raise (thunk))))
 
@@ -179,10 +178,14 @@
       (lambda () (proc block))
       (lambda () (free-foreign-block! block)))))
 
-;; code-of : Symbol -> Integer
+;; code-of : Symbol -> (U Integer (List 'no-code Symbol))
 ;; A result code's value, from (chez-sqlite3 private constants), which
-;; tests/test-constants.sps holds to sqlite3.h.
-(define (code-of name) (cdr (assq name sqlite-result-codes)))
+;; tests/test-constants.sps holds to sqlite3.h. A name the table lacks is a
+;; sentinel no row's expected value matches, so the rows that use it fail by
+;; name where a raise in a top-level definition would end the suite unnamed.
+(define (code-of name)
+  (guard (e (#t (list 'no-code name)))
+    (cdr (assq name sqlite-result-codes))))
 
 (define ok (code-of 'ok))
 (define cantopen (code-of 'cantopen))
@@ -192,13 +195,8 @@
 (define (sorted-names names)
   (list-sort (lambda (a b) (string<? (symbol->string a) (symbol->string b))) names))
 
-;; The refusals' messages, whole, written here and not read from the library.
-(define nul-message "a string C reads ends at its first NUL, and this one holds U+0000")
-(define not-a-string "not a string")
-(define not-a-procedure "not a procedure")
-(define not-a-who "a who is a symbol")
-(define reentered "re-entered after its block was freed")
-(define not-an-address "an address is an exact non-negative integer")
+;; A refusal is compared by its kind, who and irritants, never its message
+;; text (ADR-0013, decision 9).
 
 ;; --- what this suite chose, and what the oracle read there -------------------------------------
 
@@ -417,8 +415,7 @@
 (define (c-bytes string)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
-             (list 'assertion-violation (condition-who e) (condition-message e)
-                   (condition-irritants e)))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
             (#t (list 'other (describe e))))
     (call-with-c-string 'open-database string
       (lambda (address)
@@ -464,7 +461,7 @@
    (test-equal (string-append "call-with-c-string refuses "
                               (call-with-string-output-port (lambda (p) (write string p)))
                               " as an assertion violation from its WHO, naming it by its kind, with nothing allocated at the raise, and PROC not run")
-     (list (list (list 'assertion-violation 'open-database nul-message '((kind string)))
+     (list (list (list 'assertion-violation 'open-database '((kind string)))
                  zero-counts)
            'proc-not-run zero-counts)
      (let* ((ran #f)
@@ -474,8 +471,7 @@
                          (lambda (e)
                            (if (and (assertion-violation? e) (who-condition? e)
                                     (message-condition? e) (irritants-condition? e))
-                               (list 'assertion-violation (condition-who e) (condition-message e)
-                                     (condition-irritants e))
+                               (list 'assertion-violation (condition-who e) (condition-irritants e))
                                (list 'other (describe e)))))))
        (list r (if ran 'proc-ran 'proc-not-run) (native-counts)))))
  '("\x0;abc" "a\x0;b" "abc\x0;" "\x0;" "\xE9;\x0;\x3BB;" "\x1F600;\x0;" "\x20AC;\x0;"))
@@ -495,20 +491,45 @@
 ;; The NUL is written, not found: the block call-with-c-string makes for a
 ;; 39-byte string is 40 bytes, and malloc's last one freed, of that size,
 ;; was filled with #xFF first, so a copy that left the NUL out leaves #xFF
-;; where it belongs. Valgrind, which never reuses a block at once, calls a
-;; NUL left unwritten an uninitialised read.
-(test-equal "call-with-c-string writes the NUL itself: a fresh block that held #xFF reads the string's bytes, then 0"
-  (append (bytevector->u8-list (string->utf8 "abcdefghijklmnopqrstuvwxyz0123456789ABC")) '(0))
+;; where it belongs. The row needs that very block back, and glibc hands it
+;; back; so the row asserts the address, and where the block is a different
+;; one (Valgrind never reuses a block at once, and calls a NUL left unwritten
+;; an uninitialised read itself) it is skipped, named, with a line saying why.
+(define nul-row-name "call-with-c-string writes the NUL itself: a fresh block that held #xFF reads the string's bytes, then 0")
+
+(define nul-row-run
   (guard (e (#t (list 'raised (describe e))))
-    (with-block 40 (lambda (block) (poke! block (make-list-of 40 #xFF))))
-    (call-with-c-string 'open-database "abcdefghijklmnopqrstuvwxyz0123456789ABC"
-      (lambda (address) (peek address 40)))))
+    (let ((freed (with-block 40 (lambda (block) (poke! block (make-list-of 40 #xFF)) block))))
+      (call-with-c-string 'open-database "abcdefghijklmnopqrstuvwxyz0123456789ABC"
+        (lambda (address) (list 'ran (eqv? address freed) (peek address 40)))))))
+
+;; reuse-unavailable? : Any -> Boolean
+;; Whether a run completed on a block that is not the one just freed.
+(define (reuse-unavailable? run)
+  (and (pair? run) (eq? (car run) 'ran) (pair? (cdr run)) (not (cadr run))))
+
+;; skip-unavailable! : String Any -> Void
+;; When RUN is reuse-unavailable?, say so by NAME and skip the test of that
+;; name that follows: a skip is its own result, never a pass.
+(define (skip-unavailable! name run)
+  (when (reuse-unavailable? run)
+    (display "UNAVAILABLE ")
+    (display name)
+    (display ": malloc did not hand back the block just freed")
+    (newline)
+    (test-skip name)))
+
+(skip-unavailable! nul-row-name nul-row-run)
+(test-equal nul-row-name
+  (list 'ran #t
+        (append (bytevector->u8-list (string->utf8 "abcdefghijklmnopqrstuvwxyz0123456789ABC")) '(0)))
+  nul-row-run)
 
 (test-equal "c-string->string answers #f for NULL, compared as the symbol null, and refuses what is no address"
   (list 'null
-        (list 'assertion-violation 'c-string->string not-an-address '(x))
-        (list 'assertion-violation 'c-string->string not-an-address '(-1))
-        (list 'assertion-violation 'c-string->string not-an-address '(1.5)))
+        (list 'assertion-violation 'c-string->string '(x))
+        (list 'assertion-violation 'c-string->string '(-1))
+        (list 'assertion-violation 'c-string->string '(1.5)))
   (let* ((null (guard (e (#t (list 'raised (describe e))))
                  (let ((r (c-string->string 0))) (if (eq? r #f) 'null r))))
          (a (raised (lambda () (c-string->string 'x))))
@@ -532,12 +553,11 @@
     (list r (native-counts))))
 
 (test-equal "call-with-c-string: re-entering PROC through a continuation, once the block is freed, raises from its WHO, and PROC runs once"
-  (list (list 'assertion-violation 'open-database reentered '()) 1 zero-counts)
+  (list (list 'assertion-violation 'open-database '()) 1 zero-counts)
   (let ((k #f) (runs 0))
     (let ((r (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                              (irritants-condition? e))
-                        (list 'assertion-violation (condition-who e) (condition-message e)
-                              (condition-irritants e)))
+                        (list 'assertion-violation (condition-who e) (condition-irritants e)))
                        (#t (list 'other (describe e))))
                (call-with-c-string 'open-database "abc"
                  (lambda (address)
@@ -547,10 +567,10 @@
       (list r runs (native-counts)))))
 
 (test-equal "call-with-c-string refuses what is no string and a PROC that is no procedure, from its WHO, and a WHO that is no symbol, from itself, each by shown-value"
-  (list (list 'assertion-violation 'open-database not-a-string '(abc))
-        (list 'assertion-violation 'open-database not-a-procedure '(not-a-procedure))
-        (list 'assertion-violation 'open-database not-a-string '((kind list)))
-        (list 'assertion-violation 'call-with-c-string not-a-who '((kind string)))
+  (list (list 'assertion-violation 'open-database '(abc))
+        (list 'assertion-violation 'open-database '(not-a-procedure))
+        (list 'assertion-violation 'open-database '((kind list)))
+        (list 'assertion-violation 'call-with-c-string '((kind string)))
         zero-counts)
   (let* ((a (raised (lambda () (call-with-c-string 'open-database 'abc (lambda (address) address)))))
          (b (raised (lambda () (call-with-c-string 'open-database "abc" 'not-a-procedure))))
@@ -571,15 +591,28 @@
       (list answer pointer (native-counts)))))
 
 ;; The slot is zeroed, not found zero: malloc's last block freed of a
-;; pointer's size held #xFF, so a slot left unwritten reads all ones.
-(test-equal "call-with-out-pointer zeroes the slot first: a PROC that writes nothing reads 0, on a fresh block that held #xFF"
-  (list 'wrote-nothing 0)
+;; pointer's size held #xFF, so a slot left unwritten reads all ones. As for
+;; the NUL, the row needs that block back, asserts it, and is skipped, named,
+;; where it is another.
+(define zero-row-name "call-with-out-pointer zeroes the slot first: a PROC that writes nothing reads 0, on a fresh block that held #xFF")
+
+(define zero-row-run
   (guard (e (#t (list 'raised (describe e))))
-    (with-block (foreign-sizeof 'uptr)
-                (lambda (block) (poke! block (make-list-of (foreign-sizeof 'uptr) #xFF))))
-    (call-with-values
-     (lambda () (call-with-out-pointer 'open-database (lambda (slot) 'wrote-nothing)))
-     list)))
+    (let ((freed (with-block (foreign-sizeof 'uptr)
+                             (lambda (block)
+                               (poke! block (make-list-of (foreign-sizeof 'uptr) #xFF))
+                               block)))
+          (reused 'unset))
+      (call-with-values
+       (lambda ()
+         (call-with-out-pointer 'open-database
+           (lambda (slot) (set! reused (eqv? slot freed)) 'wrote-nothing)))
+       (lambda (answer pointer) (list 'ran reused answer pointer))))))
+
+(skip-unavailable! zero-row-name zero-row-run)
+(test-equal zero-row-name
+  (list 'ran #t 'wrote-nothing 0)
+  zero-row-run)
 
 (test-equal "call-with-out-pointer: a raise from PROC frees the slot, and reaches the caller; so does an escape"
   (list 'proc-raised 'escaped zero-counts)
@@ -593,12 +626,11 @@
     (list a b (native-counts))))
 
 (test-equal "call-with-out-pointer: re-entering PROC through a continuation, once the slot is freed, raises from its WHO, and PROC runs once"
-  (list (list 'assertion-violation 'open-database reentered '()) 1 zero-counts)
+  (list (list 'assertion-violation 'open-database '()) 1 zero-counts)
   (let ((k #f) (runs 0))
     (let ((r (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                              (irritants-condition? e))
-                        (list 'assertion-violation (condition-who e) (condition-message e)
-                              (condition-irritants e)))
+                        (list 'assertion-violation (condition-who e) (condition-irritants e)))
                        (#t (list 'other (describe e))))
                (call-with-out-pointer 'open-database
                  (lambda (slot)
@@ -608,8 +640,8 @@
       (list r runs (native-counts)))))
 
 (test-equal "call-with-out-pointer refuses a PROC that is no procedure, from its WHO, and a WHO that is no symbol, from itself"
-  (list (list 'assertion-violation 'open-database not-a-procedure '(not-a-procedure))
-        (list 'assertion-violation 'call-with-out-pointer not-a-who '(42))
+  (list (list 'assertion-violation 'open-database '(not-a-procedure))
+        (list 'assertion-violation 'call-with-out-pointer '(42))
         zero-counts)
   (let* ((a (raised (lambda () (call-with-out-pointer 'open-database 'not-a-procedure))))
          (b (raised (lambda () (call-with-out-pointer 42 (lambda (slot) slot))))))
@@ -685,10 +717,11 @@
 
 ;; step-names : (Listof Symbol)
 ;; The load's own names a step's expression may use: its bindings of the
-;; report's three, of threadsafe and of initialize, the threadsafe answer, and
-;; the report.
+;; report's three, of threadsafe and of initialize, the threadsafe answer, the
+;; report, and the report's version and number accessors.
 (define step-names
-  '(raw-libversion-number raw-libversion raw-sourceid raw-threadsafe raw-initialize threadsafe report))
+  '(raw-libversion-number raw-libversion raw-sourceid raw-threadsafe raw-initialize threadsafe report
+    libsqlite3-info-version libsqlite3-info-version-number))
 
 ;; The load's steps, in order: each top-level load-step definition's name, the
 ;; head of what it runs, and which of step-names that uses, so a step whose
@@ -701,7 +734,7 @@
     (raw-libversion bind-required)
     (raw-sourceid bind-required)
     (report let* raw-libversion-number raw-libversion raw-sourceid)
-    (version-checked check-version report)
+    (version-checked check-version report libsqlite3-info-version libsqlite3-info-version-number)
     (raw-threadsafe bind-required report)
     (threadsafe raw-threadsafe raw-threadsafe)
     (threadsafe-checked check-threadsafe threadsafe report)
@@ -730,6 +763,32 @@
                                        (filter (lambda (name) (occurs? name expr)) step-names))
                                 found))
                         found)))))
+      native-body))
+
+;; step-named : Any -> Any
+;; The name of the load step whose expression is EXPR, or no-step.
+(define (step-named expr)
+  (let loop ((forms native-body))
+    (cond ((null? forms) 'no-step)
+          ((let ((step (load-step-of (car forms)))) (and step (equal? (cadr step) expr)))
+           (cadr (car forms)))
+          (else (loop (cdr forms))))))
+
+;; reader-body : Symbol -> Any
+;; The body of native's (define (NAME) BODY), or no-reader.
+(define (reader-body name)
+  (let loop ((forms native-body))
+    (cond ((null? forms) 'no-reader)
+          ((let ((form (car forms)))
+             (and (list? form) (= (length form) 3) (eq? (car form) 'define)
+                  (pair? (cadr form)) (null? (cdr (cadr form))) (eq? (car (cadr form)) name)))
+           (caddr (car forms)))
+          (else (loop (cdr forms))))))
+
+(test-equal "loaded-threadsafe answers the variable of the threadsafe step, the one check-threadsafe was given, and no constant"
+  '(threadsafe threadsafe)
+  (if body-read?
+      (list (step-named '(raw-threadsafe)) (reader-body 'loaded-threadsafe))
       native-body))
 
 (test-equal "native's first definition is step 0, earlier-failure, which raises a recorded load-failure again"

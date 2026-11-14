@@ -15,7 +15,9 @@
 ;;;                  lists that are not literal, a plain open or close, a
 ;;;                  collect-safe anything else, a form with no row, a row
 ;;;                  with no form, a C name bound twice, a file that cannot be
-;;;                  read, and words that are no form
+;;;                  read, words that are no form, and the symbol
+;;;                  foreign-procedure anywhere but a form's head, the import
+;;;                  entry and bind-required's fender: a stray reference
 ;;;   sweeps         each row of the table, changed in each field in turn,
 ;;;                  held against the real src/; each row removed in turn
 ;;;   the allowlist  against its whole complement: every type Chez 10.4
@@ -258,12 +260,39 @@
 
 ;; --- fixtures -------------------------------------------------------------------------------
 
-(test-equal "fixture decoys: the word foreign-procedure in a comment, a string, a quoted symbol, #'foreign-procedure, an import, and the tail of a list is no form; three real forms are, one nested in a let and a lambda, one in a vector"
-  '(3 ())
+(test-equal "fixture decoys: the word foreign-procedure in a comment, a string, #'foreign-procedure outside bind-required, a quoted symbol, the tail of a list and an import is no form; three real forms are, one nested in a let and a lambda, one in a vector; and the three uses that are no form, the syntax mention, the quoted symbol and the list's last element, are stray references, the import's entry not"
+  `(3 ((stray-reference ,native-file) (stray-reference ,native-file) (stray-reference ,native-file)))
   (let ((items (checked (lambda () (scan-tree (string-append fixtures "/decoys"))))))
     (list (if (list? items) (length items) items)
           (found-in "decoys"
                     (rows-named '("sqlite3_open_v2" "sqlite3_errstr" "sqlite3_memory_used"))))))
+
+;; A stray reference: the symbol where no form is headed by it, so that the
+;; bindings it could make are unseen. Each fixture is the one fault it names,
+;; with no row to answer for a binding.
+(test-equal "fixture stray-alias: a keyword alias, (define-syntax fp (identifier-syntax foreign-procedure)), and a binding through it, fail, by file"
+  `((stray-reference ,native-file))
+  (found-in "stray-alias" '()))
+
+(test-equal "fixture stray-define: (define fp foreign-procedure) fails, by file"
+  `((stray-reference ,native-file))
+  (found-in "stray-define" '()))
+
+(test-equal "fixture stray-quoted: the symbol in a quoted list fails, by file"
+  `((stray-reference ,native-file))
+  (found-in "stray-quoted" '()))
+
+(test-equal "fixture stray-syntax: a second (syntax foreign-procedure), in bind-required's fender, fails; the first, the import entry and the form's head do not"
+  `((stray-reference ,native-file))
+  (found-in "stray-syntax" (rows-named '("sqlite3_errcode"))))
+
+(test-equal "fixture stray-other-macro: a (syntax foreign-procedure) in the fender of a macro that is not bind-required fails"
+  `((stray-reference ,native-file))
+  (found-in "stray-other-macro" (rows-named '("sqlite3_errcode"))))
+
+(test-equal "fixture permitted: the import entry, bind-required's one fender mention and a form's head are all there is, and nothing fails"
+  '()
+  (found-in "permitted" (rows-named '("sqlite3_errcode"))))
 
 (test-equal "fixture plain-open: sqlite3_open_v2 bound plain fails, by name"
   '((mismatch "sqlite3_open_v2" convention collect-safe plain))

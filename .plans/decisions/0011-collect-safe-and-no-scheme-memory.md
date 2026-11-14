@@ -94,5 +94,5 @@
 - **The convention table, as built** (`tests/foreign-conventions.sls`): one row per binding, with
   its C prototype in `sqlite3.h`'s spelling beside decision 6's fields, citing ADR-0002's amendment
   where the row is a required entry point. `test-conventions` holds every form under `src/` to it,
-  with the type allowlist tested against the 50 types Chez 10.4 accepts, and `test-constants`
+  with the type allowlist tested against the 54 type forms Chez 10.4 accepts, and `test-constants`
   checks each row's prototype against the header through `_Generic`.
