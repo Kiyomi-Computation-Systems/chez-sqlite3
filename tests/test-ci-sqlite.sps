@@ -510,21 +510,25 @@
 (define (check-row name spec expected-of)
   (test-equal (string-append "check-sqlite.sh: " name)
     '(returned same)
-    (outcome
-     (lambda ()
-       (with-tree (spec-ref spec 'floors)
-         (lambda (root)
-           (let* ((prefix (string-append root "/prefix"))
-                  (made (make-prefix! root prefix spec)))
-             (if (not (eqv? made 0))
-                 (list 'setup made)
-                 (let* ((got (capture-command
-                              (append (list "env")
-                                      (env-order ((spec-ref spec 'env) root prefix))
-                                      (list "sh" (string-append root "/scripts/ci/check-sqlite.sh"))
-                                      ((spec-ref spec 'args) root prefix))))
-                        (want (expected-of root prefix)))
-                   (if (matches? got want) 'same (list 'got got 'want want)))))))))))
+    (outcome (lambda () (check-run spec expected-of)))))
+
+;; check-run : Spec (String String -> Expected) -> (U 'same (List ...))
+;; What check-row asserts, unguarded: its caller guards it, so that a raise in
+;; building SPEC, which a caller may leave to this call, fails the row.
+(define (check-run spec expected-of)
+  (with-tree (spec-ref spec 'floors)
+    (lambda (root)
+      (let* ((prefix (string-append root "/prefix"))
+             (made (make-prefix! root prefix spec)))
+        (if (not (eqv? made 0))
+            (list 'setup made)
+            (let* ((got (capture-command
+                         (append (list "env")
+                                 (env-order ((spec-ref spec 'env) root prefix))
+                                 (list "sh" (string-append root "/scripts/ci/check-sqlite.sh"))
+                                 ((spec-ref spec 'args) root prefix))))
+                   (want (expected-of root prefix)))
+              (if (matches? got want) 'same (list 'got got 'want want))))))))
 
 ;; --- check-sqlite.sh: what it answers, written by hand ---------------------------------------
 
@@ -533,6 +537,11 @@
 
 ;; passes : String String Natural String String (Listof String) -> Expected
 (define (passes prefix version number source-id role options)
+  (passes-by cc prefix version number source-id role options))
+
+;; passes-by : String String String Natural String String (Listof String) -> Expected
+;; The same, for a check run with the compiler CC-NAME.
+(define (passes-by cc-name prefix version number source-id role options)
   (list 0
         (string-append
          "check-sqlite.sh: " (lib-path prefix) " is SQLite " version " (" (number->string number)
@@ -540,7 +549,7 @@
          "check-sqlite.sh: it is threadsafe (1), and its " (number->string (length options))
          " compile options are " role "'s, line for line:\n"
          (indented options)
-         "check-sqlite.sh: " cc " finds <sqlite3.h> at " (header-path prefix)
+         "check-sqlite.sh: " cc-name " finds <sqlite3.h> at " (header-path prefix)
          ", which declares the same release, and CHEZ_SQLITE3_LIBRARY names the library\n")
         ""))
 
@@ -666,19 +675,26 @@
                 (hunk items i 2 (list (cons #\- old) (cons #\space next) (cons #\+ old)))
                 (hunk items i 2 (list (cons #\+ next) (cons #\space old) (cons #\- next)))))))
 
-;; options-row : String Spec Edit String -> Unit
-;; check-row on SPEC with its library's options replaced by EDIT's, refused
-;; with EDIT's diff, against the count of SPEC's own options under ROLE.
-(define (options-row name spec edit role)
-  (let* ((lib (spec-ref spec 'lib))
-         (count (length (list-ref lib 4)))
-         (edited (list (list-ref lib 0) (list-ref lib 1) (list-ref lib 2) (list-ref lib 3) (car edit))))
-    (check-row name (spec-with spec 'lib edited)
-      (lambda (root prefix)
-        (let ((diff (cadr edit)))
-          (if (and (pair? diff) (eq? (car diff) 'either))
-              (cons 'either (map (lambda (d) (options-refused prefix count role d)) (cdr diff)))
-              (options-refused prefix count role diff)))))))
+;; options-row : String Spec (-> Edit) String -> Unit
+;; check-row on SPEC with its library's options replaced by EDIT-OF's, refused
+;; with its diff, against the count of SPEC's own options under ROLE. EDIT-OF is
+;; a thunk, run inside the row's guard: an edit that names an option not in the
+;; list raises there, and fails the row by name.
+(define (options-row name spec edit-of role)
+  (test-equal (string-append "check-sqlite.sh: " name)
+    '(returned same)
+    (outcome
+     (lambda ()
+       (let* ((edit (edit-of))
+              (lib (spec-ref spec 'lib))
+              (count (length (list-ref lib 4)))
+              (edited (list (list-ref lib 0) (list-ref lib 1) (list-ref lib 2) (list-ref lib 3) (car edit))))
+         (check-run (spec-with spec 'lib edited)
+                    (lambda (root prefix)
+                      (let ((diff (cadr edit)))
+                        (if (and (pair? diff) (eq? (car diff) 'either))
+                            (cons 'either (map (lambda (d) (options-refused prefix count role d)) (cdr diff)))
+                            (options-refused prefix count role diff))))))))))
 
 ;; with-lib : Lib Integer Any -> Lib
 ;; LIB with its I-th field VALUE.
@@ -750,28 +766,28 @@
 ;; --- check-sqlite.sh: the options, whole -------------------------------------------------------
 
 (options-row "DEFAULT_MEMSTATUS=0, at its place in SQLite's order, is refused: ADR-0005's lane keeps SQLite's memory count"
-  floor-spec (inserted floor-options "DEFAULT_MMAP_SIZE=0" "DEFAULT_MEMSTATUS=0") floor-role)
+  floor-spec (lambda () (inserted floor-options "DEFAULT_MMAP_SIZE=0" "DEFAULT_MEMSTATUS=0")) floor-role)
 
 (options-row "an option added before the first is refused"
-  floor-spec (inserted floor-options "ATOMIC_INTRINSICS=1" "ALLOW_URI_AUTHORITY") floor-role)
+  floor-spec (lambda () (inserted floor-options "ATOMIC_INTRINSICS=1" "ALLOW_URI_AUTHORITY")) floor-role)
 
 (options-row "an option added after the last is refused"
-  floor-spec (inserted floor-options 'end "USE_URI") floor-role)
+  floor-spec (lambda () (inserted floor-options 'end "USE_URI")) floor-role)
 
 (options-row "the first option dropped is refused"
-  floor-spec (dropped floor-options "ATOMIC_INTRINSICS=1") floor-role)
+  floor-spec (lambda () (dropped floor-options "ATOMIC_INTRINSICS=1")) floor-role)
 
 (options-row "an option in the middle dropped is refused"
-  floor-spec (dropped floor-options "MAX_EXPR_DEPTH=1000") floor-role)
+  floor-spec (lambda () (dropped floor-options "MAX_EXPR_DEPTH=1000")) floor-role)
 
 (options-row "the last option dropped is refused"
-  floor-spec (dropped floor-options "THREADSAFE=1") floor-role)
+  floor-spec (lambda () (dropped floor-options "THREADSAFE=1")) floor-role)
 
 (options-row "MAX_VARIABLE_NUMBER=250000, Ubuntu's, in place of SQLite's default is refused"
-  floor-spec (replaced floor-options "MAX_VARIABLE_NUMBER=32766" "MAX_VARIABLE_NUMBER=250000") floor-role)
+  floor-spec (lambda () (replaced floor-options "MAX_VARIABLE_NUMBER=32766" "MAX_VARIABLE_NUMBER=250000")) floor-role)
 
 (options-row "two options swapped are refused: the list is compared in order, not as a set"
-  floor-spec (swapped floor-options "MAX_PAGE_COUNT=0xfffffffe") floor-role)
+  floor-spec (lambda () (swapped floor-options "MAX_PAGE_COUNT=0xfffffffe")) floor-role)
 
 (test-equal "the COMPILER= row below changes an entry SQLite lists"
   'listed
@@ -779,7 +795,7 @@
 
 (when (string? compiler-option)
   (options-row "COMPILER=gcc-0.0.0, another compiler than CC, is refused: the entry is held whole"
-    floor-spec (replaced floor-options compiler-option "COMPILER=gcc-0.0.0") floor-role))
+    floor-spec (lambda () (replaced floor-options compiler-option "COMPILER=gcc-0.0.0")) floor-role))
 
 ;; --- check-sqlite.sh: the files and the env --------------------------------------------------
 
@@ -884,16 +900,17 @@
 ;; apart, so diff -u shows both in one hunk.
 (options-row "--current: the pinned release's identity with the floor's 37 options is refused"
   current-spec
-  (list floor-options
-        (hunk current-options (position "MAX_FUNCTION_ARG=1000" current-options) 7
-              '((#\- . "MAX_FUNCTION_ARG=1000")
-                (#\+ . "MAX_FUNCTION_ARG=127")
-                (#\space . "MAX_LENGTH=1000000000")
-                (#\space . "MAX_LIKE_PATTERN_LENGTH=50000")
-                (#\space . "MAX_MMAP_SIZE=0x7fff0000")
-                (#\space . "MAX_PAGE_COUNT=0xfffffffe")
-                (#\space . "MAX_PAGE_SIZE=65536")
-                (#\- . "MAX_SCHEMA=10000000"))))
+  (lambda ()
+    (list floor-options
+          (hunk current-options (position "MAX_FUNCTION_ARG=1000" current-options) 7
+                '((#\- . "MAX_FUNCTION_ARG=1000")
+                  (#\+ . "MAX_FUNCTION_ARG=127")
+                  (#\space . "MAX_LENGTH=1000000000")
+                  (#\space . "MAX_LIKE_PATTERN_LENGTH=50000")
+                  (#\space . "MAX_MMAP_SIZE=0x7fff0000")
+                  (#\space . "MAX_PAGE_COUNT=0xfffffffe")
+                  (#\space . "MAX_PAGE_SIZE=65536")
+                  (#\- . "MAX_SCHEMA=10000000")))))
   current-role)
 
 (check-row "--current: current_version and version set to the floor's in the env, with the floor's library, are still refused"
@@ -987,6 +1004,18 @@
   'found
   (if (and (string? sh-path) (string-prefix? "/" sh-path)) 'found sh-path))
 
+;; real-cc : (U String #f)
+;; The path of the C compiler $CC names, which a row's cc shim runs for the
+;; calls check-sqlite.sh makes.
+(define real-cc
+  (guard (e (#t #f))
+    (let ((found (capture-command (list "sh" "-c" "command -v \"$0\"" cc))))
+      (and (eqv? (car found) 0) (first-line (cadr found))))))
+
+(test-equal "CC is a file on this PATH, which the build row that passes runs as its compiler"
+  'found
+  (if (and (string? real-cc) (string-prefix? "/" real-cc)) 'found real-cc))
+
 (define row-tools
   '("sh" "dirname" "sed" "tr" "grep" "awk" "mktemp" "rm" "mkdir" "cp" "cat" "cmp" "diff"))
 
@@ -1037,7 +1066,11 @@
        "shift 4\n"
        "for member in \"$@\"; do\n"
        "  mkdir -p \"$dir/$(dirname \"$member\")\"\n"
-       "  printf \"the shim's %s\\n\" \"$member\" >\"$dir/$member\"\n"
+       "  if [ \"${member##*/}\" = sqlite3.h ] && [ -f \"$root/header\" ]; then\n"
+       "    cp \"$root/header\" \"$dir/$member\"\n"
+       "  else\n"
+       "    printf \"the shim's %s\\n\" \"$member\" >\"$dir/$member\"\n"
+       "  fi\n"
        "done\n"))
      (else
       (string-append
@@ -1045,6 +1078,9 @@
        "  [ -z \"${C_INCLUDE_PATH+set}\" ] || printf ' [C_INCLUDE_PATH=%s]' \"$C_INCLUDE_PATH\"\n"
        "  [ -z \"${CHEZ_SQLITE3_LIBRARY+set}\" ] || printf ' [CHEZ_SQLITE3_LIBRARY=%s]' \"$CHEZ_SQLITE3_LIBRARY\"\n"
        "  for a in \"$@\"; do printf ' %s' \"$a\"; done; printf '\\n'; } >>\"$root/calls\"\n"
+       "if [ -f \"$root/realcc\" ]; then\n"
+       "  case \" $* \" in *\" -shared \"*) ;; *) exec \"$(cat \"$root/realcc\")\" \"$@\" ;; esac\n"
+       "fi\n"
        "out=\n"
        "while [ \"$#\" -gt 0 ]; do\n"
        "  case $1 in\n"
@@ -1052,7 +1088,9 @@
        "    *) shift ;;\n"
        "  esac\n"
        "done\n"
-       "if [ -n \"$out\" ] && [ -f \"$root/cc-writes\" ]; then\n"
+       "if [ -n \"$out\" ] && [ -f \"$root/stub-lib\" ]; then\n"
+       "  cp \"$root/stub-lib\" \"$out\"\n"
+       "elif [ -n \"$out\" ] && [ -f \"$root/cc-writes\" ]; then\n"
        "  printf \"the shim's library\\n\" >\"$out\"\n"
        "fi\n")))))
 
@@ -1060,8 +1098,12 @@
 ;; (env giving the words added to build-env's), shims (the names shim/
 ;; holds, each a shim above, cc's text under any name), digests (an
 ;; association list of a file's name and the digest openssl answers),
-;; served (whether curl serves an archive), and cc-writes (whether cc
-;; writes its -o file).
+;; served (whether curl serves an archive), cc-writes (whether cc
+;; writes its -o file), and stub and header (#f, or a Lib and a Header: the
+;; row's compiler then writes that Lib, built before the row by the suite's own
+;; stub builder, as its -shared output, tar's sqlite3.h is that Header, and
+;; cc runs the real compiler for every call that is not the -shared one, as
+;; check-sqlite.sh's calls need).
 
 (define build-floor-spec
   (list (cons 'floors (floors-text "8.1.2"))
@@ -1071,7 +1113,9 @@
         (cons 'digests (list (cons "sqlite-autoconf-8010200.tar.gz" floor-archive)
                              (cons "sqlite3.c" floor-source)))
         (cons 'served #t)
-        (cons 'cc-writes #f)))
+        (cons 'cc-writes #f)
+        (cons 'stub #f)
+        (cons 'header #f)))
 
 (define build-current-spec
   (append (list (cons 'floors #f)
@@ -1113,7 +1157,14 @@
     (when (spec-ref spec 'served)
       (write-file (string-append root "/served") "the archive curl's shim serves\n"))
     (when (spec-ref spec 'cc-writes)
-      (write-file (string-append root "/cc-writes") ""))))
+      (write-file (string-append root "/cc-writes") ""))
+    (when (spec-ref spec 'stub)
+      (let ((made (make-library! root (string-append root "/stubdir") (spec-ref spec 'stub))))
+        (unless (eqv? made 0) (error 'make-build-tree! "the stub did not compile" made))
+        (checked "cp" (list "cp" (string-append root "/stubdir/libsqlite3.so.0")
+                            (string-append root "/stub-lib")))
+        (write-file (string-append root "/header") (header-text (spec-ref spec 'header)))
+        (write-file (string-append root "/realcc") (or real-cc (error 'make-build-tree! "no real cc")))))))
 
 ;; file-or-none : String -> (U String 'none)
 (define (file-or-none path)
@@ -1462,6 +1513,47 @@
                   (built-calls "2024" "8010200" (cc-call "cc-other" prefix "8010200"))
                   1 0
                   (list 'none (shim-file "8010200" "sqlite3.h") (shim-file "8010200" "sqlite3ext.h")))))
+
+;; --- build-sqlite.sh: the success path ---------------------------------------------------------
+;;
+;; The one row that runs the script to its last line: cc writes a stub library
+;; the suite's own stub builder made, answering the role's version, source id,
+;; threadsafe and options, tar's sqlite3.h declares the same release, and the
+;; check runs the real compiler and Chez on them.
+
+;; check-cc-call : String String String -> String
+;; The call of the compiler that check-sqlite.sh makes, with ARGS.
+(define (check-cc-call prefix include-path args)
+  (string-append "cc [C_INCLUDE_PATH=" include-path "] [CHEZ_SQLITE3_LIBRARY=" (lib-path prefix)
+                 "] " args))
+
+;; success-row : String Build-Spec String String String Natural String String Lib Header (Listof String) -> Unit
+(define (success-row name spec year number version lib-number source-id role lib header options)
+  (build-row name
+    (spec-with spec 'stub lib 'header header)
+    (lambda (root prefix)
+      (build-answer
+       0
+       (string-append
+        (cadr (passes-by "cc" prefix version lib-number source-id role options))
+        "build-sqlite.sh: SQLite " version " built into " prefix "\n")
+       (curl-says year number)
+       (append (built-calls year number (cc-call "cc" prefix number))
+               (list (check-cc-call prefix (string-append prefix "/include") "-E -M CWORK/find.c")
+                     (check-cc-call prefix (string-append prefix "/include") "-dM -E CWORK/find.c")
+                     (check-cc-call prefix (string-append prefix "/include") "-E -P CWORK/compiler.c")))
+       1 1
+       (list (file-or-none (string-append root "/stub-lib"))
+             (header-text header)
+             (shim-file number "sqlite3ext.h"))))))
+
+(success-row "both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0"
+  build-floor-spec "2024" "8010200" "8.1.2" 8001002 floor-source-id floor-role
+  floor-lib floor-header floor-options)
+
+(success-row "--current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, exit 0"
+  build-current-spec "2026" "3540100" current-version current-number current-source-id current-role
+  current-lib current-header current-options)
 
 ;; --- both scripts: the execute bit ------------------------------------------------------------
 ;;

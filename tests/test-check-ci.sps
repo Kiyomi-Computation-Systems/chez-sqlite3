@@ -545,6 +545,36 @@
   (string-append "job " j "'s step that runs \"" run "\" has no env " k))
 (define (cc-id-msg j) (string-append "job " j "'s step that runs \"" cc-line "\" has no id: cc"))
 (define lane-env-names '("CHEZ_SQLITE3_LIBRARY" "C_INCLUDE_PATH"))
+(define (uses-msg j u)
+  (string-append "job " j " has a step that uses \"" u
+                 "\", which is not actions/checkout@, actions/cache/restore@ or actions/cache/save@"))
+(define (restore-late j what)
+  (string-append "job " j " restores the " what " cache after the " what " build, and must restore it before"))
+(define (save-early j what)
+  (string-append "job " j " saves the " what " cache before the " what " build, and must save it after"))
+(define (save-late j what)
+  (string-append "job " j " saves the " what " cache after the " what " check, and must save it before"))
+(define (restore-cc j)
+  (string-append "job " j " restores the SQLite cache before the step that names the C compiler, and must restore it after"))
+
+;; The Chez cache's steps of one job, out of order. Each is one problem, at the
+;; step that is out of its place.
+(define (chez-order-rows j)
+  (define (step h) (lane-step j h))
+  (define (pfx s) (string-append j ": " s))
+  (list
+   (row (pfx "the Chez restore moved below check-chez.sh")
+        (list (le j (string-append (step h-restore-chez) "\n" (step h-build-chez) "\n" (step h-save-chez) "\n" (step h-chk-chez))
+                  (string-append (step h-build-chez) "\n" (step h-save-chez) "\n" (step h-chk-chez) "\n" (step h-restore-chez))))
+        (list (list (A j #f (hdr-line h-restore-chez)) (restore-late j "Chez"))))
+   (row (pfx "the Chez save moved below check-chez.sh")
+        (list (le j (string-append (step h-save-chez) "\n" (step h-chk-chez))
+                  (string-append (step h-chk-chez) "\n" (step h-save-chez))))
+        (list (list (A j #f (hdr-line h-save-chez)) (save-late j "Chez"))))
+   (row (pfx "the Chez save moved above the Chez build")
+        (list (le j (string-append (step h-build-chez) "\n" (step h-save-chez))
+                  (string-append (step h-save-chez) "\n" (step h-build-chez))))
+        (list (list (A j #f (hdr-line h-save-chez)) (save-early j "Chez"))))))
 
 ;; The problems of a lane's three env blocks, when the lane is not a job check-ci
 ;; knows: every line that names one of the two names is refused.
@@ -634,8 +664,10 @@
     (row (pfx "the SQLite build before check-chez")
          (list (del-step j (h-build j))
                (le j (step h-chk-chez) (string-append (step (h-build j)) "\n" (step h-chk-chez))))
+         ;; the build now comes before the SQLite restore too
          (list (list (A j (hdr-line (h-build j)) (string-append "        run: " (lane-bld j)))
-                     (out-of-order j (lane-bld j) cc-line))))
+                     (out-of-order j (lane-bld j) cc-line))
+               (list (HA (h-restore j)) (restore-late j "SQLite"))))
     (row (pfx "the SQLite build without its if")
          (list (se j (h-build j) (string-append "        " if-sql "\n") ""))
          (list (list (HA (h-build j)) (step-no-if j (lane-bld j)))))
@@ -753,8 +785,10 @@
                      (cache-key j "chez-threads-"))))
     (row (pfx "the Chez cache's path is the SQLite cache's")
          (list (se j h-restore-chez "/chez-threads\n" (string-append "/sqlite-" j "\n")))
+         ;; a restore of the SQLite path, before the compiler step
          (list (list (A j (hdr-line h-restore-chez) chez-key-line)
-                     (sql-key-msg j)))))
+                     (sql-key-msg j))
+               (list (HA h-restore-chez) (restore-cc j)))))
 
    ;; rule 7: the env keys
    (let ((chk-env (lambda (k v) (env-line k v))))
@@ -846,6 +880,34 @@
          (list (insert-line (h-load j) "        ? if\n        : false"))
          (list (list (A j (hdr-line (h-load j)) "        ? if") explicit-msg)
                (list (A j (hdr-line (h-load j)) "        : false") (step-key "")))))
+
+   ;; rule 10: the actions a job uses, and the order of each cache's steps
+   (list
+    (row (pfx "the SQLite restore uses actions/cache, not actions/cache/restore")
+         (list (le j (step (h-restore j))
+                   (replace-first
+                    (replace-first (step (h-restore j))
+                                   "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0"
+                                   "uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0")
+                    (key-line (lane-key j)) (key-line (string-append "sqlite-" j "-anything")))))
+         (list (list (HA (h-restore j))
+                     (uses-msg j "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"))))
+    (row (pfx "the SQLite restore moved below the check")
+         (list (le j (string-append (step (h-restore j)) "\n" (step (h-build j)) "\n" (step (h-save j)) "\n" (step h-chk))
+                   (string-append (step (h-build j)) "\n" (step (h-save j)) "\n" (step h-chk) "\n" (step (h-restore j)))))
+         (list (list (HA (h-restore j)) (restore-late j "SQLite"))))
+    (row (pfx "the compiler step moved below the SQLite restore")
+         (list (le j (string-append (step h-cc) "\n" (step (h-restore j)))
+                   (string-append (step (h-restore j)) "\n" (step h-cc))))
+         (list (list (HA (h-restore j)) (restore-cc j))))
+    (row (pfx "the SQLite save moved below the check")
+         (list (le j (string-append (step (h-save j)) "\n" (step h-chk))
+                   (string-append (step h-chk) "\n" (step (h-save j)))))
+         (list (list (HA (h-save j)) (save-late j "SQLite"))))
+    (row (pfx "the SQLite save moved above the build")
+         (list (le j (string-append (step (h-build j)) "\n" (step (h-save j)))
+                   (string-append (step (h-save j)) "\n" (step (h-build j)))))
+         (list (list (HA (h-save j)) (save-early j "SQLite")))))
 
    ;; rule 2: the job's keys
    (map (lambda (k)
@@ -1432,6 +1494,8 @@
 
    ;; --- the lanes: floor and current ---
    lane-global-rows
+   (chez-order-rows "main")
+   (chez-order-rows "floor")
    (lane-rows "floor")
    (lane-rows "current")
 

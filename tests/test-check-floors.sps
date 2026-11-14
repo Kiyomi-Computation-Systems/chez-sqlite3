@@ -1156,6 +1156,128 @@
              (scripts-problems fp sd (list (list sp (script "echo 3046000 3460000 3045001 3450100")))
                                (parse-floors (floors-of "\"10.9.1\"" "\"3.46.0\"")))))) 
 
+;; --- a file's name, and a floor split by a backslash and a newline ------------------
+;; A file's path below its directory is held to the floors too: a pin keyed by
+;; a version, as a file name, is the file the global constraints forbid. And sh
+;; joins a line that ends in a backslash with the next, so a floor split there
+;; is one floor.
+
+(define script-who "no CI script may write: they read it from")
+(define workflow-who "no workflow line may write: the CI scripts read it from")
+
+;; name-wrote : String String String String String -> String
+;; The complaint about the name of the file PATH, which contains a floor's
+;; version text. WHO is script-who or workflow-who.
+(define (name-wrote who path which version)
+  (name-wrote-from fp who path which version))
+
+;; name-wrote-from : String String String String String -> String
+;; The same, for the floors file at FLOORS.
+(define (name-wrote-from floors who path which version)
+  (string-append path ": its name contains the " which " floor " version ", which " who " " floors))
+
+;; name-form : String String String String -> String
+;; The same for FORM, the WHAT form of the SQLite floor 8.1.2.
+(define (name-form who path form what)
+  (string-append path ": its name contains " form ", the " what
+                 " form of the SQLite floor 8.1.2, which " who " " fp))
+
+;; Each floor's text and forms: the text, then how a script's complaint and a
+;; workflow's complaint about it read, as procedures of the path and the line.
+(define floor-forms
+  (list (list "8.1.2"
+              (lambda (p n) (scripts-wrote p n "SQLite" "8.1.2"))
+              (lambda (p n) (wrote p n "SQLite" "8.1.2" fp))
+              (lambda (who p) (name-wrote who p "SQLite" "8.1.2")))
+        (list "8001002" scripts-numbered numbered
+              (lambda (who p) (name-form who p "8001002" "version-number")))
+        (list "8010200" scripts-amalgam amalgam
+              (lambda (who p) (name-form who p "8010200" "amalgamation")))
+        (list "10.9.1"
+              (lambda (p n) (scripts-wrote p n "Chez" "10.9.1"))
+              (lambda (p n) (wrote p n "Chez" "10.9.1" fp))
+              (lambda (who p) (name-wrote who p "Chez" "10.9.1")))))
+
+(for-each
+ (lambda (f)
+   (let ((form (car f)) (name-of (cadddr f)))
+     (scripts-row (string-append "a file named for " form ": named by its path, not its lines")
+       (list (list sp good-script) (list (string-append "S/pin-" form) "pin\n"))
+       (list (name-of script-who (string-append "S/pin-" form))))
+     (scripts-row (string-append "a file in a subdirectory named " form ": named by its path")
+       (list (list sp good-script) (list (string-append "S/" form "/pin.sh") "pin\n"))
+       (list (name-of script-who (string-append "S/" form "/pin.sh"))))
+     (workflows-row (string-append "a workflow named for " form ": named by its path, not its lines")
+       (list (list wp good-workflow) (list (string-append "W/release-" form ".yml") clean-release))
+       (list (name-of workflow-who (string-append "W/release-" form ".yml"))))
+     (workflows-row (string-append "a workflow in a subdirectory named " form ": named by its path")
+       (list (list wp good-workflow) (list (string-append "W/" form "/release.yml") clean-release))
+       (list (name-of workflow-who (string-append "W/" form "/release.yml"))))))
+ floor-forms)
+
+(scripts-row "a name's complaint comes before its lines' complaints, and an unreadable file's name is held"
+  (list (list sp (script "echo 8.1.2")) (list "S/10.9.1/a.sh" (script "echo 8001002")) (list "S/b-8010200" #f))
+  (list (name-wrote script-who "S/10.9.1/a.sh" "Chez" "10.9.1")
+        (scripts-numbered "S/10.9.1/a.sh" script-line)
+        (name-form script-who "S/b-8010200" "8010200" "amalgamation")
+        (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(scripts-row "a name that holds a numeric form beside a letter or a digit holds no whole run; a version text is found anywhere"
+  (list (list sp good-script) (list "S/pin8001002" "pin\n") (list "S/8001002x/pin" "pin\n")
+        (list "S/a8.1.2" "pin\n"))
+  (list (name-wrote script-who "S/a8.1.2" "SQLite" "8.1.2")))
+(test-equal "scripts: the directory's own name is no part of a file's name"
+  (list 'returned '())
+  (outcome (lambda ()
+             (scripts-problems fp "S/8.1.2" (list (list "S/8.1.2/floor.sh" good-script))
+                               (parse-floors good)))))
+(test-equal "workflows: the directory's own name is no part of a file's name"
+  (list 'returned '())
+  (outcome (lambda ()
+             (check-floors fp good rp (apply under-section good-lines) "W/8.1.2"
+                           (list (list "W/8.1.2/ci.yml" good-workflow))))))
+
+;; Each floor's text and forms, split at every position by a backslash and a
+;; newline, in a script and in a workflow: found, at the first line.
+(for-each
+ (lambda (f)
+   (let* ((form (car f)) (n (string-length form)))
+     (let loop ((i 1))
+       (when (< i n)
+         (let ((a (substring form 0 i)) (b (substring form i n))
+               (where (string-append form " split after " (number->string i) " characters")))
+           (scripts-row (string-append where ", by a backslash and a newline: found at the first line")
+             (list (list sp (script (string-append "v=" a "\\") b)))
+             (list ((cadr f) sp script-line)))
+           (workflow-row (string-append where ", by a backslash and a newline: found at the first line")
+             (workflow-with (string-append "      - run: v=" a "\\") b)
+             (list ((caddr f) wp body-line)))
+           (loop (+ i 1)))))))
+ floor-forms)
+
+(scripts-row "a floor split over three lines: found at the first"
+  (list (list sp (script "v=8\\" ".1\\" ".2")))
+  (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(workflow-row "a floor split over three lines: found at the first"
+  (workflow-with "      - run: v=8\\" ".1\\" ".2")
+  (list (literal body-line "SQLite" "8.1.2")))
+(scripts-row "a floor whole on the line a backslash joins: found at the first line"
+  (list (list sp (script "echo \\" "8.1.2")))
+  (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(scripts-row "a backslash that is not at the line's end joins nothing: a floor split there is no floor"
+  (list (list sp (script "v=8.1.\\ " "2" "w=8.1\\.2" "x=8.1.\\x" "2")))
+  '())
+(scripts-row "a last line that ends in a backslash has no line to join: nothing to report"
+  (list (list sp (string-append good-script "echo 8.1.\\")))
+  '())
+(workflow-row "a backslash that is not at the line's end joins nothing, in a workflow"
+  (workflow-with "      - run: v=8.1.\\ " "2")
+  '())
+
+;; The rules about YAML escapes hold the lines as written, not as joined.
+(workflow-row "a backslash after a double quote at a line's end is still found, joined or not"
+  (workflow-with "      - run: echo \"x\" 8.1.\\" "2")
+  (list (literal body-line "SQLite" "8.1.2") (escaped wp body-line)))
+
 ;; --- the program -----------------------------------------------------------------------
 
 ;; run : (Listof String) -> (U (List Integer String String) (List 'raised String))
@@ -1401,6 +1523,16 @@
          (with-scripts "scripts-no-floor-sh")
          (refused 1 (string-append (at "scripts-no-floor-sh" "scripts")
                                    ": it holds no floor.sh, the script CI reads the floors through")))
+   (list "scripts-name-floor"
+         "a file pins/8.1.2 beside a clean floor.sh: its name holds the SQLite floor, its lines hold nothing"
+         (with-scripts "scripts-name-floor")
+         (refused 1 (name-wrote-from (at "legal" "floors.sexp") script-who
+                                     (at "scripts-name-floor" "scripts/pins/8.1.2") "SQLite" "8.1.2")))
+   (list "workflows-name-floor"
+         "a clean workflow in a directory named 8.1.2, beside ci.yml: its path holds the SQLite floor"
+         (both "workflows-name-floor")
+         (refused 1 (name-wrote-from (at "workflows-name-floor" "floors.sexp") workflow-who
+                                     (at "workflows-name-floor" "workflows/8.1.2/release.yml") "SQLite" "8.1.2")))
    (list "scripts-self-link"
          "the scripts directory is itself a symbolic link to a directory with a legal floor.sh: refused, not followed"
          (with-scripts "scripts-self-link")
@@ -1996,7 +2128,8 @@
 
 (define build-chez-usage (list 2 "" "usage: build-chez.sh PREFIX [--nothreads]\n"))
 
-;; The floor is 10.9.1 here, a floor with no sum, 9.9.9 in the unpinned rows.
+;; The floors file of the rows that move the version: its Chez floor is 9.9.9, which is
+;; not the release the script's one sum (by role, not by version) is of.
 (define unpinned (floors-of "\"9.9.9\"" "\"9.9.9\""))
 
 (ci-row "build-chez.sh: the checked-in Chez floor reaches the download of its tarball"

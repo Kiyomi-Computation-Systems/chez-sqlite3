@@ -646,8 +646,9 @@ failed (7 passed, 350 failed); it was redone as above.
 
 ### Not mutated
 
-- Rows for `id: cc`, the path rules and the wrong-step rule were each watched failing red (old script)
-  but have no named mutation.
+- The rows for the `id: cc` rule, the path rules and the wrong-step rule had no named mutation.
+  Their red run proved nothing, since the old script refused the unedited file. The review's fixes
+  mutate each rule off: see "m7" below.
 
 ## The parts combined
 
@@ -663,9 +664,195 @@ The three parts' commits were combined on `m1-slice-5-lanes` and rebased onto `m
 - `make check-test-fails`: all 13 cases.
 - `make check-clean` and `make check-dev`: ok.
 - `check-action-pins.sh`: 19 lines.
+- `make check-memory-gate`: all 56 cases, case `o` running `check-ci` on the new workflow.
 
 The caller also ran three mutations of their own, each in a copy of a part's tree and each
 caught:
 - Part A's walk skipping hidden files: 389 passed, 1 failed.
 - Part C's check step no longer required to carry the two SQLite env keys: 355 passed, 2 failed.
 - Part B's threadsafe test accepting 2: 75 passed, 1 failed.
+
+## The review's fixes
+
+An adversarial review of the combined slice found two major and four minor problems. Each fix
+was done in this order: the rows first, run against the unfixed code and watched failing;
+then the fix; then at least one mutation that turns the fix off. A mutation was one exact
+replacement (the old text occurring once), run in the worktree through `scripts/guix-env`, and
+reverted byte for byte. Counts are read from each suite's own output. Nothing under
+`scripts/ci/`, `packaging/floors.sexp` or `.github/workflows/ci.yml` was left changed: the
+mutations of `build-sqlite.sh` and `check-sqlite.sh` below were reverted, and `git diff` of the
+three paths is empty.
+
+### M1: `check-ci` holds the lanes' actions and every job's step order
+
+Rows, in `tests/test-check-ci.sps`, each asserting the whole output:
+
+- in each lane: the SQLite restore as `uses: actions/cache@...` with `key: sqlite-<lane>-anything`
+  (plant a); the restore moved below the check (b); the compiler step moved below the restore
+  (c); the SQLite save moved below the check, and above the build;
+- in `main` and in `floor`: the Chez restore moved below `check-chez.sh`, the Chez save moved
+  below `check-chez.sh`, and the Chez save moved above the Chez build.
+
+Two older rows now report one more true problem each, which their expected lists now hold: the
+SQLite build moved before `check-chez` (the restore is then after the build), and the Chez
+restore given the SQLite path (a SQLite restore before the compiler step).
+
+| Run | Passed | Failed | Notes |
+|---|---|---|---|
+| New rows against the old `check-ci.sh` | 357 | 16 | all 16 new rows; each answered exit 0, the pass line |
+| After the fix | 373 | 0 | |
+
+Fix: `cacheorder` in `tests/check-ci.sh`, run for every job. A `uses:` may only be
+`actions/checkout@`, `actions/cache/restore@` or `actions/cache/save@`; a cache (told by its
+path: Chez's or SQLite's) is restored before its build, saved after the build and before its
+check; in the lanes the SQLite restore comes after the `id: cc` step.
+
+| # | Mutation | Passed | Failed |
+|---|---|---|---|
+| R1 | the `uses:` allowlist off | 371 | 2 |
+| R2 | restore-before-build off | 367 | 6 |
+| R3 | save-after-build off | 369 | 4 |
+| R4 | save-before-check off | 369 | 4 |
+| R5 | restore-after-compiler-step off | 369 | 4 |
+
+### M2: `check-floors` reads file names
+
+Rows, in `tests/test-check-floors.sps`: for the dotted form, the version number and the
+amalgamation number of the fixtures' SQLite floor, and the dotted Chez floor, each in a file
+name and in a subdirectory name, for scripts and for workflows (16 rows); the order of a name's
+complaint among a file's; an unreadable file's name; a numeric form beside a letter or a digit
+in a name; a directory whose own name holds the floor, which is no part of a file's name; and two
+program cases on new fixtures, `scripts-name-floor` (`scripts/pins/8.1.2`) and
+`workflows-name-floor` (`workflows/8.1.2/release.yml`), built on the fixtures' own floor 8.1.2.
+
+| Run | Passed | Failed | Notes |
+|---|---|---|---|
+| M2 and M3 rows against the old `floors.sls` | 395 | 66 | 20 are M2's, 46 are M3's |
+| After both fixes | 461 | 0 | |
+
+Fix: `floor-complaints` takes the place it speaks of (`line N` or `its name`), and
+`name-problems` runs it on each file's path below its directory, for both directories, before
+the file's lines.
+
+| # | Mutation | Passed | Failed |
+|---|---|---|---|
+| N1 | no name is checked | 441 | 20 |
+| N2 | the whole path, not the one below the directory | 459 | 2 |
+| N3 | workflows' names not checked | 452 | 9 |
+| N4 | scripts' names not checked | 450 | 11 |
+
+### m3: a floor split by a backslash and a newline
+
+Rows: each form (dotted SQLite, version number, amalgamation, dotted Chez) split at every
+position by `\` and a newline, in a script and in a workflow (42 rows); a floor over three
+lines; a floor whole on the line a backslash joins; a backslash that is not at the line's end
+(a backslash and a space, a backslash inside a word) joining nothing, in a script and a workflow;
+a last line that ends in a backslash; and a backslash after a double quote at a line's end,
+found as before. The problem is reported at the first physical line.
+
+Fix: `joined-lines` joins each line that ends in a backslash with the next, as `sh` does, for the
+floor complaints only. The two YAML rules read the lines as written.
+
+| # | Mutation | Passed | Failed |
+|---|---|---|---|
+| J1 | no line is joined | 415 | 46 |
+| J2 | the backslash is kept in the joined line | 416 | 45 |
+| J3 | scripts' lines not joined | 438 | 23 |
+| J4 | workflows' lines not joined | 438 | 23 |
+| J5 | the YAML rules read the joined line | 457 | 4 |
+
+### m4: `build-sqlite.sh`'s success path
+
+Two rows, one for the floor and one for `--current`, in `tests/test-ci-sqlite.sps`: `cc`'s shim
+writes the stub library the suite's own builder makes (the role's version, number, source id,
+threadsafe and options), tar's `sqlite3.h` is the role's header, and `cc` runs the real compiler
+for every call that is not the `-shared` one. The row asserts exit 0, the whole stdout (the
+check's lines, then the final line), the whole stderr, every call, and the installed files.
+`CC`'s path is also asserted to resolve.
+
+| Run | Passed | Failed | Notes |
+|---|---|---|---|
+| Before the rows | 76 | 0 | the reviewer's mutant `echo done; exit 3` passed this |
+| After the rows | 79 | 0 | 2 rows and the `CC` row |
+
+| # | Mutation (of `scripts/ci/build-sqlite.sh`, reverted) | Passed | Failed |
+|---|---|---|---|
+| B1 | the final echo replaced by `echo done; exit 3` | 77 | 2 |
+| B2 | the `--current` check call replaced by `:` | 77 | 2 |
+| B3 | `sqlite3.h` no longer copied | 72 | 7 |
+
+### m5: an edit that raises in `test-ci-sqlite`
+
+`options-row` takes a thunk and runs it inside the row's guarded outcome; `check-row`'s body is
+`check-run`, which the options row calls inside its own guard. The edits and the `--current`
+row's `hunk` and `position` are passed as thunks.
+
+The reviewer's change: `MAX_PAGE_COUNT=0xfffffffe` changed to `...fffd` in the suite's two lists
+and in `check-sqlite.sh`'s two.
+
+| Run | Result |
+|---|---|
+| the old suite, with the change | exit 255, `Exception in position: not in the list`, no test named |
+| the new suite, with the change | 77 passed, 2 failed, both named: "two options swapped are refused..." and "--current: the pinned release's identity with the floor's 37 options is refused" |
+| the new suite, the change, and the swapped row made eager again | exit 255, the same raise, no test named |
+
+### m7: the red runs of three of part C's rules
+
+The earlier note, that the rows for the `id: cc` rule, the path rule and the wrong-step rule
+were each watched failing red against the old script, proves nothing: the old script refused the
+unedited workflow. Each rule was turned off in today's `check-ci.sh` instead:
+
+| # | Rule turned off | Passed | Failed |
+|---|---|---|---|
+| C1 | the `id: cc` rule | 371 | 2 |
+| C2 | the cache path rule | 367 | 6 |
+| C3 | the wrong-step rule for the two env names | 357 | 16 |
+
+### Nit
+
+`tests/test-check-floors.sps`'s comment on `unpinned` said "a floor with no sum". No pin is keyed
+by version: it now says what the rows use the floors file for.
+
+### The final runs
+
+All in the container, after the last mutation was reverted:
+
+- `make test`: `test: ran 26, passed 26, failed 0, hung 0`. In it, `test-check-ci` has 373 passes,
+  `test-check-floors` 461 and `test-ci-sqlite` 79.
+- `make check-test-fails`: `check-test-fails: make test failed, as it must, in all 13 cases`.
+- `make check-clean`: `check-clean: ok: make clean removes build/, follows no link out of it,
+  changes nothing else, passes again, and make deps works after it`.
+- `make check-memory-gate`: `check-memory-gate: the memory gate failed, as it must, and its
+  refusals held, in all 56 cases`.
+
+The caller replanted the review's two majors and a split floor in a copy of the fixed tree. Each
+was refused:
+- `scripts/ci/pins/3.45.1`: "its name contains the SQLite floor 3.45.1".
+- `v=3.45\` then `.1` in `scripts/ci/split.sh`: "line 1 contains the SQLite floor 3.45.1".
+- The floor's SQLite restore moved below its check: "job floor restores the SQLite cache after the
+  SQLite build, and must restore it before".
+
+## CI
+
+**The first run, cold** (run 43638086642, on `2796b4a`), passed in all five jobs.
+
+- **floor:**
+  - `build-sqlite.sh` built the floor in 17 s.
+  - `check-sqlite.sh` passed: the release's source id, threadsafe 1, and 37 options, line for
+    line, with `COMPILER=gcc-13.3.0`.
+  - `make build` reported the path `…/sqlite-floor/lib/libsqlite3.so.0 (override)`.
+  - `make test` ran 26 suites and passed 26.
+- **current:**
+  - The build took 23 s.
+  - The check passed with 38 options.
+  - `make test` passed 26 of 26.
+  - `test-constants` checked the 3.54.1 header against the floor's subset.
+- **Cold costs:**
+  - Every job built Chez again, since `build-chez.sh` changed: 3.5 to 5.6 minutes.
+  - The memory job took 19 minutes: 3.5 for Chez, 4.3 for the gate's planted defects, and 10.7
+    for every suite under Valgrind.
+- **The SQLite cache keys,** compiler included: `sqlite-floor-…-ubuntu-24.04-X64-cc--Ubuntu-13.3.0-6ubuntu2-24.04.1--13.3.0-`,
+  and the same tail for `sqlite-current-…`.
+
+The review's fixes leave `scripts/ci/`, `packaging/` and the workflow unchanged, so the next run
+is the first warm one: both SQLite caches restored, then checked again.

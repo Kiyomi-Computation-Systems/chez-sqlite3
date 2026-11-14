@@ -383,11 +383,22 @@ Measured in the pinned container before the gate was built
     discovery.
   - The SQLite cache keys are held whole, the compiler step must carry `id: cc`, and only the
     SQLite build and its save may carry the SQLite cache's `if`.
+  - **Since the review's fixes, in every job:**
+    - a `uses:` step may only be `actions/checkout@`, `actions/cache/restore@` or
+      `actions/cache/save@`;
+    - each cache, told apart by its path, is restored before its build and saved after the build
+      and before its check;
+    - in the lanes, the SQLite restore also comes after the `id: cc` step.
+
+    Before these fixes, an `actions/cache@` step escaped the key rules. And a restore moved below
+    `check-sqlite.sh` would have served the suites a library the job never checked.
 - **`test-ci-sqlite`'s children run outside the gate,** as `test-check-floors`' `check-chez.sh`
   rows do.
   - They are CI scripts. Their Chez reads a stub or a built libsqlite3 through a probe of their
-    own, and reaches none of chez-sqlite3's code.
+    own, and runs none of chez-sqlite3's code.
   - A shell child can't meet the gate's `Command:` rule.
-  - So "native code", in the rule that sends children through `gated-command`, means
-    chez-sqlite3's own path to libsqlite3.
+  - So the rule that sends children that reach native code through `gated-command` covers a
+    child that runs chez-sqlite3's code. `test-blocks`' dead-address child is one: it loads no
+    libsqlite3, but reaches `malloc` and `free` through chez-sqlite3's memory library. A child
+    that runs none of chez-sqlite3's code may run outside the gate.
   - Under `make test-memory`, the suite took 25 s, with 0 errors and no child log.

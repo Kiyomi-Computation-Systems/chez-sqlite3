@@ -137,7 +137,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
-  five jobs and their keys; each check as a step's whole run line; no `if:` but the cache's own;
+  five jobs and their keys; each check as a step's whole run line; only the checkout and cache
+  actions, each cache restored before its build and saved before its check; no `if:` but the
+  cache's own;
   no line naming a variable that steers a check; no key spelled so a text check would miss it. It
   holds against a mistaken edit, not a deliberate one: a step can compute any name. A change to
   the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended). The banned names include
@@ -150,8 +152,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own
   Valgrind with its own log, which `make test-memory` holds to the parent's evidence rules. The
   gate never uses `--trace-children`. A child started otherwise runs outside Valgrind (ADR-0005,
-  amended). Native code here means chez-sqlite3's own path to libsqlite3: a row that runs a CI
-  script, whose Chez reads a library through a probe of its own, runs it outside the gate
-  (ADR-0005, amended, M1 slice 5).
+  amended). The rule covers a child that runs chez-sqlite3's code. A row that runs a CI script,
+  whose Chez reads a library through a probe of its own and runs none of chez-sqlite3's code,
+  runs it outside the gate (ADR-0005, amended, M1 slice 5).
 - **`make test-memory` takes `MEMORY_SUITES` from make's command line only,** and refuses one
   from the environment (ADR-0005, amended).

@@ -43,6 +43,12 @@
 #     CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH, each with exactly its job's
 #     value, on the steps that run the check, make build and make test, each of
 #     which must carry both and CHEZ, and on no other step;
+#   - in every job: a uses: step may only be actions/checkout@,
+#     actions/cache/restore@ or actions/cache/save@; each cache's restore comes
+#     before its build, and its save after the build and before the cache's
+#     check (a cache is told by its path, the Chez cache's or the SQLite
+#     cache's); and in the lanes the SQLite restore comes after the step that
+#     names the compiler;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
 #     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...), the
 #     compiler's and the loader's among them (CC, C_INCLUDE_PATH, CPATH,
@@ -340,6 +346,45 @@ function needenv(at, x, k) {
   if (!((at, k) in S_ev)) prob(S_ln[at], "job " job "'s step that runs \"" x "\" has no env " k)
 }
 
+# cachekind(s): "Chez" or "SQLite" for a cache restore or save step by its path,
+# else "".
+function cachekind(s,   pth) {
+  if (!(S_uses[s] ~ /^actions\/cache\/(restore|save)@/)) return ""
+  pth = S_path[s]
+  if (pth ~ /\/chez-(threads|nothreads)$/) return "Chez"
+  if (pth ~ /\/sqlite-(floor|current)$/) return "SQLite"
+  return ""
+}
+
+# runs(s, what, prog): whether step s runs scripts/ci/WHAT-PROG.sh.
+function runs(s, what, prog) {
+  return (S_run[s] ~ ("^run: scripts/ci/" what "-" prog "\\.sh( |$)"))
+}
+
+# cacheorder(first, last): each cache's restore before its build, its save after
+# the build and before its check, and in the lanes the SQLite restore after the
+# step that names the compiler.
+function cacheorder(first, last,   s, b, k, kk, cn, restore) {
+  for (s = first; s <= last; s++) {
+    if (S_uses[s] != "" && !(S_uses[s] ~ /^actions\/(checkout|cache\/restore|cache\/save)@/))
+      prob(S_ln[s], "job " job " has a step that uses \"" S_uses[s] "\", which is not actions/checkout@, actions/cache/restore@ or actions/cache/save@")
+    k = cachekind(s)
+    if (k == "") continue
+    kk = tolower(k)
+    restore = (S_uses[s] ~ /^actions\/cache\/restore@/)
+    for (b = first; b <= last; b++) {
+      if (runs(b, "build", kk)) {
+        if (restore && s > b) prob(S_ln[s], "job " job " restores the " k " cache after the " k " build, and must restore it before")
+        if (!restore && s < b) prob(S_ln[s], "job " job " saves the " k " cache before the " k " build, and must save it after")
+      }
+      if (!restore && runs(b, "check", kk) && s > b)
+        prob(S_ln[s], "job " job " saves the " k " cache after the " k " check, and must save it before")
+    }
+    if (restore && k == "SQLite" && isl(job) && atrun[CCLINE] && s < atrun[CCLINE])
+      prob(S_ln[s], "job " job " restores the SQLite cache before the step that names the C compiler, and must restore it after")
+  }
+}
+
 function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last, isb, okstep) {
   if (job == "") return
   endstep()
@@ -375,6 +420,7 @@ function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last, isb, o
     }
     before = x
   }
+  cacheorder(first, last)
   if (isl(job)) {
     # The two names are for the three steps that run the check, make build and
     # make test, and for no other step of the lane.

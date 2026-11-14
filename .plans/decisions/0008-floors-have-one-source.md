@@ -142,6 +142,13 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
     build's own check before any cache is saved.
 - **Every Chez cache key changed once,** since the scripts are hashed: one cold Chez build per
   job.
+- **The review's fixes widened the rule,** for both directories:
+  - **File names count.** Each file's path, relative to its directory, is held like a line. A pin
+    file named after the floor, `scripts/ci/pins/3.45.1`, had passed, and its pass line had
+    listed it.
+  - **A backslash-newline joins lines.** A line ending in a backslash is read joined to the next,
+    since `sh` joins them: `v=3.45\` then `.1` had passed.
+  - The YAML rules still read physical lines.
 - **What still passes:**
   - a floor computed at run time;
   - other spellings, such as `3_45_1`;

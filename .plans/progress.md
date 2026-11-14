@@ -31,6 +31,18 @@ newest first.
   - A checkout path holding whitespace split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: `test-memory` now
     refuses one, and `check-memory-gate` holds 56 cases (ADR-0005, amended;
     [the log](m1-owed-fixes-mutation-log.md)).
+- **Owed to M1's closing review:**
+  - **`connection.sls` raises inside two critical sections.**
+    - The two places: `call-with-open-handle`'s refusals and its PROC, and `call-with-database`'s
+      open.
+    - The M2 session found this, and the M1 session reproduced it on `2579a0d`. A
+      `with-exception-handler` handler for such a raise runs with interrupts still disabled, at
+      depth 2; a `guard` clause unwinds first, at depth 1.
+    - It breaks the file's own rule, that anything raised is raised after the section.
+    - The closing review fixes it, with an ADR-0012 amendment, and M2 slice 3 drops the change it
+      had planned.
+  - **The `floor` and `current` jobs aren't required checks yet.** Branch protection names only
+    `main`, `memory` and `nothreads`, so the maintainer is asked to add them when slice 5 merges.
 - **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs
