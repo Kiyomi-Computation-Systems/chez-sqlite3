@@ -10,42 +10,93 @@ newest first.
 - **M0 slice 1, the container,** merged as PR #2.
 - **M0 slice 2, the test harness,** merged as PR #3.
 - **M0 slice 3, the memory gate,** merged as PR #4.
-- **M0 slice 4, CI,** is built on `m0-slice-4-ci`, rebased onto `main` after slice 3 merged:
-  - **Built:** `.github/workflows/ci.yml` with three jobs, `main`, `memory` and `nothreads`, on
-    Ubuntu 24.04; `scripts/ci/` (`build-chez.sh`, `floor.sh`, `check-action-pins.sh`,
-    `report-sqlite.sh`); `packaging/debian-prereqs.txt`; the floors' workflow rules;
-    `check-nothreads`, over every library under `src/`; and `check-memory-gate`'s case o.
-  - **Pins checked:** each action's commit and the Chez tarball's sha256, against GitHub.
-  - **Two Sonnet agents** built the workflow rules with the CI scripts' tests, and
-    `check-nothreads`, in parallel.
-  - **Watched failing:** [the log](ci-mutation-log.md). 39 mutations, every one failing its
-    check.
-  - **CI's first run passed** in all three jobs, building Chez from a cold cache. The runner's
-    SQLite is 3.45.1, the floor itself, with a matching header
-    ([research/ci-runner/](research/ci-runner/)). On the real `--nothreads` Chez, both libraries
-    were refused by name.
-  - **Reviewed** (Opus, read-only): no blocker, three major findings, all reproduced. Each was a
-    hole a later edit to the workflow could pass through, not a fault in what ran:
-    - Case o ran only in the job it guards, and nothing read the `nothreads` job or the pin step.
-    - Case o read keys as text, so `"if": false`, `? if`, aliases, `needs:`, `defaults: shell:`,
-      path filters and `GITHUB_ENV` writes passed it.
-    - Dropping chez-curl's spelling rules reopened `? uses`, which hid an unpinned action from
-      the pin check. The reason recorded for dropping them was wrong.
-  - **Fixed:**
-    - `make check-ci` (a Sonnet agent, test-first: 1 passed, 125 failed, then 128 passed) holds
-      the workflow's whole shape, and `make test` runs it.
-    - Case o runs it. `scripts/ci/check-chez.sh` re-checks a Chez restored from the cache.
-    - The cache keys hash every script, and `MEMORY_TIMEOUT` is 600 s.
-    - Smaller fixes: an open double-quoted string fails `check-floors`; new rows for an
-      unreadable workflow file and for `check-chez.sh`; the launcher's tests run in `main`.
-  - **CI's second run failed in `main`,** at the launcher's tests: T11b ran `make test` under
-    `env -i`, which dropped `CHEZ`, and the runner has no `scheme` on `PATH`. Reproduced, fixed,
-    and the third run passed in all three jobs, on Chez restored from the cache and re-checked.
-- **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
+- **M0 slice 4, CI,** merged as PR #5. CI on `main` passed in all three jobs.
+- **M0's closing review** (harness plan §6) ran: Opus, read-only, over the five slices and the
+  harness plan, on a snapshot of `main` at `37bb4c4`. No blocker, four major findings, every one
+  reproduced here. `m0-review-fixes` fixes M0's share ([the log](m0-review-mutation-log.md)):
+  - **`check-floors` refuses SQLite's floor in its numeric forms,** `3045001` and `3450100`,
+    which held no `3.45.1` and passed (finding 1, ADR-0008).
+  - **`check-test-fails` holds `check-ci`'s place in `make test`.** Removing it passed every check
+    (finding 2, ADR-0005 and ADR-0007).
+  - **`check-ci` holds the version reports,** which could be deleted unseen (finding 7,
+    ADR-0006). `test-check-ci`'s top-level raise is guarded (9), and two rows of the helper suite
+    assert in a fixed order and whole (10).
+  - **The records say what holds and what doesn't:** `check-ci` holds against accident, not
+    intent (5); a variable carried in `MAKEFLAGS` is not covered (6); "no suppression" was
+    measured in the container only (8). Stale and conflicting records are fixed (11).
+    `remove-temp-directory` stays exported: its suite tests the refusals that
+    `call-with-temp-directory` can't reach, a relative path and `/`.
+  - **Findings 3 and 4 are about what M1 builds:** where SQLite's two checks run, and how
+    `check-ci` loosens for new jobs. ADR-0005's amendment records both, and M1's plan takes them.
+  - **The fixes were reviewed too** (Opus, read-only): no blocker, two major findings, both
+    reproduced and fixed. A third row of the helper suite still depended on argument order, and
+    passed interpreted under a mutation it failed compiled. `check-floors`' boundary wasn't held
+    against its complement: a range that took `=` for a letter passed every row. The records now
+    say what still passes `check-floors`.
+- **M1's plan comes next.** The maintainer settled four of its questions on 2026-11-13, and
+  approved its slicing and the open surface; the plan records them.
+- **Open:** brief D2 to D7. D2's answer and D7's measurement go in with M1's plan.
 
 ## Close-outs
 
-### 2026-11-14 — M0 slice 3: the memory gate (PR #4, `3c8cff9`)
+### 2026-11-13 — M0 slice 4: CI (PR #5, `37bb4c4`)
+
+- **Built:**
+  - `.github/workflows/ci.yml`, with three jobs on Ubuntu 24.04: `main`, `memory` and
+    `nothreads`;
+  - `scripts/ci/`: `build-chez.sh`, `check-chez.sh`, `floor.sh`, `check-action-pins.sh` and
+    `report-sqlite.sh`;
+  - `packaging/debian-prereqs.txt`;
+  - the floors' workflow rules;
+  - `check-nothreads`, over every library under `src/`;
+  - `check-memory-gate`'s case o;
+  - after the review, `make check-ci`, which `make test` runs, holding the workflow to its shape.
+- **Pins checked:** each action's commit and the Chez tarball's sha256, against GitHub.
+- **Watched failing:** 53 mutations, every one failing its check, and three of them rerun against
+  `check-ci` ([the log](ci-mutation-log.md)). Red runs: the workflow rules 173 passed and 110
+  failed; `check-nothreads` 3 and 15; `check-ci` 1 and 125.
+- **CI** ([research/ci-runner/](research/ci-runner/)):
+  - **The first run passed** in all three jobs, building Chez from a cold cache. The runner's
+    SQLite is 3.45.1, the floor itself, with a matching header and 58 compile options. On the real
+    `--nothreads` Chez, both libraries were refused by name.
+  - **The second run failed in `main`,** at the launcher's tests: T11b ran `make test` under
+    `env -i`, which dropped `CHEZ`, and the runner has no `scheme` on `PATH`. It was reproduced in
+    the container and fixed.
+  - **The third run passed** on Chez restored from the cache and checked again, and so did `main`'s
+    first run after the merge.
+- **Reviewed** (Opus, read-only): no blocker, three major findings, all reproduced. Each was a hole
+  a later edit to the workflow could pass through, not a fault in what ran:
+  - Case o ran only in the job it guards, and nothing read the `nothreads` job or the pin step.
+  - Case o read keys as text, so `"if": false`, `? if`, aliases, `needs:`, `defaults: shell:`,
+    path filters and `GITHUB_ENV` writes passed it.
+  - Dropping chez-curl's spelling rules reopened `? uses`, which hid an unpinned action from the
+    pin check. The reason recorded for dropping them was wrong.
+
+  Also fixed: the cache keys hash every script; a Chez restored from the cache is checked again;
+  `MEMORY_TIMEOUT` is 600 s; an open double-quoted string fails `check-floors`; and there are new
+  rows for an unreadable workflow file and for `check-chez.sh`.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The workflow rules and the CI scripts' tests | Sonnet | about 159k | 37 | 5 min |
+  | `check-nothreads` | Sonnet | about 86k | 16 | 3 min |
+  | The adversarial review | Opus | about 266k | 92 | 20 min |
+  | `check-ci` | Sonnet | about 182k | 25 | 14 min |
+
+  The first two ran in parallel, on disjoint files.
+- **Learned** (the first and third are in [traps.md](traps.md)):
+  - A reason for dropping a copied rule is checked against every rule the copy keeps, before it
+    goes into a brief. "They protected rules about keys, and we have none" was wrong: `uses` is a
+    key. It is the third slice running where trimming a copy removed a protection.
+  - A check must not live inside what it guards. Case o ran in the memory job, so deleting the job
+    deleted its check; `check-ci` runs from `make test`.
+  - `env -i` in a test drops the variables that name its tools. Every local run had `scheme` on
+    `PATH`, and the runner didn't.
+  - Reading an agent's code catches rule breaks its passing tests don't: `check-nothreads` first
+    imported inside `map`, against AGENTS.md.
+
+### 2026-11-13 — M0 slice 3: the memory gate (PR #4, `3c8cff9`)
 
 - **Measured first** ([research/memory-gate/](research/memory-gate/)): Valgrind on Chez, opening and
   closing databases through bare FFI, loses nothing and suppresses nothing, so the gate passes no

@@ -15,7 +15,7 @@ What ships where:
 |---|---|---|
 | Ubuntu 22.04 (this host is Pop!_OS 22.04) | 3.37.2 | measured, 2026-11-13 |
 | Debian 12 | 3.40.1 | not measured |
-| Ubuntu 24.04, GitHub's `ubuntu-24.04` runner | 3.45.1 | not measured; M0 slice 4 records it |
+| Ubuntu 24.04, GitHub's `ubuntu-24.04` runner | 3.45.1 | measured, 2026-11-13, on CI's first run ([research/ci-runner/](../research/ci-runner/)) |
 | the host's Guix home profile | 3.53.1 | measured, 2026-11-13 |
 | the maintainer's Mac | 3.51.0 | the assessment |
 | macOS 14 and 15 | believed 3.43.x | not measured (brief D7) |

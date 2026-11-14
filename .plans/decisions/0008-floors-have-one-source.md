@@ -1,8 +1,9 @@
 # ADR-0008: The floors have one source, `packaging/floors.sexp`
 
 - **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
-  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)) and the workflow rules
-  ([amendment](#amendment-2026-11-13-the-workflow-rules-m0-slice-4))
+  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)), the workflow rules
+  ([amendment](#amendment-2026-11-13-the-workflow-rules-m0-slice-4)), and the SQLite floor's numeric
+  forms ([amendment](#amendment-2026-11-13-the-sqlite-floors-numeric-forms-m0s-closing-review))
 - **Date:** 2026-11-13
 - **Scope:** every statement of the Chez and SQLite floors
 - **Related:** chez-curl ADR-0016, which this copies · [ADR-0001](0001-bind-libsqlite3-directly.md)
@@ -87,3 +88,31 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
   Chez caches are keyed by a hash of the file and the build script.
 - **Tests:** `tests/test-check-floors.sps` holds each rule on texts and fixture trees, and runs
   `floor.sh` and `scripts/ci/check-action-pins.sh` in temporary trees.
+
+## Amendment, 2026-11-13: the SQLite floor's numeric forms (M0's closing review)
+
+- **Decision 3 covers the forms a floor is written in, not only its dotted text.** The review
+  found that SQLite writes its floor in two forms that hold no `3.45.1`: the version number, `3045001`
+  (`SQLITE_VERSION_NUMBER` and `sqlite3_libversion_number`), and the amalgamation's file name,
+  `sqlite-amalgamation-3450100.zip`. Two such lines in the `main` job passed `check-floors` and
+  `check-ci`. M1's `floor` lane is where both would be written.
+- **`check-floors` now refuses both,** computed from the SQLite floor in the file: X·1000000 +
+  Y·1000 + Z, and X·1000000 + Y·10000 + Z·100. Neither is written in the code. Each is found only
+  as a whole run of digits, with no ASCII letter or digit beside it, since a hex digest holds
+  such runs inside longer ones. The problem names the file, the line, the form and the floor.
+- **The Chez floor has no numeric form.** Chez names its releases by the dotted version alone,
+  in its tarball (`csv10.4.0.tar.gz`) and its tag (`v10.4.0`).
+- **What still passes,** found by the fixes' review, each beside `check-floors` and `check-ci`:
+  - a form beside a letter, as in `v3450100`, `v3045001`, `3045001L` and `sqlite3450100`. That
+    follows from the boundary, which keeps hex digests from tripping the rule;
+  - other spellings of the dotted text: `3_45_1`, `3,45,1`, `3-45-1`, and a prefix such as
+    `(>= 3.45)`;
+  - anything outside `.github/workflows`, the one directory `check-floors` reads. M1's `floor` lane
+    will fetch the amalgamation from a script under `scripts/ci/`, so the slice that writes it
+    extends `check-floors` to that directory first.
+
+  The rule holds against the forms CI's own tools print and download, not against every way of
+  writing a version.
+- **Tests:** `test-check-floors` holds each form at every position, beside each kind of
+  neighbour, and on a fixture whose own floor is 3.46.0, where 3.45.1's forms pass
+  ([the log](../m0-review-mutation-log.md)).

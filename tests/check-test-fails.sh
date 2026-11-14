@@ -19,6 +19,8 @@
 #                statement it never frees      count left (ADR-0005)
 #   floors       README's Chez line says       check-floors names the line,
 #                10.3.0, not the floor         and no suite runs
+#   ci           job memory given a            check-ci names the key, and
+#                continue-on-error key         no suite runs
 #   no-suites    every suite deleted           make test refuses to pass
 #
 # The copy holds no real suite, so no slow one can run into the 5 s
@@ -31,8 +33,8 @@
 # A case requires a non-zero exit, and compares the lines starting
 # "check-suites: " or "test: " as a whole: check-suites' verdict, the plant's
 # outcome, the after-suite's pass line, and the count. The leaks case also
-# compares the lines starting "suite-exit-status: ", and the floors case those
-# starting "check-floors: ".
+# compares the lines starting "suite-exit-status: ", the floors case those
+# starting "check-floors: ", and the ci case those starting "check-ci: ".
 #
 # The copy is the working tree without .git, build/ and .claude/ (Claude
 # Code's local state, which can hold whole worktrees), and with the
@@ -319,6 +321,24 @@ run_case "floors: check-floors names a README that states another Chez floor, an
      echo 'check-floors: FAILED (problems: 1)')" \
   '^(check-suites|check-floors|test): '
 cp "$root/README.org" "$copy/README.org"
+
+# The ci case: the copy's workflow gives job memory a job-level
+# continue-on-error key, which would let the Valgrind gate fail and the run
+# pass. check-ci refuses any key outside the job's four. check-ci passes
+# before and after: the workflow is restored.
+ci_yml=.github/workflows/ci.yml
+sed '/^  memory:$/,/^    runs-on:/ s/^    runs-on: ubuntu-24.04$/    continue-on-error: true\
+    runs-on: ubuntu-24.04/' "$root/$ci_yml" >"$copy/$ci_yml"
+if cmp -s "$root/$ci_yml" "$copy/$ci_yml"; then
+  bad "ci: the plant did not change $ci_yml, so it plants nothing"
+fi
+ci_line=$(grep -n '^    continue-on-error: true$' "$copy/$ci_yml" | cut -d: -f1)
+run_case "ci: check-ci names a workflow whose job memory may fail without failing the run, and no suite runs" \
+  "$(checked 1
+     echo "check-ci: $ci_yml:$ci_line: job memory has the key \"continue-on-error\", which is not one of name, runs-on, timeout-minutes, steps"
+     echo 'check-ci: FAILED (problems: 1)')" \
+  '^(check-suites|check-ci|test): '
+cp "$root/$ci_yml" "$copy/$ci_yml"
 
 rm -f "$copy"/tests/test-*.sps
 run_case "no-suites: make test refuses to pass with no suite to run" \

@@ -1,7 +1,8 @@
 # ADR-0007: Tests use SRFI-64 from a vendored chez-srfi pinned in Akku.lock, and the suite rules are checks
 
 - **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
-  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built))
+  built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)), and after M0's closing review
+  ([amendment](#amendment-2026-11-13-check-ci-is-a-prerequisite-and-is-held-as-one-m0s-closing-review))
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3's suites and Scheme dependencies
 - **Related:** chez-curl ADR-0015, which this copies · [ADR-0006](0006-pinned-guix-container.md)
@@ -81,3 +82,18 @@ check. AGENTS.md carries those rules here.
   failed.
 - **The copies `check-test-fails` and the host-side tests make leave out `.claude/`,** as
   `check-clean`'s does. It is Claude Code's local state, and can hold whole worktrees.
+
+## Amendment, 2026-11-13: `check-ci` is a prerequisite, and is held as one (M0's closing review)
+
+- **`make test` runs `check-help`, `check-suites`, `check-floors` and `check-ci` first.** Decision
+  4 lists three; M0 slice 4 added `check-ci` (ADR-0005, amended).
+- **`make check-test-fails` holds that place,** with an eleventh plant beside decision 4's ten:
+  - a workflow whose `memory` job carries a job-level `continue-on-error`, which `make test` must
+    fail on `check-ci`'s lines, whole, running no suite.
+
+  The closing review removed `check-ci` from the prerequisites, and every check still passed.
+  `check-help` has no plant: CI's `main` job runs it by name, and `check-ci` holds that line
+  whole.
+- **Temporary files go in a directory of the process's own, under `$TMPDIR`,** not at fixed
+  paths under `build/` (this record's slice 2 amendment). The brief's §7 said `build/`; it now
+  follows this record.

@@ -1,9 +1,11 @@
 # ADR-0006: Builds and tests run in a pinned, toolchain-only Guix container with no network
 
 - **Status:** Accepted (AGENTS.md and the harness plan, 2026-11-13); amended 2026-11-13 with what
-  M0 slice 1 measured at the pin ([amendment](#amendment-2026-11-13-what-m0-slice-1-measured)), and
+  M0 slice 1 measured at the pin ([amendment](#amendment-2026-11-13-what-m0-slice-1-measured)),
   with the self-test after the slice's review
-  ([amendment](#amendment-2026-11-13-the-self-test-after-the-slices-review))
+  ([amendment](#amendment-2026-11-13-the-self-test-after-the-slices-review)), and with the
+  version reports held by `check-ci` after M0's closing review
+  ([amendment](#amendment-2026-11-13-the-version-reports-are-held-m0s-closing-review))
 - **Date:** 2026-11-13
 - **Scope:** development tooling; no library change
 - **Related:** chez-curl ADR-0006, which this copies · [ADR-0002](0002-runtime-libsqlite3-discovery.md)
@@ -124,3 +126,14 @@ log](../guix-env-mutation-log.md)). Decisions 1 and 6 gain:
   that too when the host has no default route.
 
 chez-curl's scripts share each of these gaps; this repository's copies now differ from them.
+
+## Amendment, 2026-11-13: the version reports are held (M0's closing review)
+
+- **The steps that record the versions are now held.** The review deleted both of the `main`
+  job's report steps, and every check passed. `make check-ci` now requires them, once each and in
+  order, between the check-chez step and the make step: "Report the versions this run uses", with
+  its run block line for line, then "Report the runner's SQLite", with its `env: CHEZ` and its
+  run line (ADR-0005's amendments).
+- **What `scripts/ci/report-sqlite.sh` prints is not held.** Replaced by `exit 0`, it passed
+  `check-ci`, and nothing under `tests/` runs it. It reports and checks nothing, and was left out
+  of slice 4's mutations for that reason; its output is read by eye on each run.

@@ -2,8 +2,9 @@
 
 - **Status:** Accepted (the maintainer, 2026-11-13). The two SQLite checks are built in M1.
   Amended 2026-11-13: what M0 slice 3 measured and built
-  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)), and CI's memory job
-  (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)).
+  ([amendment](#amendment-2026-11-13-what-m0-slice-3-measured-and-built)), CI's memory job
+  (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)), and M0's closing
+  review ([amendment](#amendment-2026-11-13-m0s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -161,3 +162,39 @@ Measured in the pinned container before the gate was built
   limit, ending as a job timeout with no HUNG line.
 - **The job runs on every event,** on Ubuntu 24.04, against Chez built at its floor from the
   release tarball. Outside the container, as inside it, the gate passes no suppression.
+
+## Amendment, 2026-11-13: M0's closing review
+
+- **`check-ci` holds the workflow against accident, not intent.** The review wrote `MAKEFLAGS=-i`
+  to `GITHUB_ENV` through a name split across shell variables (`v=GITHUB_; … ${v}ENV`), and
+  `check-ci` and every suite passed. Under `-i`, `make test` exits 0 with suites failing. No text
+  check closes that, since a step can compute any name. The slice 4 amendment's "a variable
+  written through `GITHUB_ENV` under a split name" is stopped only in the spelling the review first
+  used: any line naming `GITHUB_ENV`. As with a hostile suite's log, `check-ci` holds against a
+  mistaken edit, and review and branch protection hold against a deliberate one.
+- **That `make test` runs `check-ci` is now held.** Removing the prerequisite passed every check,
+  and the two workflow edits it let through passed too: dropping `check-ci` from `main`'s make
+  line, and deleting the `memory` job, case o with it. `check-test-fails`' case `ci` plants a
+  job-level `continue-on-error` and requires `make test` to fail on `check-ci`'s lines, whole
+  ([the log](../m0-review-mutation-log.md)).
+- **Not covered, added: a variable carried in an exported `MAKEFLAGS`.**
+  `MAKEFLAGS="MEMORY_SUITES=tests/test-counters.sps" make test-memory` ran one suite and said
+  nothing. GNU Make gives such a variable the origin `command line`, the same as a real
+  command-line assignment: measured with 4.3 on the host, which is Ubuntu 24.04's too, and 4.4.1 in
+  the container, so the refusal can't tell them apart. It matters locally only: the
+  workflow bans `MAKEFLAGS`.
+- **"No suppression" is measured in the container only:** Valgrind 3.27 and SQLite 3.53.1
+  ([research/memory-gate/](../research/memory-gate/)). CI's memory job, with Valgrind 3.22 and
+  Ubuntu's 3.45.1, has not yet run a suite that loads libsqlite3. So the slice 4 amendment's "as
+  inside it, the gate passes no suppression" is policy there until M1's first such suite runs.
+- **`check-ci` is loosened per job, never for the whole file.** M1's `floor` and `current` jobs
+  need what `check-ci` refuses today: `CHEZ_SQLITE3_LIBRARY`, `C_INCLUDE_PATH`, more jobs, cache
+  steps. `main` is the one job that tests discovery, since the container always sets the
+  override, so `CHEZ_SQLITE3_LIBRARY` stays banned there. And `CC`, `C_INCLUDE_PATH`, `CPATH`,
+  `LD_LIBRARY_PATH` and `LD_PRELOAD` join the banned names before any job gains an `env:` key
+  beyond `CHEZ`: each can steer `test-constants` or the load.
+- **Where SQLite's two checks run.** Decision 5 puts `sqlite3_next_stmt` before each close, where
+  a connection is still open. The harness plan had put both checks in `suite-exit-status`, whose
+  library never loads libsqlite3, so that `check-suites`, `check-test-fails`' copy and the
+  launcher's `env -i` runs can import it. The plan now follows decision 5. `sqlite3_memory_used`
+  is asked only in a process that loaded the library, as M1 decides.

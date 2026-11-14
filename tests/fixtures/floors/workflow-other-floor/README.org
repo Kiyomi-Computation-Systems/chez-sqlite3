@@ -1,0 +1,14 @@
+* A title
+
+** Status
+
+- Chez Scheme 9.9.9 or later, built with threads
+
+** Requirements
+
+- Chez Scheme 10.9.1 or later, built with threads
+- SQLite 3.46.0 or later
+
+** License
+
+- MIT

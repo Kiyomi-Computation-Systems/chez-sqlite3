@@ -1,6 +1,6 @@
 # Research: what CI's runner gives, on the workflow's first run
 
-Date: 2026-11-14 (M0 slice 4), GitHub Actions run 43540404918, on PR #5, the workflow's first.
+Date: 2026-11-13 (M0 slice 4), GitHub Actions run 43540404918, on PR #5, the workflow's first.
 It settles the harness plan's "Ubuntu 24.04's is 3.45.1; slice 4 verifies this on the runner".
 
 ## The runner

@@ -25,7 +25,10 @@
 #     `concurrency` line for line, the three jobs and each key in them, each
 #     step's keys, with: and env: keys, the one if: and where it may be, the
 #     cache keys, the checks each job must run, each as one step's whole run
-#     line, in order, and the CHEZ each job runs with;
+#     line, in order, and the CHEZ each job runs with; and in job main, between
+#     its check-chez step and its make step, the steps "Report the versions
+#     this run uses" (its run block, line for line) and "Report the runner's
+#     SQLite" (its run line, and its env CHEZ), in that order;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
 #     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...); and
 #     check-memory-gate, test-memory and check-nothreads anywhere but as the
@@ -188,6 +191,8 @@ function stepkey(   u) {
     if (val != "") prob(ln, HASVAL)
   } else if (key == "if") {
     S_if[sn] = rest; S_ifln[sn] = ln
+  } else if (key == "name") {
+    S_name[sn] = rest
   } else if (key == "run") {
     S_run[sn] = rest; S_runln[sn] = ln
   } else if (key == "uses") {
@@ -207,7 +212,7 @@ function subkey(   want) {
   } else {
     if (key != "CHEZ") { prob(ln, "env key \"" key "\" is not CHEZ"); return }
     if (key in eseen) { prob(ln, "env key \"CHEZ\" is written twice in one step"); return }
-    eseen[key] = 1
+    eseen[key] = 1; S_env[sn] = 1
     want = chezpath[job]
     if (val != want) prob(ln, "env CHEZ in job " job " is not " want)
   }
@@ -220,6 +225,49 @@ function endstep() {
     if (S_if[sn] != IFLINE) prob(S_ifln[sn], "if is not exactly \"" IFLINE "\"")
     if (!(S_run[sn] ~ /^run: scripts\/ci\/build-chez\.sh( |$)/ || S_uses[sn] ~ /^actions\/cache\/save@/))
       prob(S_ifln[sn], "if is on a step that neither runs scripts/ci/build-chez.sh nor uses actions/cache/save")
+  }
+}
+
+# stepnamed(nm, first, last): the one step of job main named nm, or 0 (and a
+# problem) when there is not exactly one.
+function stepnamed(nm, first, last,   s, c, at) {
+  c = 0; at = 0
+  for (s = first; s <= last; s++) if (S_name[s] == "name: " nm) { c++; at = s }
+  if (c != 1) { prob(jln, "job main has " c " steps named \"" nm "\", not one"); return 0 }
+  return at
+}
+
+# mainsteps(first, last): the two report steps of job main. atrun[CHKT] and
+# atrun[MAKELINE] are the steps that run check-chez and the make line, or 0 when
+# one is missing (a problem already told).
+function mainsteps(first, last,   v, q, i, n, m, w, rl) {
+  v = stepnamed(VERS, first, last)
+  q = stepnamed(SQLN, first, last)
+  if (v && atrun[CHKT] && v < atrun[CHKT]) prob(S_ln[v], "job main runs step \"" VERS "\" before \"" CHKT "\", and must run it after")
+  if (v && atrun[MAKELINE] && v > atrun[MAKELINE]) prob(S_ln[v], "job main runs step \"" VERS "\" after \"" MAKELINE "\", and must run it before")
+  if (q && atrun[CHKT] && q < atrun[CHKT]) prob(S_ln[q], "job main runs step \"" SQLN "\" before \"" CHKT "\", and must run it after")
+  if (q && atrun[MAKELINE] && q > atrun[MAKELINE]) prob(S_ln[q], "job main runs step \"" SQLN "\" after \"" MAKELINE "\", and must run it before")
+  if (v && q && q < v) prob(S_ln[q], "job main's step \"" SQLN "\" comes before step \"" VERS "\", and must come after")
+  if (v) {
+    rl = S_runln[v] ? S_runln[v] : S_ln[v]
+    if (S_run[v] != "run: |") prob(rl, "job main's step \"" VERS "\" does not run a block: it must be run: |")
+    else {
+      n = bn[v]
+      m = (n > nvl) ? n : nvl
+      for (i = 1; i <= m; i++) {
+        if (i > n) { prob(bln[v, n] ? bln[v, n] : rl, "job main's step \"" VERS "\" has a run block that ends early: expected \"" vl[i] "\""); break }
+        if (i > nvl) { prob(bln[v, i], "job main's step \"" VERS "\" has a run line it must not: \"" bl[v, i] "\""); break }
+        if (bl[v, i] != vl[i]) {
+          prob(bln[v, i], "job main's step \"" VERS "\" has a run line that differs from the one check-ci holds: expected \"" vl[i] "\", found \"" bl[v, i] "\"")
+          break
+        }
+      }
+    }
+  }
+  if (q) {
+    rl = S_runln[q] ? S_runln[q] : S_ln[q]
+    if (S_run[q] != "run: " SQLRUN) prob(rl, "job main's step \"" SQLN "\" is not run: " SQLRUN)
+    if (!S_env[q]) prob(S_ln[q], "job main's step \"" SQLN "\" has no env CHEZ")
   }
 }
 
@@ -238,9 +286,10 @@ function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last) {
   }
   m = nreq(job)
   for (i = 1; i <= m; i++) {
-    x = rq[i]; c = 0; at = 0
+    x = rq[i]; c = 0; at = 0; atrun[x] = 0
     for (s = first; s <= last; s++) if (S_run[s] == "run: " x) { c++; at = s }
     if (c != 1) { prob(jln, "job " job " has " c " steps that run \"" x "\", not one"); before = x; continue }
+    atrun[x] = at
     pos = at - first + 1
     if (pos <= lastp) prob(S_runln[at], "job " job " runs \"" x "\" before \"" before "\", and must run it after")
     else lastp = pos
@@ -249,6 +298,7 @@ function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last) {
     } else if (S_if[at] != "") prob(S_ifln[at], "job " job "'s step that runs \"" x "\" has an if")
     before = x
   }
+  if (job == "main") mainsteps(first, last)
   job = ""
 }
 
@@ -293,6 +343,15 @@ BEGIN {
   BLDN = "scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads"
   MAKELINE = "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-clean"
   LAUNCHER = "sh tests/guix-env-launcher.sh"
+  VERS = "Report the versions this run uses"
+  SQLN = "Report the runner's SQLite"
+  SQLRUN = "scripts/ci/report-sqlite.sh"
+  nvl = 5
+  vl[1] = "          \"$RUNNER_TEMP/chez-threads/bin/scheme\" --version"
+  vl[2] = "          cc --version | head -n 1"
+  vl[3] = "          valgrind --version"
+  vl[4] = "          echo \"image: ${ImageOS:-unknown} ${ImageVersion:-unknown}\""
+  vl[5] = "          echo \"kernel: $(uname -r)\""
   chezpath["main"] = "${{ runner.temp }}/chez-threads/bin/scheme"
   chezpath["memory"] = chezpath["main"]
   chezpath["nothreads"] = "${{ runner.temp }}/chez-nothreads/bin/scheme"
@@ -321,6 +380,7 @@ fileno == 1 {
   while (substr(raw, ind + 1, 1) == " ") ind++
   content = 0
   if (inblock) { if (ind > blockcol) content = 1; else inblock = 0 }
+  if (content && instep) { bn[sn]++; bl[sn, bn[sn]] = raw; bln[sn, bn[sn]] = ln }
   if (substr(raw, ind + 1, 1) == "#") next
 
   bad = 0

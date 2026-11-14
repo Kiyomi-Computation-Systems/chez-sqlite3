@@ -8,7 +8,9 @@ and group o comes with CI in slice 4; the review added g all, g environment and 
 and M1 owns the children Valgrind doesn't follow. Amended in M0 slice 4: `check-nothreads` checks
 every library under `src/`, since M0 has no public one; `report-sqlite.sh` reports the runner's
 SQLite and checks nothing, M1's lanes holding it to its floor and header; and, from the slice's
-review, `make check-ci`, which `make test` runs, holds the workflow's whole shape.
+review, `make check-ci`, which `make test` runs, holds the workflow's shape. Amended at M0's
+closing review: `check-ci` holds the version reports too, and `check-test-fails` holds its place
+in `make test`; SQLite's two checks follow ADR-0005, decision 5 (§3).
 Source: chez-curl at `79c6ced` (`main`), surveyed read-only. Every path below is chez-curl's
 unless it says otherwise.
 Brief: [the project brief](2026-11-13-chez-sqlite3-project-brief.md). The maintainer settled
@@ -24,16 +26,16 @@ library code; the rest arrives with the code it checks (§4).
 | Piece | From | What changes |
 |---|---|---|
 | The pinned container: `channels.scm`, `manifest.scm`, `scripts/guix-env`, `guix-env-enter`, `guix-env-selftest`, `scripts/require-tools`, `tests/guix-env-launcher.sh` | the same paths | The manifest swaps `curl` for `sqlite` and drops `node` and `openssl`. `guix-env-enter` requires `lib/libsqlite3.so.0` and exports `CHEZ_SQLITE3_LIBRARY`, an absolute path, beside `CHEZ` and `CC`. The self-test's tool list and override assertion follow. Still no `LD_LIBRARY_PATH`. |
-| The Makefile skeleton: `help`, `check-help`, `.DEFAULT_GOAL := help`, `.PHONY` on one line, `require-tools` at the head of each recipe, `CHEZ`, `GOAL`, `LIBDIRS`, sorted `SUITES` | `Makefile` | Our targets only (§4). |
-| `make test`: every suite runs after a failure, each under `timeout --foreground`, exit 124 reported as HUNG, a summary line, no suites is an error | `Makefile` (`test`) | The prerequisites shrink to `deps check-help check-suites check-floors`. |
+| The Makefile skeleton: `help`, `check-help`, `.DEFAULT_GOAL := help`, `.PHONY` on one line, `require-tools` at the head of each recipe that runs Chez, `timeout` or Valgrind (`check-guix-inside` excepted: its self-test is the toolchain's check), `CHEZ`, `GOAL`, `LIBDIRS`, sorted `SUITES` | `Makefile` | Our targets only (§4). |
+| `make test`: every suite runs after a failure, each under `timeout --foreground`, exit 124 reported as HUNG, a summary line, no suites is an error | `Makefile` (`test`) | The prerequisites shrink to `deps check-help check-suites check-floors`, and slice 4 adds `check-ci`. |
 | SRFI-64: `vendor/chez-srfi` at `7879b52`, `Akku.manifest` (`depends/dev` only, no scripts), `Akku.lock`, `make deps` (never fetches), `make check-pins` | the same paths | chez-srfi only, with no jsonparse or byte-machine. |
-| `check-suites`, `check-test-fails`, `clean`, `check-clean` | `tests/check-suites.sps`, `tests/check-test-fails.sh`, `tests/check-clean.sh` | The plants we keep: `fails`, `no-tests`, `hangs`, `exit-line`, `early-exit`, `nested-exit`, `empty`, `leaks`, `floors`, `no-suites`. `seam` arrives with `check-seam` (§4). |
+| `check-suites`, `check-test-fails`, `clean`, `check-clean` | `tests/check-suites.sps`, `tests/check-test-fails.sh`, `tests/check-clean.sh` | The plants we keep: `fails`, `no-tests`, `hangs`, `exit-line`, `early-exit`, `nested-exit`, `empty`, `leaks`, `floors`, `no-suites`, and `ci`, added at M0's closing review. `seam` arrives with `check-seam` (§4). |
 | The test helper library, as `tests/chez-sqlite3-testing.sls` | `tests/curl-testing.sls`: `suite-exit-form`, `suite-exit-status`, `describe` | Each other helper (`capture-command`, temporary directories, `run-until`) joins with the suite that first needs it, as chez-curl held its origin helpers back until the origin existed. A helper with no consumer can't be seen to fail. The Node origin, wire probe and TLS helpers stay behind. Its suite comes with it. |
 | The counters, as `(chez-sqlite3 private counters)` | `src/curl/private/counters.sls` | Three kinds: `block` (our `foreign-alloc`), `connection`, `statement`. Same mutex inside `critical-section`, no reset, and a raise on a count below zero. `suite-exit-status` fails a suite with any nonzero count. |
 | Floors in one file: `packaging/floors.sexp`, `scripts/ci/floor.sh`, `make check-floors`, `tests/floors.sls` | the same paths | `((chez "10.4.0") (sqlite "3.45.1"))`. README.org's `** Requirements` is held to it from slice 2. The workflow rules and `floor.sh` come with CI, in slice 4. |
 | `test-manifest` | `tests/test-manifest.sps` | Our package, chez-srfi as the only dev dependency, the version against CHANGELOG.md. |
 | The memory gate: `test-memory`, `check-memory-gate`, `memory-plant-leak.sps`, `memory-plant-overrun.sps` | `Makefile`, `tests/check-memory-gate.sh` | §3. |
-| CI: Chez built from the pinned release tarball and cached with separate restore and save steps; one fail-closed package list; versions reported; actions pinned to commit SHAs | `.github/workflows/ci.yml`, `scripts/ci/build-chez.sh`, `scripts/ci/check-action-pins.sh`, `packaging/debian-prereqs.txt` | Two jobs in M0, `main` and `memory`. The package list is `build-essential`, `ca-certificates`, `libsqlite3-dev` (for `sqlite3.h`) and `valgrind`. |
+| CI: Chez built from the pinned release tarball and cached with separate restore and save steps; one fail-closed package list; versions reported; actions pinned to commit SHAs | `.github/workflows/ci.yml`, `scripts/ci/build-chez.sh`, `scripts/ci/check-action-pins.sh`, `packaging/debian-prereqs.txt` | Three jobs in M0, `main`, `memory` and `nothreads` (ADR-0001's amendment). The package list is `build-essential`, `ca-certificates`, `curl` (to fetch the Chez tarball), `libsqlite3-dev` (for `sqlite3.h`) and `valgrind`. |
 | `.gitignore`, the CHANGELOG format (Keep a Changelog 1.1.0, semver), mutation logs in the newer format, decision records in the house form | the same | none |
 
 ## 2. What we leave behind
@@ -70,7 +72,10 @@ The four parts each see something the others miss:
   suppression file to its one entry; slice 3 measured that we need none, so it has nothing to
   hold ([research/memory-gate/](research/memory-gate/)). Group o reads the CI workflow, so it
   comes with CI in slice 4.
-- **M1 adds SQLite's two checks** to `suite-exit-status`, once there is a loaded library to ask.
+- **M1 adds SQLite's two checks,** once there is a loaded library to ask: `sqlite3_next_stmt` at
+  each close (ADR-0005, decision 5), and `sqlite3_memory_used` in a process that loaded the
+  library. Not in `suite-exit-status` itself, whose library never loads libsqlite3, so that
+  `check-suites`, `check-test-fails` and the launcher's tests can import it (M0's closing review).
   M1 measures first whether `sqlite3_memory_used` returns to its pre-open value after a full
   open and close; if SQLite keeps something global, the baseline is taken after the first
   cycle.

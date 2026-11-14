@@ -1,0 +1,12 @@
+# Test fixture: a workflow that states no floor. Its scripts read theirs from floors.sexp.
+name: Fixture
+on:
+  pull_request:
+jobs:
+  main:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: scripts/ci/build-chez.sh /opt/chez
+      - run: scripts/ci/floor.sh sqlite
+      - run: echo 18001002 80010021 a8001002 8001002f 18010200 80102001 a8010200 8010200f
+      - run: echo 10009001 10090100 deadbeef8001002cafe

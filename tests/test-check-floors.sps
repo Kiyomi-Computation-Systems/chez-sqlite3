@@ -323,6 +323,20 @@
 ;; The same for a workflow file but ci.yml.
 (define (elsewhere path n which version) (wrote path n which version fp))
 
+;; form-wrote : String Natural String String String String -> String
+;; The complaint about line N of the workflow file PATH, which contains FORM,
+;; the WHAT form of the SQLite floor VERSION, FLOORS the floors file's path.
+(define (form-wrote path n form what version floors)
+  (string-append path ": line " (number->string n) " contains " form ", the " what
+                 " form of the SQLite floor " version
+                 ", which no workflow line may write: the CI scripts read it from " floors))
+
+;; numbered, amalgam : String Natural -> String
+;; The complaint about line N of the file PATH for 8001002, the version number
+;; of the fixtures' floor 8.1.2, and for 8010200, its amalgamation number.
+(define (numbered path n) (form-wrote path n "8001002" "version-number" "8.1.2" fp))
+(define (amalgam path n) (form-wrote path n "8010200" "amalgamation" "8.1.2" fp))
+
 ;; escaped : String Natural -> String
 ;; The complaint about line N of the workflow file PATH, which holds a
 ;; backslash after a double quote.
@@ -626,6 +640,122 @@
   (string-append "# 10.9.1\n" "name: CI\n" "# 8.1.2")
   (list (literal 1 "Chez" "10.9.1") (literal 3 "SQLite" "8.1.2")))
 
+;; --- the workflow: the SQLite floor's numeric forms ----------------------------------
+;; The floor 8.1.2 is 8001002 as SQLITE_VERSION_NUMBER and 8010200 as the
+;; amalgamation's file name, written here by hand. A form is found as a whole
+;; run of digits only: no ASCII letter or digit on either side.
+
+(define (num-row name line problems)
+  (workflow-row name (workflow-with line) problems))
+
+(num-row "the version number at the start of a line"
+  "8001002 is the number" (list (numbered wp body-line)))
+(num-row "the version number in the middle of a line"
+  "      - run: echo want 8001002 here" (list (numbered wp body-line)))
+(num-row "the version number at the end of a line"
+  "      - run: echo want 8001002" (list (numbered wp body-line)))
+(num-row "the amalgamation number at the start of a line"
+  "8010200 is the number" (list (amalgam wp body-line)))
+(num-row "the amalgamation number in the middle of a line"
+  "      - run: curl -O https://x.invalid/sqlite-amalgamation-8010200.zip" (list (amalgam wp body-line)))
+(num-row "the amalgamation number at the end of a line"
+  "      - run: echo want 8010200" (list (amalgam wp body-line)))
+
+(num-row "a form beside a dot, a dash, an underscore or a space is found"
+  "      - run: echo .8001002. -8010200_"
+  (list (numbered wp body-line) (amalgam wp body-line)))
+(num-row "a form beside a non-ASCII letter is found: only ASCII letters and digits bound a run"
+  "      - run: echo \xe9;8001002\xe9; \x3b1;8010200"
+  (list (numbered wp body-line) (amalgam wp body-line)))
+
+(num-row "the version number beside a digit on its left, a digit on its right, a letter on each side: not found"
+  "      - run: echo 18001002 80010021 a8001002 8001002f"
+  '())
+(num-row "the amalgamation number beside a digit on its left, a digit on its right, a letter on each side: not found"
+  "      - run: echo 18010200 80102001 a8010200 8010200f"
+  '())
+(num-row "an upper-case letter beside a form is a letter too: not found"
+  "      - run: echo A8001002 8010200Z"
+  '())
+(num-row "a hex digest holding a form between letters and digits: not found"
+  "      - run: echo deadbeef8001002cafe 9f8010200a1"
+  '())
+(num-row "a form past an unfound one on the same line is still found: the scan tries every position"
+  "      - run: echo 18001002 x8001002 8001002"
+  (list (numbered wp body-line)))
+(num-row "a run that holds the version number twice is no form, and a form beside it is found"
+  "      - run: echo 80010028001002 8010200"
+  (list (amalgam wp body-line)))
+(num-row "a form twice on a line is named once"
+  "      - run: echo 8001002 8001002"
+  (list (numbered wp body-line)))
+(num-row "both forms and the dotted floor on one line: the dotted floor, the version number, the amalgamation number"
+  "      - run: echo 8010200 8001002 8.1.2"
+  (list (literal body-line "SQLite" "8.1.2") (numbered wp body-line) (amalgam wp body-line)))
+(num-row "the forms of the real floors, 3.45.1, are no form of the fixtures' floor"
+  "      - run: echo 3045001 3450100"
+  '())
+(num-row "the Chez floor 10.9.1 has no numeric form: its digits run together, in each layout, are not found"
+  "      - run: echo 10009001 10090100 100901 1009001 10901 1091"
+  '())
+
+;; The boundary against its whole complement. For each form, and on each side
+;; of it separately, every character from U+0001 to U+007F but the newline
+;; (which ends the line), then a few beyond ASCII, is put immediately beside the
+;; form, as the whole line. The row computes the characters for which the form
+;; was not found, in the order tried, and expects exactly the 62 ASCII letters
+;; and digits, in code point order: a character wrongly taken as a boundary, or
+;; wrongly left out, fails the row and is named in it. A form is found when the
+;; line's complaints hold its message. Both forms go through whole-run?, but
+;; each is driven, so a rule that told them apart would be seen too.
+
+(define neighbours
+  (append (let loop ((i #x7f) (acc '()))
+            (cond ((= i 0) acc)
+                  ((= i 10) (loop (- i 1) acc))
+                  (else (loop (- i 1) (cons (integer->char i) acc)))))
+          (list #\xe9 #\x3b1 #\xa0 #\x1f600)))
+
+(define letters-and-digits
+  (string->list "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+
+;; unfound-neighbours : String (Char -> String) -> (Listof Char)
+;; The neighbours for which the workflow with LINE-OF's line as its body has no
+;; complaint MESSAGE, or raises.
+(define (unfound-neighbours message line-of)
+  (let ((outcomes
+         (map (lambda (c)
+                (cons c (outcome (lambda ()
+                                   (check-floors fp good rp (apply under-section good-lines) wd
+                                                 (list (list wp (workflow-with (line-of c)))))))))
+              neighbours)))
+    (let loop ((rest outcomes) (acc '()))
+      (cond ((null? rest) (reverse acc))
+            ((and (eq? (car (cdar rest)) 'returned) (member message (cadr (cdar rest))))
+             (loop (cdr rest) acc))
+            (else (loop (cdr rest) (cons (caar rest) acc)))))))
+
+(test-equal "boundary: the version number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (numbered wp body-line)
+                      (lambda (c) (string-append (string c) "8001002"))))
+(test-equal "boundary: the version number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (numbered wp body-line)
+                      (lambda (c) (string-append "8001002" (string c)))))
+(test-equal "boundary: the amalgamation number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (amalgam wp body-line)
+                      (lambda (c) (string-append (string c) "8010200"))))
+(test-equal "boundary: the amalgamation number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (unfound-neighbours (amalgam wp body-line)
+                      (lambda (c) (string-append "8010200" (string c)))))
+
+(workflow-row "a form on the first line of a file, and another on the last, which has no newline after it"
+  (string-append "8001002\n" "name: CI\n" "# 8010200")
+  (list (numbered wp 1) (amalgam wp 3)))
+
 ;; --- the workflow: a backslash after a double quote ----------------------------------
 ;; YAML reads escapes inside double quotes, so "8\x2e1\x2e2" is the SQLite
 ;; floor with no floor text in it. check-floors does not resolve them: it
@@ -716,6 +846,11 @@
         (elsewhere "W/a.yml" 2 "SQLite" "8.1.2")
         (literal body-line "SQLite" "8.1.2")
         (elsewhere "W/z.yml" 1 "Chez" "10.9.1")))
+
+(workflows-row "a second workflow with a numeric form: named, by its own path and line"
+  (list (list wp good-workflow)
+        (list release (release-with "      - run: echo 8001002")))
+  (list (numbered release release-line)))
 
 (workflows-row "a file in a subdirectory is held like any other"
   (list (list wp good-workflow) (list "W/sub/notes.yml" (workflow "# 10.9.1")))
@@ -848,6 +983,14 @@
 
 (define floors-summary "chez 10.9.1, sqlite 8.1.2")
 
+;; of-number, of-amalgam : String Natural -> String
+;; The complaint about line N of the fixture CASE's ci.yml for 8001002, or
+;; 8010200, the forms of its floor 8.1.2.
+(define (of-number case n)
+  (form-wrote (at case "workflows/ci.yml") n "8001002" "version-number" "8.1.2" (at case "floors.sexp")))
+(define (of-amalgam case n)
+  (form-wrote (at case "workflows/ci.yml") n "8010200" "amalgamation" "8.1.2" (at case "floors.sexp")))
+
 ;; cases : (Listof (List String String (Listof String) Expected))
 ;; The fixture directory, what it holds, the arguments, and the program's
 ;; whole answer. Every fixture directory is one case, and each has its
@@ -902,6 +1045,33 @@
          (both "workflow-sqlite-literal")
          (refused 1 (wrote (at "workflow-sqlite-literal" "workflows/ci.yml") 11 "SQLite" "8.1.2"
                            (at "workflow-sqlite-literal" "floors.sexp"))))
+   (list "workflow-sqlite-number"
+         "ci.yml writes the SQLite floor's version number, 8001002, at the start of a line, in the middle and at the end"
+         (both "workflow-sqlite-number")
+         (refused 3 (of-number "workflow-sqlite-number" 11)
+                  (of-number "workflow-sqlite-number" 12)
+                  (of-number "workflow-sqlite-number" 13)))
+   (list "workflow-sqlite-amalgamation"
+         "ci.yml writes the SQLite floor's amalgamation number, 8010200, at the start of a line, in a file name and at the end"
+         (both "workflow-sqlite-amalgamation")
+         (refused 3 (of-amalgam "workflow-sqlite-amalgamation" 11)
+                  (of-amalgam "workflow-sqlite-amalgamation" 12)
+                  (of-amalgam "workflow-sqlite-amalgamation" 13)))
+   (list "workflow-sqlite-digits"
+         "ci.yml writes both numeric forms beside letters and digits, and the Chez floor's digits run together: nothing to report"
+         (both "workflow-sqlite-digits")
+         (holds (at "workflow-sqlite-digits" "README.org") (at "workflow-sqlite-digits" "workflows")
+                "ci.yml" (at "workflow-sqlite-digits" "floors.sexp") floors-summary))
+   (list "workflow-other-floor"
+         "its floors file names SQLite 3.46.0: its forms are found, and 3.45.1's forms, on the same lines, are not"
+         (both "workflow-other-floor")
+         (refused 3
+                  (form-wrote (at "workflow-other-floor" "workflows/ci.yml") 11 "3046000" "version-number" "3.46.0"
+                              (at "workflow-other-floor" "floors.sexp"))
+                  (form-wrote (at "workflow-other-floor" "workflows/ci.yml") 12 "3460000" "amalgamation" "3.46.0"
+                              (at "workflow-other-floor" "floors.sexp"))
+                  (form-wrote (at "workflow-other-floor" "workflows/ci.yml") 13 "3460000" "amalgamation" "3.46.0"
+                              (at "workflow-other-floor" "floors.sexp"))))
    (list "workflow-both"
          "a comment in ci.yml names both floors: each named, the Chez floor first"
          (both "workflow-both")
