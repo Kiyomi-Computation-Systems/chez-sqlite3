@@ -8,7 +8,9 @@
   that keeps no memory count (M1's plan,
   [amendment](#amendment-2026-11-14-a-library-that-keeps-no-memory-count-m1s-plan)), and the first
   suite that loads libsqlite3 (M1 slice 2,
-  [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)).
+  [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)), and the
+  children under the gate (M1 slice 3,
+  [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -242,4 +244,43 @@ Measured in the pinned container before the gate was built
 - **Its children run outside Valgrind:** the C oracle, which loads the same libsqlite3, and gcc,
   sh and mkfifo. So does `test-blocks`' dead-address child, which reaches malloc and free only.
   Slice 3 decides how the gate covers children.
+- **Measured on CI** (PR #9's run, 2026-11-14): `test-native` passed in the `memory` job, Valgrind
+  3.22 with Ubuntu's 3.45.1, with no suppression. The closing review's unmeasured case is now
+  measured, clean.
+
+## Amendment, 2026-11-14: children under the gate (M1 slice 3)
+
+- **Each child that reaches native code runs under the gate's own Valgrind, with its own log**
+  (the closing review's amendment, its first choice). `make test-memory` exports
+  `CHEZ_SQLITE3_GATE_CHILD` to each suite: `$(VALGRIND)` and the gate's own options, with
+  `--log-file=build/memory/<suite>.children/%p.valgrind`. A suite runs each such child through
+  `(chez-sqlite3-testing)`'s `gated-command`: the refusal probes, preflight, `test-blocks`'
+  dead-address child and `test-native`'s C oracle. Before each suite its old child logs are
+  removed; after it, every child log is held to the parent's rules:
+  - the options are exactly the child's;
+  - `Command:` begins with `$(CHEZ) `, or names the program `libsqlite3-oracle`, and the first
+    program Valgrind read is that file;
+  - 0 errors from 0 contexts;
+  - no suppression file but Valgrind's own `default.supp`.
+
+  A child log that fails fails its suite, naming the log.
+- **Why not `--trace-children=yes`** (measured in the container, Valgrind 3.27):
+  - Chez's `system` runs a static bash. Traced, it reports about 300 uninitialised-value errors and
+    exits 9, so every child, clean or leaking, answers 9.
+  - `mktemp` loses 44 bytes definitely, and gcc reports 41 errors.
+  - Skipping the shell with `--trace-children-skip` untraces everything the shell starts, so no
+    child is seen. Tracing with a suppression for the static bash worked, but needs a suppression
+    and a skip list kept by hand, against decision 2.
+- **What it costs:** about 4.1 s per Chez child and 0.25 s per oracle run. `test-library-loading`
+  takes 14 s plain and 223 s under the gate, with 53 child logs, against `MEMORY_TIMEOUT`'s 600 s.
+  `make test-memory` went from 171 s to 409 s in the container. CI's runner is the next
+  measurement; decision 5's consequence, shards, is the remedy if it grows too slow.
+- **`check-memory-gate` gains cases p and q** (48 cases): a child's planted leak (777 bytes) and
+  overrun (23 bytes) fail the gate; options dropped for children, another program, the oracle
+  leaking, a forged log and a stale one each fail; and a child run without `gated-command`
+  passes, which is the gap that remains.
+- **Not covered:** a child started without `gated-command` runs outside Valgrind, unseen. Of the
+  wrapped children, only `test-library-loading`'s say whether they ran under memcheck: a child's
+  `/proc/self/maps` shows `vgpreload_memcheck`. `test-blocks`' child and the oracle have no such
+  row yet.
 

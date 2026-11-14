@@ -171,3 +171,11 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
     process that already holds another SQLite, a `missing-api` check passes on that SQLite's
     entry, and native would bind from two libraries. chez-sqlite3 assumes it is the only SQLite
     a process loads. Slice 3 runs every decoy case in a fresh process.
+- **The install check, and the refusals end to end** (M1 slice 3). CI's `main` job runs
+  `make build` with `CHEZ_SQLITE3_LIBRARY` unset, its own step, "The install check, by discovery":
+  it exits non-zero on any refusal, so the runner's library must be found and accepted. Which file
+  it found is read from CI's log, not held. Every refusal reason is driven through the real load
+  by a decoy libsqlite3 in a fresh process (`test-library-loading`). `not-found` runs end to end
+  in a Guix world; in an FHS world, as on CI, its row asserts discovery's success instead, and its
+  name says which world ran.
+

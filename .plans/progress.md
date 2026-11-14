@@ -33,7 +33,10 @@ newest first.
   `make build`, and the convention suite. Reviewed (Opus): no blocker; message-text assertions had
   come back, and a keyword alias hid a binding from the convention suite. Both fixed, with every
   surviving mutant rerun; the refusal paths only a decoy can reach are owed to slice 3.
-- **Next: slices 3 and 4,** each stacked on the one before.
+- **M1 slice 3, refusals end to end,** is on `m1-slice-3-refusals`, stacked on slice 2: the decoy
+  libsqlite3, the refusal probe and `test-library-loading`, `make dev` and `check-dev`, children
+  under the gate's own Valgrind, and CI's install check by discovery.
+- **Next: slice 4,** stacked on slice 3.
 - **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
   `nothreads` is the maintainer's call (ADR-0005, amended).
 
