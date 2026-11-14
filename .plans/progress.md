@@ -22,11 +22,13 @@ newest first.
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14): the `main`, `memory`
   and `nothreads` jobs are required, force pushes and deletion refused. Admins can override.
 - **Next: M1 slice 5,** the `floor` and `current` lanes; then M1's closing review.
-- **Owed to M1's closing review, found on the way:**
-  - `test-counters`' `count-up!` and `count-down!` refusal rows, from M0, still assert message
-    text (slice 4's review fixes, noted in its log).
-  - A checkout path holding whitespace would split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: nothing
-    refuses one (slice 3's review fixes).
+- **Paid on `m1-owed-fixes`, before M1's closing review** (the maintainer asked, 2026-11-14):
+  - `test-counters`' `count-up!` and `count-down!` refusal rows asserted message text, from M0.
+    The counters' refusals now lead their irritants with `not-a-kind` or `double-free`, and the
+    rows assert who and irritants only.
+  - A checkout path holding whitespace split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: `test-memory` now
+    refuses one, and `check-memory-gate` holds 56 cases (ADR-0005, amended;
+    [the log](m1-owed-fixes-mutation-log.md)).
 - **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs

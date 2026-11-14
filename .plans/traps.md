@@ -125,6 +125,12 @@ told in chez-curl's `.plans/traps.md`.
   Where the code isn't what a row is about, it names the codes it accepts, each measured. (M1,
   the Mac's first hand run, chez-sqlite3)
 
+- **A value is cut where its readers cut it.** `CHEZ_SQLITE3_GATE_CHILD` holds an absolute log
+  path, and its readers cut it at whitespace, so a checkout path holding a space split it, and
+  nothing refused one; `test-memory` now does. A plant for such a path is a real directory:
+  `CURDIR` is the physical path, and a symlink's name never reaches it. (M1's owed fixes,
+  chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
