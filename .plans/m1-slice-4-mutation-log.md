@@ -268,3 +268,193 @@ No row here can see these, by design or by measurement:
   No suppression was used.
 - **`scripts/guix-env make check-test-fails`:** `make test failed, as it must, in all 12 cases`.
 - **`scripts/guix-env make check-memory-gate`:** `the memory gate failed, as it must, and its refusals held, in all 36 cases`. Its `g all` case reads the suites from the glob, so the three new suites joined it with no edit.
+
+## The gate
+
+Slice 4's last part: the `sqlite3_memory_used` exit check with its positive control, the check
+that the testing library loads no libsqlite3, and the leaks plant through `open-database`
+([M1 plan](2026-11-13-m1-plan.md) §3.1, §3.6, §3.7, §3.9; [ADR-0005](decisions/0005-memory-gate.md),
+amended; [ADR-0012](decisions/0012-explicit-close-and-the-handle.md)). An Opus agent built it,
+test first, from the plan's leaning for where the check runs.
+
+It is:
+- **a registration point in `(chez-sqlite3 private counters)`:** `register-exit-check!` and
+  `exit-checks`. It loads nothing, and there is no way to drop a check;
+- **`(chez-sqlite3 private memory-check)`,** a new library: `memory-check-outcome`, the pure
+  verdict, and `make-memory-check`, the control, given native's bindings;
+- **native's step 8,** two plain definitions after step 7, not `load-step`s, since neither can
+  raise: the baseline read, and the check registered. `test-native`'s step list and export list
+  are unchanged;
+- **`suite-exit-status`,** which runs every registered check first, then reads the counts, and
+  names each check's outcome on its own line, after the runner's line and the counts' line;
+- **`tests/test-never-loads.sps`,** written and watched failing before the registration landed;
+- **the leaks plants:** `check-test-fails`' leaks case, rewritten, and
+  `tests/memory-plant-connection.sps` with `check-memory-gate`'s case `b connection`.
+
+The mutations ran as the slice's others did: each in its own copy under the session scratchpad's
+`s4gate/copies/`, without `.git` or `build/`, through that copy's `scripts/guix-env`, after
+`make deps` there. A driver refused any edit whose old text did not occur exactly once, or that
+changed nothing; all 14 runs' edits were checked against the tree first. Counts are read from the suites' own
+output.
+
+### Measured first
+
+**`sqlite3_memory_used` comes back to its value after `sqlite3_initialize`.** A probe loaded the
+library through `(chez-sqlite3 private native)`, read the count, then ran each cycle in turn
+through the raw bindings and then `open-database`. The 3.45.1 library was built in the container
+from the amalgamation (`sqlite-amalgamation-3450100.zip`, its `sqlite3.c` SHA-256 `1a206854…c710ab`),
+copied under `build/s4gate/`:
+
+```
+$CC -shared -fPIC -O1 -DSQLITE_THREADSAFE=1 -o libsqlite3-3.45.1.so sqlite-3.45.1/sqlite3.c -lpthread -lm
+$CC -shared -fPIC -O1 -DSQLITE_THREADSAFE=1 -DSQLITE_DEFAULT_MEMSTATUS=0 \
+    -o libsqlite3-3.45.1-nomemstatus.so sqlite-3.45.1/sqlite3.c -lpthread -lm
+```
+
+with gcc 16.2.0, each loaded through `CHEZ_SQLITE3_LIBRARY`. The counts, in bytes:
+
+| Read | Guix 3.53.1 | 3.45.1 | 3.45.1, `DEFAULT_MEMSTATUS=0` |
+|---|---|---|---|
+| once loaded, after `sqlite3_initialize` | 0 | 0 | 0 |
+| `:memory:` open, first cycle | 61,360 | 57,232 | 0 |
+| closed | 0 | 0 | 0 |
+| `:memory:` open, second cycle; closed | 61,360; 0 | 57,232; 0 | 0; 0 |
+| `:memory:` with a table, a row and a query; closed | 75,032; 0 | 70,832; 0 | 0; 0 |
+| a WAL file, a 5,000-byte blob and a query; closed | 154,472; 0 | 150,272; 0 | 0; 0 |
+| the same file again; closed | 154,464; 0 | 150,264; 0 | 0; 0 |
+| a failed open (missing directory), its handle held; closed | 1,376; 0 | 1,304; 0 | 0; 0 |
+| `open-database ":memory:"`; `close-database!` | 61,360; 0 | 57,232; 0 | 0; 0 |
+| a failed `open-database` (`cantopen`) | 0 after | 0 after | 0 after |
+
+So the baseline is read before any open: no cycle is needed first, on either version. The
+no-count build lists `DEFAULT_MEMSTATUS=0` among its options, and its count never moves, as
+Apple's never did. CI's Ubuntu 3.45.1 is a distribution build, and is still unmeasured: its first
+`make test` with this check is that measurement.
+
+**Valgrind sees a connection dropped from `open-database`.** Each probe ran under the gate's own
+command (Valgrind 3.27):
+
+| Probe | 3.53.1 | 3.45.1 |
+|---|---|---|
+| `:memory:` opened, record dropped | 840 direct, 61,288 indirect in 95 blocks: definitely lost, 1 block | 792 direct, 56,640 indirect in 24 blocks |
+| the record held by a top-level variable at exit | the same | the same |
+| the record dropped, then `(collect 4)` | the same | the same |
+| a file database, record dropped | 840 direct, 61,480 indirect | 792 direct, 56,832 indirect |
+| three opens, each dropped | 3 blocks, 2,520 direct | 3 blocks, 2,376 direct |
+
+Each exited 9, `ERROR SUMMARY: 1 errors from 1 contexts`, nothing possibly lost, no suppression.
+The loss record's stack runs `malloc`, then libsqlite3 (`sqlite3MemMalloc`, `sqlite3Malloc`,
+`sqlite3MallocZero`, `openDatabase`, `sqlite3_open_v2` on the 3.45.1 build; `???` frames in
+Guix's stripped `libsqlite3.so.3.53.1`), then Chez. So the M1 plan's §3.1 question is settled: no
+raw copy of the address survives the real constructor's calls, and Valgrind is a second witness
+to every connection left open, beside the counters.
+
+### The red runs
+
+The never-loads suite ran first, on the tree before the registration: 4 passed. Then two plants,
+in copies:
+
+| Plant | `test-never-loads` |
+|---|---|
+| `(chez-sqlite3 private native)` imported by the testing library | 2 passed, 2 failed: the allowlist row (`((chez-sqlite3 private native))` extra), the reach row (native and the nine libraries it reaches) |
+| the same, and the allowlist gaining it | 3 passed, 1 failed: the reach row, naming native both as allowlisted and as reached |
+
+With the first plant, `make test` failed on `test-never-loads` alone (`ran 22, passed 21, failed
+1`): no other check sees an import whose library body never runs.
+
+The other suites were then written, and run against stubs with the real exports, every procedure
+answering the symbol `stub` and registering nothing:
+
+| Suite | Red run | First green run |
+|---|---|---|
+| `test-memory-check` | 1 passed (the exports), 12 failed | 13 passed |
+| `test-counters` | 15 passed (14 old, and "no exit check"), 2 failed | 17 passed |
+| `test-chez-sqlite3-testing` | 61 passed (60 old, and the plant's own open), 9 failed | 70 passed |
+
+### The verdict lines
+
+`suite-exit-status` writes one line per check, after the runner's line and the counts' line:
+
+```
+suite-exit-status: the NAME check passed: TEXT
+suite-exit-status: exit 1 (the NAME check failed): TEXT
+suite-exit-status: the NAME check is unavailable: TEXT
+suite-exit-status: exit 1 (the NAME check failed): it raised: DESCRIBED
+suite-exit-status: exit 1 (the NAME check failed): it answered WRITTEN, not (pass TEXT), (fail TEXT) or (unavailable TEXT)
+```
+
+The memory check's three, as the suites printed them:
+
+```
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+suite-exit-status: exit 1 (the sqlite3_memory_used check failed): the count is 61360 bytes after the control's :memory: open and close, not its baseline, 0 bytes: SQLite still holds memory that a suite's end must have freed
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+```
+
+The failure is the raw plant's, on 3.53.1; 3.45.1's names 57232. The unavailable line is every
+suite's on the no-count build, where `test-chez-sqlite3-testing` (70), `test-memory-check` (13),
+`test-connection` (45), `test-public` (17) and `test-native` (43) all passed. `check-test-fails`'
+leaks case passed on all three libraries.
+
+### The mutations
+
+Baselines: `test-memory-check` 13, `test-counters` 17, `test-chez-sqlite3-testing` 70,
+`test-never-loads` 4; `check-test-fails` 12 cases; `check-memory-gate` 38. 13 mutations, in 14 runs (G6 ran on two
+libraries); 12 caught, and one equivalent on every library measured.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| G1 | the testing library imports no loader: native imported | `test-never-loads` 2: the allowlist, the reach. `make test`: that suite alone |
+| G2 | the allowlist names no loader: native added, with the import | `test-never-loads` 1: the reach row, naming native as allowlisted and as reached |
+| G3 | native registers the check: `register-exit-check!` made `list` | `test-chez-sqlite3-testing` 4: every child that loads libsqlite3 (no line, and the raw plant exited 0); `check-test-fails`' leaks case (no memory line). `test-native` passed 43: no row there reads the line |
+| G4 | the baseline is the load's: read at the check, after the control | `test-memory-check` 4: the control rows; `test-chez-sqlite3-testing` 2: the raw plant and the open left, each now a pass naming 61360 as the baseline; `check-test-fails`' leaks case, the same |
+| G5 | the baseline is read before any open: after a control run at the load | **Not caught, and equivalent here.** Every suite passed: the count is 0 before the first open and after every close, on 3.53.1 and 3.45.1 alike (above). It would differ only on a library that keeps something after its first connection |
+| G6 | a count that didn't rise is unavailable: the verdict answers pass | `test-memory-check` 2: the unavailable rows. On 3.53.1, `test-chez-sqlite3-testing` passed 70, since the library counts. Rerun on the no-count build: `test-chez-sqlite3-testing` 4, every native child (`check passed: the count was 0 bytes before…`) |
+| G7 | unavailable is named unavailable: its line says passed | `test-chez-sqlite3-testing` 1: the pass and unavailable child |
+| G8 | the control opens a connection: the three counts read with nothing opened | `test-memory-check` 6: every control row; `test-chez-sqlite3-testing` 4: every native child, now unavailable |
+| G9 | `check-test-fails`' plant leaves its connection open: it closes it | `check-test-fails` leaks: `make test exited 0`, the plant passed, and the check named a pass |
+| G10 | `check-memory-gate`'s plant leaves its connection open: it closes it | `check-memory-gate` 1 of 38, `b memory-plant-connection`: `make test-memory exited 0`, and every marker absent, the stack's among them. Its case `a` passed, as it must |
+| G11 | a failed check fails the suite: its outcome ignored in the status | `test-chez-sqlite3-testing` 4: the fail, raise and malformed children and the raw plant, each exit 0 under its fail line |
+| G12 | checks run in the order registered: newest first | `test-counters` 1 (`(#f #t #f)`); `test-chez-sqlite3-testing` 3: both order rows and the malformed list |
+| G13 | a control whose open fails closes its handle: not | `test-memory-check` 1: the call log ends at the open |
+
+### Not covered
+
+- **G5's difference.** No library measured keeps memory after its first connection, so a baseline
+  taken before the first open and one taken after a first cycle agree. The design reads it before
+  any open, as the plan leaned.
+- **Unavailable end to end in `make test`.** No library in the container or on CI keeps no count;
+  `test-memory-check`'s rows hold the verdict, and the no-count build was run by hand (above). The
+  Mac's hand runs reach Apple's library, where the native children expect the unavailable line.
+- **A check that never returns.** `suite-exit-status` runs each check to its end; make test's
+  timeout names a hang.
+- **Children that reach native code.** `test-chez-sqlite3-testing`'s four native children and
+  `check-test-fails`' leaks plant load libsqlite3 outside Valgrind, as `test-native`'s oracle does.
+  Slice 3 decides how the gate covers children (ADR-0005, amended).
+- **The never-loads check reads imports, not behaviour.** A library body that reached libsqlite3
+  through a name it already imports, `system` running a program that loads it, say, is held by
+  the allowlist's names and by review.
+
+### Final runs
+
+- **`scripts/guix-env make test`:** `ran 22, passed 22, failed 0, hung 0`, with:
+  - `check-seam: the seam holds (15 libraries in 15 files checked)`;
+  - `check-suites`: 22 checked;
+  - the passed line for the check in each of the three suites that load libsqlite3, `test-native`,
+    `test-connection` and `test-public`;
+  - `test-require-threaded` at 63, one more row for the new library.
+- **`scripts/guix-env make test-memory`:** `ran 22, passed 22, failed 0, hung 0`. The new suites'
+  Valgrind logs:
+
+  | Suite | Errors | Lost | Still reachable |
+  |---|---|---|---|
+  | `test-chez-sqlite3-testing` | 0, from 0 contexts | 0 definitely, indirectly or possibly | 13,504 bytes in 6 blocks |
+  | `test-memory-check` | 0 | 0 | 168 bytes in 3 blocks |
+  | `test-never-loads` | 0 | 0 | 168 bytes in 3 blocks |
+  | `test-counters` | 0 | 0 definitely or indirectly; 2,016 bytes in 7 blocks possibly, as at `f7ba038` | 53,400 bytes in 13 blocks |
+
+  No suppression was used.
+- **`scripts/guix-env make check-test-fails`:** `make test failed, as it must, in all 12 cases`, and
+  the same on the 3.45.1 build and the no-count build, through `CHEZ_SQLITE3_LIBRARY`.
+- **`scripts/guix-env make check-memory-gate`:** `the memory gate failed, as it must, and its
+  refusals held, in all 38 cases`: the connection plant's `a` and `b` are the two new ones.

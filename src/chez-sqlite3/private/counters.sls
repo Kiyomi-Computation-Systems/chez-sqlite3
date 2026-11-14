@@ -14,11 +14,15 @@
 ;;; section (locked, below): no interrupt that escapes can leave the mutex
 ;;; held.
 ;;;
-;;; It never loads libsqlite3, so any suite can import it. R6RS forbids
-;;; assigning an exported variable, so the counts are reached through
-;;; procedures.
+;;; It also keeps the exit checks a library that loaded libsqlite3 registers,
+;;; for suite-exit-status to run (register-exit-check!, below).
+;;;
+;;; It never loads libsqlite3, so any suite can import it:
+;;; tests/test-never-loads.sps holds its imports to an allowlist. R6RS forbids
+;;; assigning an exported variable, so the counts and the checks are reached
+;;; through procedures.
 (library (chez-sqlite3 private counters)
-  (export native-kinds count-up! count-down! native-counts)
+  (export native-kinds count-up! count-down! native-counts register-exit-check! exit-checks)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
           (only (chezscheme) critical-section make-mutex with-mutex))
@@ -84,4 +88,35 @@
   ;; Every kind with its count, in native-kinds order, read at one moment.
   (define (native-counts)
     (let ((now (locked lock (lambda () (vector->list counts)))))
-      (map cons native-kinds now))))
+      (map cons native-kinds now)))
+
+  ;; --- the exit checks -------------------------------------------------------
+  ;; A check of what a native library holds at a suite's end, which only that
+  ;; library can make: (chez-sqlite3 private native) registers the
+  ;; sqlite3_memory_used check once its load has initialised SQLite, so a
+  ;; process that never loaded libsqlite3 has none to run (the M1 plan, §3.7).
+  ;; The checks are kept here because suite-exit-status already reads this
+  ;; library, and registering one loads nothing. A check is a procedure of no
+  ;; arguments that answers (pass TEXT), (fail TEXT) or (unavailable TEXT);
+  ;; suite-exit-status runs each at a suite's end and names its outcome.
+
+  ;; The checks, newest first, each (NAME . CHECK), behind the counts' mutex.
+  (define checks '())
+
+  ;; register-exit-check! : Symbol (-> (List Symbol String)) -> Void
+  ;; CHECK, under NAME, for every suite-exit-status from now on, after the
+  ;; checks registered before it. There is no way to drop one. A NAME that is
+  ;; no symbol and a CHECK that is no procedure are assertion violations, and
+  ;; nothing is registered. A NAME given twice registers two checks.
+  (define (register-exit-check! name check)
+    (unless (symbol? name)
+      (assertion-violation 'register-exit-check! "an exit check's name is a symbol" name))
+    (unless (procedure? check)
+      (assertion-violation 'register-exit-check! "an exit check is a procedure" name check))
+    (locked lock (lambda () (set! checks (cons (cons name check) checks)))))
+
+  ;; exit-checks : -> (Listof (Pairof Symbol (-> (List Symbol String))))
+  ;; Every check registered, each with its name, in the order registered, in
+  ;; a fresh list.
+  (define (exit-checks)
+    (reverse (locked lock (lambda () checks)))))

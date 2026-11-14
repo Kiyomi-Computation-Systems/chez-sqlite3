@@ -10,6 +10,11 @@
 #                   Valgrind's "Invalid write" in its log and in its own
 #                   output, and goes on to the suite after it
 #   b  leak         the same for the leak plant, with its loss record
+#   b  connection   the same for the connection plant, which opens :memory:
+#                   through open-database and drops the record: one block
+#                   definitely lost, holding others, and allocated within
+#                   libsqlite3, read from the loss record's stack (the M1
+#                   plan, section 3.1)
 #   b  fails        a program that Valgrind finds clean but that exits 1
 #                   is named FAIL with its exit, then its own lines, whole:
 #                   its FAIL line with its expected and actual values, 18
@@ -165,6 +170,7 @@ hang_timeout=15
 
 overrun=tests/memory-plant-overrun.sps
 leak=tests/memory-plant-leak.sps
+connection=tests/memory-plant-connection.sps
 scratch=build/check-memory-gate
 after=$scratch/after.sps
 fails=$scratch/fails.sps
@@ -697,6 +703,32 @@ want_in() {
   fi
 }
 
+# want_match FILE ERE WHAT: FILE must hold a line matching the extended
+# regular expression ERE. For Valgrind's lines whose sizes vary by SQLite's
+# version and build.
+want_match() {
+  if [ ! -f "$1" ]; then
+    problem "$3: $1 does not exist"
+  elif ! grep -qE -- "$2" "$1"; then
+    problem "$3: no line matching \"$2\" in $1"
+  fi
+}
+
+# want_sqlite_stack VLOG: the stack of VLOG's definite loss record must pass
+# through libsqlite3: a frame in a file of that name, as a library with no
+# debug information shows it, or in sqlite3_open_v2, as one with it does.
+# So the block lost is SQLite's, not Chez's own.
+want_sqlite_stack() {
+  if [ ! -f "$1" ]; then
+    problem "its Valgrind log: $1 does not exist"
+  elif ! awk '/are definitely lost in loss record/ { inside = 1; next }
+              inside && /^==[0-9]+== *$/ { inside = 0 }
+              inside && (/libsqlite3/ || /sqlite3_open_v2/) { found = 1 }
+              END { exit !found }' "$1"; then
+    problem "its Valgrind log: the definite loss record's stack passes through no libsqlite3 frame, in $1"
+  fi
+}
+
 failed_line() { printf 'test-memory: FAIL %s (exit 9, Valgrind'"'"'s: an error or a definite leak)\n' "$1"; }
 
 # zero_line SUITE PROBLEM...: the line naming SUITE FAIL though Valgrind
@@ -764,11 +796,12 @@ allowed=$vgdefault
 count_line()  { printf 'test-memory: ran %d, passed %d, failed %d, hung %d\n' "$1" "$2" "$3" "$4"; }
 
 # ---- a: each plant, run plainly ----
-for p in "$overrun" "$leak"; do
+for p in "$overrun" "$leak" "$connection"; do
   newtree
   case "$p" in
     "$overrun") line="memory-plant-overrun: planted a one-byte write just past a 23-byte foreign block" ;;
-    *)          line="memory-plant-leak: planted a 777-byte foreign block that nothing frees or holds" ;;
+    "$leak")    line="memory-plant-leak: planted a 777-byte foreign block that nothing frees or holds" ;;
+    *)          line="memory-plant-connection: opened :memory: through open-database and dropped the record, never closed" ;;
   esac
   plain=$("$CHEZ" --libdirs "$LIBDIRS" --program "$p" 2>&1)
   rc=$?
@@ -779,7 +812,10 @@ $(printf '%s\n' "$plain" | sed 's/^/  | /')"
 done
 
 # ---- b: test-memory fails on each plant, by name, with Valgrind's marker ----
-for p in "$overrun" "$leak"; do
+# The connection plant's sizes are SQLite's, and vary by version and build,
+# so its markers are patterns: one block definitely lost, holding others, in
+# the loss record and in the summary, then its stack.
+for p in "$overrun" "$leak" "$connection"; do
   newtree
   gate MEMORY_SUITES="$p $after"
   status=$?
@@ -791,16 +827,28 @@ $(count_line 2 1 1 0)"
   case "$p" in
     "$overrun") markers="Invalid write of size 1
 0 bytes after a block of size 23 alloc'd" ;;
-    *)          markers="777 bytes in 1 blocks are definitely lost in loss record" ;;
+    "$leak")    markers="777 bytes in 1 blocks are definitely lost in loss record" ;;
+    *)          markers= ;;
   esac
   markers="$markers
 ERROR SUMMARY: 1 errors from 1 contexts"
   while IFS= read -r m; do
+    [ -n "$m" ] || continue
     want_in "$vlog" "$m" "its Valgrind log"
     want_in "$out" "$m" "test-memory's own output"
   done <<EOF
 $markers
 EOF
+  if [ "$p" = "$connection" ]; then
+    while IFS= read -r m; do
+      want_match "$vlog" "$m" "its Valgrind log"
+      want_match "$out" "$m" "test-memory's own output"
+    done <<'EOF'
+==[0-9]+== [0-9,]+ \([0-9,]+ direct, [0-9,]+ indirect\) bytes in 1 blocks are definitely lost in loss record [0-9]+ of [0-9]+$
+definitely lost: [0-9,]+ bytes in 1 blocks$
+EOF
+    want_sqlite_stack "$vlog"
+  fi
   verdict "b $(basename "$p" .sps): test-memory names $p FAIL, with Valgrind's report in its log and its output, and runs the suite after it"
 done
 

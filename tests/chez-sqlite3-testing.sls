@@ -3,8 +3,8 @@
 ;;;
 ;;;   suite-exit-form    the last datum of every tests/test-*.sps
 ;;;   suite-exit-status  the verdict that form exits with: the runner's
-;;;                      counts, and (chez-sqlite3 private counters)' native
-;;;                      counts
+;;;                      counts, (chez-sqlite3 private counters)' native
+;;;                      counts, and the exit checks registered there
 ;;;   capture-command    run a command; its exit status, stdout and stderr
 ;;;   call-with-temp-directory
 ;;;                      a fresh mktemp -d directory, removed after a call
@@ -47,15 +47,29 @@
   (define suite-exit-form '(exit (suite-exit-status runner)))
 
   ;; suite-exit-status : Test-Runner -> (U 0 1)
-  ;; 0 when RUNNER saw a pass, and no failure and no unexpected pass, and every
-  ;; count of (chez-sqlite3 private counters) is zero. Otherwise 1, after a
-  ;; line on the error port for each rule broken: the runner's counts, then
-  ;; each native count that is not zero, in native-kinds order (ADR-0005: a
-  ;; native object a suite made and never freed is a leak, which Valgrind sees
-  ;; as still reachable when a Chez object held its address). Expected failures
-  ;; and skips count neither way. SRFI-64 sets no exit status of its own. The
-  ;; answer is 0 or 1, never a count: exit statuses wrap at 256, so 256
-  ;; failures would exit 0.
+  ;; 0 when RUNNER saw a pass, and no failure and no unexpected pass, every
+  ;; count of (chez-sqlite3 private counters) is zero, and no exit check
+  ;; failed. Otherwise 1. On the error port, a line for each rule broken: the
+  ;; runner's counts, then each native count that is not zero, in native-kinds
+  ;; order (ADR-0005: a native object a suite made and never freed is a leak,
+  ;; which Valgrind sees as still reachable when a Chez object held its
+  ;; address). Then a line for every exit check, whatever its outcome, in the
+  ;; order registered. Expected failures and skips count neither way. SRFI-64
+  ;; sets no exit status of its own. The answer is 0 or 1, never a count: exit
+  ;; statuses wrap at 256, so 256 failures would exit 0.
+  ;;
+  ;; The exit checks are the counters' (exit-checks): only a library that
+  ;; loaded libsqlite3 registers one, so a suite that never loaded it runs
+  ;; none, and this library loads nothing (tests/test-never-loads.sps). They
+  ;; run first, one after another, so the counts read after them see anything
+  ;; they leave. Each answers (pass TEXT), (fail TEXT) or (unavailable TEXT),
+  ;; and its line names it:
+  ;;   suite-exit-status: the NAME check passed: TEXT
+  ;;   suite-exit-status: exit 1 (the NAME check failed): TEXT
+  ;;   suite-exit-status: the NAME check is unavailable: TEXT
+  ;; Unavailable fails nothing, and is never silent (ADR-0005, amended). A
+  ;; check that raises, or answers anything else, has failed, and its line
+  ;; says what it raised or answered.
   (define (suite-exit-status runner)
     (unless (test-runner? runner)
       (assertion-violation 'suite-exit-status "not a SRFI-64 test runner" runner))
@@ -63,8 +77,10 @@
            (fail (test-runner-fail-count runner))
            (xpass (test-runner-xpass-count runner))
            (runner-ok? (and (> pass 0) (= fail 0) (= xpass 0)))
-           (left (filter (lambda (entry) (not (eqv? (cdr entry) 0))) (native-counts))))
-      (if (and runner-ok? (null? left))
+           (checked (run-exit-checks))
+           (left (filter (lambda (entry) (not (eqv? (cdr entry) 0))) (native-counts)))
+           (checks-ok? (for-all (lambda (line) (not (eq? (car line) 'fail))) checked)))
+      (if (and runner-ok? (null? left) (null? checked))
           0
           (let ((err (current-error-port)))
             ;; The runner's own summary, on stdout, comes first.
@@ -84,8 +100,44 @@
                                                       (number->string (cdr entry))))
                                      left))
                                "): every native object a suite makes must be freed by its end\n")))
+            (for-each (lambda (line) (put-string err (cdr line))) checked)
             (flush-output-port err)
-            1))))
+            (if (and runner-ok? (null? left) checks-ok?) 0 1)))))
+
+  ;; run-exit-checks : -> (Listof (Pairof (U 'pass 'fail 'unavailable) String))
+  ;; Every exit check run, in the order registered, each one's outcome with
+  ;; its line. A raise, or an answer that is no outcome, is a failure.
+  (define (run-exit-checks)
+    (let loop ((checks (exit-checks)) (lines '()))
+      (if (null? checks)
+          (reverse lines)
+          (let* ((name (symbol->string (caar checks)))
+                 (answer (guard (e (#t (list 'raised (describe e))))
+                           (list 'answered ((cdar checks))))))
+            (loop (cdr checks) (cons (check-line name answer) lines))))))
+
+  ;; check-line : String (U (List 'raised String) (List 'answered Any))
+  ;;              -> (Pairof (U 'pass 'fail 'unavailable) String)
+  ;; The outcome of the check NAME, and its line, from what it did.
+  (define (check-line name answer)
+    (let ((value (cadr answer)))
+      (cond
+        ((eq? (car answer) 'raised)
+         (cons 'fail (string-append "suite-exit-status: exit 1 (the " name " check failed): it raised: "
+                                    value "\n")))
+        ((not (and (list? value) (= (length value) 2) (memq (car value) '(pass fail unavailable))
+                   (string? (cadr value))))
+         (cons 'fail (string-append "suite-exit-status: exit 1 (the " name " check failed): it answered "
+                                    (describe value)
+                                    ", not (pass TEXT), (fail TEXT) or (unavailable TEXT)\n")))
+        (else
+         (cons (car value)
+               (case (car value)
+                 ((pass) (string-append "suite-exit-status: the " name " check passed: " (cadr value) "\n"))
+                 ((fail) (string-append "suite-exit-status: exit 1 (the " name " check failed): "
+                                        (cadr value) "\n"))
+                 (else (string-append "suite-exit-status: the " name " check is unavailable: "
+                                      (cadr value) "\n"))))))))
 
   ;; join-words* : (Listof String) -> String
   ;; WORDS joined with ", ", or "none" for no words.

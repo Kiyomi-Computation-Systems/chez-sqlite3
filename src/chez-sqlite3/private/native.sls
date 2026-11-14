@@ -29,6 +29,9 @@
 ;;;                  answer but SQLITE_OK is load-failed
 ;;;   7. the rest    every other entry point M1 requires, in ADR-0002's
 ;;;                  amended order, eagerly
+;;;   8. the check   sqlite3_memory_used read once, the baseline, and the
+;;;                  check against it registered with the counters, for
+;;;                  suite-exit-status (chez-sqlite3 private memory-check)
 ;;;
 ;;; The load runs once per process, whatever it decides. Chez runs a library
 ;;; body that raised again at every later reference, so each step from 1 on
@@ -100,7 +103,9 @@
           (chez-sqlite3 private conditions)
           (chez-sqlite3 private memory)
           (chez-sqlite3 private discovery)
-          (chez-sqlite3 private verify))
+          (chez-sqlite3 private verify)
+          (only (chez-sqlite3 private counters) register-exit-check!)
+          (chez-sqlite3 private memory-check))
 
   ;; --- 0. once -------------------------------------------------------------------
 
@@ -456,6 +461,20 @@
     (load-step
      (bind-required report
        (foreign-procedure "sqlite3_memory_used" () integer-64))))
+
+  ;; --- 8. the exit check ---------------------------------------------------------------
+  ;; The count SQLite holds once initialised and bound, before anything is
+  ;; opened, is the baseline. The sqlite3_memory_used check against it is
+  ;; registered with the counters, which suite-exit-status reads, so only a
+  ;; process whose load got this far has it to run (ADR-0005, amended; the M1
+  ;; plan, §3.7). Neither definition can raise, so neither is a load-step.
+  (define memory-baseline (sqlite3-memory-used))
+
+  (define memory-check-registered
+    (register-exit-check! 'sqlite3_memory_used
+                          (make-memory-check memory-baseline sqlite3-memory-used
+                                             call-with-c-string call-with-out-pointer
+                                             sqlite3-open-v2 sqlite3-close)))
 
   ;; --- the report's readers ----------------------------------------------------------
 

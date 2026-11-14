@@ -1,8 +1,8 @@
 #!r6rs
-;;; The suite for (chez-sqlite3-testing): suite-exit-form, suite-exit-status,
-;;; capture-command, the temporary directories (call-with-temp-directory,
-;;; make-process-temp-directory, remove-temp-directory), run-until,
-;;; gated-command and describe.
+;;; The suite for (chez-sqlite3-testing): suite-exit-form, suite-exit-status
+;;; with the exit checks it runs, capture-command, the temporary directories
+;;; (call-with-temp-directory, make-process-temp-directory,
+;;; remove-temp-directory), run-until, gated-command and describe.
 ;;;
 ;;; Each expected value is one the code under test cannot produce by failing.
 ;;; SRFI-64 turns a raise in the actual expression into #f, so no expected
@@ -667,6 +667,225 @@
   '(0 under-tmpdir ("kept") removed)
   (process-outcome
    (string-append "(warning 'probe \"just a warning\")\n" kept-line)))
+
+;; --- the exit checks (ADR-0005, amended; the M1 plan, §3.7) ----------------
+;; suite-exit-status runs every check registered with the counters, in the
+;; order registered, and names each outcome on the error port: a pass, a
+;; failure, which exits 1, or unavailable. A check is registered for good, so
+;; each row runs in a child: a fresh Chez running a suite of one passing test
+;; under a null runner, which prints nothing, then the forms given, then the
+;; shared exit form. This suite's own process registers nothing: its verdict
+;; rows above see no check.
+;;
+;; The first rows register checks of their own, and load no libsqlite3. The
+;; rest load it, through (chez-sqlite3 private native), whose load registers
+;; the sqlite3_memory_used check; each such child reads the count itself, and
+;; prints what it read, so the row knows the numbers the verdict must name.
+;; Those children reach native code, outside Valgrind.
+
+;; child-suite : String String -> (List Integer String String)
+;; The exit status, stdout and stderr of a child suite whose imports end with
+;; IMPORTS and whose forms after its one test are BODY.
+(define (child-suite imports body)
+  (call-with-temp-directory
+   (lambda (base)
+     (let ((program (string-append base "/child.sps")))
+       (write-file program
+                   (string-append
+                    "#!r6rs\n"
+                    "(import (rnrs) (srfi :64) (chez-sqlite3 private counters) (chez-sqlite3-testing)\n"
+                    "        " imports ")\n"
+                    "(define runner (test-runner-null))\n"
+                    "(test-runner-current runner)\n"
+                    "(test-begin \"child\")\n"
+                    "(test-assert \"passes\" #t)\n"
+                    body "\n"
+                    "(test-end \"child\")\n"
+                    "(exit (suite-exit-status runner))\n"))
+       (capture-command (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program))))))
+
+(test-equal "two checks that pass and are unavailable: exit 0, each named on its own line, in the order registered"
+  (list 0 ""
+        (string-append
+         "suite-exit-status: the zeta check passed: all is well\n"
+         "suite-exit-status: the alpha check is unavailable: nothing to count here\n"))
+  (child-suite ""
+               (string-append "(register-exit-check! 'zeta (lambda () '(pass \"all is well\")))\n"
+                              "(register-exit-check! 'alpha (lambda () '(unavailable \"nothing to count here\")))")))
+
+(test-equal "a check that fails: exit 1, its line naming it"
+  (list 1 "" "suite-exit-status: exit 1 (the fake check failed): it did not hold\n")
+  (child-suite "" "(register-exit-check! 'fake (lambda () '(fail \"it did not hold\")))"))
+
+(test-equal "a check that raises: exit 1, its line naming what it raised"
+  (list 1 "" "suite-exit-status: exit 1 (the fake check failed): it raised: Exception in fake-check: it broke with irritant 42\n")
+  (child-suite "" "(register-exit-check! 'fake (lambda () (error 'fake-check \"it broke\" 42)))"))
+
+;; The answers a check may give are (pass TEXT), (fail TEXT) and
+;; (unavailable TEXT); these are their neighbours. None may pass.
+(test-equal "a check that answers anything but (pass TEXT), (fail TEXT) or (unavailable TEXT): exit 1, each named with what it answered"
+  (list 1 ""
+        (apply string-append
+               (map (lambda (shown)
+                      (string-append "suite-exit-status: exit 1 (the odd check failed): it answered "
+                                     shown ", not (pass TEXT), (fail TEXT) or (unavailable TEXT)\n"))
+                    '("fine" "(pass)" "(pass 5)" "(passed \"x\")" "(pass \"x\" \"y\")"
+                      "(unavailable . \"x\")" "#f"))))
+  (child-suite ""
+               (apply string-append
+                      (map (lambda (answer) (string-append "(register-exit-check! 'odd (lambda () '" answer "))\n"))
+                           '("fine" "(pass)" "(pass 5)" "(passed \"x\")" "(pass \"x\" \"y\")"
+                             "(unavailable . \"x\")" "#f")))))
+
+(test-equal "a failure, a native object left and two checks: every line, the runner's first, then the counts', then the checks' in the order registered"
+  (list 1 ""
+        (string-append
+         "suite-exit-status: exit 1 (pass 1, fail 1, xpass 0" runner-tail
+         "suite-exit-status: exit 1 (native objects left: statement 1" counts-tail
+         "suite-exit-status: the zeta check passed: all is well\n"
+         "suite-exit-status: exit 1 (the alpha check failed): it did not hold\n"))
+  (child-suite ""
+               (string-append "(test-assert \"fails\" #f)\n"
+                              "(count-up! 'statement)\n"
+                              "(register-exit-check! 'zeta (lambda () '(pass \"all is well\")))\n"
+                              "(register-exit-check! 'alpha (lambda () '(fail \"it did not hold\")))")))
+
+;; --- the sqlite3_memory_used check, on the library --------------------------
+
+;; The verdict lines for the counts a child read: written out here, and not
+;; read from the library.
+(define (memory-pass-line baseline)
+  (string-append "suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, "
+                 (number->string baseline)
+                 " bytes, after the control's :memory: open and close\n"))
+(define (memory-fail-line after baseline)
+  (string-append "suite-exit-status: exit 1 (the sqlite3_memory_used check failed): the count is "
+                 (number->string after)
+                 " bytes after the control's :memory: open and close, not its baseline, "
+                 (number->string baseline)
+                 " bytes: SQLite still holds memory that a suite's end must have freed\n"))
+(define (memory-unavailable-line count)
+  (string-append "suite-exit-status: the sqlite3_memory_used check is unavailable: the count was "
+                 (number->string count) " bytes before the control's :memory: open and "
+                 (number->string count)
+                 " while it was open, so this libsqlite3 keeps no memory count\n"))
+
+;; datum-of : String -> Any
+;; The first datum of TEXT, or (unreadable TEXT).
+(define (datum-of text)
+  (guard (e (#t (list 'unreadable text)))
+    (read (open-string-input-port text))))
+
+(define native-import "(chez-sqlite3 private native)")
+
+;; The plant: SQLite memory held past a suite's end, through a raw open that
+;; nothing counts and nothing closes. The child prints the count once loaded,
+;; the count holding the open, and the open's code.
+(define raw-plant
+  (guard (e (#t (list 'raised (describe e))))
+    (child-suite native-import
+                 (string-append
+                  "(define baseline (sqlite3-memory-used))\n"
+                  "(define rc\n"
+                  "  (call-with-c-string 'plant \":memory:\"\n"
+                  "    (lambda (name)\n"
+                  "      (let-values (((rc handle) (call-with-out-pointer 'plant (lambda (slot) (sqlite3-open-v2 name slot 6 0)))))\n"
+                  "        rc))))\n"
+                  "(define holding (sqlite3-memory-used))\n"
+                  "(write (list baseline holding rc))\n"
+                  "(newline)"))))
+
+;; plant-read : (U (List Integer Integer Integer) Any)
+;; What the plant printed, its three counts, when it ran.
+(define plant-read
+  (if (and (list? raw-plant) (= (length raw-plant) 3) (string? (cadr raw-plant)))
+      (datum-of (cadr raw-plant))
+      raw-plant))
+
+(define plant-read? (and (list? plant-read) (= (length plant-read) 3) (for-all integer? plant-read)))
+
+;; counting? : Boolean
+;; Whether this libsqlite3 keeps a memory count: the plant's open raised it.
+;; Apple's does not (ADR-0005, amended), and there every check below is
+;; unavailable.
+(define counting? (and plant-read? (> (cadr plant-read) (car plant-read))))
+
+(test-equal "SQLite memory held past the end through a raw open, never closed: exit 1, the check's line naming the count and the baseline, and no count of ours, which never saw the open; or, where the library keeps no count, unavailable and exit 0"
+  (if plant-read?
+      (let ((baseline (car plant-read)) (holding (cadr plant-read)))
+        (list (if counting? 1 0)
+              (string-append (call-with-string-output-port (lambda (p) (write plant-read p))) "\n")
+              (if counting?
+                  (memory-fail-line holding baseline)
+                  (memory-unavailable-line baseline))))
+      (list 'the-plant-printed-no-counts plant-read))
+  raw-plant)
+
+(test-equal "the plant's open succeeded, so its count is the open's"
+  0
+  (if plant-read? (caddr plant-read) plant-read))
+
+;; native-child : String String -> (List Integer String String)
+;; A child that loads native, reads the count, runs BODY, then prints the count
+;; it read after the load and the one at the end of BODY.
+(define (native-child imports body)
+  (child-suite (string-append native-import " " imports)
+               (string-append "(define baseline (sqlite3-memory-used))\n"
+                              body "\n"
+                              "(write (list baseline (sqlite3-memory-used)))\n"
+                              "(newline)")))
+
+;; expected-for : Any ((List Integer Integer) -> Any) -> Any
+;; EXPECTED given the two counts the child of OUTCOME printed, or why it
+;; printed none. It raises nothing: an expected expression's raise would end
+;; this suite, naming no test.
+(define (expected-for outcome expected)
+  (let ((read (and (list? outcome) (= (length outcome) 3) (string? (cadr outcome))
+                   (datum-of (cadr outcome)))))
+    (if (and (list? read) (= (length read) 2) (for-all integer? read))
+        (expected read)
+        (list 'the-child-printed-no-counts outcome))))
+
+(define (printed counts)
+  (string-append (call-with-string-output-port (lambda (p) (write counts p))) "\n"))
+
+;; checked-line : Integer -> String
+;; The check's line for a suite that freed all it held: a pass naming the
+;; BASELINE, or unavailable where the library keeps no count.
+(define (checked-line baseline)
+  (if counting? (memory-pass-line baseline) (memory-unavailable-line baseline)))
+
+(define opened-nothing
+  (guard (e (#t (list 'raised (describe e)))) (native-child "" "")))
+
+(test-equal "a suite that loaded libsqlite3 and opened nothing still runs the check, through its control: exit 0, the line naming the baseline"
+  (expected-for opened-nothing
+                (lambda (counts) (list 0 (printed counts) (checked-line (car counts)))))
+  opened-nothing)
+
+(define opened-and-closed
+  (guard (e (#t (list 'raised (describe e))))
+    (native-child "(chez-sqlite3)" "(close-database! (open-database \":memory:\"))")))
+
+(test-equal "a suite that opened and closed a connection through open-database: exit 0, the line naming the baseline"
+  (expected-for opened-and-closed
+                (lambda (counts) (list 0 (printed counts) (checked-line (car counts)))))
+  opened-and-closed)
+
+(define left-open
+  (guard (e (#t (list 'raised (describe e))))
+    (native-child "(chez-sqlite3)" "(define db (open-database \":memory:\"))")))
+
+(test-equal "a suite that left a connection from open-database open: exit 1, the connection counted, then the check's line naming the count it holds"
+  (expected-for left-open
+                (lambda (counts)
+                  (list 1 (printed counts)
+                        (string-append
+                         "suite-exit-status: exit 1 (native objects left: connection 1" counts-tail
+                         (if counting?
+                             (memory-fail-line (cadr counts) (car counts))
+                             (memory-unavailable-line (car counts)))))))
+  left-open)
 
 
 ;; --- run-until ------------------------------------------------------------
