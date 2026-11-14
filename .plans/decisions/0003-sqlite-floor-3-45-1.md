@@ -51,3 +51,14 @@ What the versions bring that v1 uses:
   SQLite. That covers this host's system library.
 - **JSONB is always available,** and FTS5 is wherever the build enables it (brief §2.6).
 - **Raising the floor** makes the edits ADR-0008 lists.
+
+## Amendment, 2026-11-14: decision 3 is built (M1 slice 5)
+
+- **The `floor` lane compiles the floor itself,** from sqlite.org's autoconf tarball, which holds
+  the same amalgamation as the zip, byte for byte, and needs only `tar`. Before compiling, it
+  checks the archive against its pin, and `sqlite3.c` against the SHA3-256 the release's log
+  publishes. Then `check-sqlite.sh` holds the build's version, source id and every compile option
+  before the suites load it through the override.
+- **The `current` lane does the same at 3.54.1.**
+- **Before CI:** with both builds, compiled in the Guix container with the lanes' flags,
+  `make test` passed 25 of 25 suites. See [the log](../m1-slice-5-mutation-log.md).

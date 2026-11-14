@@ -2,8 +2,8 @@
 # scripts/ci/floor.sh NAME
 #
 # Prints one floor, NAME being chez or sqlite, as packaging/floors.sexp at the
-# repository root writes it (ADR-0008): one line, "10.4.0". The root is two
-# directories above this script.
+# repository root writes it (ADR-0008): one line, three dot-separated numbers.
+# The root is two directories above this script.
 #
 # CI states no floor anywhere. This is how a step, or a script, gets one:
 # scripts/ci/build-chez.sh and check-chez.sh call it for the Chez floor, and

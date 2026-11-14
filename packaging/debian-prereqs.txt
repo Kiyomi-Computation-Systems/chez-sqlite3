@@ -25,13 +25,19 @@
 # toolchain: gcc, g++, make and libc6-dev.
 build-essential
 
-# --- to fetch the Chez release tarball ----------------------------------------
-# scripts/ci/build-chez.sh downloads it with curl, checks its sha256, and
-# unpacks it with tar. The runner image has curl already; it is listed so that
-# this file is the whole truth about a bare machine. tar is an Essential Debian
-# package, so it needs no line here.
+# --- to fetch the Chez release tarball and SQLite's source -------------------
+# scripts/ci/build-chez.sh downloads Chez's tarball with curl, checks its
+# sha256, and unpacks it with tar. scripts/ci/build-sqlite.sh downloads
+# SQLite's sqlite-autoconf tarball with curl, checks its SHA3-256 and its
+# sqlite3.c's with openssl dgst -sha3-256, and unpacks it with tar.
+# sqlite.org publishes SHA3-256 digests, which coreutils cannot compute: the
+# openssl command is the tool, not the libssl3 library a bare image already
+# has. The runner image has curl already; each is listed so that this file is
+# the whole truth about a bare machine. tar and gzip are Essential Debian
+# packages, so they need no line here.
 ca-certificates
 curl
+openssl
 
 # --- SQLite ---------------------------------------------------------------------
 # libsqlite3-dev gives sqlite3.h, which scripts/ci/report-sqlite.sh and,

@@ -365,6 +365,45 @@ Measured in the pinned container before the gate was built
 - **Rejected:** carrying such a path through the prefix. The prefix is a string of words, as
   `VALGRIND` is, and a quoting of its own would be a second rule for both readers to keep.
 
+## Amendment, 2026-11-14: the `floor` and `current` lanes (M1 slice 5)
+
+- **The lanes' compile options are held whole.** `check-sqlite.sh` compares every
+  `sqlite3_compileoption_get` answer, in SQLite's order, with its role's list: 37 options for the
+  floor and 38 for 3.54.1. `COMPILER=` is computed from the compiler, by SQLite's own
+  preprocessor test.
+- **That whole list is what keeps `DEFAULT_MEMSTATUS=0` out.** SQLite lists `DEFAULT_MEMSTATUS`
+  only when it isn't 1 (`# if SQLITE_DEFAULT_MEMSTATUS != 1`), so the rule above, that the lanes
+  must not set it to 0, has nothing else to read. A floor build with
+  `-DSQLITE_DEFAULT_MEMSTATUS=0` was refused by one line, `+DEFAULT_MEMSTATUS=0`.
+- **`check-ci` holds five jobs.**
+  - In `floor` and `current` only, `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` may stand, as env
+    keys with exactly the job's values.
+  - They stand on the three steps that run `check-sqlite.sh`, `make build` and `make test`, and
+    each of those steps must carry both, and `CHEZ`.
+  - `main`, `memory` and `nothreads` still refuse both names: `main` is the one job that tests
+    discovery.
+  - The SQLite cache keys are held whole, the compiler step must carry `id: cc`, and only the
+    SQLite build and its save may carry the SQLite cache's `if`.
+  - **Since the review's fixes, in every job:**
+    - a `uses:` step may only be `actions/checkout@`, `actions/cache/restore@` or
+      `actions/cache/save@`;
+    - each cache, told apart by its path, is restored before its build and saved after the build
+      and before its check;
+    - in the lanes, the SQLite restore also comes after the `id: cc` step.
+
+    Before these fixes, an `actions/cache@` step escaped the key rules. And a restore moved below
+    `check-sqlite.sh` would have served the suites a library the job never checked.
+- **`test-ci-sqlite`'s children run outside the gate,** as `test-check-floors`' `check-chez.sh`
+  rows do.
+  - They are CI scripts. Their Chez reads a stub or a built libsqlite3 through a probe of their
+    own, and runs none of chez-sqlite3's code.
+  - A shell child can't meet the gate's `Command:` rule.
+  - So the rule that sends children that reach native code through `gated-command` covers a
+    child that runs chez-sqlite3's code. `test-blocks`' dead-address child is one: it loads no
+    libsqlite3, but reaches `malloc` and `free` through chez-sqlite3's memory library. A child
+    that runs none of chez-sqlite3's code may run outside the gate.
+  - Under `make test-memory`, the suite took 25 s, with 0 errors and no child log.
+
 ## Amendment, 2026-11-14: statements, and the decoy's cost (M2's plan)
 
 Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0

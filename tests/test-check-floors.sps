@@ -925,6 +925,359 @@
   (outcome (lambda ()
              (check-floors fp "((chez \"10.9.1\"))" rp #f wd (list (list wp good-workflow))))))
 
+;; --- the CI scripts directory: pure ------------------------------------------------
+;; scripts-problems holds every file under the scripts directory, each as its
+;; path and text: no line may contain a floor's version text or the SQLite
+;; floor's numeric forms as a whole run of digits (the same boundary as the
+;; workflows), the directory must hold a file, and floor.sh directly in it.
+;; The workflow rules about YAML escapes and quotes do not apply: they are
+;; ordinary shell here. The base is the fixtures' floors, 10.9.1 and 8.1.2.
+
+(define sd "S")
+(define sp "S/floor.sh")
+
+;; scripts-wrote : String Natural String String -> String
+;; The complaint about line N of the script PATH, which contains a floor's
+;; version text. WHICH is "Chez" or "SQLite".
+(define (scripts-wrote path n which version)
+  (scripts-wrote-from fp path n which version))
+
+;; scripts-wrote-from : String String Natural String String -> String
+;; The same, for the floors file at FLOORS.
+(define (scripts-wrote-from floors path n which version)
+  (string-append path ": line " (number->string n) " contains the " which " floor " version
+                 ", which no CI script may write: they read it from " floors))
+
+;; scripts-form : String Natural String String -> String
+;; The same for FORM, the WHAT form of the SQLite floor 8.1.2.
+(define (scripts-form path n form what)
+  (scripts-form-from fp path n form what))
+
+(define (scripts-form-from floors path n form what)
+  (string-append path ": line " (number->string n) " contains " form ", the " what
+                 " form of the SQLite floor 8.1.2, which no CI script may write: they read it from " floors))
+
+(define (scripts-numbered path n) (scripts-form path n "8001002" "version-number"))
+(define (scripts-amalgam path n) (scripts-form path n "8010200" "amalgamation"))
+
+(define scripts-no-files
+  (string-append sd ": it holds no file, but must hold floor.sh, the script CI reads the floors through"))
+(define scripts-no-floor-sh
+  (string-append sd ": it holds no floor.sh, the script CI reads the floors through"))
+
+;; script : String ... -> String
+;; A legal floor.sh, which states no floor, with the lines BODY after its
+;; second line. The first line of BODY is line 3.
+(define (script . body)
+  (apply workflow (append (list "#!/bin/sh" "set -eu") body)))
+
+(define script-line 3)
+(define good-script (script))
+
+(define (scripts-row name scripts problems)
+  (test-equal (string-append "scripts: " name)
+    (list 'returned problems)
+    (outcome (lambda () (scripts-problems fp sd scripts (parse-floors good))))))
+
+;; script-row : String String (Listof String) -> Unit
+;; A floor.sh whose line 3 is LINE.
+(define (script-row name line problems)
+  (scripts-row name (list (list sp (script line))) problems))
+
+(scripts-row "a floor.sh that states no floor: nothing to report"
+  (list (list sp good-script)) '())
+
+(scripts-row "versions that are no floor of the file may be written anywhere, the real floors among them"
+  (list (list sp (script "echo 10.4.0 3.45.1 3045001 3450100, the real floors, here other versions"
+                         "echo 10.9 8.1 10.9.0 8.1.3 8001003 8010300")))
+  '())
+
+(script-row "the SQLite floor at the start of a line"
+  "8.1.2 is the floor" (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(script-row "the SQLite floor in the middle of a line"
+  "echo want 8.1.2 here" (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(script-row "the SQLite floor at the end of a line"
+  "echo want 8.1.2" (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(script-row "the Chez floor at the start of a line"
+  "10.9.1 is the floor" (list (scripts-wrote sp script-line "Chez" "10.9.1")))
+(script-row "the Chez floor in the middle of a line"
+  "echo want 10.9.1 here" (list (scripts-wrote sp script-line "Chez" "10.9.1")))
+(script-row "the Chez floor at the end of a line"
+  "echo want 10.9.1" (list (scripts-wrote sp script-line "Chez" "10.9.1")))
+(script-row "the Chez floor in a case pattern, as a pin keyed by version"
+  "    10.9.1) echo abc ;;" (list (scripts-wrote sp script-line "Chez" "10.9.1")))
+
+(script-row "the floor inside a longer number is still the floor's text, before it and after it"
+  "echo 110.9.1 8.1.23"
+  (list (scripts-wrote sp script-line "Chez" "10.9.1")
+        (scripts-wrote sp script-line "SQLite" "8.1.2")))
+
+(script-row "both floors on one line: both are named, the Chez floor first"
+  "echo 8.1.2 10.9.1"
+  (list (scripts-wrote sp script-line "Chez" "10.9.1")
+        (scripts-wrote sp script-line "SQLite" "8.1.2")))
+
+(scripts-row "a floor on the first line, a middle line, and the last, which has no newline after it"
+  (list (list sp (string-append "# 10.9.1\n" "set -eu\n" "# 8.1.2\n" "echo fine\n" "# 8.1.2")))
+  (list (scripts-wrote sp 1 "Chez" "10.9.1")
+        (scripts-wrote sp 3 "SQLite" "8.1.2")
+        (scripts-wrote sp 5 "SQLite" "8.1.2")))
+
+(script-row "the version number at the start of a line" "8001002 is the number"
+  (list (scripts-numbered sp script-line)))
+(script-row "the version number in the middle of a line" "echo want 8001002 here"
+  (list (scripts-numbered sp script-line)))
+(script-row "the version number at the end of a line" "echo want 8001002"
+  (list (scripts-numbered sp script-line)))
+(script-row "the amalgamation number at the start of a line" "8010200 is the number"
+  (list (scripts-amalgam sp script-line)))
+(script-row "the amalgamation number in the middle of a line"
+  "curl -O https://x.invalid/sqlite-amalgamation-8010200.zip"
+  (list (scripts-amalgam sp script-line)))
+(script-row "the amalgamation number at the end of a line" "echo want 8010200"
+  (list (scripts-amalgam sp script-line)))
+(script-row "a form beside a dot, a dash, an underscore or a space is found"
+  "echo .8001002. -8010200_"
+  (list (scripts-numbered sp script-line) (scripts-amalgam sp script-line)))
+(script-row "both forms and the dotted floor on one line: the dotted floor, the version number, the amalgamation number"
+  "echo 8010200 8001002 8.1.2"
+  (list (scripts-wrote sp script-line "SQLite" "8.1.2")
+        (scripts-numbered sp script-line) (scripts-amalgam sp script-line)))
+(script-row "a form past an unfound one on the same line is still found: the scan tries every position"
+  "echo 18001002 x8001002 8001002"
+  (list (scripts-numbered sp script-line)))
+(script-row "a form twice on a line is named once" "echo 8001002 8001002"
+  (list (scripts-numbered sp script-line)))
+(script-row "a hex digest holding a form between letters and digits: not found"
+  "echo deadbeef8001002cafe 9f8010200a1" '())
+(script-row "a form beside a digit on its left, a digit on its right, or a letter, in either case: not found"
+  "echo 18001002 80010021 a8001002 8001002f 18010200 80102001 A8010200 8010200Z" '())
+(script-row "the Chez floor 10.9.1 has no numeric form: its digits run together are not found"
+  "echo 10009001 10090100 100901 1009001 10901 1091" '())
+(script-row "the forms of the real floors, 3.45.1, are no form of the fixtures' floor"
+  "echo 3045001 3450100" '())
+
+(scripts-row "a form on the first line of a file, and another on the last, which has no newline after it"
+  (list (list sp (string-append "8001002\n" "set -eu\n" "# 8010200")))
+  (list (scripts-numbered sp 1) (scripts-amalgam sp 3)))
+
+;; The boundary against its whole complement, as for the workflows: each
+;; character from U+0001 to U+007F but the newline, and a few beyond ASCII,
+;; beside the form as the whole line, on each side. Exactly the 62 ASCII
+;; letters and digits leave it unfound.
+
+;; scripts-unfound-neighbours : String (Char -> String) -> (Listof Char)
+;; The neighbours for which the script with LINE-OF's line has no complaint
+;; MESSAGE, or raises.
+(define (scripts-unfound-neighbours message line-of)
+  (let ((outcomes
+         (map (lambda (c)
+                (cons c (outcome (lambda ()
+                                   (scripts-problems fp sd (list (list sp (script (line-of c))))
+                                                     (parse-floors good))))))
+              neighbours)))
+    (let loop ((rest outcomes) (acc '()))
+      (cond ((null? rest) (reverse acc))
+            ((and (eq? (car (cdar rest)) 'returned) (member message (cadr (cdar rest))))
+             (loop (cdr rest) acc))
+            (else (loop (cdr rest) (cons (caar rest) acc)))))))
+
+(test-equal "scripts boundary: the version number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (scripts-unfound-neighbours (scripts-numbered sp script-line)
+                              (lambda (c) (string-append (string c) "8001002"))))
+(test-equal "scripts boundary: the version number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (scripts-unfound-neighbours (scripts-numbered sp script-line)
+                              (lambda (c) (string-append "8001002" (string c)))))
+(test-equal "scripts boundary: the amalgamation number with each character on its left is found but for the ASCII letters and digits"
+  letters-and-digits
+  (scripts-unfound-neighbours (scripts-amalgam sp script-line)
+                              (lambda (c) (string-append (string c) "8010200"))))
+(test-equal "scripts boundary: the amalgamation number with each character on its right is found but for the ASCII letters and digits"
+  letters-and-digits
+  (scripts-unfound-neighbours (scripts-amalgam sp script-line)
+                              (lambda (c) (string-append "8010200" (string c)))))
+
+;; The workflow rules about YAML do not apply: a backslash after a double
+;; quote and an odd number of double quotes are ordinary shell, and floor.sh's
+;; own lines hold both.
+(script-row "a backslash after a double quote is shell, not a YAML escape: nothing to report"
+  "echo \"\\x38\"" '())
+(script-row "an odd number of double quotes is shell: nothing to report"
+  "echo \"unbalanced" '())
+(script-row "floor.sh's own message line, a backslash after a double quote and an odd number of quotes"
+  "  fail \"it is not one list of (key \\\"version\\\") entries\"" '())
+(script-row "floor.sh's own grep line, with a pattern in double quotes holding escaped quotes"
+  "entries=$(printf '%s\\n' \"$text\" | grep -o -E \"\\\\( *$name +\\\"[^\\\"]*\\\" *\\\\)\" || true)" '())
+(script-row "floor.sh's own pattern line, with three double quotes"
+  "if ! printf '%s\\n' \"$text\" | grep -q -E '^ *\\( *(\\( *[a-z]+ +\"[^\"]*\" *\\) *)+\\) *$'; then" '())
+
+;; Every file is held.
+(scripts-row "a file in a subdirectory is held like any other"
+  (list (list sp good-script) (list "S/lib/pins.sh" (script "# 8.1.2")))
+  (list (scripts-wrote "S/lib/pins.sh" script-line "SQLite" "8.1.2")))
+(scripts-row "a hidden file is held"
+  (list (list sp good-script) (list "S/.pins" "10.9.1\n"))
+  (list (scripts-wrote "S/.pins" 1 "Chez" "10.9.1")))
+(scripts-row "a file with no .sh in its name is held"
+  (list (list sp good-script) (list "S/notes" "8001002\n"))
+  (list (scripts-numbered "S/notes" 1)))
+(scripts-row "every file is held, in path order, whatever order they come in"
+  (list (list "S/z.sh" "# 10.9.1\n")
+        (list sp (script "echo 8.1.2"))
+        (list "S/a/b.sh" "\n# 8.1.2 and 10.9.1\n"))
+  (list (scripts-wrote "S/a/b.sh" 2 "Chez" "10.9.1")
+        (scripts-wrote "S/a/b.sh" 2 "SQLite" "8.1.2")
+        (scripts-wrote sp script-line "SQLite" "8.1.2")
+        (scripts-wrote "S/z.sh" 1 "Chez" "10.9.1")))
+(scripts-row "no file at all: the directory is named, once"
+  '() (list scripts-no-files))
+(scripts-row "no floor.sh, and another script that writes no floor"
+  (list (list "S/build.sh" good-script)) (list scripts-no-floor-sh))
+(scripts-row "a floor.sh only in a subdirectory is not the script: there is no floor.sh, and its lines are held"
+  (list (list "S/lib/floor.sh" (script "echo 10.9.1")))
+  (list scripts-no-floor-sh
+        (scripts-wrote "S/lib/floor.sh" script-line "Chez" "10.9.1")))
+(scripts-row "a file named like floor.sh but not floor.sh is no floor.sh"
+  (list (list "S/floor.sh.orig" good-script) (list "S/xfloor.sh" good-script))
+  (list scripts-no-floor-sh))
+(scripts-row "an unreadable floor.sh, #f, is not compared, and is no missing floor.sh; the others still are"
+  (list (list sp #f) (list "S/build.sh" (script "echo 10.9.1")))
+  (list (scripts-wrote "S/build.sh" script-line "Chez" "10.9.1")))
+(scripts-row "an unreadable second script, #f, is not compared"
+  (list (list sp good-script) (list "S/build.sh" #f)) '())
+
+(test-equal "scripts: the floors come from the floors file: other floors, other texts"
+  (list 'returned
+        (list (string-append sp ": line 3 contains 3046000, the version-number form of the SQLite floor 3.46.0, which no CI script may write: they read it from " fp)
+              (string-append sp ": line 3 contains 3460000, the amalgamation form of the SQLite floor 3.46.0, which no CI script may write: they read it from " fp)))
+  (outcome (lambda ()
+             (scripts-problems fp sd (list (list sp (script "echo 3046000 3460000 3045001 3450100")))
+                               (parse-floors (floors-of "\"10.9.1\"" "\"3.46.0\"")))))) 
+
+;; --- a file's name, and a floor split by a backslash and a newline ------------------
+;; A file's path below its directory is held to the floors too: a pin keyed by
+;; a version, as a file name, is the file the global constraints forbid. And sh
+;; joins a line that ends in a backslash with the next, so a floor split there
+;; is one floor.
+
+(define script-who "no CI script may write: they read it from")
+(define workflow-who "no workflow line may write: the CI scripts read it from")
+
+;; name-wrote : String String String String String -> String
+;; The complaint about the name of the file PATH, which contains a floor's
+;; version text. WHO is script-who or workflow-who.
+(define (name-wrote who path which version)
+  (name-wrote-from fp who path which version))
+
+;; name-wrote-from : String String String String String -> String
+;; The same, for the floors file at FLOORS.
+(define (name-wrote-from floors who path which version)
+  (string-append path ": its name contains the " which " floor " version ", which " who " " floors))
+
+;; name-form : String String String String -> String
+;; The same for FORM, the WHAT form of the SQLite floor 8.1.2.
+(define (name-form who path form what)
+  (string-append path ": its name contains " form ", the " what
+                 " form of the SQLite floor 8.1.2, which " who " " fp))
+
+;; Each floor's text and forms: the text, then how a script's complaint and a
+;; workflow's complaint about it read, as procedures of the path and the line.
+(define floor-forms
+  (list (list "8.1.2"
+              (lambda (p n) (scripts-wrote p n "SQLite" "8.1.2"))
+              (lambda (p n) (wrote p n "SQLite" "8.1.2" fp))
+              (lambda (who p) (name-wrote who p "SQLite" "8.1.2")))
+        (list "8001002" scripts-numbered numbered
+              (lambda (who p) (name-form who p "8001002" "version-number")))
+        (list "8010200" scripts-amalgam amalgam
+              (lambda (who p) (name-form who p "8010200" "amalgamation")))
+        (list "10.9.1"
+              (lambda (p n) (scripts-wrote p n "Chez" "10.9.1"))
+              (lambda (p n) (wrote p n "Chez" "10.9.1" fp))
+              (lambda (who p) (name-wrote who p "Chez" "10.9.1")))))
+
+(for-each
+ (lambda (f)
+   (let ((form (car f)) (name-of (cadddr f)))
+     (scripts-row (string-append "a file named for " form ": named by its path, not its lines")
+       (list (list sp good-script) (list (string-append "S/pin-" form) "pin\n"))
+       (list (name-of script-who (string-append "S/pin-" form))))
+     (scripts-row (string-append "a file in a subdirectory named " form ": named by its path")
+       (list (list sp good-script) (list (string-append "S/" form "/pin.sh") "pin\n"))
+       (list (name-of script-who (string-append "S/" form "/pin.sh"))))
+     (workflows-row (string-append "a workflow named for " form ": named by its path, not its lines")
+       (list (list wp good-workflow) (list (string-append "W/release-" form ".yml") clean-release))
+       (list (name-of workflow-who (string-append "W/release-" form ".yml"))))
+     (workflows-row (string-append "a workflow in a subdirectory named " form ": named by its path")
+       (list (list wp good-workflow) (list (string-append "W/" form "/release.yml") clean-release))
+       (list (name-of workflow-who (string-append "W/" form "/release.yml"))))))
+ floor-forms)
+
+(scripts-row "a name's complaint comes before its lines' complaints, and an unreadable file's name is held"
+  (list (list sp (script "echo 8.1.2")) (list "S/10.9.1/a.sh" (script "echo 8001002")) (list "S/b-8010200" #f))
+  (list (name-wrote script-who "S/10.9.1/a.sh" "Chez" "10.9.1")
+        (scripts-numbered "S/10.9.1/a.sh" script-line)
+        (name-form script-who "S/b-8010200" "8010200" "amalgamation")
+        (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(scripts-row "a name that holds a numeric form beside a letter or a digit holds no whole run; a version text is found anywhere"
+  (list (list sp good-script) (list "S/pin8001002" "pin\n") (list "S/8001002x/pin" "pin\n")
+        (list "S/a8.1.2" "pin\n"))
+  (list (name-wrote script-who "S/a8.1.2" "SQLite" "8.1.2")))
+(test-equal "scripts: the directory's own name is no part of a file's name"
+  (list 'returned '())
+  (outcome (lambda ()
+             (scripts-problems fp "S/8.1.2" (list (list "S/8.1.2/floor.sh" good-script))
+                               (parse-floors good)))))
+(test-equal "workflows: the directory's own name is no part of a file's name"
+  (list 'returned '())
+  (outcome (lambda ()
+             (check-floors fp good rp (apply under-section good-lines) "W/8.1.2"
+                           (list (list "W/8.1.2/ci.yml" good-workflow))))))
+
+;; Each floor's text and forms, split at every position by a backslash and a
+;; newline, in a script and in a workflow: found, at the first line.
+(for-each
+ (lambda (f)
+   (let* ((form (car f)) (n (string-length form)))
+     (let loop ((i 1))
+       (when (< i n)
+         (let ((a (substring form 0 i)) (b (substring form i n))
+               (where (string-append form " split after " (number->string i) " characters")))
+           (scripts-row (string-append where ", by a backslash and a newline: found at the first line")
+             (list (list sp (script (string-append "v=" a "\\") b)))
+             (list ((cadr f) sp script-line)))
+           (workflow-row (string-append where ", by a backslash and a newline: found at the first line")
+             (workflow-with (string-append "      - run: v=" a "\\") b)
+             (list ((caddr f) wp body-line)))
+           (loop (+ i 1)))))))
+ floor-forms)
+
+(scripts-row "a floor split over three lines: found at the first"
+  (list (list sp (script "v=8\\" ".1\\" ".2")))
+  (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(workflow-row "a floor split over three lines: found at the first"
+  (workflow-with "      - run: v=8\\" ".1\\" ".2")
+  (list (literal body-line "SQLite" "8.1.2")))
+(scripts-row "a floor whole on the line a backslash joins: found at the first line"
+  (list (list sp (script "echo \\" "8.1.2")))
+  (list (scripts-wrote sp script-line "SQLite" "8.1.2")))
+(scripts-row "a backslash that is not at the line's end joins nothing: a floor split there is no floor"
+  (list (list sp (script "v=8.1.\\ " "2" "w=8.1\\.2" "x=8.1.\\x" "2")))
+  '())
+(scripts-row "a last line that ends in a backslash has no line to join: nothing to report"
+  (list (list sp (string-append good-script "echo 8.1.\\")))
+  '())
+(workflow-row "a backslash that is not at the line's end joins nothing, in a workflow"
+  (workflow-with "      - run: v=8.1.\\ " "2")
+  '())
+
+;; The rules about YAML escapes hold the lines as written, not as joined.
+(workflow-row "a backslash after a double quote at a line's end is still found, joined or not"
+  (workflow-with "      - run: echo \"x\" 8.1.\\" "2")
+  (list (literal body-line "SQLite" "8.1.2") (escaped wp body-line)))
+
 ;; --- the program -----------------------------------------------------------------------
 
 ;; run : (Listof String) -> (U (List Integer String String) (List 'raised String))
@@ -939,20 +1292,47 @@
 ;; The path the program names for FILE in the fixture directory CASE.
 (define (at case file) (string-append fixtures "/" case "/" file))
 
-;; both : String -> (Listof String)
-;; The three arguments the program takes for the fixture directory CASE: the
-;; floors file, the README and the workflow directory.
-(define (both case)
-  (list (at case "floors.sexp") (at case "README.org") (at case "workflows")))
+;; clean-scripts : String
+;; The scripts directory the cases share: a floor.sh that writes no floor, with
+;; a backslash after a double quote and an odd number of double quotes in it.
+(define clean-scripts (at "legal" "scripts"))
 
-;; holds : String String String String String -> (List 0 String "")
-;; What a pass prints: the README and the workflow directory that hold the
-;; floors in the floors file, the files read there, and the floors.
-(define (holds readme-path workflows-path names floors-path summary)
+;; scripts-wrote-legal, scripts-form-legal : the complaints a case that takes
+;; the legal fixture's floors file (8.1.2) names it by.
+(define (scripts-wrote-legal path n which version)
+  (scripts-wrote-from (at "legal" "floors.sexp") path n which version))
+(define (scripts-form-legal path n form what)
+  (scripts-form-from (at "legal" "floors.sexp") path n form what))
+
+;; both : String -> (Listof String)
+;; The four arguments the program takes for the fixture directory CASE: the
+;; floors file, the README, the workflow directory and the shared scripts
+;; directory.
+(define (both case)
+  (list (at case "floors.sexp") (at case "README.org") (at case "workflows") clean-scripts))
+
+;; with-scripts : String -> (Listof String)
+;; The four arguments for a case that holds only a scripts directory: the
+;; legal fixture's floors file, README and workflows, and CASE's scripts.
+(define (with-scripts case)
+  (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows")
+        (at case "scripts")))
+
+;; holds-with : String String String String String String String -> (List 0 String "")
+;; What a pass prints: the README, the workflow directory and the scripts
+;; directory that hold the floors in the floors file, the files read in each
+;; directory, and the floors.
+(define (holds-with readme-path workflows-path names scripts-path script-names floors-path summary)
   (list 0
-        (string-append "check-floors: " readme-path " and " workflows-path " (" names ")"
+        (string-append "check-floors: " readme-path ", " workflows-path " (" names ")"
+                       " and " scripts-path " (" script-names ")"
                        " hold the floors in " floors-path " (" summary ")\n")
         ""))
+
+;; holds : String String String String String -> (List 0 String "")
+;; The same, with the shared scripts directory, which holds floor.sh alone.
+(define (holds readme-path workflows-path names floors-path summary)
+  (holds-with readme-path workflows-path names clean-scripts "floor.sh" floors-path summary))
 
 ;; refused : Natural String ... -> (List 1 "" String)
 ;; What a failure prints: PROBLEMS, one line each, then the count. COUNT is
@@ -979,7 +1359,7 @@
 (define usage
   (list 1
         ""
-        "check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS\n"))
+        "check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS\n"))
 
 (define floors-summary "chez 10.9.1, sqlite 8.1.2")
 
@@ -1123,6 +1503,40 @@
          "the workflow directory is itself a symbolic link to a directory with a legal ci.yml: refused, not followed"
          (both "workflows-self-link")
          (refused 1 (string-append (at "workflows-self-link" "workflows")
+                                   ": it cannot be read: Exception: it is a symbolic link, not a directory")))
+   (list "scripts-sqlite-literal"
+         "a script in a subdirectory of the scripts, lib/fetch.sh, names the SQLite floor in a comment, beside a clean floor.sh"
+         (with-scripts "scripts-sqlite-literal")
+         (refused 1 (scripts-wrote-legal (at "scripts-sqlite-literal" "scripts/lib/fetch.sh") 4 "SQLite" "8.1.2")))
+   (list "scripts-sqlite-number"
+         "a hidden file with no .sh, .pins, writes the SQLite floor's version number on its line 1 and its amalgamation number on its line 2"
+         (with-scripts "scripts-sqlite-number")
+         (refused 2
+                  (scripts-form-legal (at "scripts-sqlite-number" "scripts/.pins") 1 "8001002" "version-number")
+                  (scripts-form-legal (at "scripts-sqlite-number" "scripts/.pins") 2 "8010200" "amalgamation")))
+   (list "scripts-chez-literal"
+         "build.sh keys a pin by the Chez floor, in a case pattern"
+         (with-scripts "scripts-chez-literal")
+         (refused 1 (scripts-wrote-legal (at "scripts-chez-literal" "scripts/build.sh") 4 "Chez" "10.9.1")))
+   (list "scripts-no-floor-sh"
+         "the scripts hold lib/floor.sh and build.sh, and no floor.sh directly: named once"
+         (with-scripts "scripts-no-floor-sh")
+         (refused 1 (string-append (at "scripts-no-floor-sh" "scripts")
+                                   ": it holds no floor.sh, the script CI reads the floors through")))
+   (list "scripts-name-floor"
+         "a file pins/8.1.2 beside a clean floor.sh: its name holds the SQLite floor, its lines hold nothing"
+         (with-scripts "scripts-name-floor")
+         (refused 1 (name-wrote-from (at "legal" "floors.sexp") script-who
+                                     (at "scripts-name-floor" "scripts/pins/8.1.2") "SQLite" "8.1.2")))
+   (list "workflows-name-floor"
+         "a clean workflow in a directory named 8.1.2, beside ci.yml: its path holds the SQLite floor"
+         (both "workflows-name-floor")
+         (refused 1 (name-wrote-from (at "workflows-name-floor" "floors.sexp") workflow-who
+                                     (at "workflows-name-floor" "workflows/8.1.2/release.yml") "SQLite" "8.1.2")))
+   (list "scripts-self-link"
+         "the scripts directory is itself a symbolic link to a directory with a legal floor.sh: refused, not followed"
+         (with-scripts "scripts-self-link")
+         (refused 1 (string-append (at "scripts-self-link" "scripts")
                                    ": it cannot be read: Exception: it is a symbolic link, not a directory")))))
 
 ;; ad hoc : (List String (Listof String) Expected)
@@ -1131,35 +1545,46 @@
 ;; arguments.
 (define ad-hoc
   (list
-   (list "no file exists: all three named, the floors first, then the README, then the workflow directory"
-         (list (at "legal" "none.sexp") (at "legal" "none.org") (at "legal" "none"))
-         (refused 3 (cannot-read (at "legal" "none.sexp"))
+   (list "no file exists: all four named, the floors first, then the README, then the workflow directory, then the scripts directory"
+         (list (at "legal" "none.sexp") (at "legal" "none.org") (at "legal" "none") (at "legal" "nothing"))
+         (refused 4 (cannot-read (at "legal" "none.sexp"))
                   (cannot-read (at "legal" "none.org"))
-                  (cannot-list (at "legal" "none") "no such file or directory")))
-   (list "a bad floors file, no README and no workflow directory: the floors problems, then the README, then the directory"
+                  (cannot-list (at "legal" "none") "no such file or directory")
+                  (cannot-list (at "legal" "nothing") "no such file or directory")))
+   (list "a bad floors file, no README, no workflow directory and no scripts directory: the floors problems, then the README, then the directories"
          (list (at "floors-invalid" "floors.sexp") (at "floors-invalid" "none.org")
-               (at "floors-invalid" "none"))
-         (refused 4
+               (at "floors-invalid" "none") (at "floors-invalid" "nothing"))
+         (refused 5
                   (string-append (at "floors-invalid" "floors.sexp") ": the key python is extra: the keys are chez, sqlite")
                   (string-append (at "floors-invalid" "floors.sexp")
                                  ": chez: the version \"10.9\" is not three dot-separated naturals, major.minor.patch")
                   (cannot-read (at "floors-invalid" "none.org"))
-                  (cannot-list (at "floors-invalid" "none") "no such file or directory")))
+                  (cannot-list (at "floors-invalid" "none") "no such file or directory")
+                  (cannot-list (at "floors-invalid" "nothing") "no such file or directory")))
    (list "a README with a problem and no workflow directory: both named, the README first"
-         (list (at "legal" "floors.sexp") (at "no-section" "README.org") (at "legal" "none"))
+         (list (at "legal" "floors.sexp") (at "no-section" "README.org") (at "legal" "none") clean-scripts)
          (refused 2
                   (string-append (at "no-section" "README.org") ": it has no \"** Requirements\" section")
                   (cannot-list (at "legal" "none") "no such file or directory")))
    (list "the workflows argument names ci.yml itself, a file: it cannot be read as a directory"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows/ci.yml"))
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows/ci.yml") clean-scripts)
          (refused 1 (cannot-list (at "legal" "workflows/ci.yml") "not a directory")))
+   (list "the scripts argument names floor.sh itself, a file: it cannot be read as a directory"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "scripts/floor.sh"))
+         (refused 1 (cannot-list (at "legal" "scripts/floor.sh") "not a directory")))
+   (list "a scripts directory that is missing, with the rest right: named alone"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "nothing"))
+         (refused 1 (cannot-list (at "legal" "nothing") "no such file or directory")))
    (list "no arguments: the usage line, exit 1" '() usage)
    (list "one argument: the usage line, exit 1" (list (at "legal" "floors.sexp")) usage)
    (list "two arguments: the usage line, exit 1"
          (list (at "legal" "floors.sexp") (at "legal" "README.org"))
          usage)
-   (list "four arguments: the usage line, exit 1"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") "extra")
+   (list "three arguments, as before the scripts were held: the usage line, exit 1"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows"))
+         usage)
+   (list "five arguments: the usage line, exit 1"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts "extra")
          usage)))
 
 (for-each
@@ -1185,9 +1610,22 @@
    (lambda ()
      (call-with-temp-directory
       (lambda (dir)
-        (let ((got (run (list (at "no-workflow" "floors.sexp") (at "no-workflow" "README.org") dir)))
+        (let ((got (run (list (at "no-workflow" "floors.sexp") (at "no-workflow" "README.org") dir clean-scripts)))
               (want (refused 1 (string-append dir ": it holds no file, but must hold ci.yml,"
                                               " the workflow CI runs"))))
+          (if (equal? got want) 'same (list 'got got 'want want))))))))
+
+;; The same for the scripts directory: git keeps no empty directory either.
+(test-equal "program: an empty scripts directory: named, once, and nothing else"
+  '(returned same)
+  (outcome
+   (lambda ()
+     (call-with-temp-directory
+      (lambda (dir)
+        (let ((got (run (list (at "legal" "floors.sexp") (at "legal" "README.org")
+                              (at "legal" "workflows") dir)))
+              (want (refused 1 (string-append dir ": it holds no file, but must hold floor.sh,"
+                                              " the script CI reads the floors through"))))
           (if (equal? got want) 'same (list 'got got 'want want))))))))
 
 ;; The program and the pure procedure agree on the fixtures: each answer above
@@ -1608,6 +2046,149 @@
   (lambda (root) (list (prefix-in root) "--threads")) chez-usage)
 (check-chez-row "three arguments are a usage error" this-chez
   (lambda (root) (list (prefix-in root) "--nothreads" "x")) chez-usage)
+
+;; --- build-chez.sh ---------------------------------------------------------------------
+;;
+;; scripts/ci/build-chez.sh PREFIX [--nothreads] takes no version: it reads the
+;; Chez floor through floor.sh, downloads that floor's tarball, and checks it
+;; against the one sum it pins, by role (floor_sha256), since no script under
+;; scripts/ci may write a floor's version text (check-floors, ADR-0008). The
+;; rows run a copy of the real scripts/ci in a fresh tree whose floors file is
+;; the row's own. Where it would download, a curl that only names its URL,
+;; first on the PATH, stands in; the network is never touched.
+
+;; fake-curl : String
+;; A curl that names the URL it was asked for, its last argument, and fails.
+(define fake-curl "#!/bin/sh\nfor url; do :; done\necho \"$url\" >&2\nexit 7\n")
+
+;; fake-curl-writes : String
+;; A curl that names the URL, writes the two bytes x and a newline to the
+;; file named after -o, and succeeds: a tarball that is not the pinned one.
+(define fake-curl-writes
+  (string-append "#!/bin/sh\nprev=\nfor a; do\n  [ \"$prev\" = -o ] && out=$a\n  prev=$a\n  url=$a\ndone\n"
+                 "echo \"$url\" >&2\nprintf 'x\\n' >\"$out\"\n"))
+
+;; with-ci-tree : (U String #f) (Listof (Pair String String)) ((String) -> Any) -> Any
+;; PROC on ROOT, a fresh directory holding a copy of the real scripts/ci, a
+;; packaging/floors.sexp with FLOORS-TEXT (none when it is #f), and in shim/
+;; each executable of SHIMS, a name and its text, after a curl that only
+;; names its URL.
+(define (with-ci-tree floors-text shims proc)
+  (call-with-temp-directory
+   (lambda (root)
+     (checked "mkdir" (list "mkdir" "-p" (string-append root "/scripts")
+                            (string-append root "/packaging") (string-append root "/shim")))
+     (checked "cp" (list "cp" "-R" "scripts/ci" (string-append root "/scripts/ci")))
+     (when floors-text
+       (write-file (string-append root "/packaging/floors.sexp") floors-text))
+     (for-each (lambda (shim)
+                 (write-file-in root (string-append "shim/" (car shim)) (cdr shim))
+                 (checked "chmod" (list "chmod" "+x" (string-append root "/shim/" (car shim)))))
+               (cons (cons "curl" fake-curl) shims))
+     (proc root))))
+
+;; ci-script : String String -> String
+;; The path of the script NAME of scripts/ci in the tree at ROOT.
+(define (ci-script root name) (string-append root "/scripts/ci/" name))
+
+;; shimmed : String -> String
+;; The PATH assignment that puts the tree's shim/ first.
+(define (shimmed root) (string-append "PATH=" root "/shim:" (getenv "PATH")))
+
+;; ci-row : String (U String #f) (Listof (Pair String String))
+;;          ((String) -> (Listof String)) (List Integer String String) -> Unit
+;; The command ARGV-OF builds for the tree's root must answer EXPECTED: its
+;; exit status, whole stdout and whole stderr.
+(define (ci-row name floors-text shims argv-of expected)
+  (test-equal (string-append "scripts/ci: " name)
+    (list 'returned expected)
+    (outcome (lambda ()
+               (with-ci-tree floors-text shims
+                 (lambda (root) (capture-command (argv-of root))))))))
+
+;; build-chez : String ... -> (String -> (Listof String))
+;; sh running build-chez.sh with ARGS, the PATH shimmed, and the assignments
+;; ENV set first.
+(define (build-chez-with env . args)
+  (lambda (root)
+    (append (list "env" (shimmed root)) env (list "sh" (ci-script root "build-chez.sh")) args)))
+
+(define (build-chez . args) (apply build-chez-with '() args))
+
+;; The checked-in floors file, whose Chez floor build-chez.sh must pin the
+;; sum of: the rows that use it get as far as the download.
+(define real-text (guard (e (#t "")) (file-text floors-path)))
+(define real-chez (guard (e (#t "?")) (floor-text (parse-floors real-text) 'chez)))
+
+;; chez-url : String -> String
+;; Where the Chez release VERSION is downloaded from, its URL and a newline.
+(define (chez-url version)
+  (string-append "https://github.com/cisco/ChezScheme/releases/download/v" version
+                 "/csv" version ".tar.gz\n"))
+
+(define build-chez-usage (list 2 "" "usage: build-chez.sh PREFIX [--nothreads]\n"))
+
+;; The floors file of the rows that move the version: its Chez floor is 9.9.9, which is
+;; not the release the script's one sum (by role, not by version) is of.
+(define unpinned (floors-of "\"9.9.9\"" "\"9.9.9\""))
+
+(ci-row "build-chez.sh: the checked-in Chez floor reaches the download of its tarball"
+        real-text '() (build-chez "/opt/chez")
+        (list 7 "" (chez-url real-chez)))
+
+(ci-row "build-chez.sh: --nothreads reaches the same download"
+        real-text '() (build-chez "/opt/chez" "--nothreads")
+        (list 7 "" (chez-url real-chez)))
+
+(ci-row "build-chez.sh: another floor reaches its own download: the version is the floors file's, not the script's"
+        unpinned '() (build-chez "/opt/chez")
+        (list 7 "" (chez-url "9.9.9")))
+
+;; A tarball that is not the pinned one fails its sum, before anything is
+;; unpacked. The sum of the two bytes x and a newline, which the curl above
+;; wrote, was taken with sha256sum; the pinned sum is the release tarball's.
+(ci-row "build-chez.sh: a floor whose tarball is not the pinned one fails its sum, naming both"
+        unpinned (list (cons "curl" fake-curl-writes)) (build-chez "/opt/chez")
+        (list 1 ""
+              (string-append
+               (chez-url "9.9.9")
+               "build-chez.sh: csv9.9.9.tar.gz has sha256 73cb3858a687a8494ca3323053016282f3dad39d42cf62ca4e79dda2aac7d9ac"
+               ", but this script pins 54d0d19e4cd51878f88fb4b7ddb44079be6ca12bcf14163f8ea53cbcb4633385"
+               " for the Chez floor: if the floor changed, fetch its release tarball, check it, and pin its sum as floor_sha256 in this script\n")))
+
+(ci-row "build-chez.sh: the env cannot select a version: the file's floor reaches its download, whatever the env says"
+        unpinned '()
+        (build-chez-with (list "CHEZ_VERSION=10.4.0" "CURL_FLOOR_VERSION=7.85.0" "version=10.4.0" "floor=10.4.0")
+                         "/opt/chez")
+        (list 7 "" (chez-url "9.9.9")))
+
+(ci-row "build-chez.sh: a malformed Chez floor fails closed, before any download"
+        (floors-of "\"10.9\"" good-sqlite) '() (build-chez "/opt/chez")
+        (list 1 ""
+              (string-append
+               "floor.sh: packaging/floors.sexp: the chez version \"10.9\" is not three dot-separated naturals, major.minor.patch\n"
+               "build-chez.sh: no Chez floor to build\n")))
+
+(ci-row "build-chez.sh: a Chez floor written twice fails closed, before any download"
+        "((chez \"10.9.1\") (chez \"10.9.1\") (sqlite \"8.1.2\"))" '() (build-chez "/opt/chez")
+        (list 1 ""
+              (string-append
+               "floor.sh: packaging/floors.sexp: it holds more than one chez entry\n"
+               "build-chez.sh: no Chez floor to build\n")))
+
+(ci-row "build-chez.sh: no floors file fails closed, before any download"
+        #f '() (build-chez "/opt/chez")
+        (list 1 ""
+              (string-append "floor.sh: packaging/floors.sexp: it cannot be read\n"
+                             "build-chez.sh: no Chez floor to build\n")))
+
+(ci-row "build-chez.sh: a version and a prefix, as an older call gave, is the usage"
+        real-text '() (build-chez real-chez "/opt/chez") build-chez-usage)
+(ci-row "build-chez.sh: no prefix is the usage" real-text '() (build-chez) build-chez-usage)
+(ci-row "build-chez.sh: a flag but --nothreads is the usage" real-text '()
+        (build-chez "/opt/chez" "--threads") build-chez-usage)
+(ci-row "build-chez.sh: a relative prefix is refused" real-text '() (build-chez "chez")
+        (list 2 "" "build-chez.sh: PREFIX must be an absolute path, not 'chez'\n"))
 
 ;; --- check-action-pins.sh ------------------------------------------------------------
 

@@ -7,8 +7,10 @@
 # the one packaging/floors.sexp holds (ADR-0008), read by scripts/ci/floor.sh,
 # which fails closed on a file that does not give exactly one well-formed Chez
 # version. Nothing a workflow says, an env key or a matrix value, can change
-# it. The tarball is checked against the sha256 pinned below before anything is
-# unpacked. Threaded by default, as chez-sqlite3 needs (ADR-0001, amended);
+# it. The tarball is checked against the sha256 pinned below, floor_sha256,
+# before anything is unpacked. The pin is by role, the floor's own, and writes
+# no version: nothing under scripts/ci may (`make check-floors`, ADR-0008).
+# Threaded by default, as chez-sqlite3 needs (ADR-0001, amended);
 # --nothreads builds the Chez the nothreads lane imports the libraries on.
 # Afterwards scripts/ci/check-chez.sh asks the installed scheme for its
 # version and (threaded?), and fails unless they are the floor and what was
@@ -19,7 +21,8 @@
 #
 # Changing the floor is a reviewed change: fetch the release tarball, compare
 # its sha256 with the digest the GitHub releases API lists for the asset, and
-# add it to tarball_sha256 below. A floor with no sha256 here fails.
+# replace floor_sha256 below with it. A floor whose tarball is not that one
+# fails its sum.
 set -eu
 
 usage() {
@@ -48,21 +51,10 @@ version=$(sh "$here/floor.sh" chez) || {
   exit 1
 }
 
-# tarball_sha256 VERSION: the sha256 of csvVERSION.tar.gz, the release
-# tarball. Chez publishes no checksum file; each sum here is that of the
-# downloaded release asset, and equals the digest the GitHub releases API lists
-# for the asset. Fails for a version with no sum.
-tarball_sha256() {
-  case $1 in
-    10.4.0) echo 54d0d19e4cd51878f88fb4b7ddb44079be6ca12bcf14163f8ea53cbcb4633385 ;;
-    *) return 1 ;;
-  esac
-}
-
-sum=$(tarball_sha256 "$version") || {
-  echo "build-chez.sh: no sha256 is pinned for Chez $version: fetch its release tarball, check it, and add the sum to tarball_sha256 in this script" >&2
-  exit 1
-}
+# floor_sha256: the sha256 of the floor's release tarball, csvVERSION.tar.gz.
+# Chez publishes no checksum file; this sum is that of the downloaded release
+# asset, and equals the digest the GitHub releases API lists for the asset.
+floor_sha256=54d0d19e4cd51878f88fb4b7ddb44079be6ca12bcf14163f8ea53cbcb4633385
 
 # sha256_of FILE: the sha256 of FILE. sha256sum on Linux, shasum elsewhere.
 sha256_of() {
@@ -81,8 +73,8 @@ curl -fsSL --retry 3 -o "$tarball" \
   "https://github.com/cisco/ChezScheme/releases/download/v$version/csv$version.tar.gz"
 
 got=$(sha256_of "$tarball")
-if [ "$got" != "$sum" ]; then
-  echo "build-chez.sh: csv$version.tar.gz has sha256 $got, but this script pins $sum" >&2
+if [ "$got" != "$floor_sha256" ]; then
+  echo "build-chez.sh: csv$version.tar.gz has sha256 $got, but this script pins $floor_sha256 for the Chez floor: if the floor changed, fetch its release tarball, check it, and pin its sum as floor_sha256 in this script" >&2
   exit 1
 fi
 

@@ -7,8 +7,8 @@ newest first.
 ## Now
 
 - **M0 is done:** PRs #1 to #6.
-- **M1 slices 0 to 3 are merged** as PRs #7 to #10, each squash-merged in order with CI passing in
-  all three jobs. **Slice 4 is PR #11.** Its close-out goes in the next branch's first commit.
+- **M1 slices 0 to 4 are merged** as PRs #7 to #11, each squash-merged in order with CI passing in
+  all three jobs. `main`'s run for `2f1c62d` passed in all three.
 - **The maintainer accepted ADR-0010 to ADR-0013 and their amendments** on 2026-11-14, and the
   global constraints carry no provisional rule.
 - **The maintainer's hand run on the Mac** (macOS 26.7.1, 2026-11-14), on slice 4's tree:
@@ -21,17 +21,73 @@ newest first.
     Apple's `THREADSAFE=2` build (ADR-0010, amended).
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14): the `main`, `memory`
   and `nothreads` jobs are required, force pushes and deletion refused. Admins can override.
-- **Next: M1 slice 5,** the `floor` and `current` lanes; then M1's closing review.
-- **Paid on `m1-owed-fixes`, before M1's closing review** (the maintainer asked, 2026-11-14):
+- **Now: M1 slice 5,** the `floor` and `current` lanes, on `m1-slice-5-lanes`; then M1's closing
+  review. The `current` lane pins SQLite 3.54.1, sqlite.org's newest release on 2026-11-14 and
+  the version the maintainer's Mac ran through Homebrew (the M1 plan, §7).
+- **Paid in PR #12 (`2579a0d`), before M1's closing review** (the maintainer asked, 2026-11-14):
   - `test-counters`' `count-up!` and `count-down!` refusal rows asserted message text, from M0.
     The counters' refusals now lead their irritants with `not-a-kind` or `double-free`, and the
     rows assert who and irritants only.
   - A checkout path holding whitespace split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: `test-memory` now
     refuses one, and `check-memory-gate` holds 56 cases (ADR-0005, amended;
     [the log](m1-owed-fixes-mutation-log.md)).
+- **Owed to M1's closing review:**
+  - **`connection.sls` raises inside two critical sections.**
+    - The two places: `call-with-open-handle`'s refusals and its PROC, and `call-with-database`'s
+      open.
+    - The M2 session found this, and the M1 session reproduced it on `2579a0d`. A
+      `with-exception-handler` handler for such a raise runs with interrupts still disabled, at
+      depth 2; a `guard` clause unwinds first, at depth 1.
+    - It breaks the file's own rule, that anything raised is raised after the section.
+    - The closing review fixes it, with an ADR-0012 amendment, and M2 slice 3 drops the change it
+      had planned.
+  - **The `floor` and `current` jobs aren't required checks yet.** Branch protection names only
+    `main`, `memory` and `nothreads`, so the maintainer is asked to add them when slice 5 merges.
 - **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs
+
+### 2026-11-14 — M1 slice 4: the public library and connections (PR #11, `2f1c62d`)
+
+- **Built:** `(chez-sqlite3)`, re-exporting 28 names: the report, the version and compile
+  options, `open-database`, `close-database!`, `call-with-database`, `database?` and every
+  condition's predicate and accessors. Connections owned by the thread that opened them, the
+  open options with the mutex mode, and the connection counter. The memory check at a suite's
+  exit, `sqlite3_memory_used` against a baseline, with an uncounted open and close as its
+  control. The connection plant through `open-database`; `sqlite3_next_stmt` in
+  `close-database!`; `docs/reference.md`, with `test-reference` and `test-docs`.
+- **Measured first:** on CI's runner, Ubuntu's 3.45.1 came back to its 0-byte baseline after a
+  full open and close (ADR-0005, amended).
+- **Watched failing:** every logged mutation, with the gate's and the docs' in logs of their own
+  ([the log](m1-slice-4-mutation-log.md), [the docs'](m1-slice-4-docs-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, 1 major, 10 minor. The fixes answer the major and
+  the mutants the log reproduces. The docs promised that a `guard` catches a load that fails,
+  which it can't in a program; `test-never-loads` checked imports only, not what referencing
+  every export loads.
+- **The maintainer's Mac** found four portability bugs CI couldn't: a Chez not named `scheme`, no
+  `/proc` (two suites), and Apple's library answering `CANTOPEN` where the others answer
+  `IOERR`. All fixed before the merge; the rerun passed 25 of 25 on Apple's and Homebrew's
+  libraries.
+- **Decided by the maintainer** (2026-11-14): the records accepted;
+  `sqlite-library-unavailable-library` left unexported; `test-reference` holds the docs'
+  signatures to the source's, AGENTS.md's one exception to the rule on comments; branch
+  protection on `main`.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Connections and the public library (table, then build) | Opus | about 890k | 128 | 48 min |
+  | The docs | Sonnet | about 141k | 32 | 10 min |
+  | The memory check and the connection plant | Opus | about 385k | 125 | 33 min |
+  | Integration with slice 3 | Sonnet | about 123k | 60 | 23 min |
+  | Adversarial review | Opus | about 333k | 85 | 20 min |
+  | The review's fixes | Sonnet | about 192k | 70 | 20 min |
+  | The signature check restored | Sonnet | about 59k | 11 | 3.9 min |
+
+  The docs and the gate's work ran in worktrees of their own, beside the builder.
+- **Learned** ([traps.md](traps.md)): macOS has no `/proc`; a test can't take `CHEZ`'s file name
+  for the Chez binary's; one failure can answer different codes on different builds. And the
+  Mac run belongs before a slice's review, not after it: it found what CI never could.
 
 ### 2026-11-14 — M1 slice 3: refusals end to end (PR #10, `7c7d321`)
 
