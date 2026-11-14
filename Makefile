@@ -58,7 +58,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps build check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -133,6 +133,19 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 	  [ "$$d" = "$$b" ] || ln -sfn "$$f" "$$dst/$$d"; \
 	done
 	@echo "deps: $(SRFI_SRC) linked into $(SRFI_LIBS)/srfi"
+
+# Loads libsqlite3 as chez-sqlite3 would, through tests/preflight.sps, and
+# names it: its path and source, its version and number, and its source id.
+# A refused libsqlite3 fails it, exit 1, with the reason, the path, the
+# detail, the candidates checked and a remedy, and, when the refusal came
+# after the version was read, that library's own report. chez-sqlite3
+# compiles nothing (ADR-0001), so this is the question an install asks. It
+# writes nothing: no build output, under src/ or anywhere. build is in
+# .PHONY: the build/ directory exists, and without it make would answer that
+# build is up to date and run nothing. make test does not depend on it.
+build: ## Load libsqlite3 as chez-sqlite3 would and name it; fail with the reason when it is refused
+	@scripts/require-tools "$(GOAL)" $(CHEZ)
+	@$(CHEZ) --libdirs src --program tests/preflight.sps
 
 # Three places name the chez-srfi commit, and nothing else keeps them equal:
 # Akku.lock (what a consumer installs), the gitlink the superproject records

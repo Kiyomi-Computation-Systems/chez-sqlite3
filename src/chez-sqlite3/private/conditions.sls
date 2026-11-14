@@ -101,14 +101,16 @@
   ;;   source      (U Symbol #f): where the path came from, one of
   ;;               (chez-sqlite3 private discovery)'s libsqlite3-sources, or #f
   ;;   detail      by reason: the override's value (invalid-override), the
-  ;;               loader's message, or the C name of an entry point that
-  ;;               answered NULL (load-failed), the version string
+  ;;               loader's message, the C name of an entry point that
+  ;;               answered NULL, or the code sqlite3_initialize answered
+  ;;               when it was not SQLITE_OK (load-failed), the version string
   ;;               (below-floor), 0 (not-threadsafe), the entry point's C name
   ;;               (missing-api), #f (not-found)
   ;;   candidates  (Listof String): every path checked, in order (not-found)
   ;;   library     (U Libsqlite3-Info #f): what the library reported, for a
   ;;               refusal made after its version was read (below-floor,
-  ;;               not-threadsafe); #f before that, and for a missing-api
+  ;;               not-threadsafe, missing-api, and load-failed from
+  ;;               sqlite3_initialize); #f before that, and for a missing-api
   ;;               refusal of a report entry point, which is refused before
   ;;               the report exists
   (define-condition-type &sqlite-library-unavailable &chez-sqlite3-error

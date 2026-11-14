@@ -28,7 +28,9 @@
 ;;;       memory); load-shared-object, foreign-procedure, foreign-entry,
 ;;;       foreign-entry?, foreign-ref and foreign-set! for (chez-sqlite3
 ;;;       private native), which alone calls into libsqlite3, and with
-;;;       getenv and machine-type reads the world discovery is given. A name
+;;;       getenv and machine-type reads the world discovery is given, and
+;;;       foreign-sizeof, format, format-condition? and display-condition for
+;;;       native too, the size of its out-pointers and the loader's message. A name
 ;;;       no library may import is not in allowed-chez-names at all, so it is
 ;;;       refused everywhere, the libraries above among them: define-ftype
 ;;;       (v1 reads no C struct, and a function ftype would bind a C entry
@@ -143,21 +145,28 @@
 ;; time, load a file. Adding a name is a reviewed change to the seam
 ;; (ADR-0009), and tests/test-check-seam.sps requires the list to equal the
 ;; names src/ imports, so an unused name cannot stay.
-;; critical-section, make-mutex and with-mutex guard the counters' counts, and
-;; keep an interrupt that escapes from falling between a native object's
-;; making and its count: they run no code built at run time, and reach no
-;; library. threaded?, scheme-version and scheme-version-number are
-;; require-threaded's questions, asked of the Chez running it.
+;; critical-section, make-mutex and with-mutex guard the counters' counts and
+;; memory's live table, and keep an interrupt that escapes from falling
+;; between a native object's making and its count: they run no code built at
+;; run time, and reach no library. dynamic-wind is Chez's own, not (rnrs)'s, a
+;; distinct binding that refuses the critical form: (dynamic-wind #t before
+;; thunk after) runs native's before and after thunks, a counted block's
+;; making and freeing, each in one critical section with the record of the
+;; extent. threaded?, scheme-version and scheme-version-number are
+;; require-threaded's questions, asked of the Chez running it. The rest are
+;; library-only-chez-names', each in its one library.
 (define allowed-chez-names
-  '(critical-section make-mutex scheme-version scheme-version-number threaded? with-mutex))
+  '(critical-section display-condition dynamic-wind foreign-alloc foreign-entry?
+    foreign-free foreign-procedure foreign-ref foreign-set! foreign-sizeof format
+    format-condition? getenv load-shared-object machine-type make-mutex scheme-version
+    scheme-version-number threaded? with-mutex))
 
 ;; library-only-chez-names : (Listof (Pairof Symbol (Listof (Listof Symbol))))
 ;; Rule (f). Each entry is a name, then one or more libraries that alone may
-;; import it from (chezscheme): any other library that does fails. Neither
-;; (chez-sqlite3 private memory) nor (chez-sqlite3 private native) exists yet,
-;; and an entry may name a library that does not: it records the layout. A name
-;; joins allowed-chez-names only when its library lands and imports it, and
-;; until then it is refused everywhere as unlisted.
+;; import it from (chezscheme): any other library that does fails. A name
+;; joins allowed-chez-names only when its library imports it, and until then
+;; it is refused everywhere as unlisted: foreign-entry, which native does not
+;; import, is one.
 ;; foreign-alloc and foreign-free belong to memory, whose blocks are counted: a
 ;; block allocated anywhere else is one the counters cannot see. native alone
 ;; calls into libsqlite3: foreign-procedure binds an entry point,
@@ -165,8 +174,11 @@
 ;; library (a second one, or anything else, loaded elsewhere would escape
 ;; ADR-0002's one load), and foreign-ref and foreign-set! read and write
 ;; foreign memory, the copy of every string passed to libsqlite3 (ADR-0011)
-;; among it. getenv and machine-type are the inputs discovery is given, read
-;; by native alone so that discovery stays a pure function (ADR-0002).
+;; among it, and foreign-sizeof sizes the slot of an out-pointer. getenv and
+;; machine-type are the inputs discovery is given, read by native alone so that
+;; discovery stays a pure function (ADR-0002). format, format-condition? and
+;; display-condition render the loader's refusal as the detail of load-failed:
+;; native's alone, as nothing else needs them.
 ;; get-thread-id is not here: ADR-0010's library has no name yet.
 ;; Adding a name or a library is a reviewed change to the seam (ADR-0009).
 (define library-only-chez-names
@@ -179,7 +191,11 @@
     (foreign-ref (chez-sqlite3 private native))
     (foreign-set! (chez-sqlite3 private native))
     (getenv (chez-sqlite3 private native))
-    (machine-type (chez-sqlite3 private native))))
+    (machine-type (chez-sqlite3 private native))
+    (foreign-sizeof (chez-sqlite3 private native))
+    (format (chez-sqlite3 private native))
+    (format-condition? (chez-sqlite3 private native))
+    (display-condition (chez-sqlite3 private native))))
 
 ;; rnrs-libraries : (Listof (Listof Symbol))
 ;; The standard libraries a library under src/ may import: R6RS's, but for

@@ -18,11 +18,10 @@
 ;;; Two programs run. The real one holds the real tables, in which only the
 ;;; names src/ imports today are allowed. The variant is the real program with
 ;;; allowed-chez-names widened by every name in library-only-chez-names, the
-;;; state the tables reach when (chez-sqlite3 private memory) and (chez-sqlite3
-;;; private native) land and import them: the rules about those names, (f) and
-;;; (k) among them, cannot be reached through the real table until then. The
-;;; variant is the program's own text, read as data, with that one definition
-;;; replaced.
+;;; state the tables reach when every such name's library imports it:
+;;; foreign-entry, which native does not import, is allowed in the variant
+;;; alone. The variant is the program's own text, read as data, with that one
+;;; definition replaced.
 ;;;
 ;;; The two allowlists are held against their whole complements: every name
 ;;; (chezscheme) exports that is not allowed, and every library this Chez has
@@ -75,12 +74,16 @@
 ;; depends on them: never read back from the program.
 
 ;; table-allowed : (Listof Symbol)
-;; The names src/ imports from (chezscheme) today: counters', and require-threaded's.
+;; The names src/ imports from (chezscheme) today: counters', require-threaded's,
+;; memory's and native's.
 (define table-allowed
-  '(critical-section make-mutex scheme-version scheme-version-number threaded? with-mutex))
+  '(critical-section display-condition dynamic-wind foreign-alloc foreign-entry?
+    foreign-free foreign-procedure foreign-ref foreign-set! foreign-sizeof format
+    format-condition? getenv load-shared-object machine-type make-mutex scheme-version
+    scheme-version-number threaded? with-mutex))
 
 ;; table-only : (Listof (Pair Symbol (Listof (Listof Symbol))))
-;; The library-only entries. Neither library exists yet; the entries record the layout.
+;; The library-only entries. foreign-entry's library, native, does not import it.
 (define table-only
   '((foreign-alloc (chez-sqlite3 private memory))
     (foreign-free (chez-sqlite3 private memory))
@@ -91,7 +94,17 @@
     (foreign-ref (chez-sqlite3 private native))
     (foreign-set! (chez-sqlite3 private native))
     (getenv (chez-sqlite3 private native))
-    (machine-type (chez-sqlite3 private native))))
+    (machine-type (chez-sqlite3 private native))
+    (foreign-sizeof (chez-sqlite3 private native))
+    (format (chez-sqlite3 private native))
+    (format-condition? (chez-sqlite3 private native))
+    (display-condition (chez-sqlite3 private native))))
+
+;; table-general : (Listof Symbol)
+;; The allowed names no entry keeps to its libraries: those any library under
+;; src/ may import. Rule (f) holds the others, each in its own row.
+(define table-general
+  (filter (lambda (id) (not (assq id table-only))) table-allowed))
 
 ;; --- running a program --------------------------------------------------------------
 
@@ -354,10 +367,11 @@
    (list "name-primitive: a name outside allowed-chez-names: $primitive, which reaches eval"
          "name-primitive" 'real
          (refused 1 (string-append (at "name-primitive" (p "d.sls")) ": (chez-sqlite3 private d) " (not-listed "$primitive"))))
-   (list "names-several: allowed and refused names mixed, including format, which chez-curl's list had: each name outside is named, in order"
+   (list "names-several: allowed and refused names mixed, including format, which chez-curl's list had and native alone may import: each name refused is named, in order"
          "names-several" 'real
          (refused 3
-                  (string-append (at "names-several" (p "n.sls")) ": (chez-sqlite3 private n) " (not-listed "format"))
+                  (string-append (at "names-several" (p "n.sls")) ": (chez-sqlite3 private n) "
+                                 (library-only "format" "(chez-sqlite3 private native)"))
                   (string-append (at "names-several" (p "n.sls")) ": (chez-sqlite3 private n) " (not-listed "eval"))
                   (string-append (at "names-several" (p "n.sls")) ": (chez-sqlite3 private n) " (not-listed "$primitive"))))
    (list "names-denylisted: the names the old denylist held are outside the allowlist too"
@@ -698,7 +712,7 @@
 ;; The entries above are held to src/'s imports, so an entry dropped with nothing else
 ;; changed passes there: the name then becomes one every library may import. So the
 ;; table is written out here whole, each name with its libraries.
-(test-equal "library-only-chez-names, written out whole: foreign-alloc and foreign-free for memory; load-shared-object, foreign-procedure, foreign-entry, foreign-entry?, foreign-ref, foreign-set!, getenv and machine-type for native"
+(test-equal "library-only-chez-names, written out whole: foreign-alloc and foreign-free for memory; load-shared-object, foreign-procedure, foreign-entry, foreign-entry?, foreign-ref, foreign-set!, getenv, machine-type, foreign-sizeof, format, format-condition? and display-condition for native"
   table-only
   declared-library-only)
 
@@ -791,29 +805,38 @@
                                            (map (lambda (id) (not-listed (symbol->string id)))
                                                 complement-names)))))))
 
-(test-equal "every name allowed-chez-names lists passes, in one library"
+;; The library-only names are held by rule (f)'s rows: in a library of their
+;; own they are refused there, and that is their row.
+(test-equal "every name allowed-chez-names lists that no library-only entry keeps passes, in one library"
   'as-expected
   (tree-verdict program
                 (list (library-in '(chez-sqlite3 private x) '(x)
-                                  (list '(rnrs) `(only (chezscheme) ,@table-allowed))
+                                  (list '(rnrs) `(only (chezscheme) ,@table-general))
                                   '((define x 1))))
                 (lambda (dir) (holds 1 1))))
 
-;; The names, as p0 to p6, c0 to c2 and e0 to e4: a refused name at every position of an
-;; only list, of the import clauses and of the export clause, one library each.
+;; The names, as p0 to p7, c0 to c2 and e0 to e4: a refused name at every position of an
+;; only list of table-general's names, of the import clauses and of the export clause, one
+;; library each.
 (define (numbered prefix i) (list 'chez-sqlite3 'private (string->symbol (string-append prefix (number->string i)))))
+
+;; general-positions : (Listof Natural)
+;; Every place a name can stand among table-general's: before each, and after the last.
+(define general-positions
+  (let loop ((i (length table-general)) (found '()))
+    (if (< i 0) found (loop (- i 1) (cons i found)))))
 
 (test-equal "a name outside the list is refused at every position of an only list"
   'as-expected
   (tree-verdict program
                 (map (lambda (i)
                        (library-in (numbered "p" i) '()
-                                   (list '(rnrs) `(only (chezscheme) ,@(list-head table-allowed i) eval ,@(list-tail table-allowed i)))
+                                   (list '(rnrs) `(only (chezscheme) ,@(list-head table-general i) eval ,@(list-tail table-general i)))
                                    '()))
-                     '(0 1 2 3 4 5 6))
+                     general-positions)
                 (lambda (dir)
                   (refusals-at dir (map (lambda (i) (cons (numbered "p" i) (list (not-listed "eval"))))
-                                        '(0 1 2 3 4 5 6))))))
+                                        general-positions)))))
 
 (test-equal "(chezscheme) imported whole is refused in the first, the middle and the last import clause"
   'as-expected
@@ -923,13 +946,15 @@
 ;; --- rule (g), every allowed name re-exported, on the variant -----------------------------------
 
 ;; reexporters : (Listof (Pair (Listof Symbol) (Listof Symbol)))
-;; Each library with the names it may import, all of them (variant).
+;; Each library with the names it may import (variant): counters the names any library
+;; may, and memory and native each its own.
 (define reexporters
-  (list (cons '(chez-sqlite3 private counters) table-allowed)
+  (list (cons '(chez-sqlite3 private counters) table-general)
         (cons '(chez-sqlite3 private memory) '(foreign-alloc foreign-free))
         (cons '(chez-sqlite3 private native)
               '(load-shared-object foreign-procedure foreign-entry foreign-entry?
-                foreign-ref foreign-set! getenv machine-type))))
+                foreign-ref foreign-set! getenv machine-type foreign-sizeof format
+                format-condition? display-condition))))
 
 (test-equal "each name allowed, in the library that may import it, refuses a re-export, plain and renamed, whole output (variant)"
   'as-expected
