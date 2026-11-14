@@ -116,3 +116,40 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
 - **Tests:** `test-check-floors` holds each form at every position, beside each kind of
   neighbour, and on a fixture whose own floor is 3.46.0, where 3.45.1's forms pass
   ([the log](../m0-review-mutation-log.md)).
+
+## Amendment, 2026-11-14: `check-floors` reads `scripts/ci/` (M1 slice 5)
+
+- **`check-floors` takes a fourth directory, `scripts/ci`,** read before any script there fetched
+  SQLite, as M0's closing review asked. No line of any file under it, subdirectories and hidden
+  files included, may hold either floor's dotted version, or the SQLite floor's version number or
+  amalgamation number as a whole run of digits, with the workflows' boundary. The directory must
+  be a real one, not a link, and hold `floor.sh` directly: an empty one, or one without
+  `floor.sh`, is refused.
+- **The YAML rules don't apply there.** A backslash after a double quote and an odd number of
+  quotes are ordinary shell, and `floor.sh` has both.
+- **Both floors, not SQLite's alone.** The constraint was already that CI writes no floor. The
+  rule's first run on the real tree named the two lines that did: `build-chez.sh`'s pin, keyed by
+  the Chez floor's version, and an example in `floor.sh`'s comment.
+- **Pins are keyed by role.**
+  - `build-chez.sh` pins `floor_sha256`.
+  - `build-sqlite.sh` pins `floor_year`, `floor_archive` and `floor_source`, and computes the
+    archive's number from the version.
+  - A raised floor with stale pins fails its download, or its digest check before anything is
+    unpacked. On the host, a copy with one digit of `floor_archive` changed stopped after
+    `openssl`, and never ran `tar`.
+  - The current release is no floor. It is written as `current_version=3.54.1` in
+    `build-sqlite.sh`, in `check-sqlite.sh` and in `test-ci-sqlite`, and a mismatch fails the
+    build's own check before any cache is saved.
+- **Every Chez cache key changed once,** since the scripts are hashed: one cold Chez build per
+  job.
+- **What still passes:**
+  - a floor computed at run time;
+  - other spellings, such as `3_45_1`;
+  - a floor in any file outside the two directories, `tests/` among them, whose rows name floors
+    on purpose.
+- **Tests:**
+  - `test-check-floors`' `scripts:` rows and program cases;
+  - chez-curl's `build-chez.sh` tree rows, brought back;
+  - `check-test-fails`' `floors-script` case.
+
+  See [the log](../m1-slice-5-mutation-log.md).

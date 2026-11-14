@@ -139,7 +139,8 @@ K1 to K3, W10 and A6 failed `test-check-floors`; C1 to C9 failed `test-check-ci`
 - **`scripts/ci/build-chez.sh`.** It checks its own result: the tarball's sha256 before
   unpacking, and the installed Chez's version and `(threaded?)` after. It runs only in CI, where
   its first run is its test. The pinned sum was checked against the digest GitHub's releases API
-  lists for the asset.
+  lists for the asset. *(M1 slice 5: it now pins by role, and chez-curl's tree rows for it are
+  back in `test-check-floors`; see [slice 5's log](m1-slice-5-mutation-log.md).)*
 - **`scripts/ci/report-sqlite.sh`.** It reports and checks nothing.
 - **The workflow's jobs themselves.** Their first run on CI was green in all three
   ([research/ci-runner/](research/ci-runner/)). No job has been seen to fail there: each job's

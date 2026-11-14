@@ -363,3 +363,31 @@ Measured in the pinned container before the gate was built
   ([the log](../m1-owed-fixes-mutation-log.md)).
 - **Rejected:** carrying such a path through the prefix. The prefix is a string of words, as
   `VALGRIND` is, and a quoting of its own would be a second rule for both readers to keep.
+
+## Amendment, 2026-11-14: the `floor` and `current` lanes (M1 slice 5)
+
+- **The lanes' compile options are held whole.** `check-sqlite.sh` compares every
+  `sqlite3_compileoption_get` answer, in SQLite's order, with its role's list: 37 options for the
+  floor and 38 for 3.54.1. `COMPILER=` is computed from the compiler, by SQLite's own
+  preprocessor test.
+- **That whole list is what keeps `DEFAULT_MEMSTATUS=0` out.** SQLite lists `DEFAULT_MEMSTATUS`
+  only when it isn't 1 (`# if SQLITE_DEFAULT_MEMSTATUS != 1`), so the rule above, that the lanes
+  must not set it to 0, has nothing else to read. A floor build with
+  `-DSQLITE_DEFAULT_MEMSTATUS=0` was refused by one line, `+DEFAULT_MEMSTATUS=0`.
+- **`check-ci` holds five jobs.**
+  - In `floor` and `current` only, `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` may stand, as env
+    keys with exactly the job's values.
+  - They stand on the three steps that run `check-sqlite.sh`, `make build` and `make test`, and
+    each of those steps must carry both, and `CHEZ`.
+  - `main`, `memory` and `nothreads` still refuse both names: `main` is the one job that tests
+    discovery.
+  - The SQLite cache keys are held whole, the compiler step must carry `id: cc`, and only the
+    SQLite build and its save may carry the SQLite cache's `if`.
+- **`test-ci-sqlite`'s children run outside the gate,** as `test-check-floors`' `check-chez.sh`
+  rows do.
+  - They are CI scripts. Their Chez reads a stub or a built libsqlite3 through a probe of their
+    own, and reaches none of chez-sqlite3's code.
+  - A shell child can't meet the gate's `Command:` rule.
+  - So "native code", in the rule that sends children through `gated-command`, means
+    chez-sqlite3's own path to libsqlite3.
+  - Under `make test-memory`, the suite took 25 s, with 0 errors and no child log.

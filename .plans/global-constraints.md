@@ -14,10 +14,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(chez-sqlite3 private require-threaded)` refuses any other Chez by name at import, and every
   library under `src/` imports it first (ADR-0003, ADR-0001 amended).
 - **The floors are written once, in `packaging/floors.sexp`.** README.org's Requirements is held
-  to it by `make check-floors`, which also refuses any workflow line that writes a floor: its
-  dotted text, and SQLite's version number and amalgamation number as whole runs of digits. Other
-  spellings pass, and `check-floors` reads only `.github/workflows` (ADR-0008, amended). CI reads floors through
-  `scripts/ci/floor.sh` and writes none. The code is held to the file by behaviour: the floor
+  to it by `make check-floors`, which also refuses any line, in a workflow or in a file under
+  `scripts/ci/`, that writes a floor: its dotted text, and SQLite's version number and
+  amalgamation number as whole runs of digits. Other spellings pass, and `check-floors` reads only
+  `.github/workflows` and `scripts/ci` (ADR-0008, amended). CI reads floors through
+  `scripts/ci/floor.sh` and writes none: its pins are keyed by role, never by version. The code is held to the file by behaviour: the floor
   itself is accepted and the version below it refused (ADR-0008, amended). No other house
   document restates a floor.
 
@@ -136,18 +137,21 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
-  three jobs and their keys; each check as a step's whole run line; no `if:` but the cache's own;
+  five jobs and their keys; each check as a step's whole run line; no `if:` but the cache's own;
   no line naming a variable that steers a check; no key spelled so a text check would miss it. It
   holds against a mistaken edit, not a deliberate one: a step can compute any name. A change to
   the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended). The banned names include
   `CC`, `C_INCLUDE_PATH`, `CPATH`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `CHEZ_SQLITE3_DECOY` and
-  `CHEZ_SQLITE3_GATE_CHILD`, and `CHEZ_SQLITE3_LIBRARY` stays banned in `main`, the job that tests
-  discovery (M1 slice 3).
+  `CHEZ_SQLITE3_GATE_CHILD`. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` stand only in `floor` and
+  `current`, as exact env keys of the three steps that name the lane's build; `main`, the job that
+  tests discovery, refuses both (M1 slices 3 and 5).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own
   Valgrind with its own log, which `make test-memory` holds to the parent's evidence rules. The
   gate never uses `--trace-children`. A child started otherwise runs outside Valgrind (ADR-0005,
-  amended).
+  amended). Native code here means chez-sqlite3's own path to libsqlite3: a row that runs a CI
+  script, whose Chez reads a library through a probe of its own, runs it outside the gate
+  (ADR-0005, amended, M1 slice 5).
 - **`make test-memory` takes `MEMORY_SUITES` from make's command line only,** and refuses one
   from the environment (ADR-0005, amended).

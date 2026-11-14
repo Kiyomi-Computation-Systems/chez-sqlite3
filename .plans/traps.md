@@ -125,6 +125,23 @@ told in chez-curl's `.plans/traps.md`.
   Where the code isn't what a row is about, it names the codes it accepts, each measured. (M1,
   the Mac's first hand run, chez-sqlite3)
 
+- **`cc -E` puts a system header's macro on a line of its own.** After `#include <sqlite3.h>`,
+  `chez_v SQLITE_VERSION` came out as `chez_v `, and the value came on the next line, after a
+  `# 2 "<stdin>" 3` marker. Read macros with `-dM -E`, or keep lines whole with `-P`. (M1
+  slice 5, chez-sqlite3)
+
+- **A compile option at its default may be unlisted.** SQLite lists `DEFAULT_MEMSTATUS` only when
+  it isn't 1, so `-DSQLITE_DEFAULT_MEMSTATUS=1` is invisible to `sqlite3_compileoption_get`. Only
+  the whole list can hold a rule about it. (M1 slice 5, chez-sqlite3)
+
+- **A row that runs a script with `sh` can't see its execute bit.** Both of slice 5's new CI
+  scripts were first written without one, and every row passed. The workflow runs them by path.
+  `test-ci-sqlite` holds both bits. (M1 slice 5, chez-sqlite3)
+
+- **`false &&` before an `||` chain disables only its first test.** `false && A || B` runs `B`.
+  A mutant meant to skip a whole check, written so, failed 1 row, not 5. Mutate the refusal
+  instead: `true || fail …`. (M1 slice 5, chez-sqlite3)
+
 - **A value is cut where its readers cut it.** `CHEZ_SQLITE3_GATE_CHILD` holds an absolute log
   path, and its readers cut it at whitespace, so a checkout path holding a space split it, and
   nothing refused one; `test-memory` now does. A plant for such a path is a real directory:
