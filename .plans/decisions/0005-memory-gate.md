@@ -11,7 +11,8 @@
   [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)), and the
   children under the gate (M1 slice 3,
   [amendment](#amendment-2026-11-14-children-under-the-gate-m1-slice-3)), and SQLite's memory check
-  (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)).
+  (M1 slice 4, [amendment](#amendment-2026-11-14-sqlites-memory-check-m1-slice-4)). Amended 2026-11-14:
+  statements, and the decoy's cost (M2's plan, [amendment](#amendment-2026-11-14-statements-and-the-decoys-cost-m2s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -402,3 +403,32 @@ Measured in the pinned container before the gate was built
     libsqlite3, but reaches `malloc` and `free` through chez-sqlite3's memory library. A child
     that runs none of chez-sqlite3's code may run outside the gate.
   - Under `make test-memory`, the suite took 25 s, with 0 errors and no child log.
+
+## Amendment, 2026-11-14: statements, and the decoy's cost (M2's plan)
+
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
+([the M2 plan](../2026-11-14-m2-plan.md), §4.1 and §4.7).
+
+- **The `statement` counter gets its counts** ([ADR-0014](0014-statements-belong-to-their-connection.md),
+  decision 9): up for every statement `sqlite3_prepare_v3` hands back, down at its finalize. A
+  suite exits with it at zero, like the others.
+- **`sqlite3_next_stmt` now has something to miss.** `close-database!` finalizes the connection's
+  live statements first (ADR-0012, amended), so the check finds a statement only through a hole in
+  that tracking: a defect of chez-sqlite3's, refused as M1 refuses it.
+- **Valgrind sees a leaked statement only through its connection.** SQLite links every statement
+  from its connection, so one never finalized on an open connection stays reachable through it.
+  The leaks plant through `prepare-statement` drops both unclosed: the counters see the statement,
+  and Valgrind the connection. M2 slice 3 records what Valgrind reports.
+- **A plant meant for Valgrind uses values bigger than SQLite's lookaside slots.** Clearing a
+  statement's bindings while a row is ready frees what the row reads. With a 5,000-byte BLOB,
+  Valgrind reported the invalid read of the freed block, on both libraries; with 200 bytes it saw
+  nothing, though the bytes read back were wrong. Lookaside is why: with it turned off, the same
+  200-byte case reported an invalid read inside a freed 208-byte block, on both
+  ([research/m2-review/](../research/m2-review/)). Turning it off takes `sqlite3_db_config`, M4's
+  variadic binding, so M2's plants use big values instead.
+- **The decoy's rows grow by 21** (ADR-0002, amended). Each is a gated child, about 5.6 s on CI
+  (308 s for `test-library-loading`'s 55 child logs, M1 slice 3's amendment), so M2 adds about
+  120 s, to about 430 s of `MEMORY_TIMEOUT`'s 600, with M3's and M4's entry points still to come.
+  That is arithmetic, not a measurement: M2 slice 2 measures it on CI. Past 450 s, three quarters
+  of the limit, the suite is split in two, each under the limit alone. The consequences' shards
+  answer the job's total time, 14 minutes of 60 so far, which this doesn't approach.

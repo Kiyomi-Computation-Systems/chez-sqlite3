@@ -1,0 +1,62 @@
+=== probe2
+libversion: "3.53.1"
+A. prepare: (";" rc 0 null? #t tail 1)
+A. prepare: (" ; select 2" rc 0 null? #f tail 11)
+A. prepare: ("select 1;;" rc 0 null? #f tail 9)
+A. prepare: (";;" rc 0 null? #t tail 2)
+B. step rc, errcode right after it: (100 100)
+B. column_blob on '' (TEXT): type, null?, bytes: (3 #t 0)
+B. column_blob on 'ab' (TEXT): null?, bytes: (#f 2)
+C. 2^63-1: (9223372036854775807 bind 0 back 9223372036854775807)
+C. 2^63: (9223372036854775808 bind 0 back -9223372036854775808)
+C. 2^64-1: (18446744073709551615 bind 0 back -1)
+C. 2^64: (18446744073709551616 bind (raised "invalid foreign-procedure argument ~s") back 0)
+C. -2^63-1: (-9223372036854775809 bind (raised "invalid foreign-procedure argument ~s") back 0)
+D. bits of +nan.0, of (fl/ 0.0 0.0), of (fl- +nan.0): ("FFF8000000000000" "FFF8000000000000" "FFF8000000000000")
+D. eqv? +nan.0 (fl/ 0.0 0.0); eqv? +nan.0 (fl- +nan.0); nan? of each: (#t #t #t #t)
+D. bind (fl/ 0.0 0.0): rc, typeof: (0 "null")
+E. limit length 10: bind 'old' rc, bind 29 bytes rc (18 TOOBIG), step rc, value read: (0 0 100 "a value longer than ten bytes")
+F. prepare: ("select (" bytes 8 rc 1 offset -1)
+F. prepare: ("select 1 +" bytes 10 rc 1 offset -1)
+F. prepare: ("select é," bytes 10 rc 1 offset -1)
+F. prepare: ("selectx" bytes 7 rc 1 offset 0)
+G. encoding pragma, create, insert: ((0 101 0) (0 101 0) (0 101 0))
+G. row: (type 3 text-bytes (195 169) blob-bytes (195 169))
+G. row: (type 3 text-bytes (237 160 128) blob-bytes (237 160 128))
+G. row: (type 3 text-bytes (240 144 129 129) blob-bytes (240 144 129 129))
+=== probe3
+libversion: "3.53.1"
+H. UTF-16 db, column_blob first on 'é': bytes: (233 0)
+I. eqv? +nan.0 with 7FF8..0, 7FF0..1, FFF8..1; nan? of each: (#t #t #t #t #t #t)
+I. equal? / = / fl=?: (#t #f (+nan.0))
+J. limit was, is; bind 'old', bind 100 bytes, step; typeof, bytes: (1000000000 30 0 18 100 "null" 0)
+K. assertion-violation? error? message: (#t #f "invalid who argument ~s (message = ~s, irritants = ~s)")
+L. disable count probed outside, and in a handler of a raise inside critical-section: (1 2)
+M. column_count before, step rc, column_count after another connection adds a column: (1 100 2)
+=== probe4
+libversion: "3.53.1"
+reset of an INSERT ... RETURNING after one step (100 ROW), a reader holding a read lock: first step, answer, elapsed ms: (100 100 5 1502)
+finalize of an INSERT ... RETURNING after one step (100 ROW), a reader holding a read lock: first step, answer, elapsed ms: (100 100 5 1502)
+N. column_count before, step rc, after another connection drops a column: ((0 101 0) 2 100 1)
+=== probe5
+libversion: "3.53.1"
+reset, reader #t: step, answer, rows in t after (1 before, 3 if the insert stood): (100 5 1)
+finalize, reader #t: step, answer, rows in t after (1 before, 3 if the insert stood): (100 5 1)
+reset, reader #f: step, answer, rows in t after (1 before, 3 if the insert stood): (100 0 3)
+finalize, reader #f: step, answer, rows in t after (1 before, 3 if the insert stood): (100 0 3)
+=== probe6
+libversion: "3.53.1"
+O. failed step, a statement live before finalize?, finalize's answer, live after?, close: (2067 #t 2067 #f 0)
+O. RETURNING finalized under a reader: step, finalize, live after?, close: (100 5 #f 0)
+=== probe7
+libversion: "3.53.1"
+P. prepared, never stepped: cache_size before/after, encoding before/after, 'a' like 'A' before/after: (("-2000" "7") ("UTF-8" "UTF-16le") ("1" "0") (0 #t) (0 #t) (0 #t))
+=== probe8
+libversion: "3.53.1"
+Q. bind 200 bytes, step, clear_bindings in the row state: bind, step, clear rc, same pointer?, bytes, first 4 read after: (0 100 0 #t 200 (65 65 65 65))
+=== probe9
+libversion: "3.53.1"
+Q. bind a 200-byte BLOB, step, clear_bindings in the row state: bind, step, clear rc, same pointer?, bytes, first 4 read after: (0 100 0 #t 200 (0 0 0 0))
+=== probe10
+libversion: "3.53.1"
+Q. bind a 5000-byte BLOB, step, clear_bindings in the row state: bind, step, clear rc, same pointer?, bytes, first 4 read after: (0 100 0 #t 5000 (65 65 65 65))

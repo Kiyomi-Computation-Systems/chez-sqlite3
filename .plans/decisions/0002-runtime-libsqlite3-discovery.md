@@ -2,7 +2,8 @@
 
 - **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b. Amended
   2026-11-14: `not-threadsafe`, and what the Mac showed
-  ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)).
+  ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)). Amended
+  2026-11-14: M2's required entry points ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -179,3 +180,22 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
   in a Guix world; in an FHS world, as on CI, its row asserts discovery's success instead, and its
   name says which world ran.
 
+## Amendment, 2026-11-14: M2's required entry points (M2's plan)
+
+Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
+([the M2 plan](../2026-11-14-m2-plan.md), §4.7).
+
+- **M2 adds 21 required entry points** to item 5 of the M1 amendment's "What is bound, in
+  order", after M1's, in the same step, the seventh of native's load. Each is checked with
+  `foreign-entry?` before it is bound, else `missing-api` naming it: `sqlite3_prepare_v3`,
+  `sqlite3_finalize`, `sqlite3_step`, `sqlite3_reset`, `sqlite3_clear_bindings`,
+  `sqlite3_bind_parameter_count`, `sqlite3_bind_parameter_index`, `sqlite3_bind_null`,
+  `sqlite3_bind_int64`, `sqlite3_bind_double`, `sqlite3_bind_text64`, `sqlite3_bind_blob64`,
+  `sqlite3_column_count`, `sqlite3_column_name`, `sqlite3_column_type`, `sqlite3_column_int64`,
+  `sqlite3_column_double`, `sqlite3_column_text`, `sqlite3_column_blob`, `sqlite3_column_bytes`
+  and `sqlite3_error_offset`.
+- **All 21 are in the floor's build.** `nm -D --defined-only` on a 3.45.1 built from the
+  amalgamation found each ([research/m2-plan/](../research/m2-plan/)).
+- **None is optional:** each is part of SQLite's statement API, which M2's verbs can't do without.
+- **Each gets a decoy switch and a `missing-api` row in `test-library-loading`,** as M1's do (M1
+  slice 3). ADR-0005's amendment of the same day gives what that costs the gate.

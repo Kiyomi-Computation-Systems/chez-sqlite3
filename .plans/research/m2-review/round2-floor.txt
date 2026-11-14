@@ -1,0 +1,28 @@
+=== round2-plain
+plain: reset answered 5 after 1502 ms; collect took 1402 ms; the call had returned before the collect did: #t
+collect-safe: reset answered 5 after 1502 ms; collect took 0 ms; the call had returned before the collect did: #f
+=== round2-r1
+libversion: "3.45.1"
+R1. b's busy_timeout pragma, a's begin exclusive, b's prepare rc and ms: ((0 100 0) (0 101 0) 5 1501)
+R1b. b warmed, then a's begin exclusive, b's prepare rc and ms: (0 0)
+R2. step, reset, errcode, second reset, finalize after it: (100 5 5 0 0)
+R3. prepare: ("/*" rc 1 null? #t tail 1)
+R3. prepare: ("/* " rc 0 null? #t tail 3)
+R3. prepare: ("/*x" rc 0 null? #t tail 3)
+R3. prepare: ("select 1;/*" rc 0 null? #f tail 9)
+R3. prepare: ("--" rc 0 null? #t tail 2)
+R3. prepare: ("-" rc 1 null? #t tail 1)
+R3. prepare: ("\v" rc 1 null? #t tail 0)
+R3. prepare: ("\f" rc 0 null? #t tail 1)
+R3. prepare: ("\x85;" rc 1 null? #t tail 2)
+R3. prepare: (" " rc 1 null? #t tail 2)
+R3. prepare: ("select 1;\v" rc 0 null? #f tail 9)
+R4. cache_size before, prepare rc and tail of 'pragma cache_size = 7; select 1', cache_size after: ("-2000" 0 22 "7")
+=== round2-two
+reader #t: steps 100 100; finalize first 0, finalize second 5
+reader #f: steps 100 100; finalize first 0, finalize second 0
+=== round2-cwd
+open-database, a missing file read-write: handler's disable count, kind: (1 sqlite-error) (outside: 1)
+call-with-database, a missing file read-write: handler's disable count, kind: (2 sqlite-error) (outside: 1)
+call-with-open-handle on a closed database: handler's disable count, kind: (2 closed) (outside: 1)
+call-with-database, the body raising: handler's disable count, kind: (1 other) (outside: 1)

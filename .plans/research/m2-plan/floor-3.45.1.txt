@@ -1,0 +1,22 @@
+libversion: "3.45.1"
+1. step, step again without reset (101 is DONE): (101 101)
+1. rows after two steps of one insert: 2
+2/9. failed step's code (2067 is CONSTRAINT_UNIQUE, 19 CONSTRAINT): 2067
+2. reset, reset again, step again, finalize: (2067 0 2067 2067)
+3. bind rcs: (0 0 0 0)
+3. typeof: NULL-pointer text, NULL-pointer blob, empty text, empty blob: ("null" "null" "text" "blob")
+4. -0.0 through a REAL column: type (2 FLOAT), value: (2 0.0)
+4. -0.0 through select ?: type, value: (2 -0.0)
+5. prepare: ("select 1; select 2" rc 0 stmt-null? #f tail-at 9)
+5. prepare: ("select 1;   -- a comment" rc 0 stmt-null? #f tail-at 9)
+5. prepare: ("select 1;" rc 0 stmt-null? #f tail-at 9)
+5. prepare: ("" rc 0 stmt-null? #t tail-at 0)
+5. prepare: ("   -- only a comment" rc 0 stmt-null? #t tail-at 20)
+6. rc (1 ERROR), offset: (1 13)
+6. nosuchcol's index in characters, in bytes: (12 13)
+7. 'select 1' NUL ' garbage': rc, stmt-null?, tail-at, length: (0 #f 8 17)
+8. bind index 2 of 1 (25 RANGE), bind 1, step, bind while a row is ready (21 MISUSE): (25 0 100 21)
+10. cast(x'ff41' as text): type (3 TEXT), bytes: (3 (255 65))
+10. 'yes' in a BOOLEAN column: type (3 TEXT): 3
+11. '': type, pointer null?, bytes: (3 #f 0)
+11. x'': type (4 BLOB), pointer null?, bytes: (4 #t 0)
