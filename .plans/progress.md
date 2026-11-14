@@ -6,52 +6,127 @@ newest first.
 
 ## Now
 
-- **M0 is done.** Its five slices merged as PRs #1 to #5, and its closing review and the review's
-  fixes as PR #6. CI on `main` passed in all three jobs at `d85c28c`.
-- **M1 slice 0, the plan and the records,** is on `m1-slice-0-plan`:
-  [the M1 plan](2026-11-13-m1-plan.md); ADR-0010 to ADR-0013, proposed for the maintainer's
-  acceptance with its PR; and amendments to ADR-0002, ADR-0005, ADR-0009, the brief and the global
-  constraints, whose new rules are marked provisional where no choice of the maintainer's backs
-  them.
-  - **Reviewed** (Opus, read-only): no blocker, 8 major findings and 15 minor, all checked and
-    fixed. Among them: no record said which entry points are required, so Apple's library would
-    have been refused; the bind order couldn't build the report refusals carry; the records
-    claimed acceptance beyond what the maintainer had approved; and the plan's probe depended on
-    argument order. The probe was fixed and rerun, with the same output.
-  - **The maintainer settled eight questions** on 2026-11-13 and 2026-11-14 (the plan, §2): the
-    settings list moves to M3; `FULLMUTEX` by default, with `'no-mutex`; a `THREADSAFE=0` library is
-    refused; D7 measured on the one Mac; a fieldless condition root; a closed connection raises
-    `&sqlite-closed`; a library with no memory count is reported and passes; and
-    `call-with-database` takes its procedure last.
-  - **Brief D7 is measured** on macOS 26.7.1 ([research/mac-d7/](research/mac-d7/)). Apple's SQLite
-    is 3.51.0, loads from the dyld cache by path, and has no extension loading and no memory count.
-- **M1 slice 1, the pure core,** is PR #8, stacked on PR #7: discovery, load-state, the loading
-  conditions, the report and the checks. Reviewed (Opus): the code sound, 17 mutations every suite
-  passed, all now caught.
-- **M1 slice 2, the load and the checks of the FFI,** is on `m1-slice-2-load`, stacked on slice 1:
-  `check-seam`, the constants and their header check, the native load with its C oracle and
-  `make build`, and the convention suite. Reviewed (Opus): no blocker; message-text assertions had
-  come back, and a keyword alias hid a binding from the convention suite. Both fixed, with every
-  surviving mutant rerun; the refusal paths only a decoy can reach are owed to slice 3.
-- **M1 slice 3, refusals end to end,** is on `m1-slice-3-refusals`, stacked on slice 2: the decoy
-  libsqlite3, the refusal probe and `test-library-loading`, `make dev` and `check-dev`, children
-  under the gate's own Valgrind, and CI's install check by discovery.
-- **M1 slice 4, the public library and connections,** is on `m1-slice-4-connections`, stacked on
-  slice 3: the conditions for connections, `open-database`, `close-database!` and
-  `call-with-database` with thread ownership, the first `(chez-sqlite3)`, SQLite's memory check in
-  the gate, `test-never-loads`, the leaks plant through `open-database`, and `docs/reference.md`.
-- **Next: M1 slice 5,** the `floor` and `current` lanes, then M1's closing review.
+- **M0 is done:** PRs #1 to #6.
+- **M1 slices 0 to 3 are merged** as PRs #7 to #10, each squash-merged in order with CI passing in
+  all three jobs. **Slice 4 is PR #11.** Its close-out goes in the next branch's first commit.
+- **The maintainer accepted ADR-0010 to ADR-0013 and their amendments** on 2026-11-14, and the
+  global constraints carry no provisional rule.
+- **The maintainer's hand run on the Mac** (macOS 26.7.1, 2026-11-14), on slice 4's tree:
+  - The first runs failed: six `check-chez.sh` rows that assumed `…/bin/scheme`, then seven rows
+    of two causes, no `/proc`, and Apple's library answering `SQLITE_CANTOPEN` to an open of a
+    FIFO. All fixed in slice 4's branch ([traps.md](traps.md)).
+  - The rerun: with Apple's 3.51.0, found by discovery, 25 of 25 suites passed, each that loads
+    libsqlite3 naming the memory check unavailable; with Homebrew's 3.54.1 through the override,
+    25 of 25, the check passing; `check-dev` passed. `FULLMUTEX` serializes a connection on
+    Apple's `THREADSAFE=2` build (ADR-0010, amended).
+- **Branch protection is on for `main`** (the maintainer asked, 2026-11-14): the `main`, `memory`
+  and `nothreads` jobs are required, force pushes and deletion refused. Admins can override.
+- **Next: M1 slice 5,** the `floor` and `current` lanes; then M1's closing review.
 - **Owed to M1's closing review, found on the way:**
   - `test-counters`' `count-up!` and `count-down!` refusal rows, from M0, still assert message
     text (slice 4's review fixes, noted in its log).
   - A checkout path holding whitespace would split `CHEZ_SQLITE3_GATE_CHILD`'s prefix: nothing
     refuses one (slice 3's review fixes).
-  - `test-reference` holds each entry's name and shape, not its type text, now that it reads no
-    comment (slice 4's review): a wrong type with the right `->` passes it.
-- **Open:** brief D3 to D6, for M2 and M3. Branch protection requiring `main`, `memory` and
-  `nothreads` is the maintainer's call (ADR-0005, amended).
+- **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs
+
+### 2026-11-14 — M1 slice 3: refusals end to end (PR #10, `7c7d321`)
+
+- **Built:** a decoy libsqlite3, compiled at test time, one build per missing entry point, its
+  behaviour chosen by `CHEZ_SQLITE3_DECOY`; the refusal probe; `test-library-loading`, one fresh
+  process per case, every outcome asserted whole, the step order held by behaviour; `make dev` and
+  `check-dev`; children under the gate's own Valgrind through `gated-command`; CI's install check
+  by discovery, and `check-dev` on the make line.
+- **Measured first:** `--trace-children` can't gate Chez's children: traced, its static bash
+  makes every child exit 9, and skipping the shell untraces everything below it (ADR-0005,
+  amended).
+- **Watched failing:** every logged mutation, the paths slice 2 couldn't reach among them
+  ([the log](m1-slice-3-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, 3 major, 11 minor, all reproduced and fixed. A gated
+  child that forked failed the gate though clean; 12 of 53 children asserted nothing about the
+  gate; the log's timings came from an older tree.
+- **CI:** the install check found `/usr/lib/x86_64-linux-gnu/libsqlite3.so.0 (system)`, 3.45.1.
+  `test-library-loading` takes 308 s of `MEMORY_TIMEOUT`'s 600 under the gate, and the memory
+  job 11 to 14 minutes.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder (table and measurements, then build) | Opus | about 975k | 232 | 93 min |
+  | Adversarial review | Opus | about 277k | 101 | 23 min |
+  | The review's fixes | Sonnet | about 217k | 103 | 45 min |
+
+- **Learned** ([traps.md](traps.md)): a skip list under `--trace-children` hides all below it;
+  GNU `env` reads `-u` only before its first assignment; a row anchored by an occurrence count
+  breaks when the file gains one. And a claim of coverage is checked row by row: "every child
+  says it ran under memcheck" was 41 of 53.
+
+### 2026-11-14 — M1 slice 2: the load and the checks of the FFI (PR #9, `b0ffbae`)
+
+- **Built:** `check-seam`; the constants, every result code at the floor's header, checked against
+  `sqlite3.h`; `(chez-sqlite3 private memory)` and `native`, the load in seven steps with
+  `sqlite3_initialize` among them; `test-native` against a C oracle that `dlopen`s the same file;
+  the convention table and suite; `make build`.
+- **Measured:** a plain blocking `sqlite3_open_v2` hangs every thread's collection;
+  `__collect_safe` doesn't, even inside `critical-section` (ADR-0011, amended).
+- **Watched failing:** seam 32, constants 6 on two headers, native 33, conventions 16, then the
+  review's ([the logs](m1-slice-2-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, 2 major, 10 minor, all fixed. Message-text
+  assertions had come back; a keyword alias of `foreign-procedure` hid a `string`-typed binding
+  from every check.
+- **CI:** the exact result-code check ran against the runner's 3.45.1 header; `test-native` passed
+  under Valgrind 3.22 with Ubuntu's 3.45.1, the closing review's unmeasured case.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | `check-seam` (table, then build) | Sonnet | about 415k | 84 | 25 min |
+  | Constants and test-constants | Sonnet | about 116k | 26 | 5.6 min |
+  | Native load and oracle (table, then build) | Opus | about 831k | 199 | 46 min |
+  | Convention suite and prototypes | Sonnet | about 178k | 52 | 11 min |
+  | Adversarial review | Opus | about 326k | 71 | 20 min |
+  | The review's fixes | Sonnet | about 173k | 60 | 11 min |
+
+  The seam and constants agents worked in worktrees of their own, beside the native builder.
+- **Learned** ([traps.md](traps.md)): a scanner of forms reads elements, never tails; a probe that
+  blocks a plain call can't release itself. And a rule fixed in one slice's suites is restated in
+  the next slice's briefs: message text came back.
+
+### 2026-11-14 — M1 slice 1: the pure core (PR #8, `f70b5ee`)
+
+- **Built:** `(chez-sqlite3 private discovery)`, `load-state`, `conditions` (the root and
+  `&sqlite-library-unavailable`), `libsqlite3-info` and `verify`, with five suites, all on
+  synthetic inputs.
+- **Watched failing:** each suite red against a stub first; 121 mutations, 120 caught, the survivor
+  unreachable ([the log](m1-slice-1-mutation-log.md)).
+- **Reviewed** (Opus, read-only): the code sound; 17 mutations every suite passed, one of them an
+  override that searched `LD_LIBRARY_PATH`. All now caught, against complements, not samples.
+- **CI:** passed in all three jobs; `nothreads` refused every new library by name.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder (copy table, then build) | Sonnet | about 402k | 75 | 24 min |
+  | Adversarial review | Opus | about 219k | 37 | 15 min |
+  | The review's fixes | Sonnet | about 152k | 37 | 7.4 min |
+
+- **Learned:** a copy's table of what it drops, checked before the build, caught two of the
+  builder's own questions early. An allowlist is tested against its complement in every slice,
+  however small it looks.
+
+### 2026-11-14 — M1 slice 0: the plan and the records (PR #7, `6bed21c`)
+
+- **Built:** the M1 plan; ADR-0010 to ADR-0013; amendments to ADR-0002, ADR-0005, ADR-0009, the
+  brief and the constraints; brief D7, measured on the maintainer's Mac.
+- **Decided by the maintainer:** eight questions on 2026-11-13 and 2026-11-14, and on 2026-11-14
+  every record of the slice accepted.
+- **Reviewed** (Opus, read-only): no blocker, 8 major, 15 minor, all fixed. No record said which
+  entry points are required, so Apple's library would have been refused; the status lines claimed
+  more acceptance than the maintainer had given; the plan's probe depended on argument order.
+- **Subagents:** one, Opus: the review, about 210k tokens, 55 tool calls, 16 min.
+- **Learned:** a status line says only what the maintainer approved; the rest is proposed, and
+  its constraints provisional, until accepted.
 
 ### 2026-11-13 — M0's closing review and its fixes (PR #6, `d85c28c`)
 
