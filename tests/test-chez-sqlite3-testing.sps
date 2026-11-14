@@ -719,7 +719,11 @@
 
 ;; Under make test-memory the gated child says (valgrind . yes); anywhere else, no.
 (define valgrind-line
-  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
+  (string-append "(valgrind . "
+                 (cond ((getenv "CHEZ_SQLITE3_GATE_CHILD") "yes")
+                       ((file-exists? "/proc/self/maps") "no")
+                       (else "no-maps"))
+                 ")\n"))
 
 (define (run-child-suite run imports body)
   (call-with-temp-directory

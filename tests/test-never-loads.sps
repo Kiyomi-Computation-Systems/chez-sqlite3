@@ -259,15 +259,17 @@
    "(import (rnrs) (chez-sqlite3-testing) (chez-sqlite3 private counters))\n"
    "(define referenced (list " (apply string-append (map (lambda (n) (string-append (symbol->string n) " ")) names)) "))\n"
    "(define (mapped?)\n"
-   "  (let ((maps (call-with-port\n"
-   "               (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
-   "                                     (make-transcoder (utf-8-codec)))\n"
-   "               get-string-all))\n"
-   "        (needle \"libsqlite3\"))\n"
-   "    (let loop ((i 0))\n"
-   "      (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
-   "            ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
-   "            (else (loop (+ i 1)))))))\n"
+   "  (if (not (file-exists? \"/proc/self/maps\"))\n"
+   "      'no-maps\n"
+   "      (let ((maps (call-with-port\n"
+   "                   (open-file-input-port \"/proc/self/maps\" (file-options) (buffer-mode block)\n"
+   "                                         (make-transcoder (utf-8-codec)))\n"
+   "                   get-string-all))\n"
+   "            (needle \"libsqlite3\"))\n"
+   "        (let loop ((i 0))\n"
+   "          (cond ((> (+ i (string-length needle)) (string-length maps)) 'no)\n"
+   "                ((string=? (substring maps i (+ i (string-length needle))) needle) 'yes)\n"
+   "                (else (loop (+ i 1))))))))\n"
    "(write (list (length referenced) (exit-checks) (mapped?)))\n"
    "(newline)\n"
    "(exit 0)\n"))
@@ -282,8 +284,11 @@
          (capture-command
           (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program)))))))
 
-(test-equal "a child that references every export of (chez-sqlite3-testing) runs its body, and registers no exit check and maps no libsqlite3: it prints the count of names, (), and no"
-  (list 0 (string-append "(" (number->string (length testing-exports)) " () no)\n") "")
+;; A system with no /proc, macOS, can't say what is mapped: there the child
+;; prints no-maps, and the row holds the count and the checks alone.
+(test-equal "a child that references every export of (chez-sqlite3-testing) runs its body, and registers no exit check and maps no libsqlite3: it prints the count of names, (), and no, or no-maps where there is no /proc"
+  (list 0 (string-append "(" (number->string (length testing-exports)) " () "
+                         (if (file-exists? "/proc/self/maps") "no" "no-maps") ")\n") "")
   (run-child testing-exports))
 
 (test-end "never-loads")

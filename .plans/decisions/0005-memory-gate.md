@@ -342,4 +342,7 @@ Measured in the pinned container before the gate was built
   under Valgrind, its loss record's stack through libsqlite3. A 3.45.1 build with symbols shows
   `sqlite3_open_v2` there; Guix's stripped library shows `???` frames inside `libsqlite3.so`, and
   the gate accepts either.
+- **On the maintainer's Mac** (2026-11-14), every suite that loads Apple's 3.51.0 named the check
+  unavailable and passed on its other checks, as designed; with Homebrew's 3.54.1 through the
+  override, the check passed, the count back at 0 after 66,848 bytes while open.
 

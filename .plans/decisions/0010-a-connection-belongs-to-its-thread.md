@@ -88,3 +88,8 @@
 - **Thread ids:** six threads forked in turn got ids 1 to 6, the main thread 0, on Chez 10.4.0.
   CSUG doesn't promise that ids are never reused. If a later Chez reused them, a new thread could
   pass a dead owner's check.
+- **On the maintainer's Mac** (macOS 26.7.1, 2026-11-14), Apple's 3.51.0, `THREADSAFE=2`, passed
+  `test-connection`'s mutex rows: `sqlite3_db_mutex` non-NULL with the default and NULL with
+  `'no-mutex`. On that build a connection with no flag is multi-thread, so the default's
+  `FULLMUTEX` is what serializes it. The plan's open question is settled.
+

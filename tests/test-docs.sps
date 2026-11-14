@@ -948,7 +948,11 @@
 
 ;; The last line a child prints: yes exactly when the gate asked.
 (define valgrind-line
-  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
+  (string-append "(valgrind . "
+                 (cond ((getenv "CHEZ_SQLITE3_GATE_CHILD") "yes")
+                       ((file-exists? "/proc/self/maps") "no")
+                       (else "no-maps"))
+                 ")\n"))
 
 ;; write-text : String String -> Void
 (define (write-text path text)
