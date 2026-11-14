@@ -125,7 +125,10 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
      and the source: those five fields and no others. So every refusal from here on carries it.
   2. **The floor:** `below-floor`.
   3. **`sqlite3_threadsafe`:** `not-threadsafe`.
-  4. **Every other required entry point,** each checked with `foreign-entry?` first, else
+  4. **`sqlite3_initialize`,** called once (M1 slice 2). A build compiled with
+     `SQLITE_OMIT_AUTOINIT` doesn't initialise itself at its first open, so the load does it. An
+     answer other than `SQLITE_OK` is `load-failed`, its detail the code.
+  5. **Every other required entry point,** each checked with `foreign-entry?` first, else
      `missing-api` naming it. M1's are `sqlite3_compileoption_used`,
      `sqlite3_compileoption_get`, `sqlite3_open_v2`, `sqlite3_close`, `sqlite3_errmsg`,
      `sqlite3_errstr`, `sqlite3_errcode`, `sqlite3_extended_errcode`, `sqlite3_next_stmt` and
@@ -152,3 +155,13 @@ facts were measured on the development host (Pop!_OS 22.04, a Guix home profile,
 - **Homebrew's SQLite is at `/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib`,** 3.54.1 on that
   Mac. It loads by absolute path, as the override names it. Whether Homebrew also links it into
   `/opt/homebrew/lib` wasn't checked; nothing here reads that directory.
+- **What slice 2 built and measured** (M1 slice 2):
+  - **The load is seven steps,** each a definition inside `load-step`: choose, load, the report,
+    the floor, threadsafe, `sqlite3_initialize`, the rest. Existence is `(rnrs)`'s `file-exists?`,
+    as decision 2 says "exists": a directory there is chosen, and then refused `load-failed`.
+  - **`load-failed`'s detail** is one of three: the loader's message; the C name of a report entry
+    point that answered NULL, `"sqlite3_libversion"` or `"sqlite3_sourceid"`; or
+    `sqlite3_initialize`'s code.
+  - **A missing report entry point is `missing-api` with library `#f`,** since the report doesn't
+    exist yet. A build with `SQLITE_OMIT_COMPILEOPTION_DIAGS` lacks `sqlite3_compileoption_used`,
+    and is refused `missing-api`.

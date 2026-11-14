@@ -189,3 +189,55 @@ In a scratch tree of the launcher, `channels.scm` and `manifest.scm`, SQLite 3.5
   `file-exists?` follows a link, is false on a dangling one, and true on a directory.
 - **P6:** a raise from a critical `dynamic-wind`'s before thunk, caught by a guard, leaves the
   interrupt disable count at 0, so the re-entry refusal there is safe.
+
+## Conventions
+
+The convention suite (`tests/test-conventions.sps`, with `tests/foreign-conventions.sls` and
+`tests/fixtures/conventions/`) and the prototype rows of `tests/test-constants.sps` (ADR-0011,
+decision 6; [M1 plan](2026-11-13-m1-plan.md) §4). Each mutation ran in its own copy of the tree
+under `/tmp/claude-1000/-home-kishu-src-chez-sqlite3/2a34ce20-2ac8-4a34-9128-3ab6746e1074/scratchpad/conv/`,
+without `.git` or `build/`, through that copy's `scripts/guix-env`, on the one suite named. Counts are
+read from the suite's output. Unmutated: `test-conventions` passes 34, `test-constants` 39 (9 of them
+the prototype rows).
+
+### The red runs
+
+Each suite, run before any mutation against a stub table with one wrong row:
+
+| Suite | The wrong row | Result |
+|---|---|---|
+| `test-conventions` | `sqlite3_close` plain | pass 25, fail 9: the collect-safe table row, `src: no violation` (`(mismatch "sqlite3_close" convention plain collect-safe)`), the plain-close fixture, and the six sweeps, each of which holds the unmutated rows to the real `src/` |
+| `test-constants` | `sqlite3_open_v2`'s `sqlite3 **` written `sqlite3 *` | pass 38, fail 1: the header row, `actual: ("sqlite3_open_v2")`. The map passes, as it must: both are pointers, and only the header can tell them apart |
+
+### The mutations
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| C1 | `sqlite3_close` plain in `native.sls` (this log's N4b) | `test-conventions` 7 of 34: `src: no violation` names `(mismatch "sqlite3_close" convention plain collect-safe)`, and the six sweeps. `test-native` still passes 43, as N4b recorded |
+| C2 | one argument type: `sqlite3_errcode` takes `int` in `native.sls` | `test-conventions` 7 of 34: `(mismatch "sqlite3_errcode" arguments (uptr) (int))` |
+| C3 | `sqlite3_errmsg` bound `__collect_safe` in `native.sls` | `test-conventions` 7 of 34: `(mismatch "sqlite3_errmsg" convention plain collect-safe)` |
+| C4 | `sqlite3_errstr` returns `string` in `native.sls` | `test-conventions` 7 of 34: `(type-refused "sqlite3_errstr" result string)` and the result mismatch |
+| C5 | a binding added with no row: `sqlite3_changes` in `native.sls` | `test-conventions` 8 of 34: `(no-row "sqlite3_changes")`, and the row that holds `src/`'s 15 names |
+| C6 | a row removed: `sqlite3_errcode` from the table | `test-conventions` 13 of 34: `(no-row "sqlite3_errcode")`, the 15-names row, the collect-safe row, the four fixtures that use the row, six sweeps |
+| C7 | the scanner walks tails: `foreign-forms` recurses on `cdr` | `test-conventions` 20 of 34: `src` reads the import clause's tail and `(syntax foreign-procedure)`'s, `(entry-not-literal ... (foreign-procedure foreign-ref ...))` and `(foreign-procedure)`; the decoys fixture and every other fixture fail |
+| C8 | the allowlist gains `string` (arguments and results) | `test-conventions` 5 of 34: the allowlist row, the used-types row, the complement row naming `string`, the positions fixture, the whole-complement fixture. `src` still passes: no binding uses `string` |
+| C9 | the allowlist gains `void` as an argument | `test-conventions` 4 of 34: the allowlist row, the used-types row, the positions fixture, the whole-complement fixture |
+| C10 | the convention comparison dropped from `form-violations` | `test-conventions` 4 of 34: the plain-open, plain-close and safe-other fixtures, and the convention sweep. `src` passes, which is why the fixtures exist |
+| C11 | the outside-native check dropped | `test-conventions` 2 of 34: the outside and outside-no-library fixtures |
+| C12 | the bound-twice check dropped | `test-conventions` 2 of 34: both bound-twice fixtures |
+| C13 | the scanner skips vectors | first run, with a fixture that wrote `(vector (foreign-procedure ...))`, a call and not a vector: **none, 34 passed.** The fixture is now `'#(...)`; then `test-conventions` 1 of 34: the decoys fixture's count of three forms |
+| C14 | the complement short by one type: `wstring` out of the suite's list | `test-conventions` 1 of 34: the whole-complement fixture, which binds `wstring` and has no row for it |
+| C15 | a prototype row with a wrong parameter type: `sqlite3_compileoption_used`'s `const char *` written `char *` | `test-constants` 1 of 39: `actual: ("sqlite3_compileoption_used")`. The map passes, as both are pointers |
+| C16 | the map's pointer rule gives `int` | `test-constants` 3 of 39: the map-against-rows row (every pointer row named), the written-out map row, the planted-map row |
+
+Where a mutation also fails the six sweeps, they are counted. The sweeps hold the real `src/` to the
+table with one row changed in turn, so any real fault in `src/` or the table breaks them as well as
+`src: no violation`.
+
+### Not caught here
+
+- **C13's first run** shows what a fixture must do: the form it hides must be the shape the scanner
+  claims to read, here a literal vector. A call whose operand is a form is just a list.
+- **A Chez type a later Chez adds** is outside the complement list until someone adds it. The suite
+  asks Chez 10.4 that each listed type is accepted, so the list can't hold a type this Chez lacks, but
+  it can't enumerate one it lacks a name for.

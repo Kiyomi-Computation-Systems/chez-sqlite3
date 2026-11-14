@@ -6,7 +6,9 @@
   (M0 slice 4, [amendment](#amendment-2026-11-13-cis-memory-job-m0-slice-4)), and M0's closing
   review ([amendment](#amendment-2026-11-13-m0s-closing-review)). Amended 2026-11-14: a library
   that keeps no memory count (M1's plan,
-  [amendment](#amendment-2026-11-14-a-library-that-keeps-no-memory-count-m1s-plan)).
+  [amendment](#amendment-2026-11-14-a-library-that-keeps-no-memory-count-m1s-plan)), and the first
+  suite that loads libsqlite3 (M1 slice 2,
+  [amendment](#amendment-2026-11-14-the-first-suite-that-loads-libsqlite3-m1-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -229,3 +231,15 @@ Measured in the pinned container before the gate was built
   Slice 4 of M1 builds it. On 3.53.1 and 3.54.1 the count came back to its value before the first
   open after one open, query and close (above). Whether 3.45.1's does, or needs a baseline taken
   after the first cycle (decision 5), is measured on CI's runner first.
+
+## Amendment, 2026-11-14: the first suite that loads libsqlite3 (M1 slice 2)
+
+- **`test-native` loads libsqlite3 under the gate,** opening and closing `:memory:` and a failed
+  open through the raw bindings. In the container (Valgrind 3.27, SQLite 3.53.1): 0 errors,
+  nothing definitely, indirectly or possibly lost, 15,256 bytes in 11 blocks still reachable, and
+  no suppression. Its first run in CI's `memory` job is the first measurement with Valgrind 3.22
+  and Ubuntu's 3.45.1 (the closing review's amendment).
+- **Its children run outside Valgrind:** the C oracle, which loads the same libsqlite3, and gcc,
+  sh and mkfifo. So does `test-blocks`' dead-address child, which reaches malloc and free only.
+  Slice 3 decides how the gate covers children.
+

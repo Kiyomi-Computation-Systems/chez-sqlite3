@@ -29,6 +29,13 @@
 ;;;                finds are tested on synthetic text.
 ;;;   procedures   sqlite-result-code-name and sqlite-primary-code-name, by
 ;;;                their answers on every row and on codes outside the table.
+;;;   prototypes   each row of the convention table (tests/foreign-conventions.sls)
+;;;                holds its C prototype to sqlite3.h: the C program asks
+;;;                _Generic whether the function's type is exactly the row's.
+;;;                A map written here, int to int, sqlite3_int64 to
+;;;                integer-64 and any pointer to uptr, holds the row's Chez
+;;;                types to its C types. A wrong row fails by name, and each
+;;;                kind of wrong row is planted in the suite.
 ;;;
 ;;; The C program is compiled with $CC and no -I flag: the compiler's own
 ;;; search path must find sqlite3.h. A missing compiler or header fails a
@@ -44,6 +51,8 @@
         (srfi :64)
         (only (chezscheme) getenv)
         (chez-sqlite3-testing)
+        (only (foreign-conventions) conventions-table row-name row-prototype row-arguments
+              row-result)
         (only (floors) read-floors floor-numbers))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -282,16 +291,22 @@
 
 ;; --- the C program ------------------------------------------------------------------
 
-;; c-program : (Listof String) -> String
+;; c-program : (Listof String) (Listof (List String String)) -> String
 ;; Prints (header-version N), then for each name (constant "NAME" VALUE) or,
-;; when the header defines no macro of that name, (undefined "NAME").
-(define (c-program names)
+;; when the header defines no macro of that name, (undefined "NAME"); then for
+;; each prototype (NAME FUNCTION-TYPE), (prototype "NAME" 1) when the header
+;; declares NAME as a function of exactly FUNCTION-TYPE, and 0 when it
+;; declares it otherwise. _Generic does not evaluate its operand, so nothing is
+;; called or linked. The name is in parentheses, so a function-like macro of
+;; its name would not be expanded.
+(define (c-program names prototypes)
   (string-append
    "#include <sqlite3.h>\n"
    "#include <stdio.h>\n"
    "\n"
    "#define CONSTANT(e) printf(\"(constant \\\"%s\\\" %lld)\\n\", #e, (long long)(e))\n"
    "#define UNDEFINED(e) printf(\"(undefined \\\"%s\\\")\\n\", #e)\n"
+   "#define PROTOTYPE(f, t) printf(\"(prototype \\\"%s\\\" %d)\\n\", #f, _Generic((f), t: 1, default: 0))\n"
    "\n"
    "int main(void)\n"
    "{\n"
@@ -301,6 +316,9 @@
                  (string-append "#ifdef " n "\n  CONSTANT(" n ");\n#else\n  UNDEFINED(" n
                                 ");\n#endif\n"))
                names))
+   (apply string-append
+          (map (lambda (p) (string-append "  PROTOTYPE(" (car p) ", " (cadr p) ");\n"))
+               prototypes))
    "  return 0;\n"
    "}\n"))
 
@@ -311,7 +329,9 @@
                 (integer? (cadr d)) (exact? (cadr d)))
            (and (= (length d) 2) (eq? (car d) 'undefined) (string? (cadr d)))
            (and (= (length d) 3) (eq? (car d) 'constant) (string? (cadr d))
-                (integer? (caddr d)) (exact? (caddr d))))))
+                (integer? (caddr d)) (exact? (caddr d)))
+           (and (= (length d) 3) (eq? (car d) 'prototype) (string? (cadr d))
+                (memv (caddr d) '(0 1)) #t))))
 
 ;; read-all : String -> (U (Listof Any) #f)
 (define (read-all text)
@@ -326,7 +346,7 @@
                                          (make-transcoder (utf-8-codec)))
     (lambda (port) (put-string port text))))
 
-;; header-facts : (Listof String)
+;; header-facts : (Listof String) (Listof (List String String))
 ;;                -> (U (List 'facts (Listof Answer) String)
 ;;                      (Pairof Symbol Any))
 ;; In a directory of its own: compiles and runs the program for NAMES, and
@@ -335,14 +355,14 @@
 ;; step that went wrong: macros or compile or run (with the command's status,
 ;; stdout and stderr), output (what the program printed, which is not
 ;; answers), or raised.
-(define (header-facts names)
+(define (header-facts names prototypes)
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory
      (lambda (dir)
        (let ((source (string-append dir "/headers.c"))
              (probe (string-append dir "/probe.c"))
              (program (string-append dir "/headers")))
-         (write-text source (c-program names))
+         (write-text source (c-program names prototypes))
          (write-text probe "#include <sqlite3.h>\n")
          (let ((macros (capture-command (append (c-compiler) (list "-dM" "-E" probe)))))
            (if (not (= (car macros) 0))
@@ -451,7 +471,63 @@
           ((member (cadr (car cs)) seen) (loop (cdr cs) seen))
           (else (loop (cdr cs) (cons (cadr (car cs)) seen))))))
 
-(define facts (header-facts asked-names))
+;; --- the prototypes ---------------------------------------------------------------------
+
+;; The convention table (tests/foreign-conventions.sls) has a row per binding:
+;; its C name, its prototype in sqlite3.h's own spelling and the Chez types it
+;; binds with. The C program holds each prototype to the header, through
+;; _Generic on the function itself, and the map below holds each row's Chez
+;; types to its C types.
+
+;; function-type : Row -> String
+;; The row's prototype as a C pointer-to-function type: RESULT (*)(PARAMETERS),
+;; (void) for none.
+(define (function-type row)
+  (let ((proto (row-prototype row)))
+    (string-append (car proto) " (*)("
+                   (if (null? (cadr proto))
+                       "void"
+                       (fold-left (lambda (acc p) (string-append acc ", " p))
+                                  (car (cadr proto)) (cdr (cadr proto))))
+                   ")")))
+
+;; prototype-ask : Row -> (List String String)
+(define (prototype-ask row) (list (row-name row) (function-type row)))
+
+(define prototype-asks (map prototype-ask conventions-table))
+
+;; ends-with? : String String -> Boolean
+(define (ends-with? text suffix)
+  (and (>= (string-length text) (string-length suffix))
+       (string=? (substring text (- (string-length text) (string-length suffix))
+                            (string-length text))
+                 suffix)))
+
+;; chez-type : String -> (U Symbol #f)
+;; The Chez type a C type is bound as: int is int, sqlite3_int64 is integer-64,
+;; and any pointer, const char * and sqlite3 ** among them, is the address
+;; itself, uptr (ADR-0011, decisions 1 and 4). Any other C type has no
+;; mapping, and a row that writes one fails until a record decides it.
+(define (chez-type c-type)
+  (cond ((string=? c-type "int") 'int)
+        ((string=? c-type "sqlite3_int64") 'integer-64)
+        ((ends-with? c-type "*") 'uptr)
+        (else #f)))
+
+;; map-problems : Table -> (Listof (List String Any Any Any Any))
+;; Each row whose Chez types are not the map of its C types:
+;; (NAME MAPPED-ARGUMENTS MAPPED-RESULT ARGUMENTS RESULT).
+(define (map-problems rows)
+  (filter (lambda (m) m)
+          (map (lambda (row)
+                 (let ((arguments (map chez-type (cadr (row-prototype row))))
+                       (result (chez-type (car (row-prototype row)))))
+                   (if (and (equal? arguments (row-arguments row)) (eq? result (row-result row)))
+                       #f
+                       (list (row-name row) arguments result (row-arguments row) (row-result row)))))
+               rows)))
+
+(define facts (header-facts asked-names prototype-asks))
 
 (define answers (if (eq? (car facts) 'facts) (cadr facts) '()))
 (define macro-text (if (eq? (car facts) 'facts) (caddr facts) ""))
@@ -718,6 +794,86 @@
            (if low (car low) 'no-primary)))
        table)
   (answers-of primary-code-name (map cdr table)))
+
+;; --- the prototypes, against the header --------------------------------------------------
+
+;; prototype-answer : String -> (U 0 1 'no-answer)
+(define (prototype-answer name)
+  (let ((entry (find (lambda (a) (and (eq? (car a) 'prototype) (string=? (cadr a) name))) answers)))
+    (if entry (caddr entry) 'no-answer)))
+
+;; verdicts-of : (Listof Row) -> (U (Listof (Pair String Any)) (Pair Symbol Any))
+;; A fresh compile and run of the C program, asking only ROWS' prototypes:
+;; each row's name and the program's answer, or the step that failed.
+(define (verdicts-of rows)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((f (header-facts '() (map prototype-ask rows))))
+      (if (eq? (car f) 'facts)
+          (map (lambda (row)
+                 (let ((entry (find (lambda (a) (and (eq? (car a) 'prototype)
+                                                     (string=? (cadr a) (row-name row))))
+                                    (cadr f))))
+                   (cons (row-name row) (if entry (caddr entry) 'no-answer))))
+               rows)
+          f))))
+
+(test-equal "prototypes: the table has a row for each of M1's 15 entry points"
+  15 (length conventions-table))
+
+(test-equal "prototypes: the header declares each row's prototype exactly: the rows it does not, each by name"
+  '()
+  (map car (filter (lambda (row) (not (eqv? (prototype-answer (row-name row)) 1)))
+                   conventions-table)))
+
+(test-equal "prototypes: every question got an answer, 1 or 0"
+  '()
+  (map car (filter (lambda (row) (eq? (prototype-answer (row-name row)) 'no-answer))
+                   conventions-table)))
+
+(test-equal "prototypes: each row's Chez types are the map of its C types, the rows that are not each by name"
+  '()
+  (map-problems conventions-table))
+
+;; The map, written out: int, sqlite3_int64 and every pointer; nothing else.
+(test-equal "map: int is int, sqlite3_int64 is integer-64, any pointer is uptr, and nothing else is mapped"
+  '(int integer-64 uptr uptr uptr uptr #f #f #f #f #f #f #f #f)
+  (map chez-type '("int" "sqlite3_int64" "const char *" "sqlite3 **" "sqlite3 *" "sqlite3_stmt *"
+                   "unsigned int" "long" "long long" "sqlite3_uint64" "double" "size_t"
+                   "void" "const char")))
+
+;; The C side's control: a row written as the header does not declare it must
+;; be answered 0, by name, and written right 1. Each pair differs in the one
+;; thing named.
+(test-equal "the prototype check refuses a wrong parameter type: sqlite3_open_v2 with its sqlite3 ** written sqlite3 *, and answers 1 when it is written right"
+  '((("sqlite3_open_v2" . 1)) (("sqlite3_open_v2" . 0)))
+  (list (verdicts-of (list (list "sqlite3_open_v2"
+                                 '("int" ("const char *" "sqlite3 **" "int" "const char *"))
+                                 '(uptr uptr int uptr) 'int 'collect-safe '())))
+        (verdicts-of (list (list "sqlite3_open_v2"
+                                 '("int" ("const char *" "sqlite3 *" "int" "const char *"))
+                                 '(uptr uptr int uptr) 'int 'collect-safe '())))))
+
+(test-equal "the prototype check refuses a result written int where the header has sqlite3_int64, and a dropped const, each by name"
+  '(("sqlite3_memory_used" . 0) ("sqlite3_errmsg" . 0) ("sqlite3_errstr" . 1))
+  (verdicts-of (list (list "sqlite3_memory_used" '("int" ()) '() 'int 'plain '())
+                     (list "sqlite3_errmsg" '("char *" ("sqlite3 *")) '(uptr) 'uptr 'plain '())
+                     (list "sqlite3_errstr" '("const char *" ("int")) '(int) 'uptr 'plain '()))))
+
+(test-equal "the prototype check refuses a parameter count: sqlite3_close with an extra int, and sqlite3_threadsafe given a parameter"
+  '(("sqlite3_close" . 0) ("sqlite3_threadsafe" . 0))
+  (verdicts-of (list (list "sqlite3_close" '("int" ("sqlite3 *" "int")) '(uptr int) 'int 'collect-safe '())
+                     (list "sqlite3_threadsafe" '("int" ("int")) '(int) 'int 'plain '()))))
+
+(test-equal "the map check names a row whose Chez types differ from its C types: sqlite3_close taking int, sqlite3_errstr returning int, sqlite3_memory_used returning int, and a C type the map lacks"
+  '(("sqlite3_close" (uptr) int (int) int)
+    ("sqlite3_errstr" (int) uptr (int) int)
+    ("sqlite3_memory_used" () integer-64 () int)
+    ("sqlite3_sourceid" () #f () uptr))
+  (map-problems
+   (list (list "sqlite3_close" '("int" ("sqlite3 *")) '(int) 'int 'collect-safe '())
+         (list "sqlite3_errstr" '("const char *" ("int")) '(int) 'int 'plain '())
+         (list "sqlite3_memory_used" '("sqlite3_int64" ()) '() 'int 'plain '())
+         (list "sqlite3_sourceid" '("double" ()) '() 'uptr 'plain '()))))
 
 (test-end "constants")
 

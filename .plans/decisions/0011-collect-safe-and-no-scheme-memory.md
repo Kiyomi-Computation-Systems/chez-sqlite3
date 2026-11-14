@@ -1,7 +1,8 @@
 # ADR-0011: Calls that can block are `__collect_safe`, and nothing passed to libsqlite3 lives in Scheme memory
 
 - **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. Proposed first in
-  the brief, §3d.
+  the brief, §3d. Amended 2026-11-14: what slice 2 measured
+  ([amendment](#amendment-2026-11-14-what-m1-slice-2-measured)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -74,3 +75,24 @@
   one fails its suite (ADR-0005).
 - **v1 has no callbacks** (brief §4), so CSUG's rule that a callable invoked from a
   `__collect_safe` call must be `__collect_safe` too has nothing to apply to yet.
+
+## Amendment, 2026-11-14: what M1 slice 2 measured
+
+- **A plain blocking call stops every thread.** `sqlite3_open_v2` on a FIFO opened read-only
+  blocks until a writer opens it. Bound plain, a collection requested by another thread waited for
+  it, and the whole process hung. Bound `__collect_safe`, the collection ran while the open was
+  blocked. That holds even when the call sits inside `critical-section`, so slice 4 can count a
+  connection in the same critical section as its open.
+- **`test-native` holds it by behaviour.** A FIFO row forks a thread that opens a FIFO and collects
+  from another, every wait bounded. The FIFO is released by opening it read-write, which POSIX
+  leaves undefined. Linux allows it, and the Mac's hand run is the first measurement there. A plain
+  `sqlite3_open_v2` fails the row, after its bound. A plain `sqlite3_close` can't be made to block
+  on demand, so the convention suite holds it.
+- **The bindings are literal forms,** each wrapped by a binder that checks `foreign-entry?` first:
+  `(bind-required LIBRARY (foreign-procedure [__collect_safe] "C_NAME" (ARG ...) RESULT))`. The
+  convention suite reads them as data (decision 6).
+- **The convention table, as built** (`tests/foreign-conventions.sls`): one row per binding, with
+  its C prototype in `sqlite3.h`'s spelling beside decision 6's fields, citing ADR-0002's amendment
+  where the row is a required entry point. `test-conventions` holds every form under `src/` to it,
+  with the type allowlist tested against the 50 types Chez 10.4 accepts, and `test-constants`
+  checks each row's prototype against the header through `_Generic`.
