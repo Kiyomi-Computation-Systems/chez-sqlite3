@@ -35,7 +35,11 @@ newest first.
     `check-nothreads`, in parallel.
   - **Watched failing:** [the log](ci-mutation-log.md). 39 mutations, every one failing its
     check.
-  - **Waiting for:** CI's first run, which records the runner's SQLite, and the slice's review.
+  - **CI's first run passed** in all three jobs, building Chez from a cold cache. The runner's
+    SQLite is 3.45.1, the floor itself, with a matching header
+    ([research/ci-runner/](research/ci-runner/)). On the real `--nothreads` Chez, both libraries
+    were refused by name.
+  - **Waiting for:** the slice's review.
 - **Open:** brief D2 to D7. D7 (the Mac's SQLite) is due in M1.
 
 ## Close-outs
