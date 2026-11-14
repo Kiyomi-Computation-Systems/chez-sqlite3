@@ -19,6 +19,11 @@ name: CI
 #               it, then every suite runs under it.
 #   nothreads   every library under src/ must be refused, by name, on a Chez
 #               built with --nothreads (ADR-0001, amended).
+#   floor       SQLite at its floor, built from source: its version, source id
+#               and compile options checked whole, then make build and the
+#               suites against it.
+#   current     the same against the current SQLite release, which the build
+#               script pins.
 #
 # This workflow states no floor. scripts/ci/build-chez.sh takes no version and
 # reads its own from packaging/floors.sexp (ADR-0008), and so does any step
@@ -33,11 +38,12 @@ name: CI
 # way.
 #
 # `make check-ci` (tests/check-ci.sh), which make test runs, holds this file
-# to the one shape it reads: these triggers, these three jobs and their keys,
+# to the one shape it reads: these triggers, these five jobs and their keys,
 # each check as a step's whole run line, no if: but on the cache's own steps,
-# no variable that would steer a check, and no key spelled so that a text
-# check would miss it. A change to the workflow changes tests/check-ci.sh
-# with it.
+# no variable that would steer a check (but the two names floor and current
+# hold, as exact env keys of the three steps that name the SQLite build), and
+# no key spelled so that a text check would miss it. A change to the workflow
+# changes tests/check-ci.sh with it.
 
 on:
   push:
@@ -66,7 +72,10 @@ concurrency:
 # needs: a cold cache costs each job a build, once, and the first to save
 # wins. Whether it was built or restored, scripts/ci/check-chez.sh then asks
 # the Chez itself for its version and (threaded?), so a cache that serves
-# another build fails the job before any check runs on it.
+# another build fails the job before any check runs on it. The two SQLite
+# caches are keyed the same way, by the scripts that build and check them, the
+# runner's image and the C compiler (and, for the floor's, by the floors file
+# and its reader), and are checked after a restore as after a build.
 
 jobs:
   main:
@@ -280,3 +289,208 @@ jobs:
         env:
           CHEZ: ${{ runner.temp }}/chez-nothreads/bin/scheme
         run: make check-nothreads
+
+  # SQLite at its floor, compiled here from sqlite.org's source, with the
+  # flags scripts/ci/build-sqlite.sh fixes (harness plan, section 5; ADR-0003,
+  # decision 3). This file names no version: the script reads the floor from
+  # packaging/floors.sexp. Before any suite runs, scripts/ci/check-sqlite.sh
+  # asserts the version, the source id and every compile option of the
+  # library the suites load, and that the compiler finds its header. The
+  # steps that run it, make build and make test name the build in their env,
+  # the override and the header's directory, which no other job may name:
+  # main is the one job that tests discovery.
+  floor:
+    name: floor (the suites against SQLite at its floor, built from source)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install the packages in packaging/debian-prereqs.txt
+        run: |
+          pkgs=$(grep -v -e '^#' -e '^$' packaging/debian-prereqs.txt | tr '\n' ' ')
+          if [ -z "$pkgs" ]; then
+            echo "::error::packaging/debian-prereqs.txt yielded no packages: a broken step, not an empty list"
+            exit 1
+          fi
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $pkgs
+
+      - name: Identify the runner image
+        id: image
+        run: |
+          . /etc/os-release
+          echo "id=${ID}-${VERSION_ID}-${RUNNER_ARCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Chez
+        id: chez
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/chez-threads
+          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh') }}-${{ steps.image.outputs.id }}
+
+      - name: Build Chez
+        if: steps.chez.outputs.cache-hit != 'true'
+        run: scripts/ci/build-chez.sh "$RUNNER_TEMP/chez-threads"
+
+      - name: Save Chez
+        if: steps.chez.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/chez-threads
+          key: ${{ steps.chez.outputs.cache-primary-key }}
+
+      - name: Check the Chez this job runs
+        run: scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads"
+
+      # SQLite lists the compiler that built it among its compile options,
+      # which check-sqlite.sh holds whole, so the compiler is in the cache key:
+      # an image that moves cc rebuilds, and never serves a stale library.
+      - name: Name the C compiler for the cache key
+        id: cc
+        run: echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore SQLite at its floor
+        id: sqlite
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sqlite-floor
+          key: sqlite-floor-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh') }}-${{ steps.image.outputs.id }}-${{ steps.cc.outputs.id }}
+
+      - name: Build SQLite at its floor
+        if: steps.sqlite.outputs.cache-hit != 'true'
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+        run: scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor"
+
+      - name: Save SQLite at its floor
+        if: steps.sqlite.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sqlite-floor
+          key: ${{ steps.sqlite.outputs.cache-primary-key }}
+
+      - name: Check the SQLite this job runs
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-floor/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-floor/include
+        run: scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor"
+
+      - name: Load SQLite at its floor
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-floor/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-floor/include
+        run: make build
+
+      - name: The suites against SQLite at its floor
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-floor/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-floor/include
+        run: make test
+
+  # SQLite at the current release, compiled here as the floor's is, with
+  # scripts/ci/build-sqlite.sh --current: the release the script pins, no
+  # floor, so it reads no floors file and its cache is not keyed by one. The
+  # suites must pass on it as on the floor's. check-sqlite.sh asserts the
+  # same things of it, and the same steps carry the same env, with this job's
+  # own paths.
+  current:
+    name: current (the suites against the current SQLite, built from source)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install the packages in packaging/debian-prereqs.txt
+        run: |
+          pkgs=$(grep -v -e '^#' -e '^$' packaging/debian-prereqs.txt | tr '\n' ' ')
+          if [ -z "$pkgs" ]; then
+            echo "::error::packaging/debian-prereqs.txt yielded no packages: a broken step, not an empty list"
+            exit 1
+          fi
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $pkgs
+
+      - name: Identify the runner image
+        id: image
+        run: |
+          . /etc/os-release
+          echo "id=${ID}-${VERSION_ID}-${RUNNER_ARCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Chez
+        id: chez
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/chez-threads
+          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh') }}-${{ steps.image.outputs.id }}
+
+      - name: Build Chez
+        if: steps.chez.outputs.cache-hit != 'true'
+        run: scripts/ci/build-chez.sh "$RUNNER_TEMP/chez-threads"
+
+      - name: Save Chez
+        if: steps.chez.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/chez-threads
+          key: ${{ steps.chez.outputs.cache-primary-key }}
+
+      - name: Check the Chez this job runs
+        run: scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads"
+
+      # SQLite lists the compiler that built it among its compile options,
+      # which check-sqlite.sh holds whole, so the compiler is in the cache key:
+      # an image that moves cc rebuilds, and never serves a stale library.
+      - name: Name the C compiler for the cache key
+        id: cc
+        run: echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore SQLite at the current release
+        id: sqlite
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sqlite-current
+          key: sqlite-current-${{ hashFiles('scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh') }}-${{ steps.image.outputs.id }}-${{ steps.cc.outputs.id }}
+
+      - name: Build SQLite at the current release
+        if: steps.sqlite.outputs.cache-hit != 'true'
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+        run: scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current
+
+      - name: Save SQLite at the current release
+        if: steps.sqlite.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sqlite-current
+          key: ${{ steps.sqlite.outputs.cache-primary-key }}
+
+      - name: Check the SQLite this job runs
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-current/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-current/include
+        run: scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current
+
+      - name: Load SQLite at the current release
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-current/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-current/include
+        run: make build
+
+      - name: The suites against SQLite at the current release
+        env:
+          CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
+          CHEZ_SQLITE3_LIBRARY: ${{ runner.temp }}/sqlite-current/lib/libsqlite3.so.0
+          C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-current/include
+        run: make test
