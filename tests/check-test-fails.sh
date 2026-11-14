@@ -15,8 +15,10 @@
 #   empty        an empty file (Chez fails     check-suites names it, and
 #                it, exit 255, unexplained)    no suite runs
 #   leaks        a suite whose tests pass,     make test names it FAIL, and
-#                but which counts a            suite-exit-status names the
-#                statement it never frees      count left (ADR-0005)
+#                but which opens :memory:      suite-exit-status names the
+#                through open-database and     connection left, then the
+#                drops the record, never       sqlite3_memory_used check's
+#                closed                        failure (ADR-0005, ADR-0012)
 #   seam         a private library that        check-seam names the import,
 #                imports foreign-alloc, a      and no suite runs
 #                name only (chez-sqlite3
@@ -37,23 +39,34 @@
 # A case requires a non-zero exit, and compares the lines starting
 # "check-suites: " or "test: " as a whole: check-suites' verdict, the plant's
 # outcome, the after-suite's pass line, and the count. The leaks case also
-# compares the lines starting "suite-exit-status: ", the seam case those
+# compares the lines starting "suite-exit-status: ", whole, the counts in
+# them included, the seam case those
 # starting "check-seam: ", the floors case those starting "check-floors: ",
 # and the ci case those starting "check-ci: ".
 #
 # The copy is the working tree without .git, build/ and .claude/ (Claude
 # Code's local state, which can hold whole worktrees), and with the
 # chez-srfi checkout, so make deps works there and nothing is fetched.
-# Nothing in the copy runs git. make deps relinks build/ in the copy. Its
-# src/ holds two of the tree's own libraries, whatever else the tree holds:
-# (chez-sqlite3 private counters), which every suite's (chez-sqlite3-testing)
-# imports, and (chez-sqlite3 private require-threaded), which it imports
-# first. README.org and packaging/floors.sexp are the tree's own, and agree,
-# so check-floors passes in every case but floors.
+# Nothing in the copy runs git. make deps relinks build/ in the copy. In
+# every case but leaks, its src/ holds two of the tree's own libraries,
+# whatever else the tree holds: (chez-sqlite3 private counters), which every
+# suite's (chez-sqlite3-testing) imports, and (chez-sqlite3 private
+# require-threaded), which it imports first. So those cases also show that
+# check-suites and the testing library need no other, and load no
+# libsqlite3 (the M1 plan, §3.7; tests/test-never-loads.sps holds the
+# imports). README.org and packaging/floors.sexp are the tree's own, and
+# agree, so check-floors passes in every case but floors.
 #
-# The leaks plant raises a count with no matching release, as a library that
-# made a statement and never finalized it would. No library makes a native
-# object yet, so the plant stands in for one (ADR-0005).
+# The leaks plant opens a connection through (chez-sqlite3)'s open-database
+# and drops the record, as a caller that never closed it would. Its src/ is
+# the tree's whole src/, for that case alone, and it loads libsqlite3 as a
+# suite does: through CHEZ_SQLITE3_LIBRARY, or discovery. The connection
+# counter names it, and so does the sqlite3_memory_used check its load
+# registered. The plant prints the count it read once loaded and the one its
+# open left, and the check's line must name those two: a failure where the
+# open raised the count, and unavailable, on a library that keeps none, such
+# as Apple's (ADR-0005, amended). Valgrind sees the same leak, definitely
+# lost: tests/check-memory-gate.sh's own plant of it.
 #
 # `make check-test-fails` passes MAKE and TIMEOUT, the tools it found. Run
 # directly, the script takes make and timeout from PATH.
@@ -91,12 +104,15 @@ done
 rm -f "$copy"/tests/test-*.sps
 # No library but the two every suite needs: the tree's own counters, and what
 # they import first.
-rm -rf "$copy/src"
-mkdir -p "$copy/src/chez-sqlite3/private"
-for lib in require-threaded counters; do
-  cp "$root/src/chez-sqlite3/private/$lib.sls" "$copy/src/chez-sqlite3/private/$lib.sls" ||
-    { echo "check-test-fails: could not copy (chez-sqlite3 private $lib)" >&2; exit 2; }
-done
+two_libraries() {
+  rm -rf "$copy/src"
+  mkdir -p "$copy/src/chez-sqlite3/private"
+  for lib in require-threaded counters; do
+    cp "$root/src/chez-sqlite3/private/$lib.sls" "$copy/src/chez-sqlite3/private/$lib.sls" ||
+      { echo "check-test-fails: could not copy (chez-sqlite3 private $lib)" >&2; exit 2; }
+  done
+}
+two_libraries
 
 # ---- the plants ----
 plant_dir=$tmp/plants
@@ -186,15 +202,21 @@ EOF
 cat >"$plant_dir/leaks" <<'EOF'
 #!r6rs
 ;;; Planted by tests/check-test-fails.sh: a suite whose tests all pass, but
-;;; which counts a statement it never frees (ADR-0005). Valgrind would call
-;;; such a statement still reachable while a Chez object held its address;
-;;; only the counters see it.
-(import (rnrs) (srfi :64) (chez-sqlite3 private counters) (chez-sqlite3-testing))
+;;; which opens a connection through open-database and drops the record,
+;;; never closed (ADR-0005, ADR-0012). It prints the count SQLite held once
+;;; loaded, which is the check's baseline, and the count its open left.
+(import (rnrs) (srfi :64) (chez-sqlite3)
+        (only (chez-sqlite3 private native) sqlite3-memory-used)
+        (chez-sqlite3-testing))
 (define runner (test-runner-simple))
 (test-runner-current runner)
 (test-begin "plant-leaks")
-(count-up! 'statement)
-(test-assert "passes, so only the statement left counted can fail this suite" #t)
+(define baseline (sqlite3-memory-used))
+(open-database ":memory:")
+(define holding (sqlite3-memory-used))
+(display (string-append "plant-leaks: counts " (number->string baseline) " " (number->string holding)))
+(newline)
+(test-assert "passes, so only the connection left open can fail this suite" #t)
 (test-end "plant-leaks")
 (exit (suite-exit-status runner))
 EOF
@@ -239,12 +261,23 @@ expected() {
 # LINES, by default the check-suites and test lines. On a failure it prints
 # make test's whole output.
 run_case() {
-  name=$1 wanted=$2 lines=${3:-'^(check-suites|test): '}
+  run_make
+  judge "$@"
+}
+
+# run_make: runs make test in the copy, its output to $tmp/out and its exit
+# status to status.
+run_make() {
   ( cd "$copy" &&
       "${TIMEOUT:-timeout}" "$make_timeout" "${MAKE:-make}" --no-print-directory test \
         TEST_TIMEOUT="$suite_timeout" ) \
     >"$tmp/out" 2>&1
   status=$?
+}
+
+# judge NAME WANTED [LINES]: run_case's requirements, of the run_make before.
+judge() {
+  name=$1 wanted=$2 lines=${3:-'^(check-suites|test): '}
   got=$(grep -E "$lines" "$tmp/out")
   wrong=0
   if [ "$status" -eq 124 ]; then
@@ -296,13 +329,29 @@ run_case "empty: check-suites names a suite with no datum, and no suite runs" \
   "check-suites: $plant: it holds no datum, so it cannot end with (exit (suite-exit-status runner))"
 
 cp "$plant_dir/leaks" "$copy/$plant"
-run_case "leaks: a suite whose tests pass, but which leaves a statement counted, is named FAIL through the counters' line, and the suites after it run" \
+rm -rf "$copy/src"
+cp -a "$root/src" "$copy/src" || { echo "check-test-fails: could not copy src/" >&2; exit 2; }
+run_make
+# The two counts the plant read, or none: a plant that printed none fails the
+# case, since no line below can then match.
+counts=$(sed -n 's/^plant-leaks: counts \([0-9][0-9]*\) \([0-9][0-9]*\)$/\1 \2/p' "$tmp/out")
+baseline=${counts%% *} holding=${counts##* }
+if [ -z "$counts" ]; then
+  memory_line='(the plant printed no counts)'
+elif [ "$holding" -gt "$baseline" ]; then
+  memory_line="suite-exit-status: exit 1 (the sqlite3_memory_used check failed): the count is $holding bytes after the control's :memory: open and close, not its baseline, $baseline bytes: SQLite still holds memory that a suite's end must have freed"
+else
+  memory_line="suite-exit-status: the sqlite3_memory_used check is unavailable: the count was $baseline bytes before the control's :memory: open and $baseline while it was open, so this libsqlite3 keeps no memory count"
+fi
+judge "leaks: a suite whose tests pass, but which leaves a connection from open-database open, is named FAIL through the counters' line and the memory check's, and the suites after it run" \
   "$(checked 2
-     echo 'suite-exit-status: exit 1 (native objects left: statement 1): every native object a suite makes must be freed by its end'
+     echo 'suite-exit-status: exit 1 (native objects left: connection 1): every native object a suite makes must be freed by its end'
+     printf '%s\n' "$memory_line"
      echo "test: FAIL $plant (exit 1)"
      echo "test: pass $after"
      echo 'test: ran 2, passed 1, failed 1, hung 0')" \
   '^(check-suites|test|suite-exit-status): '
+two_libraries
 
 # The plant is gone, so only the after-suite is left to check.
 rm -f "${copy:?}/${plant:?}"

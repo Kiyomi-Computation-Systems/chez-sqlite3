@@ -885,8 +885,21 @@
       (list (if (eq? opener 'satisfied) (cadr (with-mutex m opener-answer)) 'the-opener-hung)
             (if (eq? collector 'satisfied) (cadr (with-mutex m collector-answer)) 'the-collector-hung)))))
 
-(test-equal "sqlite3_open_v2 is __collect_safe: blocked on a FIFO, it lets another thread's collection finish, and that thread releases it; it answers SQLITE_IOERR and the handle closes with SQLITE_OK; every count is zero after"
-  (list (list (list ioerr ok) 'collected) 'released-by-the-collector zero-counts)
+;; fifo-refused : Any -> Any
+;; RESULT with its open's answer written refused-open when it is SQLITE_IOERR
+;; or SQLITE_CANTOPEN, and left as it is otherwise. The open's answer is not
+;; what the row is about: Guix's 3.53.1 and Homebrew's 3.54.1 answer IOERR,
+;; reading the header from a FIFO, and Apple's 3.51.0 answers CANTOPEN
+;; (measured on the maintainer's Mac). Any other answer fails the row.
+(define (fifo-refused result)
+  (if (and (pair? result) (pair? (car result)) (pair? (caar result))
+           (memv (car (caar result)) (list ioerr cantopen)))
+      (cons (cons (cons 'refused-open (cdr (caar result))) (cdar result)) (cdr result))
+      result))
+
+(test-equal "sqlite3_open_v2 is __collect_safe: blocked on a FIFO, it lets another thread's collection finish, and that thread releases it; it answers SQLITE_IOERR, or SQLITE_CANTOPEN on Apple's 3.51.0, and the handle closes with SQLITE_OK; every count is zero after"
+  (list (list (list 'refused-open ok) 'collected) 'released-by-the-collector zero-counts)
+  (fifo-refused
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory
      (lambda (dir)
@@ -907,7 +920,7 @@
                                      'released-by-the-watchdog
                                      'released-by-the-collector)))
                (when pid (capture-command (list "kill" pid)))
-               (list answers released-by (native-counts)))))))))
+               (list answers released-by (native-counts))))))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

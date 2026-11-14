@@ -1506,25 +1506,52 @@
   (string-append "(" (number->string (car ns)) " " (number->string (cadr ns)) " "
                  (number->string (caddr ns)) " " threads ")"))
 
-;; chez-prefix : (U String #f)
-;; The prefix of the Chez CHEZ names, or #f when that is not .../bin/scheme.
-(define chez-prefix
+;; chez-path : (U String #f)
+;; The file CHEZ names, found through the shell as make test runs it, or #f.
+(define chez-path
   (guard (e (#t #f))
     (let* ((found (capture-command (list "sh" "-c" "command -v \"$CHEZ\"")))
            (path (cadr found))
            (path (if (and (> (string-length path) 0)
                           (char=? (string-ref path (- (string-length path) 1)) #\newline))
                      (substring path 0 (- (string-length path) 1))
-                     path))
-           (tail "/bin/scheme")
-           (n (string-length path)) (m (string-length tail)))
-      (and (eqv? (car found) 0)
-           (> n m)
-           (string=? (substring path (- n m) n) tail)
-           (substring path 0 (- n m))))))
+                     path)))
+      (and (eqv? (car found) 0) (> (string-length path) 0) path))))
 
-(test-assert "check-chez.sh: CHEZ names a Chez at PREFIX/bin/scheme, which the rows below run"
-  (string? chez-prefix))
+;; own-prefix : (U String #f)
+;; The prefix of that file when it is .../bin/scheme, as CI's build lays Chez
+;; out and as the container's is; else #f. Homebrew's Chez on a Mac is
+;; .../bin/chez.
+(define own-prefix
+  (and chez-path
+       (let* ((tail "/bin/scheme") (n (string-length chez-path)) (m (string-length tail)))
+         (and (> n m)
+              (string=? (substring chez-path (- n m) n) tail)
+              (substring chez-path 0 (- n m))))))
+
+;; prefix-in : String -> (U String #f)
+;; The prefix the rows below hand check-chez.sh, in the tree ROOT: CHEZ's own
+;; when it is .../bin/scheme; else ROOT/chez, made here, whose bin/scheme is a
+;; shell script that execs the file CHEZ names. A script, not a link: a Chez
+;; run through a link of another name looks for boot files by that name
+;; (traps.md). Making it twice gives the same files.
+(define (prefix-in root)
+  (cond
+    (own-prefix own-prefix)
+    ((not chez-path) #f)
+    (else
+     (let ((prefix (string-append root "/chez")))
+       (checked "mkdir" (list "mkdir" "-p" (string-append prefix "/bin")))
+       (call-with-output-file (string-append prefix "/bin/scheme.new")
+         (lambda (port)
+           (put-string port (string-append "#!/bin/sh\nexec '" chez-path "' \"$@\"\n"))))
+       (checked "mv" (list "mv" "-f" (string-append prefix "/bin/scheme.new")
+                           (string-append prefix "/bin/scheme")))
+       (checked "chmod" (list "chmod" "755" (string-append prefix "/bin/scheme")))
+       prefix))))
+
+(test-assert "check-chez.sh: CHEZ names a file, which the rows below run as PREFIX/bin/scheme: its own prefix, or a script that execs it"
+  (string? chez-path))
 
 ;; check-chez-row : String (Listof Natural) (String -> (Listof String)) (String -> Expected) -> Unit
 ;; In a tree whose Chez floor is FLOOR, sh scripts/ci/check-chez.sh with the
@@ -1551,23 +1578,23 @@
 (define chez-usage (lambda (root) (list 2 "" "usage: check-chez.sh PREFIX [--nothreads]\n")))
 
 (check-chez-row "the Chez at the floor, threaded, passes, with its one line" this-chez
-  (lambda (root) (list chez-prefix))
+  (lambda (root) (list (prefix-in root)))
   (lambda (root)
-    (list 0 (string-append "check-chez.sh: " (scheme-at chez-prefix) " is Chez " (dotted this-chez)
+    (list 0 (string-append "check-chez.sh: " (scheme-at (prefix-in root)) " is Chez " (dotted this-chez)
                            ", threaded: " (answer this-chez "yes") "\n")
           "")))
 
 (check-chez-row "a threaded Chez asked for --nothreads fails, naming both answers" this-chez
-  (lambda (root) (list chez-prefix "--nothreads"))
+  (lambda (root) (list (prefix-in root) "--nothreads"))
   (lambda (root)
-    (list 1 "" (string-append "check-chez.sh: " (scheme-at chez-prefix) " answers " (answer this-chez "yes")
+    (list 1 "" (string-append "check-chez.sh: " (scheme-at (prefix-in root)) " answers " (answer this-chez "yes")
                               ", but (scheme-version-number) and (threaded?) should answer "
                               (answer this-chez "no") "\n"))))
 
 (check-chez-row "a Chez one patch below the floor fails, naming both answers" next-patch
-  (lambda (root) (list chez-prefix))
+  (lambda (root) (list (prefix-in root)))
   (lambda (root)
-    (list 1 "" (string-append "check-chez.sh: " (scheme-at chez-prefix) " answers " (answer this-chez "yes")
+    (list 1 "" (string-append "check-chez.sh: " (scheme-at (prefix-in root)) " answers " (answer this-chez "yes")
                               ", but (scheme-version-number) and (threaded?) should answer "
                               (answer next-patch "yes") "\n"))))
 
@@ -1578,9 +1605,9 @@
 
 (check-chez-row "no prefix is a usage error" this-chez (lambda (root) '()) chez-usage)
 (check-chez-row "a second argument but --nothreads is a usage error" this-chez
-  (lambda (root) (list chez-prefix "--threads")) chez-usage)
+  (lambda (root) (list (prefix-in root) "--threads")) chez-usage)
 (check-chez-row "three arguments are a usage error" this-chez
-  (lambda (root) (list chez-prefix "--nothreads" "x")) chez-usage)
+  (lambda (root) (list (prefix-in root) "--nothreads" "x")) chez-usage)
 
 ;; --- check-action-pins.sh ------------------------------------------------------------
 

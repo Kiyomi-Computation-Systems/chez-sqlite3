@@ -1,8 +1,9 @@
 # ADR-0013: Errors are condition types under one fieldless root, and SQLite's codes are symbols
 
-- **Status:** Proposed in M1 slice 0, for the maintainer's acceptance with its PR. The maintainer
+- **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. The maintainer
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
-  §3g.
+  §3g. Amended 2026-11-14: what slice 4 built
+  ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -90,3 +91,26 @@
 - **`(chez-sqlite3)` exports one type, predicate and accessor set per condition.**
 - **A subtype is only as stable as SQLite's codes.** They have been stable since extended codes
   arrived, and the table's suite records any that move.
+
+## Amendment, 2026-11-14: what M1 slice 4 built
+
+- **`(chez-sqlite3)` exports each condition's predicate and accessors,** not its `&…` type name and
+  not its constructor, as the maintainer's list of public names has it. The consequence's "one
+  type, predicate and accessor set per condition" is read so.
+- **`sqlite-library-unavailable-library` is not exported in M1.** It would hand back a report no
+  public accessor can read, and `below-floor`'s detail already carries the version. The
+  maintainer approved leaving it unexported, 2026-11-14.
+- **`code`'s type is `(U Symbol Integer)`.** Decision 4's "every primary code is named" holds for
+  today's primaries; a future low byte the table doesn't name answers the integer.
+- **Slice 4's refusals lead their irritants with a symbol naming the rule:** `not-a-string`,
+  `unknown-option`, `option-given-twice`, `contradictory-options`,
+  `file-uri-without-uri-option`, `not-a-database`, `untracked-statements`, `not-a-procedure` and
+  the rest, and `register-exit-check!`'s after slice 4's review. Native's earlier refusals don't:
+  `call-with-c-string`'s U+0000 refusal names the string by its kind alone, `((kind string))`.
+  Each still differs from every other by its who or irritants, so decision 9 holds without
+  reading a message.
+- **`&sqlite-wrong-thread` and `&sqlite-closed` carry a fixed `&message`,** whose presence the rows
+  assert, never its text.
+- **`&sqlite-closed` can't be reached through the public surface in M1:** its one verb,
+  `close-database!`, is a no-op on a closed connection. `test-connection` reaches it through the
+  private `call-with-open-handle`, which M2's verbs use.

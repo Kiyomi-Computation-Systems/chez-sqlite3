@@ -191,7 +191,11 @@
 ;; Under make test-memory the child runs under the gate's own Valgrind, and
 ;; says so; anywhere else it does not.
 (define valgrind-line
-  (string-append "(valgrind . " (if (getenv "CHEZ_SQLITE3_GATE_CHILD") "yes" "no") ")\n"))
+  (string-append "(valgrind . "
+                 (cond ((getenv "CHEZ_SQLITE3_GATE_CHILD") "yes")
+                       ((file-exists? "/proc/self/maps") "no")
+                       (else "no-maps"))
+                 ")\n"))
 
 (test-equal "free-foreign-block! refuses a dead address, freed already or never allocated, before free runs: in a child Chez, which goes on to print its counts, all zero"
   (list 0

@@ -4,6 +4,8 @@ A Chez Scheme library that binds SQLite through its C interface.
 
 It is in development: there is nothing to use yet.
 
+The [[file:docs/reference.md][API reference]] lists every name the library exports.
+
 ** Requirements
 
 - Chez Scheme 10.4.0 or later, built with threads

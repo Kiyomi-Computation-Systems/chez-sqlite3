@@ -30,7 +30,9 @@
 ;;;       private native), which alone calls into libsqlite3, and with
 ;;;       getenv and machine-type reads the world discovery is given, and
 ;;;       foreign-sizeof, format, format-condition? and display-condition for
-;;;       native too, the size of its out-pointers and the loader's message. A name
+;;;       native too, the size of its out-pointers and the loader's message;
+;;;       get-thread-id for (chez-sqlite3 private connection), whose check of
+;;;       a connection's owner is the only one (ADR-0010). A name
 ;;;       no library may import is not in allowed-chez-names at all, so it is
 ;;;       refused everywhere, the libraries above among them: define-ftype
 ;;;       (v1 reads no C struct, and a function ftype would bind a C entry
@@ -158,8 +160,8 @@
 (define allowed-chez-names
   '(critical-section display-condition dynamic-wind foreign-alloc foreign-entry?
     foreign-free foreign-procedure foreign-ref foreign-set! foreign-sizeof format
-    format-condition? getenv load-shared-object machine-type make-mutex scheme-version
-    scheme-version-number threaded? with-mutex))
+    format-condition? get-thread-id getenv load-shared-object machine-type make-mutex
+    scheme-version scheme-version-number threaded? with-mutex))
 
 ;; library-only-chez-names : (Listof (Pairof Symbol (Listof (Listof Symbol))))
 ;; Rule (f). Each entry is a name, then one or more libraries that alone may
@@ -178,8 +180,11 @@
 ;; machine-type are the inputs discovery is given, read by native alone so that
 ;; discovery stays a pure function (ADR-0002). format, format-condition? and
 ;; display-condition render the loader's refusal as the detail of load-failed:
-;; native's alone, as nothing else needs them.
-;; get-thread-id is not here: ADR-0010's library has no name yet.
+;; native's alone, as nothing else needs them. get-thread-id belongs to
+;; connection, whose every verb checks that it runs on the connection's owning
+;; thread (ADR-0010): a library that asked for thread ids elsewhere would be a
+;; second owner check, the place a gap opens. M2's statements check through
+;; connection's call-with-open-handle.
 ;; Adding a name or a library is a reviewed change to the seam (ADR-0009).
 (define library-only-chez-names
   '((foreign-alloc (chez-sqlite3 private memory))
@@ -195,7 +200,8 @@
     (foreign-sizeof (chez-sqlite3 private native))
     (format (chez-sqlite3 private native))
     (format-condition? (chez-sqlite3 private native))
-    (display-condition (chez-sqlite3 private native))))
+    (display-condition (chez-sqlite3 private native))
+    (get-thread-id (chez-sqlite3 private connection))))
 
 ;; rnrs-libraries : (Listof (Listof Symbol))
 ;; The standard libraries a library under src/ may import: R6RS's, but for

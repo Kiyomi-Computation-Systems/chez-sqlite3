@@ -44,7 +44,7 @@
 
 ## Amendment, 2026-11-14: what `check-seam` reads (M1's plan)
 
-Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
+Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0.
 
 - **`check-seam` reads `src/` alone.** The rule is about what the library exposes:
   under `src/`, only `(chez-sqlite3)` and the `(chez-sqlite3 private …)` libraries exist, and no
@@ -66,4 +66,5 @@ Proposed in M1 slice 0, for the maintainer's acceptance with its PR.
   `display-condition` are `(chez-sqlite3 private native)`'s alone. `define-ftype`, `lock-object`,
   `foreign-callable` and `fork-thread` are allowed to no library. A library that imports a
   library-only name may export no macro (rule (k)).
+- **Slice 4 adds `get-thread-id`,** `(chez-sqlite3 private connection)`'s alone.
 

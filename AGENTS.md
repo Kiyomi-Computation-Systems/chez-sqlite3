@@ -75,7 +75,10 @@
 * A test is not finished when it passes. It is finished when you have watched
   it fail.
 * Prefer a check to a comment.
-* **Do not** write tests that rely on reading code comments
+* **Do not** write tests that rely on reading code comments. The one exception:
+  `test-reference` holds `docs/reference.md`'s signatures to the Typed Racket
+  signature comments of `(chez-sqlite3)`'s exports, which are the contract
+  (the maintainer, 2026-11-14)
 
 **Tests**
 

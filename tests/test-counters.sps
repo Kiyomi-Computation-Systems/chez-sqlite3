@@ -1,7 +1,8 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private counters): a count per kind of native
 ;;; object, behind one mutex, with no reset (ADR-0005). A count-down below
-;;; zero is a double free, and raises.
+;;; zero is a double free, and raises. And the exit checks registered there,
+;;; which this process never registers: a child does.
 ;;;
 ;;; A test that raises a count on purpose lowers it again under
 ;;; dynamic-wind, and this suite exits through suite-exit-status, which
@@ -12,7 +13,7 @@
 (import (rnrs)
         (srfi :64)
         (only (chezscheme) fork-thread make-mutex with-mutex sleep make-time
-              library-exports)
+              library-exports getenv)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters))
 
@@ -49,6 +50,14 @@
 (define not-a-kind "not a kind of native object chez-sqlite3 counts")
 (define double-free "more objects of this kind freed than made: a double free")
 
+;; refused : (-> Any) -> (U (List 'assertion-violation Symbol (Listof Any)) (List 'other String) (List 'no-raise Any))
+;; THUNK's assertion violation as its who and irritants alone, never its message.
+(define (refused thunk)
+  (guard (e ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other (describe e))))
+    (list 'no-raise (thunk))))
+
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 
 ;; counts-with : (Listof (Pairof Symbol Integer)) -> (Listof (Pairof Symbol Integer))
@@ -73,8 +82,8 @@
 
 (test-begin "counters")
 
-(test-equal "(chez-sqlite3 private counters) exports exactly native-kinds, count-up!, count-down! and native-counts: no reset"
-  (sorted-names '(native-kinds count-up! count-down! native-counts))
+(test-equal "(chez-sqlite3 private counters) exports exactly native-kinds, count-up!, count-down!, native-counts, register-exit-check! and exit-checks: no reset, and no way to drop a check"
+  (sorted-names '(native-kinds count-up! count-down! native-counts register-exit-check! exit-checks))
   (sorted-names (library-exports '(chez-sqlite3 private counters))))
 
 (test-equal "native-kinds: block, connection and statement, in that order"
@@ -179,6 +188,61 @@
          (between (cdr (assq 'connection (native-counts))))
          (downs (run-threads count-down!)))
     (list ups between downs (native-counts))))
+
+;; --- the exit checks ------------------------------------------------------
+;; A check is registered for good, and suite-exit-status runs every one at
+;; this suite's end, so this process registers none: the refusals register
+;; nothing, and a child registers the rest.
+
+(test-equal "a process that loaded no libsqlite3 has no exit check"
+  '()
+  (exit-checks))
+
+(test-equal "register-exit-check! refuses a name that is no symbol, and a check that is no procedure, as assertion violations naming who and irritants, never the text, and registers nothing"
+  (list (list 'assertion-violation 'register-exit-check! '(not-a-name "memory"))
+        (list 'assertion-violation 'register-exit-check! '(not-a-procedure memory (pass "x")))
+        '())
+  (let* ((a (refused (lambda () (register-exit-check! "memory" (lambda () '(pass "x"))))))
+         (b (refused (lambda () (register-exit-check! 'memory '(pass "x")))))
+         (after (exit-checks)))
+    (list a b after)))
+
+(define chez (getenv "CHEZ"))
+
+;; registered-in-child : (List Integer String String)
+;; A child that registers checks named zeta, alpha and zeta, and prints what
+;; exit-checks answers: each name, and whether its procedure is the one
+;; registered under it, then that a second call answers a fresh list. It
+;; exits 0 itself, so suite-exit-status never runs them.
+(define registered-in-child
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (base)
+       (let ((program (string-append base "/child.sps")))
+         (call-with-port (open-file-output-port program (file-options no-fail) (buffer-mode block)
+                                                (make-transcoder (utf-8-codec)))
+           (lambda (p)
+             (put-string p
+               (string-append
+                "#!r6rs\n"
+                "(import (rnrs) (chez-sqlite3 private counters))\n"
+                "(define first (lambda () '(pass \"one\")))\n"
+                "(define second (lambda () '(fail \"two\")))\n"
+                "(define third (lambda () '(unavailable \"three\")))\n"
+                "(register-exit-check! 'zeta first)\n"
+                "(register-exit-check! 'alpha second)\n"
+                "(register-exit-check! 'zeta third)\n"
+                "(define checks (exit-checks))\n"
+                "(write (list (map car checks)\n"
+                "             (map (lambda (entry proc) (eq? (cdr entry) proc)) checks (list first second third))\n"
+                "             (if (eq? checks (exit-checks)) 'same-list 'fresh-list)))\n"
+                "(newline)\n"
+                "(exit 0)\n"))))
+         (capture-command (list chez "--libdirs" "src:tests:build/scheme-libs" "--program" program)))))))
+
+(test-equal "exit-checks answers every check registered, in the order registered, a name given twice twice, each with its own procedure, in a fresh list"
+  '(0 "((zeta alpha zeta) (#t #t #t) fresh-list)\n" "")
+  registered-in-child)
 
 (test-end "counters")
 

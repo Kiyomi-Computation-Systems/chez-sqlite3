@@ -109,6 +109,22 @@ told in chez-curl's `.plans/traps.md`.
   7th, and the row broke on an edit it wasn't about. Anchor on a line's content. (M1 slice 3,
   chez-sqlite3)
 
+- **A test that reads the name of the file `CHEZ` names assumes a layout.** CI's and the
+  container's Chez is `…/bin/scheme`; Homebrew's on a Mac is `/opt/homebrew/bin/chez`.
+  `test-check-floors`' `check-chez.sh` rows took the prefix from `CHEZ`'s path and failed 6 rows
+  on the maintainer's Mac. They now build a `bin/scheme` that execs it when the name differs.
+  (M1, the Mac's first hand run, chez-sqlite3)
+
+- **macOS has no `/proc`.** Children that read `/proc/self/maps` to say whether they run under
+  Valgrind printed `(valgrind . no-maps)` there, and rows that expected `no` failed; one child
+  read it unguarded and died. A row's expectation says what its own process can see. (M1, the
+  Mac's first hand run, chez-sqlite3)
+
+- **One failure can answer differently by build.** `sqlite3_open_v2` on a FIFO answers
+  `SQLITE_IOERR` on Guix's 3.53.1 and Homebrew's 3.54.1, and `SQLITE_CANTOPEN` on Apple's 3.51.0.
+  Where the code isn't what a row is about, it names the codes it accepts, each measured. (M1,
+  the Mac's first hand run, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
