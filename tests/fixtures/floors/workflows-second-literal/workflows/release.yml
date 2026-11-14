@@ -1,0 +1,7 @@
+name: Release
+on:
+  push:
+jobs:
+  release:
+    steps:
+      - run: echo 10.9.1
