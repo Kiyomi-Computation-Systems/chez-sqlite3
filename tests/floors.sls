@@ -95,7 +95,7 @@
 ;;; nothing would read that either, since build-chez.sh takes no version.
 (library (floors)
   (export floors-path check-floors floors-problems parse-floors read-floors file-text
-          floor-text floor-numbers requirement-lines workflows-problems ci-workflow)
+          floor-text floor-numbers requirement-lines workflows-problems ci-workflow scripts-problems)
   (import (rnrs)
           (only (chezscheme) display-condition parameterize print-graph))
 
@@ -531,40 +531,89 @@
             (list "amalgamation"
                   (number->string (+ (* x 1000000) (* y 10000) (* z 100)))))))
 
+  ;; floor-complaints : String String String String (Listof (List String String (Listof (List String String)))) String -> (Listof String)
+  ;; Each complaint about the text TEXT, a line or the name of the file at
+  ;; PATH, WHERE being "line N" or "its name", for each
+  ;; floor, the Chez floor first: its version text if the text contains it,
+  ;; then its numeric forms (name digits) that the text holds as a whole run
+  ;; of digits. FPATH is the floors file's path, FLOORS (name version forms)
+  ;; for each floor, and WHO what the messages say may not write it, and where
+  ;; it is read from: "no workflow line may write: the CI scripts read it
+  ;; from", or "no CI script may write: they read it from".
+  (define (floor-complaints path where line fpath floors who)
+    (apply append
+           (map (lambda (floor)
+                  (append
+                   (if (contains? line (cadr floor))
+                       (list (string-append
+                              path ": " where " contains the "
+                              (car floor) " floor " (cadr floor)
+                              ", which " who " " fpath))
+                       '())
+                   (apply append
+                          (map (lambda (form)
+                                 (if (whole-run? line (cadr form))
+                                     (list (string-append
+                                            path ": " where " contains "
+                                            (cadr form) ", the " (car form) " form of the "
+                                            (car floor) " floor " (cadr floor)
+                                            ", which " who " " fpath))
+                                     '()))
+                               (caddr floor)))))
+                floors)))
+
+  ;; ends-in-backslash? : String -> Boolean
+  (define (ends-in-backslash? s)
+    (let ((n (string-length s)))
+      (and (> n 0) (char=? (string-ref s (- n 1)) #\\))))
+
+  ;; joined-lines : (Listof String) -> (Listof (U String #f))
+  ;; For each of LINES, in order: the line joined with those after it as sh
+  ;; joins them, when it starts a run of lines that end in a backslash (the
+  ;; backslash and the newline are gone), or #f for a line that such a run
+  ;; took in. A floor split by a backslash and a newline is one floor to sh.
+  (define (joined-lines lines)
+    (let loop ((rest lines) (out '()))
+      (if (null? rest)
+          (reverse out)
+          (let take ((acc (car rest)) (more (cdr rest)) (taken '()))
+            (if (and (ends-in-backslash? acc) (pair? more))
+                (take (string-append (substring acc 0 (- (string-length acc) 1)) (car more))
+                      (cdr more)
+                      (cons #f taken))
+                (loop more (append taken (cons acc out))))))))
+
+  ;; relative-name : String String -> String
+  ;; PATH below the directory DIR, without it, when it is below it.
+  (define (relative-name dir path)
+    (let ((prefix (string-append dir "/")))
+      (if (prefix? prefix path)
+          (substring path (string-length prefix) (string-length path))
+          path)))
+
+  ;; name-problems : String String String Floors String -> (Listof String)
+  ;; The floor complaints about the name of the file at PATH, below the
+  ;; directory DIR: a name may not hold a floor, nor a form of one, either.
+  (define (name-problems dir path fpath floors who)
+    (floor-complaints path "its name" (relative-name dir path) fpath floors who))
+
   ;; line-problems : String String (Listof String) (Listof (List String String (Listof (List String String)))) -> (Listof String)
-  ;; Each complaint about the lines LINES of the file at PATH, in line order:
-  ;; for a line, for each floor, the Chez floor first, its version text if the
-  ;; line contains it, then its numeric forms (name digits) that the line
-  ;; holds as a whole run of digits; then a backslash after a double quote,
-  ;; then an odd number of double quotes. FPATH is the floors file's path,
-  ;; FLOORS (name version forms) for each floor.
+  ;; Each complaint about the lines LINES of the workflow file at PATH, in line
+  ;; order: for a line, its floor complaints (floor-complaints) on the line
+  ;; joined with those a trailing backslash joins to it (joined-lines), at its
+  ;; first line; then a backslash after a double quote, then an odd number of
+  ;; double quotes, on the line as written.
+  ;; FPATH is the floors file's path, FLOORS (name version forms) for each
+  ;; floor.
   (define (line-problems path fpath lines floors)
-    (let loop ((rest lines) (n 1))
+    (let loop ((rest lines) (joined (joined-lines lines)) (n 1))
       (if (null? rest)
           '()
           (append
-           (apply append
-                  (map (lambda (floor)
-                         (append
-                          (if (contains? (car rest) (cadr floor))
-                              (list (string-append
-                                     path ": line " (number->string n) " contains the "
-                                     (car floor) " floor " (cadr floor)
-                                     ", which no workflow line may write: the CI scripts read it from "
-                                     fpath))
-                              '())
-                          (apply append
-                                 (map (lambda (form)
-                                        (if (whole-run? (car rest) (cadr form))
-                                            (list (string-append
-                                                   path ": line " (number->string n) " contains "
-                                                   (cadr form) ", the " (car form) " form of the "
-                                                   (car floor) " floor " (cadr floor)
-                                                   ", which no workflow line may write: the CI scripts read it from "
-                                                   fpath))
-                                            '()))
-                                      (caddr floor)))))
-                       floors))
+           (if (car joined)
+               (floor-complaints path (string-append "line " (number->string n)) (car joined) fpath floors
+                                 "no workflow line may write: the CI scripts read it from")
+               '())
            (if (backslash-after-quote? (car rest))
                (list (string-append
                       path ": line " (number->string n)
@@ -575,7 +624,19 @@
                       path ": line " (number->string n)
                       " holds an odd number of double quotes, so a double-quoted string goes on past it, where YAML may read an escape, and check-floors reads line by line"))
                '())
-           (loop (cdr rest) (+ n 1))))))
+           (loop (cdr rest) (cdr joined) (+ n 1))))))
+
+  ;; floor-rows : Floors -> (Listof (List String String (Listof (List String String))))
+  ;; (name version forms) for each floor in FLOORS that no CI file may write:
+  ;; forms are the numeric forms of the SQLite floor, and none for the Chez
+  ;; floor.
+  (define (floor-rows floors)
+    (map (lambda (row)
+           (list (cadr row) (floor-text floors (car row))
+                 (if (eq? (car row) 'sqlite)
+                     (sqlite-forms floors)
+                     '())))
+         workflow-floors))
 
   ;; workflows-problems : String String (Listof (List String (U String #f))) Floors -> (Listof String)
   ;; What is wrong with WORKFLOWS, every file under the workflow directory
@@ -590,14 +651,7 @@
   ;; after a double quote; then an odd number of double quotes.
   (define (workflows-problems fpath wdir workflows floors)
     (let* ((ci-path (string-append wdir "/" ci-workflow))
-           ;; (name version forms) for each floor: forms are the numeric forms
-           ;; of the SQLite floor, and none for the Chez floor.
-           (rows (map (lambda (row)
-                        (list (cadr row) (floor-text floors (car row))
-                              (if (eq? (car row) 'sqlite)
-                                  (sqlite-forms floors)
-                                  '())))
-                      workflow-floors))
+           (rows (floor-rows floors))
            (sorted (list-sort (lambda (a b) (string<? (car a) (car b))) workflows)))
       (if (null? workflows)
           (list (string-append wdir ": it holds no file, but must hold " ci-workflow
@@ -608,9 +662,59 @@
                (list (string-append wdir ": it holds no " ci-workflow ", the workflow CI runs")))
            (apply append
                   (map (lambda (entry)
-                         (if (cadr entry)
-                             (line-problems (car entry) fpath (split (cadr entry) #\newline) rows)
-                             '()))
+                         (append
+                          (name-problems wdir (car entry) fpath rows
+                                         "no workflow line may write: the CI scripts read it from")
+                          (if (cadr entry)
+                              (line-problems (car entry) fpath (split (cadr entry) #\newline) rows)
+                              '())))
+                       sorted))))))
+
+  ;; floor-script : String
+  ;; The name of the file, directly in the scripts directory, that it must
+  ;; hold.
+  (define floor-script "floor.sh")
+
+  ;; scripts-problems : String String (Listof (List String (U String #f))) Floors -> (Listof String)
+  ;; What is wrong with SCRIPTS, every file under the CI scripts directory
+  ;; SDIR, each as its path and its text, against FLOORS, from the floors file
+  ;; at FPATH. A text that is #f is a file the caller could not read, which it
+  ;; names: it is not compared. In order: a directory with no file, named
+  ;; alone; one with no floor.sh, SDIR/floor.sh; and then, file by file in the
+  ;; order of their paths, whatever order they come in, each line's floor
+  ;; complaints (floor-complaints), as for a workflow. The rules about
+  ;; backslashes and double quotes are YAML's, and a script is shell: they
+  ;; do not apply.
+  (define (scripts-problems fpath sdir scripts floors)
+    (let* ((floor-path (string-append sdir "/" floor-script))
+           (rows (floor-rows floors))
+           (sorted (list-sort (lambda (a b) (string<? (car a) (car b))) scripts)))
+      (if (null? scripts)
+          (list (string-append sdir ": it holds no file, but must hold " floor-script
+                               ", the script CI reads the floors through"))
+          (append
+           (if (assoc floor-path sorted)
+               '()
+               (list (string-append sdir ": it holds no " floor-script
+                                    ", the script CI reads the floors through")))
+           (apply append
+                  (map (lambda (entry)
+                         (append
+                          (name-problems sdir (car entry) fpath rows
+                                         "no CI script may write: they read it from")
+                          (if (cadr entry)
+                              (let ((lines (split (cadr entry) #\newline)))
+                                (let loop ((rest lines) (joined (joined-lines lines)) (n 1))
+                                  (if (null? rest)
+                                      '()
+                                      (append
+                                       (if (car joined)
+                                           (floor-complaints (car entry) (string-append "line " (number->string n))
+                                                             (car joined) fpath rows
+                                                             "no CI script may write: they read it from")
+                                           '())
+                                       (loop (cdr rest) (cdr joined) (+ n 1))))))
+                              '())))
                        sorted))))))
 
   ;; check-floors : String String String (U String #f) String
