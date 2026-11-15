@@ -3,7 +3,10 @@
 - **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3b. Amended
   2026-11-14: `not-threadsafe`, and what the Mac showed
   ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)). Amended
-  2026-11-14: M2's required entry points ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)).
+  2026-11-14: M2's required entry points
+  ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)). Amended 2026-11-15: M3's
+  required entry points (M3's plan,
+  [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -199,3 +202,19 @@ Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
 - **None is optional:** each is part of SQLite's statement API, which M2's verbs can't do without.
 - **Each gets a decoy switch and a `missing-api` row in `test-library-loading`,** as M1's do (M1
   slice 3). ADR-0005's amendment of the same day gives what that costs the gate.
+
+## Amendment, 2026-11-15: M3's required entry points (M3's plan)
+
+Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.7).
+
+- **M3 adds five required entry points** to item 5 of the M1 amendment's "What is bound, in
+  order", after M2's, in the same step, the seventh of native's load. Each is checked with
+  `foreign-entry?` before it is bound, else `missing-api` naming it: `sqlite3_changes64`,
+  `sqlite3_total_changes64`, `sqlite3_last_insert_rowid`, `sqlite3_get_autocommit` and
+  `sqlite3_interrupt`.
+- **All five are in the floor's build** (M3's research, single, `entry-points.sps`).
+- **None is optional:** the counters, `with-transaction`'s read of autocommit and the interrupt
+  can't do without them.
+- **Each gets a decoy switch and a `missing-api` row,** continuing the alternation of entry
+  points between `test-library-loading-decoys` and `test-library-loading-real`, the halves M2
+  split the suite into in PR #19 (ADR-0005, amended).

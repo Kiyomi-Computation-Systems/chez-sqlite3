@@ -82,7 +82,7 @@ Measured on Guix's 3.53.1 and at the floor, 3.45.1, alike (M3's research, "singl
 - **A guard whose clauses don't match re-enters the raise's extent to raise again,** so a
   before thunk that refuses a re-entry replaces the caller's condition. M2's
   `call-with-database` and `call-with-statement` let the re-entry through, and keep their after
-  thunks contained (`connection.sls:465–470`, `statement.sls:434`); measured on Chez 10.4.0 by the
+  thunks contained (`connection.sls:465–470`, `statement.sls:436`); measured on Chez 10.4.0 by the
   plan's review.
 
 ## Decision
@@ -164,7 +164,7 @@ Measured on Guix's 3.53.1 and at the floor, 3.45.1, alike (M3's research, "singl
    rolls back a newer savepoint at the same depth. So:
    - `begun` is set inside the section of the step that answered the `BEGIN` or `SAVEPOINT`, as
      `call-with-statement`'s prepare hands its statement over inside its own section
-     (`statement.sls:435–436`), so no interrupt falls between them. `ended` is set inside the
+     (`statement.sls:437–438`), so no interrupt falls between them. `ended` is set inside the
      section of the step that commits, releases, or completes the rollback;
    - **the commit runs in the wind's body, after the body returns,** by decision 6, when `ended`
      is unset. Its raises, a failed commit's and `&sqlite-transaction-ended`, are made there, in

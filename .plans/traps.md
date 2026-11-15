@@ -65,6 +65,13 @@ told in chez-curl's `.plans/traps.md`.
   correctly, seen only by a row holding it to the header. Every value a verb passes is checked to
   fit its C type before the section (ADR-0011, amended). (M2 slice 2's review, chez-sqlite3)
 
+- **A guard whose clauses don't match re-enters the raise's extent.** It raises again in the
+  raise's own dynamic environment, so a `dynamic-wind` before thunk runs a second time, and one
+  that refuses a re-entry replaces the caller's condition: the outer guard caught `re-entered`,
+  and `call-with-c-string` gave its refusal. M2's `call-with-statement` and `call-with-database`,
+  whose before thunks do nothing, gave the caller's condition (the plan's review, on Chez
+  10.4.0). (M3's plan, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -137,6 +144,71 @@ told in chez-curl's `.plans/traps.md`.
   connection too,** not only another's: a held `select *` read 2, then 2 after the ALTER, then 3
   after its step. So a count read before a step can be stale, and a column read checks the count
   in its own section. (M3's research, reproduced in M2 slice 3, chez-sqlite3)
+
+- **An interrupt sticks while any statement of its connection holds a row.** Every new prepare and
+  step then answers `SQLITE_INTERRUPT` until that statement is reset: `ROLLBACK`, `COMMIT`,
+  `ROLLBACK TO` and `RELEASE` among them, so the transaction can't be ended. With none active, the
+  next statement's start discards it, so one that lands between two statements is lost
+  (concurrency I2, I3, trap 2; slice-0 P7). (M3's research, chez-sqlite3)
+
+- **A busy timeout doesn't cover a read transaction's first write.** After `BEGIN` and a read, a
+  write under another connection's write lock answered BUSY at once, with no timeout and with 1500
+  and 2000 ms ones, and in WAL `SQLITE_BUSY_SNAPSHOT` (517) once the other had committed. No retry
+  of the statement can succeed. `BEGIN IMMEDIATE` waits under the timeout instead, while the
+  connection holds no read of its own (concurrency B2, B5, B6, trap 4; slice-0 P12).
+  (M3's research, chez-sqlite3)
+
+- **`BEGIN IMMEDIATE` doesn't wait while the connection's own SELECT holds an old snapshot.** In
+  WAL, with a SELECT held at a row and another connection's commit after it, `BEGIN IMMEDIATE` and
+  `BEGIN EXCLUSIVE` answered 517 at once, with a 300 ms timeout, and began nothing. Reset the
+  SELECT first (slice-0 P9). (M3's research, chez-sqlite3)
+
+- **Some settings fail at once, with a busy timeout set.** `journal_mode = wal` under another
+  connection's reserved lock, and `journal_mode = delete` on a WAL file while any other connection
+  is open, even an idle one, answered BUSY with no wait under a 200 ms timeout (slice-0 P2). (M3's research,
+  chez-sqlite3)
+
+- **A refused `BEGIN IMMEDIATE` still takes its lock.** Inside a deferred transaction that had read
+  nothing, it failed, "cannot start a transaction within a transaction", and `txn_state` went from
+  NONE to WRITE (single T1). (M3's research, chez-sqlite3)
+
+- **Whether a failure ended its transaction turns on the statement, not the code.** The same NOMEM
+  or FULL undid only its statement, or rolled back the transaction, by one function call, one
+  constraint, one row, or whether a table was read. A limit left in force across the statement's
+  own rollback turned one into the other. An interrupted write always ends it, and an interrupted
+  SELECT never does (single T8, T12, T13; concurrency I5). (M3's research, chez-sqlite3)
+
+- **A PRAGMA never refuses a value or a name.** A word it doesn't know turns a boolean off,
+  `synchronous = 4` is stored, `busy_timeout = 2147483648` gives 0, and `PRAGMA foreign_key = ON`
+  does nothing. Inside a transaction, `foreign_keys = ON` does nothing and says nothing (single P4,
+  P5, T4, T5; concurrency B1). (M3's research, chez-sqlite3)
+
+- **A connection's `journal_mode` can be stale.** One that had read the file before another
+  switched it to WAL answered `delete` until its next read (concurrency trap 5). (M3's research,
+  chez-sqlite3)
+
+- **`last_insert_rowid` can name a row that doesn't exist:** one a failed statement or a ROLLBACK
+  undid. It doesn't move for a WITHOUT ROWID table or an upsert's DO UPDATE (single T7, C8, C11).
+  (M3's research, chez-sqlite3)
+
+- **After `ROLLBACK`, an open SELECT goes on answering rows,** the rolled-back ones among them,
+  unless the rollback undid a schema change, when it answers 516 (single O2, O4b, T2). (M3's
+  research, chez-sqlite3)
+
+- **A busy wait's grain is the build's.** Without `nanosleep`, SQLite sleeps whole seconds: a
+  timeout under 1000 ms answers BUSY at once, and 1500 waits 1000. No compile option shows it
+  (concurrency B3). (M3's research, chez-sqlite3)
+
+- **A connection's own held read stops its writes from waiting.** With its SELECT held at a row,
+  under another's `BEGIN IMMEDIATE` and write, its `BEGIN IMMEDIATE` and an autocommit INSERT
+  answered BUSY in microseconds, where without the held read they waited out a 1500 ms timeout,
+  in WAL and rollback-journal mode alike. With `BEGIN IMMEDIATE` taken before the read, writes
+  beside it ran (slice-0 P12; the plan's review found it). (M3's research, chez-sqlite3)
+
+- **Any set of `foreign_keys` or `trusted_schema` expires every statement on its connection,**
+  even one that changes nothing: `foreign_keys = 1`, `= 0` and `= off`, and `trusted_schema = 0`
+  and `= 1`, each made a held statement re-prepare at its next step. No read form of the six
+  settings did, nor a set of the other four (slice-0 P13, P13b). (M3's research, chez-sqlite3)
 
 ## Checks and environment
 

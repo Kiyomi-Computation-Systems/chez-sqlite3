@@ -87,8 +87,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **A connection belongs to the thread that opened it.** Every verb checks, in order, that its
   argument is a database, that it runs on the owning thread, and that the connection is open,
   before anything reaches C. The wrong thread raises `&sqlite-wrong-thread`, and a closed
-  connection `&sqlite-closed`. M3's `sqlite3_interrupt` is the one exception (ADR-0010,
-  ADR-0012).
+  connection `&sqlite-closed`. `interrupt-database!` is the one exception, and checks only that its
+  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019) *(provisional)*.
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
 - **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
@@ -147,6 +147,49 @@ Proposed record is marked *(provisional)* until that record is accepted.
   test-memory` prints each suite's time, and fails one past it as `SLOW`, so a suite is split
   before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
   562 s on a slow runner (ADR-0005, amended).
+
+## Conveniences, transactions, settings and interrupt *(provisional)*
+
+- **A convenience runs one statement and finishes it on every path** before it returns or raises:
+  back in the cache, reset with its bindings cleared, or finalized. None is left at a row once it
+  has returned or raised; `query-fold` holds one only while its procedure runs (ADR-0016,
+  ADR-0020).
+- **A `dynamic-wind` around a caller's procedure lets a re-entry through,** as M2's do: a guard
+  whose clauses don't match re-enters the raise's extent to raise again, and a refusing before
+  thunk would replace the caller's condition. **Where an after thunk's work isn't idempotent, a
+  flag of M3's own makes it act once,** and a later exit, or a re-entered body or loop, is
+  decided by the flag: `query-fold`'s loop raises `&sqlite-closed`, and `with-transaction`'s
+  later return raises `&sqlite-transaction-ended`, never a second commit (ADR-0016,
+  ADR-0017). A raise inside `call-with-c-string`'s procedure is caught inside it and
+  raised after it, since `call-with-block` refuses a re-entry (ADR-0016).
+- **Every raise names the procedure the caller called:** M3's conveniences reach M2's statement
+  verbs through internals that take a who (ADR-0013, decision 2; ADR-0014, amended).
+- **The statement cache holds only reset statements, prepared `SQLITE_PREPARE_PERSISTENT`,** at
+  most its connection's `statement-cache` setting, 32 when absent, 0 to 1024, fixed at open; the
+  least recently used out first. At 0 it holds none, and the conveniences prepare with no flags. A
+  statement whose step or read failed is finalized, never kept. `prepare-statement`,
+  `execute-script!` and the settings never use it, and the close finalizes its statements as
+  tracked ones (ADR-0020).
+- **`with-transaction` reads `sqlite3_get_autocommit`** to choose `BEGIN` or a savepoint, and again
+  after its body, before any commit or rollback: whether a failure ended a transaction can't be
+  told from its code. It refuses to begin while its connection holds a row (ADR-0017; the M3
+  plan's Q14).
+- **The settings are an allowlist, each value checked in Scheme before anything opens:** six of
+  SQLite's, each set, then read back by a second statement and compared, `busy-timeout` first; and
+  the library's own `statement-cache`, which SQLite never sees and nothing reads back. They run at
+  open only, and a failure closes the connection, then raises (ADR-0018).
+- **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
+  mutex, and only while the connection is interruptible.** The close clears that under the same
+  mutex before it finalizes anything. The mutex is held only inside a critical section, never
+  across a call that can block (ADR-0019).
+- **A critical section is no lock between threads:** it keeps out only its own thread's engines,
+  timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
+  decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the
+  record's mutex (ADR-0019).
+- **No busy handler and no retry in Scheme;** a busy wait ends at its timeout, interrupt or not.
+  A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms (ADR-0019).
+- **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
+  `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
 
 ## Layout and names
 

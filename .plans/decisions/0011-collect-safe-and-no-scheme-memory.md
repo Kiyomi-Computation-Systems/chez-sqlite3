@@ -9,7 +9,8 @@
   sections (M1's closing review,
   [amendment](#amendment-2026-11-14-the-helpers-raise-after-their-sections-m1s-closing-review)).
   Amended 2026-11-15, and accepted by the maintainer that day: Chez's foreign ranges (M2 slice 2,
-  [amendment](#amendment-2026-11-15-chezs-foreign-ranges-m2-slice-2)).
+  [amendment](#amendment-2026-11-15-chezs-foreign-ranges-m2-slice-2)). Amended 2026-11-15: M3's
+  bindings (M3's plan, [amendment](#amendment-2026-11-15-m3s-bindings-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -213,3 +214,18 @@ Measured on Chez 10.4.0, amd64.
 - **The allowlist grows** to `int`, `uptr`, `integer-64`, `unsigned-int`, `double`, `unsigned-64`
   and `unsigned-8` for arguments, and `int`, `uptr`, `integer-64`, `double` and `void` for
   results. `test-conventions` holds it against the other 50 of the 54 type forms Chez accepts.
+
+## Amendment, 2026-11-15: M3's bindings (M3's plan)
+
+Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.4 and §4.7).
+
+- **M3's five bindings are plain:** `sqlite3_changes64`, `sqlite3_total_changes64`,
+  `sqlite3_last_insert_rowid`, `sqlite3_get_autocommit` and `sqlite3_interrupt`. No measurement or
+  documentation shows one waiting, so none joins decision 5's list. `sqlite3_interrupt` returned
+  in 0.31 to 12.22 µs from another thread, waiting for no mutex (M3's research, concurrency I1,
+  I8).
+- **`sqlite3_interrupt` is the one binding called off the owning thread.** It takes the handle,
+  an integer, read under the record's mutex ([ADR-0019](0019-interrupt-and-close.md)).
+- **The context's `sqlite3_close`** writes a checkpoint, about 5 ms for 4 MB of WAL, but never
+  waited in the busy handler (concurrency S5). It stays `__collect_safe`: its I/O can still be
+  long.

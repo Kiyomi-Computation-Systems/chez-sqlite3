@@ -65,14 +65,15 @@
   replaces the caller's condition with its own: measured on Chez 10.4.0 by the M3 plan's review,
   for a refusing wind and for M1's `call-with-c-string`, whose `call-with-block` refuses one. M2's
   `call-with-statement` and `call-with-database`, whose before thunks do nothing, delivered the
-  caller's condition (`connection.sls:465–470`, `statement.sls:434`).
+  caller's condition (`connection.sls:465–470`, `statement.sls:436`).
 - **Slice 4's values** (PR #19): `statement-values.sls`'s private `read-outcome` reads a column's
   data inside a section, and `finish` decodes and raises after it; a NULL pointer's code 7 is NOMEM
   only when the column's type has turned NULL (ADR-0015's slice 4 amendment).
 - **A value is copied byte by byte with this thread's interrupts off.** M2's closing review
   measured a 64 MiB BLOB `column-value` at 1932 ms and a 64 MiB `bind!` at 2000 ms, about 30 ns a
   byte; an engine reading one ran 1.8 s with no expiry, while another thread's
-  `collect-rendezvous` waited 0 to 7 ms. ADR-0015 records it, in M2's closing-review PR.
+  `collect-rendezvous` waited 0 to 7 ms. ADR-0015 records it, in its closing-review amendment
+  (PR #20).
 
 ## Decision
 
@@ -108,8 +109,8 @@
    copied in a critical section of its own, read or bound** (the plan's Q15): a column
    through M2's who-taking column read, and a parameter through its who-taking bind, every value
    checked in Scheme before any is bound, as `bind-all!`'s rule has it. A value's copy takes about
-   30 ns a byte with this thread's interrupts off (M2's closing review; ADR-0015, in its
-   closing-review PR), so a section never holds more than one. A row read across sections stays
+   30 ns a byte with this thread's interrupts off (M2's closing review; ADR-0015,
+   amended), so a section never holds more than one. A row read across sections stays
    consistent, since nothing but its convenience steps a checked-out statement, on the owner's
    thread, and a column count changes only at a step (the context). `query-fold` calls
    `(proc acc row)`, as R6RS `fold-left` calls its procedure.
@@ -144,14 +145,14 @@
      caller can't reset a statement it never held, since `tracked-statements` is private, so the
      remedy is to close the connection. `docs/reference.md` says so.
    - **`query-fold` calls the caller's procedure with its statement at a row.** Its shape is
-     M2's `call-with-statement` (`statement.sls:442–475`) where M2's holds:
+     M2's `call-with-statement` (`statement.sls:444–477`) where M2's holds:
      - a plain `dynamic-wind` around a critical one. The plain winder's before thunk does nothing,
        so a re-entry goes through (the context). The critical winder's after thunk finishes the
        statement with interrupts disabled, under a guard that records a failure and raises
        nothing, and the plain winder's after thunk raises that failure unless a raise is under way;
      - the statement, a cache hit or a fresh prepare, reaches the fold's variable inside the
        section that checks it out or prepares it, as `call-with-statement`'s prepare hands its
-       statement over inside its own section (`statement.sls:435–436`), so no escaping interrupt
+       statement over inside its own section (`statement.sls:437–438`), so no escaping interrupt
        falls between the check-out and the after thunk's knowing of it;
      - a handler records a raise and hands it on in place, as M2's does. It covers the wind's whole
        body, the fold's own check-out, binds, steps and row reads as well as the procedure, so a
@@ -183,7 +184,7 @@
      the M3 plan's Q14).
 7. **`execute-script!` runs a script with no parameters** (Q4):
    - **a loop of prepares, never `sqlite3_exec`.** M2's prepare, where more SQL follows the first
-     statement, finalizes that statement and refuses (`made-outcome`, `statement.sls:380–386`). So
+     statement, finalizes that statement and refuses (`made-outcome`, `statement.sls:382–388`). So
      M3 adds a private prepare beside it that hands back the first statement, live, and the tail's
      byte offset instead, by ADR-0014's checks in ADR-0014's section, with no flags. Each
      statement is stepped to done, its rows dropped, and finalized; then the loop prepares from the

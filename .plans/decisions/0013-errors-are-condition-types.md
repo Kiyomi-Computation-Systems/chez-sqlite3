@@ -4,7 +4,8 @@
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
   §3g. Amended 2026-11-14: what slice 4 built
   ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: M2's conditions (M2's plan,
-  [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)).
+  [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)). Amended 2026-11-15: M3's conditions
+  (M3's plan, [amendment](#amendment-2026-11-15-m3s-conditions-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -172,3 +173,57 @@ the same day ([the M2 plan](../2026-11-14-m2-plan.md), §3): `offset` in charact
 - **M2's refusals of a caller's mistake are assertion violations** (decision 7): a value that can't
   bind, a parameter or column out of range, a verb its statement's state doesn't allow, SQL
   holding no statement or more than one.
+
+## Amendment, 2026-11-15: M3's conditions (M3's plan)
+
+Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.2 to §4.5).
+
+- **The hierarchy, with M3's types:**
+
+  ```
+  &error
+   └ &chez-sqlite3-error             no fields; every library condition is one
+      ├ &sqlite-error                code, extended-code, message, sql, offset
+      │   ├ &sqlite-busy             primary code busy or locked
+      │   ├ &sqlite-constraint       primary code constraint
+      │   ├ &sqlite-read-only        primary code readonly
+      │   └ &sqlite-interrupt        primary code interrupt (M3)
+      ├ &sqlite-invalid-text         column, offset
+      ├ &sqlite-setting-mismatch     setting, expected, actual (M3)
+      ├ &sqlite-transaction-ended    no fields (M3)
+      ├ &sqlite-library-unavailable  reason, path, source, detail, candidates, library
+      ├ &sqlite-wrong-thread         owner, caller
+      └ &sqlite-closed               no fields
+  ```
+
+- **`&sqlite-interrupt`** is classed by its primary code, `interrupt`, in the one procedure that
+  makes an `&sqlite-error`, as decision 8's subtypes are. A caller who interrupts catches it
+  ([ADR-0019](0019-interrupt-and-close.md)). `(chez-sqlite3)` exports `sqlite-interrupt?`.
+- **`&sqlite-setting-mismatch`** is raised when a setting read back differs from the value
+  written ([ADR-0018](0018-the-settings-list.md)). Its fields are the setting's name, a symbol, and
+  the value asked for and the value read, as Scheme values. It isn't a `&sqlite-error`: SQLite
+  answered `SQLITE_OK` throughout. `(chez-sqlite3)` exports `sqlite-setting-mismatch?` and its
+  three accessors.
+- **`&sqlite-transaction-ended`** is raised by `with-transaction` when its body returns after the
+  transaction has ended under it ([ADR-0017](0017-with-transaction-and-savepoints.md)). It has no
+  field beyond its `&who`, and a fixed `&message`. `(chez-sqlite3)` exports
+  `sqlite-transaction-ended?`.
+- **No subtype for `busy-snapshot` or `locked`.** The extended code already tells them from the
+  rest, and the four BUSY cases that need different remedies all answer 5, extended 5, so no
+  subtype could tell those apart (M3's research, concurrency B2, B3, B5, B7, B9, B11).
+- **`execute-script!`'s `&sqlite-error` carries the whole script as `sql`, and an `offset` into it
+  that says which statement failed,** in characters, as decision 3's amendment counts it
+  ([ADR-0016](0016-the-conveniences-and-the-counters.md)): for a prepare's error, the token SQLite
+  points at; for a step's error, which SQLite gives no offset, the failing statement's first token.
+  This amends M2's "every other `&sqlite-error` a statement raises carries … no offset" for this
+  one verb.
+- **Decision 2 holds through M3's conveniences:** each raise names the convenience the caller
+  called. M2's statement verbs gain private procedures that take a who, which the conveniences
+  call ([ADR-0014](0014-statements-belong-to-their-connection.md), amended; agreed with M2's
+  session).
+- **M3's refusals of a caller's mistake are assertion violations** (decision 7): a setting the list
+  doesn't know, or a value outside its domain; a mode `with-transaction` doesn't know; a
+  procedure that is no procedure; and `with-transaction` begun while a statement of its connection
+  is `row` or `failed` ([ADR-0017](0017-with-transaction-and-savepoints.md), decision 1). A
+  re-entry is no refusal: M3's winders let it through, and a re-entered fold raises
+  `&sqlite-closed`, a re-entered transaction's return `&sqlite-transaction-ended`.

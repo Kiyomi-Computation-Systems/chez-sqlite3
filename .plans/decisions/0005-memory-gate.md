@@ -23,7 +23,9 @@
   [amendment](#amendment-2026-11-15-the-decoys-cost-measured-m2-slice-2)). Amended 2026-11-15
   by the maintainer's choice, "Split in #19, rest after": one run was one sample, and the suite
   is split, with a check that holds the rule (M2's closing review,
-  [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)).
+  [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)). Amended
+  2026-11-15: M3's entry points and suites (M3's plan,
+  [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -515,3 +517,25 @@ rest after". The split and a check that holds the rule land in PR #19, before it
   they would take about 360 s and 310 s. The `memory` job took 21m55s, and named no suite `SLOW`.
 - **So M3's entry points add to one half,** and the check names a half before it nears the
   timeout.
+
+## Amendment, 2026-11-15: M3's entry points and suites (M3's plan)
+
+Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.7). M2 split
+`test-library-loading` in PR #19, its 36 entry points alternating between two halves, and `make
+test-memory` fails a suite past three quarters of `MEMORY_TIMEOUT` as `SLOW` (the split's
+amendment, above). This amendment adds only what M3 brings.
+
+- **M3's five entry points add five decoy children,** each to one half, as the split amendment
+  says, continuing the alternation: three to `test-library-loading-decoys` and two to
+  `test-library-loading-real`. Each adds a child of about 5 s, and about 15 ms more for each of
+  the others, by the slice 2 amendment's arithmetic, near 30 s across the halves where it was
+  measured. M3 slice 2 reads both halves' times from more than one CI run, naming each, since one
+  run is one sample. A half M3's rows bring near the threshold is split again in that slice, as M2
+  split the whole.
+- **M3's own suites** are held by the same check. The `memory` job's total is read in every M3
+  slice's CI run; past 45 minutes, three quarters of its 60, the job is sharded, as this record's
+  consequences foresee, with an amendment then.
+- **A row that causes NOMEM sets `sqlite3_hard_heap_limit64` around one call** and lifts it
+  straight after (M3's research, single T12). The limit is process-wide, so the row restores it on
+  every path, and it needs the memory count on: where it is off, as on Apple's build, the row is
+  named unavailable, as the memory check is.

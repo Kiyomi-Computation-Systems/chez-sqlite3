@@ -9,13 +9,14 @@ newest first.
 - **M0 is done:** PRs #1 to #6.
 - **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
   closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
-- **M2 slices 0 to 4 are merged:**
+- **M2 is done,** each PR squash-merged in order with CI passing in every job:
   - slice 0, as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their amendments to the
     older records;
   - slice 1, the pure core, as PR #16, `e6b2462`;
   - slice 2, the bindings, as PR #17, `f2ffa0e`;
   - slice 3, statements, as PR #18, `0572267`;
-  - slice 4, values, as PR #19, `00ab0c8`.
+  - slice 4, values, as PR #19, `00ab0c8`;
+  - its closing review, as PR #20, `bb7feaa`.
 - **The maintainer accepted ADR-0010 to ADR-0015 and their amendments:**
   - on 2026-11-14, all of them to that day;
   - on 2026-11-15, ADR-0015's slice 1 and slice 4 amendments, ADR-0005's and ADR-0011's slice 2
@@ -23,14 +24,17 @@ newest first.
 
   ADR-0014's slice 1 amendment and ADR-0005's split record the maintainer's own choices ("Match
   SQLite"; "Split in #19, rest after").
+- **The maintainer accepted ADR-0016 to ADR-0020** on 2026-11-15, with the M3 plan's Q1 to Q15
+  settled. The plan's amendments to the older records (its §10), applied in M3 slice 0, are
+  proposed, and the global constraints mark their rules *(provisional)*.
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2's closing review is built,** as PR #20 on `m2-closing-review`. M2 is done when it merges. The
-  slices ran in the maintainer's stacked order of 2026-11-14: each opened as a PR, and the next
-  begun on top of it. The Mac run is done, below. Next is M3, whose plan is drafted on `m3-plan`
-  by another session, with ADR-0016 to ADR-0020.
+- **Now: M3 slice 0, the plan and the records, is PR #21 on `m3-plan`.** M3's slices 1 to 6
+  follow it ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the maintainer's
+  stacked order of 2026-11-14: each opened as a PR, and the next begun on top of it. M2's Mac run
+  is done, below.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -71,10 +75,55 @@ newest first.
     - so what CI can't reach held on the Mac: `sqlite3_bind_text64`'s `unsigned-8` on Apple's
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
-- **Open:** nothing. Brief D3 to D6 are settled (the M2 plan, §2), and slice 2 settled the
-  split of `test-library-loading` (§7).
+- **Open:** the M3 plan's probes P4, P5, P6 and P8, each in the slice it names (its §7, §8).
+  Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
+  (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-15 — M3 slice 0: the plan and the records (PR #21)
+
+- **Built:** [the M3 plan](2026-11-15-m3-plan.md), and ADR-0016 to ADR-0020, accepted by the
+  maintainer with the plan's Q1 to Q15. The plan's owed amendments are applied, each proposed:
+  the brief, ADR-0002, ADR-0005, ADR-0010 to ADR-0014, the global constraints, AGENTS.md and
+  `traps.md`.
+- **Measured** on Guix's 3.53.1 and at the floor, 3.45.1: M3's research, in two halves, while M2
+  was being built, and slice 0's probes P1, P2, P3, P7, P9, P11, P12, P13 and P14
+  ([research/m3-plan/](research/m3-plan/README.md)).
+- **Reviewed** (Opus, adversarial): the research once, its findings measured again and fixed in
+  place; the plan twice, a first review and a focused one of its fixes. Each high finding was
+  reproduced by a probe before it was fixed. Then a third review read only the delta, the re-read
+  and the applied amendments, against what M2 merged. Its one high finding: ADR-0005's split
+  amendment had M3's entry points "add to one half", and M3's amendment had them alternate, with
+  no row holding either. Now both say each goes to one half, three to the decoys suite and two to
+  the real one. It found 13 lesser slips too: stale cites, a misnamed section, and a 1024 credited
+  to Q11 that is Q13's. Each was checked against the tree, and each was fixed.
+- **Findings for M2,** F1 to F13 (the plan, §9), went to M2's session, which answered F8, F11, F12
+  and F13: F12 fixed in #19, F13 commented in #20, and F8 and F11 settled as M3's work.
+- **Re-read** against #19 and #20 before the amendments were applied: the plan's account of the
+  split was corrected, and 30 line cites moved, then six more into ADR-0005, ADR-0014 and
+  `traps.md` once slice 0's amendments lengthened them. Every other quote and anchor held.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Concurrency research | Opus | about 395k | 93 | 49 min |
+  | Single-connection research | Opus | about 451k | 76 | 35 min |
+  | The research's review | Opus | about 420k | 77 | 22 min |
+  | The planner, four passes | Opus | about 928k | 336 | 84 min |
+  | The plan's first review | Opus | about 463k | 80 | 28 min |
+  | The focused review of its fixes | Opus | about 294k | 60 | 21 min |
+  | The delta's review | Opus | about 275k | 98 | 17 min |
+
+- **Learned:**
+  - Re-read a line cite from the commit it was read at. The first re-read, after #19, compared
+    `native.sls` from #19's head to its merge, found it unchanged, and missed that #19 itself had
+    moved `call-with-block`, cited from `0572267`. The re-read after #20 mapped every cite from its
+    own commit.
+  - Read a partition from its table, not its name: the plan had M3's entry points joining "the
+    half that holds the rows per entry point", where `decoy-halves` alternates them.
+  - A record's amendment moves the lines a plan cites in it. Applying §10 moved six of the
+    plan's own cites, so the cites are re-read after the records change, not before.
 
 ### 2026-11-15 — M2's closing review and its fixes (PR #20)
 
