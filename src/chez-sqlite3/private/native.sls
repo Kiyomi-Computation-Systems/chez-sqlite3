@@ -87,9 +87,16 @@
 ;;; call-with-c-string hands C a UTF-8, NUL-terminated copy, written with
 ;;; foreign-set!; c-string->string reads one back with foreign-ref, up to its
 ;;; NUL, and decodes it; call-with-out-pointer hands C a zeroed slot of a
-;;; pointer's size and reads it after. Each block is freed when PROC returns,
-;;; raises or escapes, and a PROC re-entered after that raises. Each takes the
-;;; WHO of the public procedure it serves, so its refusals name that one
+;;; pointer's size and reads it after. Values cross the same way (M2 slice 4):
+;;; call-with-bytes hands C a copy of a bytevector's bytes, a bound TEXT's
+;;; UTF-8 or a BLOB, in a counted block of at least one byte, so an empty
+;;; value is never NULL; foreign-bytes copies a counted run out of a pointer,
+;;; a column's TEXT or BLOB; c-string->bytevector copies the bytes up to a
+;;; NUL, undecoded, a column's name, and c-string->string decodes what it
+;;; reads. No other library may read or write foreign memory (check-seam).
+;;; Each block is freed when PROC returns, raises or escapes, and a PROC
+;;; re-entered after that raises. Each helper that takes a WHO is given the
+;;; name of the public procedure it serves, so its refusals name that one
 ;;; (ADR-0013, decision 2), and names a refused value by shown-value, never a
 ;;; string's text (ADR-0013, decision 7). None raises inside the critical
 ;;; thunks that make and free its block: a raise there would reach a
@@ -97,8 +104,9 @@
 ;;; closing review). An engine's expiry unwinds the extent and frees the
 ;;; block, and its resume is a re-entry, so a caller under engines holds the
 ;;; whole extent in one critical section, and raises what it caught there
-;;; after it: (chez-sqlite3 private connection)'s open, and report's
-;;; sqlite-compile-option?.
+;;; after it: (chez-sqlite3 private connection)'s open, report's
+;;; sqlite-compile-option?, and the statement verbs, inside
+;;; call-with-statement-handle's section.
 ;;;
 ;;; Every refusal is a &sqlite-library-unavailable, raised through
 ;;; raise-library-unavailable, carrying the path and its source. The reasons
@@ -123,7 +131,8 @@
           sqlite3-bind-blob64 sqlite3-column-count sqlite3-column-name sqlite3-column-type
           sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
           sqlite3-column-bytes sqlite3-error-offset sqlite-transient
-          call-with-c-string c-string->string call-with-out-pointer)
+          call-with-c-string c-string->string call-with-out-pointer
+          call-with-bytes foreign-bytes c-string->bytevector)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) display-condition dynamic-wind foreign-entry? foreign-procedure
@@ -327,20 +336,85 @@
     (unless (exact-natural? address)
       (assertion-violation 'c-string->string "an address is an exact non-negative integer"
                            (shown-value address)))
-    (and (not (eqv? address 0))
-         (let* ((n (let scan ((i 0))
-                     (if (eqv? (foreign-ref 'unsigned-8 address i) 0) i (scan (+ i 1)))))
-                (bytes (make-bytevector n)))
-           (let fill ((i 0))
-             (when (< i n)
-               (bytevector-u8-set! bytes i (foreign-ref 'unsigned-8 address i))
-               (fill (+ i 1))))
-           (let ((decoded (utf8->string bytes)))
+    (let ((bytes (c-string->bytevector address)))
+      (and bytes
+           (let ((n (bytevector-length bytes))
+                 (decoded (utf8->string bytes)))
              (if (and (>= n 3) (eqv? (bytevector-u8-ref bytes 0) #xEF)
                       (eqv? (bytevector-u8-ref bytes 1) #xBB)
                       (eqv? (bytevector-u8-ref bytes 2) #xBF))
                  (string-append (string #\xFEFF) decoded)
                  decoded)))))
+
+  ;; c-string->bytevector : Natural -> (U Bytevector #f)
+  ;; The bytes of the NUL-terminated string at ADDRESS, up to its NUL and
+  ;; without it, undecoded, in a fresh bytevector of exactly that length; #f
+  ;; for NULL. c-string->string decodes what it answers; a column's name is
+  ;; decoded strictly, by (chez-sqlite3 private utf8), from it (ADR-0015,
+  ;; decision 9). An ADDRESS that is no exact natural is an assertion
+  ;; violation, by shown-value.
+  (define (c-string->bytevector address)
+    (unless (exact-natural? address)
+      (assertion-violation 'c-string->bytevector "an address is an exact non-negative integer"
+                           (shown-value address)))
+    (and (not (eqv? address 0))
+         (foreign-bytes address
+                        (let scan ((i 0))
+                          (if (eqv? (foreign-ref 'unsigned-8 address i) 0) i (scan (+ i 1)))))))
+
+  ;; foreign-bytes : Natural Natural -> Bytevector
+  ;; The N bytes at ADDRESS, read with foreign-ref, in a fresh bytevector:
+  ;; what sqlite3_column_text or _blob points to, for sqlite3_column_bytes'
+  ;; count (ADR-0011, decision 4). N of 0 answers an empty one, and reads
+  ;; nothing, NULL included. An ADDRESS or an N that is no exact natural,
+  ;; and NULL with N above 0, are assertion violations from foreign-bytes,
+  ;; their irritants the field, address or count, then the value by
+  ;; shown-value, or null-address and N.
+  (define (foreign-bytes address n)
+    (unless (exact-natural? address)
+      (assertion-violation 'foreign-bytes "an address is an exact non-negative integer"
+                           'address (shown-value address)))
+    (unless (exact-natural? n)
+      (assertion-violation 'foreign-bytes "a count of bytes is an exact non-negative integer"
+                           'count (shown-value n)))
+    (when (and (eqv? address 0) (> n 0))
+      (assertion-violation 'foreign-bytes "NULL holds no bytes to read" 'null-address n))
+    (let ((bytes (make-bytevector n)))
+      (let fill ((i 0))
+        (when (< i n)
+          (bytevector-u8-set! bytes i (foreign-ref 'unsigned-8 address i))
+          (fill (+ i 1))))
+      bytes))
+
+  ;; call-with-bytes : Symbol Bytevector (Positive-Integer -> A) -> A
+  ;; PROC's answer, PROC given the address of a counted block of (max 1 N)
+  ;; bytes holding BYTES' N bytes, written with foreign-set!, freed once PROC
+  ;; returns, raises or escapes, by call-with-block: a bound TEXT's UTF-8, a
+  ;; U+0000 kept, or a BLOB (ADR-0015, decision 5). An empty BYTES gets a
+  ;; block of one byte, written 0, so the address is never NULL, which SQLite
+  ;; would bind as NULL (ADR-0011, amended). BYTES is the caller's, and
+  ;; mutable, so it is copied first, and the copy alone written. A WHO that
+  ;; is no symbol is an assertion violation from call-with-bytes; a BYTES
+  ;; that is no bytevector, and a PROC that is no procedure, from WHO; each
+  ;; named by shown-value, before anything is allocated. Re-entering PROC
+  ;; after the free raises from WHO.
+  (define (call-with-bytes who bytes proc)
+    (check-who 'call-with-bytes who)
+    (unless (bytevector? bytes)
+      (assertion-violation who "not a bytevector" (shown-value bytes)))
+    (unless (procedure? proc)
+      (assertion-violation who "not a procedure" (shown-value proc)))
+    (let* ((copy (bytevector-copy bytes))
+           (n (bytevector-length copy)))
+      (call-with-block who (max 1 n)
+        (lambda (block)
+          (if (= n 0)
+              (foreign-set! 'unsigned-8 block 0 0)
+              (let loop ((i 0))
+                (when (< i n)
+                  (foreign-set! 'unsigned-8 block i (bytevector-u8-ref copy i))
+                  (loop (+ i 1))))))
+        proc)))
 
   ;; call-with-out-pointer : Symbol (Positive-Integer -> A) -> (Values A Natural)
   ;; PROC's answer, and the pointer its slot holds once PROC has returned:

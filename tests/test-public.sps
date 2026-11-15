@@ -145,7 +145,18 @@
     (parameter-count chez-sqlite3 private statement)
     (step! chez-sqlite3 private statement)
     (reset! chez-sqlite3 private statement)
-    (column-count chez-sqlite3 private statement)))
+    (column-count chez-sqlite3 private statement)
+    (bind! chez-sqlite3 private statement-values)
+    (bind-all! chez-sqlite3 private statement-values)
+    (clear-bindings! chez-sqlite3 private statement-values)
+    (column-value chez-sqlite3 private statement-values)
+    (column-bytevector chez-sqlite3 private statement-values)
+    (column-name chez-sqlite3 private statement-values)
+    (sql-null chez-sqlite3 private values)
+    (sql-null? chez-sqlite3 private values)
+    (sqlite-invalid-text? chez-sqlite3 private conditions)
+    (sqlite-invalid-text-column chez-sqlite3 private conditions)
+    (sqlite-invalid-text-offset chez-sqlite3 private conditions)))
 
 (test-begin "public")
 
@@ -153,11 +164,12 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) names 40 exports"
-  40
-  (length public-names))
+(test-equal "(chez-sqlite3) exports 51 names, counted from the library itself, not from this suite's list"
+  51
+  (guard (e (#t (list 'raised (describe e))))
+    (length (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
+(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the values, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))

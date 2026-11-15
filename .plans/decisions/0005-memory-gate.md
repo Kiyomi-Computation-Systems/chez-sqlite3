@@ -20,7 +20,10 @@
   and accepted by the maintainer that day: the CI scripts' execute bits (M1's closing review,
   [amendment](#amendment-2026-11-14-the-ci-scripts-execute-bits-m1s-closing-review)). Amended
   2026-11-15, and accepted by the maintainer that day: the decoy's cost, measured (M2 slice 2,
-  [amendment](#amendment-2026-11-15-the-decoys-cost-measured-m2-slice-2)).
+  [amendment](#amendment-2026-11-15-the-decoys-cost-measured-m2-slice-2)). Amended 2026-11-15
+  by the maintainer's choice, "Split in #19, rest after": one run was one sample, and the suite
+  is split, with a check that holds the rule (M2's closing review,
+  [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -465,7 +468,9 @@ its rule.
   with 55. That is the gap between its line and the next in the `memory` job's timestamped log, on
   PR #17's run at `811db14`. It was 252 s, then 373 s, alone in the container.
 - **That is below 450 s, three quarters of `MEMORY_TIMEOUT`'s 600,** so the suite stays whole in
-  M2. Slices 3 and 4 add no entry point. The `memory` job took 19 minutes of its 60.
+  M2. Slices 3 and 4 add no entry point. The `memory` job took 19 minutes of its 60. *This was
+  one run, on a fast runner, and wrong for M2: the suite reached 562 s on a slow one. It is split
+  (the amendment below).*
 - **Every child grew, not only the new ones.** A child compiles native from source under Valgrind,
   so each binding native gains costs every child. One gated control child took 4.53 to 4.58 s on
   `main` and 4.83 to 4.89 s with the slice. Put back to `main`'s `native.sls`, it took 4.57 to
@@ -474,3 +479,36 @@ its rule.
   cost for the rest, missed this.
 - **M3's entry points cross the line.** With 41 s left under it, about seven more children reach
   450 s, so M3's plan splits the suite in two, each under the limit alone, as the rule above says.
+
+## Amendment, 2026-11-15: the split, and its check (M2's closing review)
+
+The maintainer's choice, 2026-11-15, put with M2's closing review's measurement: "Split in #19,
+rest after". The split and a check that holds the rule land in PR #19, before it merges.
+
+- **One CI run is one sample.** M2 slice 2's amendment above read 409.3 s from one run and settled
+  that the suite stays whole. M2's closing review read the `memory` job's log of each M2 run:
+  - 409.3 s at `811db14`, 404.2 s at `018b28a`, 411.0 s at `1eff5be` and 391.4 s at `7a8ea47`;
+  - **520.9 s at `14c4825`, 555.1 s at `5dd3af0`, and 562.2 s at `1a53b13`,** #19's head, 38 s from
+    `MEMORY_TIMEOUT`;
+  - 284.8 s at `0572267`.
+
+  `5dd3af0` and `0572267` hold the same code, at 555.1 s and 284.8 s. CI's runners differ about
+  two to one, and `test-check-ci` shows the same gap.
+- **The suite is split in two:** `test-library-loading-decoys` and `test-library-loading-real`,
+  sharing `(library-loading)` under `tests/`.
+  - The 36 entry points alternate between them, 18 each, and every old row runs in one of them.
+  - A row in each holds that the two halves partition the convention table: merged in its order,
+    each entry once.
+  - Another row holds that each suite runs its own half, found by its file name.
+  - In the container they took 196 s and 184 s, against 374 s whole. At CI's slow ratio, that is
+    about 295 s and 277 s, each well under 450 s.
+- **The rule now has a check.**
+  - `make test-memory` prints each suite's time under the gate.
+  - It fails a suite past three quarters of `MEMORY_TIMEOUT` by name, as `SLOW`, counted beside
+    `HUNG`. The threshold is taken from `MEMORY_TIMEOUT` alone.
+  - `make check-memory-gate`'s case r holds the check. It plants a suite past the threshold, which
+    must be named `SLOW`, and one just under it, which must pass. Each of seven mutants of the check
+    fails case r.
+  - The check adds two `date` calls a suite, and case r about 20 s to the job.
+- **So M3's entry points add to one half,** and the check names a half before it nears the
+  timeout.

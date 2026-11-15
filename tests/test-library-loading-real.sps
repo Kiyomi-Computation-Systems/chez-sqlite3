@@ -1,7 +1,13 @@
 #!r6rs
-;;; The suite for loading libsqlite3 end to end: (chez-sqlite3 private
-;;; native), tests/refusal-probe.sps and tests/preflight.sps (ADR-0002,
-;;; ADR-0003, ADR-0010, ADR-0013).
+;;; One of the two suites that load libsqlite3 end to end, through (chez-sqlite3
+;;; private native), tests/refusal-probe.sps and tests/preflight.sps
+;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the real
+;;; libsqlite3, the refusals no decoy reaches, discovery, make build's
+;;; preflight, and half of the decoy's missing-api rows;
+;;; tests/test-library-loading-decoys.sps holds the decoy's behaviours and the
+;;; other half. They were one suite until it passed 450 s under the memory
+;;; gate on CI, three quarters of MEMORY_TIMEOUT (ADR-0005, amended);
+;;; (library-loading) holds what both use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -9,20 +15,9 @@
 ;;; tests/refusal-probe.sps in a fresh Chez, through `env`, and reads back
 ;;; what it printed, as data, whole: exit status, every line, and stderr.
 ;;;
-;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc)
-;;;     once per build, each export left out one at a time, and run under
-;;;     one behaviour per row, chosen by CHEZ_SQLITE3_DECOY. Each row asserts
-;;;     the refusal's reason and every field (plan section 3.4), and the
-;;;     decoy's call log, whole. The log holds the load's order by
-;;;     behaviour: the report's three, the floor, threadsafe, initialize,
-;;;     then the rest, each refused before the next runs. A lacking build
-;;;     run under a behaviour that an earlier step refuses holds that step's
-;;;     place: the earlier refusal must win. A failed compile fails its row,
-;;;     never skips it (ADR-0001). The decoy's versions are the floor and the
-;;;     one below it, read from packaging/floors.sexp (ADR-0008);
-;;;   - the load runs once: the probe references loaded-libsqlite3 three
-;;;     times, and the later two must answer what the first did, with no
-;;;     second load in the call log and no second library in the process;
+;;;   - decoys: this suite's half of the missing-api rows, as the other suite
+;;;     builds them, and the control build, for preflight. The partition's
+;;;     two rows are held here too, so that either suite alone holds it;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
 ;;;     then through the override. What it reports must equal what
 ;;;     tests/libsqlite3-oracle.c reads from the same file;
@@ -58,12 +53,10 @@
         (chez-sqlite3-testing)
         (foreign-conventions)
         (libsqlite3-oracle)
-        (floors)
+        (library-loading)
         (only (chezscheme) getenv putenv format format-condition? load-shared-object
               file-directory? foreign-entry? machine-type directory-list)
-        (chez-sqlite3 private discovery)
-        (chez-sqlite3 private verify)
-        (chez-sqlite3 private constants))
+        (chez-sqlite3 private discovery))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -83,34 +76,7 @@
         (write (test-result-ref r 'actual-value))
         (newline)))))
 
-;; --- strings -------------------------------------------------------------------------
-
-(define (string-prefix? prefix s)
-  (let ((n (string-length s)) (m (string-length prefix)))
-    (and (>= n m) (string=? (substring s 0 m) prefix))))
-
-(define (string-suffix? suffix s)
-  (let ((n (string-length s)) (m (string-length suffix)))
-    (and (>= n m) (string=? (substring s (- n m) n) suffix))))
-
-(define (absolute? s)
-  (and (string? s) (string-prefix? "/" s)))
-
-;; join : (Listof String) -> String
-;; ENTRIES with one space between: a decoy's call log.
-(define (join entries)
-  (if (null? entries)
-      ""
-      (fold-left (lambda (all entry) (string-append all " " entry))
-                 (car entries) (cdr entries))))
-
-(define (set? value) (and (string? value) (not (string=? value ""))))
-
-;; --- the processes it spawns -----------------------------------------------------------
-
-(define chez (getenv "CHEZ"))
-
-(test-begin "library-loading")
+(test-begin "library-loading-real")
 
 ;; The Makefile exports CHEZ, so this suite spawns the Chez that runs it.
 ;; Without it nothing below can run: fail, never skip.
@@ -120,143 +86,6 @@
 
 (unless (set? chez)
   (exit 1))
-
-;; Every compile here, the decoys' and the oracle's, runs $CC's words.
-(test-equal "CC is cut at whitespace, so CC='ccache gcc' runs ccache, with gcc as its argument"
-  '(("ccache" "gcc") ("gcc" "-m64") ("cc") ("cc"))
-  (let* ((a (c-compiler (lambda (name) (and (string=? name "CC") " ccache\tgcc "))))
-         (b (c-compiler (lambda (name) (and (string=? name "CC") "gcc -m64"))))
-         (c (c-compiler (lambda (name) (and (string=? name "CC") "  "))))
-         (d (c-compiler (lambda (name) #f))))
-    (list a b c d)))
-
-;; read-data : String -> (U (Listof Any) (List 'unreadable String))
-;; TEXT read as a sequence of data.
-(define (read-data text)
-  (guard (e (#t (list 'unreadable text)))
-    (let ((port (open-string-input-port text)))
-      (let loop ((data '()))
-        (let ((datum (read port)))
-          (if (eof-object? datum)
-              (reverse data)
-              (loop (cons datum data))))))))
-
-;; env-order : (Listof String) -> (Listof String)
-;; ENV-ARGS with every -u NAME pair first, then each NAME=VALUE, each group in
-;; its own order: env reads -u only before the first assignment.
-(define (env-order env-args)
-  (let loop ((rest env-args) (unsets '()) (sets '()))
-    (cond ((null? rest) (append (reverse unsets) (reverse sets)))
-          ((and (string=? (car rest) "-u") (pair? (cdr rest)))
-           (loop (cddr rest) (cons* (cadr rest) "-u" unsets) sets))
-          (else (loop (cdr rest) unsets (cons (car rest) sets))))))
-
-;; spawn-in : String (Listof String) String (Listof String)
-;;            -> (U (List Integer String String) (List 'raised String))
-;; Runs PROGRAM with ARGS in a fresh Chez with LIBDIRS as its library path,
-;; under the memory gate's Valgrind when the gate asks (gated-command),
-;; through env with ENV-ARGS (NAME=VALUE to set, -u NAME to unset): its exit
-;; status, stdout and stderr. Never env -i: CHEZ and PATH survive
-;; (.plans/traps.md).
-(define (spawn-in libdirs env-args program args)
-  (guard (e (#t (list 'raised (describe e))))
-    (capture-command
-     (append '("env") (env-order env-args)
-             (gated-command getenv (append (list chez "--libdirs" libdirs "--program" program)
-                                           args))))))
-
-(define (spawn env-args program args) (spawn-in "src" env-args program args))
-
-;; as-data : (U (List Integer String String) (List 'raised String))
-;;           -> (U (List Integer (Listof Any) String) (List 'raised String))
-;; A probe's answer, with what it printed read as data.
-(define (as-data answer)
-  (if (eq? (car answer) 'raised)
-      answer
-      (list (car answer) (read-data (cadr answer)) (caddr answer))))
-
-;; probe-with : (Listof String) (Listof String)
-;;              -> (U (List Integer (Listof Any) String) (List 'raised String))
-;; tests/refusal-probe.sps under ENV-ARGS, with ARGS.
-(define (probe-with env-args args)
-  (as-data (spawn env-args "tests/refusal-probe.sps" args)))
-
-(define (probe env-args) (probe-with env-args '()))
-
-(define (override path) (string-append "CHEZ_SQLITE3_LIBRARY=" path))
-
-;; switch-args : (U String #f) -> (Listof String)
-;; CHEZ_SQLITE3_DECOY set to SWITCH, or unset for #f: every child gets one or
-;; the other, so a value left in this process's environment never reaches a
-;; row.
-(define (switch-args switch)
-  (if switch
-      (list (string-append "CHEZ_SQLITE3_DECOY=" switch))
-      '("-u" "CHEZ_SQLITE3_DECOY")))
-
-;; The probe references loaded-libsqlite3 three times. A load runs once per
-;; process, whatever it decided, so the two later references answer the very
-;; object the first did: the report, or the refusal raised again.
-(define once '(again . (same same)))
-
-;; Every count zero, whatever the load decided (ADR-0005, decision 4).
-(define no-native-objects '(counts . ((block . 0) (connection . 0) (statement . 0))))
-
-;; Under make test-memory, every child runs under the gate's own Valgrind,
-;; and says so; anywhere else, none does.
-(define gated? (and (getenv "CHEZ_SQLITE3_GATE_CHILD") #t))
-(define valgrind-line (cons 'valgrind (if gated? 'yes 'no)))
-
-;; outcome : Integer (Listof Pair) (Listof Pair) (Listof Pair) (U (Listof String) #f)
-;;           -> Expected
-;; The probe's whole answer: STATUS; the lines of its first reference, HEAD;
-;; BEFORE (then-override) and the references' again; the counts; AFTER
-;; (marker); whether it ran under Valgrind; and the decoy's call log, CALLS,
-;; as entries, or no calls line for a library without one. Its stderr is
-;; empty.
-(define (outcome status head before after calls)
-  (list status
-        (append head before (list once no-native-objects) after (list valgrind-line)
-                (if calls (list (cons 'calls (join calls))) '()))
-        ""))
-
-;; A report is what a loaded library says about itself, as the probe prints
-;; it after the path and source: (version . V) (version-number . N)
-;; (source-id . ID).
-(define (report version number source-id)
-  (list (cons 'version version) (cons 'version-number number) (cons 'source-id source-id)))
-
-;; loaded-lines : String Symbol Report Any -> (Listof Pair)
-(define (loaded-lines path source report threadsafe)
-  (append (list (cons 'loaded path) (cons 'source source)) report
-          (list (cons 'threadsafe threadsafe))))
-
-;; refused-lines : Symbol (U String #f) (U Symbol #f) Any (Listof String) Any
-;;                  (Listof Any) -> (Listof Pair)
-;; LIBRARY is report-of's list for a refusal made after the version was
-;; read, else #f. IRRITANTS are the condition's: the path, as the one
-;; irritant, for each refusal that has a path.
-(define (refused-lines reason path source detail candidates library irritants)
-  (list (cons 'reason reason) (cons 'who 'chez-sqlite3) (cons 'path path)
-        (cons 'source source) (cons 'detail detail) (cons 'candidates candidates)
-        (cons 'library library) (cons 'irritants irritants)))
-
-;; report-of : String Symbol Report -> (Listof Any)
-;; A refusal's library as the probe prints it: path, source, then the
-;; report's values.
-(define (report-of path source report)
-  (cons* path source (map cdr report)))
-
-(define (loaded path source report threadsafe calls)
-  (outcome 0 (loaded-lines path source report threadsafe) '() '() calls))
-
-(define refused
-  (case-lambda
-    ((reason path source detail candidates library calls)
-     (refused reason path source detail candidates library calls (list path)))
-    ((reason path source detail candidates library calls irritants)
-     (outcome 1 (refused-lines reason path source detail candidates library irritants)
-              '() '() calls))))
 
 ;; --- the scratch directory and the floors ----------------------------------------------
 
@@ -295,17 +124,7 @@
     (let ((answer (capture-command (list "mkdir" "-p" path))))
       (if (and (eqv? (car answer) 0) (file-directory? path)) 'made (list 'not-made answer)))))
 
-;; floor-values : (U (List String Natural String Natural) (List 'no-floors Any))
-;; SQLite's floor from packaging/floors.sexp, its number as
-;; sqlite3_libversion_number encodes it, and the version one below it, as
-;; text and number: the decoy's versions (ADR-0008).
-(define floor-values
-  (guard (e (#t (list 'no-floors (describe e))))
-    (let* ((floors (read-floors))
-           (parts (floor-numbers floors 'sqlite))
-           (number (+ (* (car parts) 1000000) (* (cadr parts) 1000) (caddr parts)))
-           (below (- number 1)))
-      (list (floor-text floors 'sqlite) number (version-number->string below) below))))
+(define floor-values (read-floor-values))
 
 (test-equal "packaging/floors.sexp gives the decoys their versions: the floor, and the one below it"
   'read
@@ -319,264 +138,62 @@
 (define below-version (caddr floor-values))
 (define below-number (cadddr floor-values))
 
+;; --- the partition ----------------------------------------------------------------------
+
+;; Each half makes the missing-api rows of one suite. Merged in the table's
+;; order, the halves are its names exactly when each entry is in one half,
+;; once, and each half keeps the table's order; tests/test-library-loading-
+;; decoys.sps holds the same row.
+(test-equal "the two suites' entry lists partition the convention table: merged in its order, they are its names, each once"
+  (map row-name conventions-table)
+  (merge-halves (map row-name conventions-table) (map cdr decoy-halves)))
+
+;; this-half : (U (Pairof String (Listof String)) #f)
+;; This suite's half, by its own file's name. The row below writes the name
+;; out, so a suite copied from the other, or a lookup that answers another
+;; half, fails it.
+(define this-half (suite-half (command-line)))
+
+(test-equal "this suite runs its own half of the partition, found by its file's name, and each suite the partition names is a file in tests/"
+  (list "test-library-loading-real.sps" (map (lambda (half) (cons (car half) 'present)) decoy-halves))
+  (list (if this-half (car this-half) (list 'unlisted (command-line)))
+        (map (lambda (half)
+               (cons (car half) (if (file-exists? (string-append "tests/" (car half))) 'present 'absent)))
+             decoy-halves)))
+
+(define this-entries (if this-half (cdr this-half) '()))
+
 ;; --- decoys --------------------------------------------------------------------------
 
-(define decoy-source "tests/decoy-libsqlite3.c")
-
-;; The entry points (chez-sqlite3 private native) binds, in its order
-;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-;; rest, M1's ten and then M2's 21. A thirty-seventh that native binds and
-;; the decoy lacks refuses the control, and the control's row fails.
-(define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
-(define rest-entries
-  '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
-    "sqlite3_errmsg" "sqlite3_errstr" "sqlite3_errcode" "sqlite3_extended_errcode"
-    "sqlite3_next_stmt" "sqlite3_memory_used"
-    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"
-    "sqlite3_clear_bindings" "sqlite3_bind_parameter_count" "sqlite3_bind_parameter_index"
-    "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
-    "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
-    "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
-    "sqlite3_column_bytes" "sqlite3_error_offset"))
-(define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
-
-;; The lists above are written out, and an entry dropped from them takes its
-;; build and its missing-api row with it. The convention table holds the
-;; bindings to native, in ADR-0002's order (test-conventions), so the list
-;; is held to the table's names, whole and in order.
-(test-equal "the decoy's entry list is the convention table's names, whole and in order"
-  (map row-name conventions-table)
-  every-entry)
-
-(define (lacks entry) (string-append "-DDECOY_LACKS_" entry))
-
 ;; builds : (Listof (Pairof String (Listof String)))
-;; Each build's name and its switches.
+;; The control, for preflight's rows, and a lacking build for each entry of
+;; this suite's half.
 (define builds
-  (append (list (list "control")
-                (list "marked" "-DDECOY_MARKER")
-                (list "not-sqlite" "-DDECOY_NOT_SQLITE")
-                (cons "lacks-rest" (map lacks rest-entries)))
-          (map (lambda (entry) (list (string-append "lacks-" entry) (lacks entry))) every-entry)))
+  (decoy-builds (cons "control" (map lacks-build this-entries))))
 
 (define (so-of build) (in-scratch (string-append build ".so")))
 
-;; compile-decoy : String (Listof String) -> (U 0 (List Integer String String) (List 'raised String))
-;; Compiles the decoy as BUILD.so in the scratch directory under SWITCHES, with
-;; the floor's versions: 0, or the compiler's whole answer when it failed.
-(define (compile-decoy build switches)
-  (guard (e (#t (list 'raised (describe e))))
-    (let ((answer (capture-command
-                   (append (c-compiler getenv)
-                           (list "-Wall" "-Werror" "-shared" "-fPIC" "-o" (so-of build) decoy-source
-                                 (string-append "-DDECOY_VERSION_NUMBER=" (number->string floor-number))
-                                 (string-append "-DDECOY_VERSION=\"" floor-version "\"")
-                                 (string-append "-DDECOY_BELOW_NUMBER=" (number->string below-number))
-                                 (string-append "-DDECOY_BELOW=\"" below-version "\""))
-                           switches))))
-      (if (eqv? (car answer) 0) 0 answer))))
-
 ;; compiled : (Listof (Pairof String Any))
 ;; Every build, compiled once, in order.
-(define compiled
-  (let loop ((rest builds) (done '()))
-    (if (null? rest)
-        (reverse done)
-        (let ((status (compile-decoy (caar rest) (cdar rest))))
-          (loop (cdr rest) (cons (cons (caar rest) status) done))))))
+(define compiled (compile-decoys so-of floor-values builds))
 
-(define (compiled-status build)
-  (cond ((assoc build compiled) => cdr) (else (list 'no-such-build build))))
+(define (compiled-status build) (decoy-status compiled build))
 
 ;; decoy-env : String (U String #f) -> (Listof String)
 (define (decoy-env build switch)
   (cons (override (so-of build)) (switch-args switch)))
 
 ;; decoy-row : String (U String #f) (Listof String) String (String -> Expected) -> Void
-;; The test DESCRIPTION: the probe, with ARGS, on BUILD under SWITCH; the
-;; build's compile must have answered 0, then EXPECTED of its path. Every
-;; row references loaded-libsqlite3 three times, so each log asserted whole
-;; also shows that the load ran once.
+;; (library-loading)'s decoy-row-in, on this suite's builds.
 (define (decoy-row build switch args description expected)
-  (test-equal (string-append "decoy " build
-                             (if switch (string-append " under \"" switch "\"") "")
-                             ": " description)
-    (cons 0 (expected (so-of build)))
-    (cons (compiled-status build) (probe-with (decoy-env build switch) args))))
-
-;; The call log's entries, as tests/decoy-libsqlite3.c writes them: first the
-;; switch it read, then each call.
-(define (read-switch switch) (string-append "decoy(" switch ")"))
-(define the-report-three '("sqlite3_libversion_number()" "sqlite3_libversion()" "sqlite3_sourceid()"))
-(define threadsafe-call "sqlite3_threadsafe()")
-(define initialize-call "sqlite3_initialize()")
-(define (log-of switch . calls) (cons (read-switch switch) calls))
-(define memory-used-call "sqlite3_memory_used()")
-;; A successful load's six calls: native's step 8 reads the memory baseline
-;; after initialize. No refusal reaches it.
-(define (loaded-calls switch) (append (every-call switch) (list memory-used-call)))
-(define (every-call switch)
-  (append (list (read-switch switch)) the-report-three (list threadsafe-call initialize-call)))
+  (decoy-row-in so-of compiled-status build switch args description expected))
 
 (define control-report (report floor-version floor-number "decoy-sourceid"))
-(define below-report (report below-version below-number "decoy-sourceid"))
 (define (control-library so) (report-of so 'override control-report))
-(define (below-library so) (report-of so 'override below-report))
 
-;; code-of : Symbol -> (U Integer (List 'no-code Symbol))
-;; A result code's value, from (chez-sqlite3 private constants), which
-;; tests/test-constants.sps holds to sqlite3.h. A name it lacks answers
-;; (no-code NAME), which no probe prints, so that row fails by name.
-(define (code-of name)
-  (guard (e (#t (list 'no-code name)))
-    (cdr (assq name sqlite-result-codes))))
-
-(decoy-row "control" #f '()
-  "the floor itself is accepted: the report's five fields, threadsafe 2, and the load's six calls in order"
-  (lambda (so) (loaded so 'override control-report 2 (loaded-calls "control"))))
-
-(decoy-row "control" "below-floor" '()
-  "one below the floor is below-floor, detail its version, carrying its report, and nothing runs after the report's three"
-  (lambda (so) (refused 'below-floor so 'override below-version '() (below-library so)
-                        (apply log-of "below-floor" the-report-three))))
-
-(decoy-row "control" "not-threadsafe" '()
-  "sqlite3_threadsafe answering 0 is not-threadsafe, detail 0, and sqlite3_initialize never runs"
-  (lambda (so) (refused 'not-threadsafe so 'override 0 '() (control-library so)
-                        (append (apply log-of "not-threadsafe" the-report-three)
-                                (list threadsafe-call)))))
-
-(decoy-row "control" "libversion-null" '()
-  "sqlite3_libversion answering NULL is load-failed, naming it, with no report, and sqlite3_sourceid never runs"
-  (lambda (so) (refused 'load-failed so 'override "sqlite3_libversion" '() #f
-                        (log-of "libversion-null" "sqlite3_libversion_number()" "sqlite3_libversion()"))))
-
-(decoy-row "control" "sourceid-null" '()
-  "sqlite3_sourceid answering NULL is load-failed, naming it, with no report"
-  (lambda (so) (refused 'load-failed so 'override "sqlite3_sourceid" '() #f
-                        (apply log-of "sourceid-null" the-report-three))))
-
-;; sqlite3_sourceid's bytes are UTF-8: é is two bytes, λ two and € three, and
-;; a reading as Latin-1 would report seven characters for them.
-(decoy-row "control" "sourceid-utf8" '()
-  "a source id past ASCII is read as UTF-8: d\xE9;coy-\x3BB;\x20AC;"
-  (lambda (so) (loaded so 'override (report floor-version floor-number "d\xE9;coy-\x3BB;\x20AC;") 2
-                       (loaded-calls "sourceid-utf8"))))
-
-(decoy-row "control" "initialize-fails" '()
-  "sqlite3_initialize answering SQLITE_NOMEM is load-failed, detail that code, carrying the report, after threadsafe"
-  (lambda (so) (refused 'load-failed so 'override (code-of 'nomem) '() (control-library so)
-                        (every-call "initialize-fails"))))
-
-;; A second code, so that no one value passes for "not SQLITE_OK".
-(decoy-row "control" "initialize-misuse" '()
-  "sqlite3_initialize answering SQLITE_MISUSE is load-failed too, detail that code, not NOMEM's"
-  (lambda (so) (refused 'load-failed so 'override (code-of 'misuse) '() (control-library so)
-                        (every-call "initialize-misuse"))))
-
-;; Only an exact value is a switch: a near miss, and an empty value, behave as
-;; the control, and the log shows what the decoy read.
-(decoy-row "control" "Below-floor" '()
-  "a value that is no switch behaves as the control, and the log names it"
-  (lambda (so) (loaded so 'override control-report 2
-                       (append (list "decoy(?Below-floor)") the-report-three
-                               (list threadsafe-call initialize-call memory-used-call)))))
-
-(decoy-row "control" "below-floorX" '()
-  "a value that only begins with a switch, below-floorX, is no switch: the control, and the log names it"
-  (lambda (so) (loaded so 'override control-report 2
-                       (append (list "decoy(?below-floorX)") the-report-three
-                               (list threadsafe-call initialize-call memory-used-call)))))
-
-(decoy-row "control" "" '()
-  "an empty value is no switch either"
-  (lambda (so) (loaded so 'override control-report 2
-                       (append (list "decoy(?)") the-report-three
-                               (list threadsafe-call initialize-call memory-used-call)))))
-
-;; Each entry point left out, one at a time: refused by name before anything
-;; calls it, never Chez's "no entry for". The report's three are each bound
-;; before any is called, so a library lacking one has had no call, and no
-;; report. Every later refusal carries the report.
-(for-each
- (lambda (entry)
-   (decoy-row (string-append "lacks-" entry) #f '()
-     (string-append "a library without " entry " is missing-api, naming it")
-     (lambda (so)
-       (cond ((member entry report-entries)
-              (refused 'missing-api so 'override entry '() #f (log-of "control")))
-             ((string=? entry "sqlite3_threadsafe")
-              (refused 'missing-api so 'override entry '() (control-library so)
-                       (apply log-of "control" the-report-three)))
-             ((string=? entry "sqlite3_initialize")
-              (refused 'missing-api so 'override entry '() (control-library so)
-                       (append (apply log-of "control" the-report-three) (list threadsafe-call))))
-             (else
-              (refused 'missing-api so 'override entry '() (control-library so)
-                       (every-call "control")))))))
- every-entry)
-
-(decoy-row "lacks-rest" #f '()
-  "a library without any of the rest is refused naming the first in ADR-0002's order, sqlite3_compileoption_used"
-  (lambda (so) (refused 'missing-api so 'override "sqlite3_compileoption_used" '() (control-library so)
-                        (every-call "control"))))
-
-(decoy-row "not-sqlite" #f '()
-  "a library with no sqlite3_* function is missing-api, naming sqlite3_libversion_number, the first asked"
-  (lambda (so) (refused 'missing-api so 'override "sqlite3_libversion_number" '() #f (log-of "control"))))
-
-;; The load's order, by behaviour. Each row's library lacks an entry point that
-;; a later step binds, and answers wrongly at an earlier step: the earlier
-;; step's refusal must win, and the log must stop where it does.
-(decoy-row "lacks-sqlite3_open_v2" "below-floor" '()
-  "the floor comes before the rest: below-floor, not missing-api"
-  (lambda (so) (refused 'below-floor so 'override below-version '() (below-library so)
-                        (apply log-of "below-floor" the-report-three))))
-
-(decoy-row "lacks-sqlite3_open_v2" "not-threadsafe" '()
-  "threadsafe comes before the rest: not-threadsafe, not missing-api"
-  (lambda (so) (refused 'not-threadsafe so 'override 0 '() (control-library so)
-                        (append (apply log-of "not-threadsafe" the-report-three)
-                                (list threadsafe-call)))))
-
-(decoy-row "lacks-sqlite3_open_v2" "initialize-fails" '()
-  "sqlite3_initialize comes before the rest: load-failed with its code, not missing-api"
-  (lambda (so) (refused 'load-failed so 'override (code-of 'nomem) '() (control-library so)
-                        (every-call "initialize-fails"))))
-
-(decoy-row "lacks-sqlite3_threadsafe" "below-floor" '()
-  "the floor comes before threadsafe's binding: below-floor, not missing-api"
-  (lambda (so) (refused 'below-floor so 'override below-version '() (below-library so)
-                        (apply log-of "below-floor" the-report-three))))
-
-(decoy-row "lacks-sqlite3_initialize" "not-threadsafe" '()
-  "threadsafe's check comes before sqlite3_initialize's binding: not-threadsafe, not missing-api"
-  (lambda (so) (refused 'not-threadsafe so 'override 0 '() (control-library so)
-                        (append (apply log-of "not-threadsafe" the-report-three)
-                                (list threadsafe-call)))))
-
-;; A refusal is kept. Below the floor, then CHEZ_SQLITE3_LIBRARY names the
-;; marked build, and the probe references loaded-libsqlite3 twice more. Both
-;; raise the first refusal again: nothing is loaded or called a second time,
-;; and the second library never enters the process (ADR-0002).
-(let ((first (so-of "control")) (second (so-of "marked")))
-  (test-equal "a refusal is kept: CHEZ_SQLITE3_LIBRARY changed between references loads nothing new"
-    (list 0 0 1
-          (append (refused-lines 'below-floor first 'override below-version '() (below-library first)
-                                 (list first))
-                  (list (cons 'then-override second) once no-native-objects (cons 'marker 'absent)
-                        valgrind-line
-                        (cons 'calls (join (apply log-of "below-floor" the-report-three)))))
-          "")
-    (cons* (compiled-status "control") (compiled-status "marked")
-           (probe-with (decoy-env "control" "below-floor")
-                       (list "--then-override" second "--marker" "decoy_marker")))))
-
-;; The marker's control: loaded, the marked build's marker is seen.
-(decoy-row "marked" #f '("--marker" "decoy_marker")
-  "a build with DECOY_MARKER, once loaded, shows its marker to foreign-entry?"
-  (lambda (so) (outcome 0 (loaded-lines so 'override control-report 2) '()
-                        (list (cons 'marker 'present)) (loaded-calls "control"))))
+;; This suite's half of the entry points, each left out, one at a time
+;; ((library-loading)'s missing-api-rows).
+(missing-api-rows decoy-row control-library this-entries)
 
 ;; --- the real libsqlite3 ---------------------------------------------------------------
 
@@ -1074,6 +691,6 @@
           'done)
         (if (file-directory? scratch) 'left 'removed)))
 
-(test-end "library-loading")
+(test-end "library-loading-real")
 
 (exit (suite-exit-status runner))

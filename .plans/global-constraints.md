@@ -143,8 +143,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   raise `&sqlite-invalid-text`; `column-bytevector` reads them undecoded (ADR-0015).
 - **A `&sqlite-error`'s subtype comes from its primary code, in the one procedure that makes
   one,** and its `offset` counts characters of its `sql` (ADR-0013 amended).
-- **`test-library-loading` is split in two once it passes 450 s under the gate on CI,** three
-  quarters of `MEMORY_TIMEOUT` (ADR-0005 amended).
+- **No suite passes three quarters of `MEMORY_TIMEOUT` under the gate,** 450 s of 600. `make
+  test-memory` prints each suite's time, and fails one past it as `SLOW`, so a suite is split
+  before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
+  562 s on a slow runner (ADR-0005, amended).
 
 ## Layout and names
 

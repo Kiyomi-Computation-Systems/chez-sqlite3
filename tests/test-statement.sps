@@ -596,9 +596,9 @@
         (refused-row '(more-than-one-statement 16)))
   (map refusal-row '("select 1; select 2" "select 'é'; x" "select 1;x" "select 1 -- c\n; x")))
 
-(test-equal "a refused SQL's first statement has been prepared: pragma cache_size = 7; select 1 is refused at index 23, and cache_size is 7 after, from -2000; the connection then closes, nothing left on it"
-  (list -2000 (list (list 'assertion-violation 'prepare-statement '(more-than-one-statement 23))
-                    one-connection)
+(test-equal "a refused SQL's first statement has been prepared: pragma cache_size = 7; select 1 is refused at index 23, and cache_size is 7 after, from a base of 11 the row sets first, since a build's default differs (Apple's is 2000, Guix's -2000); the connection then closes, nothing left on it"
+  (list 11 (list (list 'assertion-violation 'prepare-statement '(more-than-one-statement 23))
+                 one-connection)
         7 'closed zero-counts)
   (let ((db #f))
     (dynamic-wind
@@ -607,6 +607,7 @@
         (attempt
          (lambda ()
            (set! db (open-database ":memory:"))
+           (call-with-statement db "pragma cache_size = 11" step!)
            (let* ((before (query-int db "pragma cache_size"))
                   (r (at-raise (lambda () (prepare-statement db "pragma cache_size = 7; select 1"))))
                   (after (query-int db "pragma cache_size"))

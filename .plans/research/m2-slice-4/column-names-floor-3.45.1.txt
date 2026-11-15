@@ -1,0 +1,94 @@
+libversion: "3.45.1"
+sourceid: "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+[bare expressions] SQL "select 1+1, 1 + 1, (1+1)" [73 65 6C 65 63 74 20 31 2B 31 2C 20 31 20 2B 20 31 2C 20 28 31 2B 31 29]
+  prepare 0, column_count 3; step 100, count 3; reset 0, count 3; step 100
+  name 0: "1+1" [31 2B 31]
+  name 1: "1 + 1" [31 20 2B 20 31]
+  name 2: "(1+1)" [28 31 2B 31 29]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[expressions' text] SQL "select x'00', 'a' || 'b', -  1" [73 65 6C 65 63 74 20 78 27 30 30 27 2C 20 27 61 27 20 7C 7C 20 27 62 27 2C 20 2D 20 20 31]
+  prepare 0, column_count 3; step 100, count 3; reset 0, count 3; step 100
+  name 0: "x'00'" [78 27 30 30 27]
+  name 1: "'a' || 'b'" [27 61 27 20 7C 7C 20 27 62 27]
+  name 2: "-  1" [2D 20 20 31]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a column of a table] SQL "select a from t" [73 65 6C 65 63 74 20 61 20 66 72 6F 6D 20 74]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "a" [61]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[* over a table] SQL "select * from t" [73 65 6C 65 63 74 20 2A 20 66 72 6F 6D 20 74]
+  prepare 0, column_count 4; step 100, count 4; reset 0, count 4; step 100
+  name 0: "a" [61]
+  name 1: "b c" [62 20 63]
+  name 2: "\xC3\xA9" [C3 A9]
+  name 3: "\xEF\xBB\xBFx" [EF BB BF 78]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a multibyte alias, quoted] SQL "select 1 as \x22\xC3\xA9\xE5\x90\x8D\x22" [73 65 6C 65 63 74 20 31 20 61 73 20 22 C3 A9 E5 90 8D 22]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "\xC3\xA9\xE5\x90\x8D" [C3 A9 E5 90 8D]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a multibyte alias, bare] SQL "select 1 as \xC3\xA9\xE5\x90\x8D" [73 65 6C 65 63 74 20 31 20 61 73 20 C3 A9 E5 90 8D]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "\xC3\xA9\xE5\x90\x8D" [C3 A9 E5 90 8D]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias starting with U+FEFF, quoted] SQL "select 1 as \x22\xEF\xBB\xBFid\x22" [73 65 6C 65 63 74 20 31 20 61 73 20 22 EF BB BF 69 64 22]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "\xEF\xBB\xBFid" [EF BB BF 69 64]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias starting with U+FEFF, bare] SQL "select 1 as \xEF\xBB\xBFid" [73 65 6C 65 63 74 20 31 20 61 73 20 EF BB BF 69 64]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "id" [69 64]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias holding U+FEFF, quoted] SQL "select 1 as \x22a\xEF\xBB\xBFb\x22" [73 65 6C 65 63 74 20 31 20 61 73 20 22 61 EF BB BF 62 22]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "a\xEF\xBB\xBFb" [61 EF BB BF 62]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias holding U+FEFF, bare] SQL "select 1 as a\xEF\xBB\xBFb" [73 65 6C 65 63 74 20 31 20 61 73 20 61 EF BB BF 62]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "a\xEF\xBB\xBFb" [61 EF BB BF 62]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[duplicate aliases] SQL "select 1 as a, 2 as a" [73 65 6C 65 63 74 20 31 20 61 73 20 61 2C 20 32 20 61 73 20 61]
+  prepare 0, column_count 2; step 100, count 2; reset 0, count 2; step 100
+  name 0: "a" [61]
+  name 1: "a" [61]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a column twice] SQL "select a, a from t" [73 65 6C 65 63 74 20 61 2C 20 61 20 66 72 6F 6D 20 74]
+  prepare 0, column_count 2; step 100, count 2; reset 0, count 2; step 100
+  name 0: "a" [61]
+  name 1: "a" [61]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[* over a join of t with itself] SQL "select * from t, t as x" [73 65 6C 65 63 74 20 2A 20 66 72 6F 6D 20 74 2C 20 74 20 61 73 20 78]
+  prepare 0, column_count 8; step 100, count 8; reset 0, count 8; step 100
+  name 0: "a" [61]
+  name 1: "b c" [62 20 63]
+  name 2: "\xC3\xA9" [C3 A9]
+  name 3: "\xEF\xBB\xBFx" [EF BB BF 78]
+  name 4: "a" [61]
+  name 5: "b c" [62 20 63]
+  name 6: "\xC3\xA9" [C3 A9]
+  name 7: "\xEF\xBB\xBFx" [EF BB BF 78]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias holding a doubled quote] SQL "select 1 as \x22a\x22\x22b\x22" [73 65 6C 65 63 74 20 31 20 61 73 20 22 61 22 22 62 22]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "a\x22b" [61 22 62]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias as a string literal] SQL "select 1 as 'lit'" [73 65 6C 65 63 74 20 31 20 61 73 20 27 6C 69 74 27]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "lit" [6C 69 74]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[an alias of the byte FF, not UTF-8] SQL "select 1 as \x22\xFF\x22" [73 65 6C 65 63 74 20 31 20 61 73 20 22 FF 22]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "\xFF" [FF]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[* over a table whose column is named FF] SQL "select * from u" [73 65 6C 65 63 74 20 2A 20 66 72 6F 6D 20 75]
+  prepare 0, column_count 1; step 100, count 1; reset 0, count 1; step 100
+  name 0: "\xFF" [FF]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a step that answers done] SQL "select a as \xC3\xA9 from t where 0" [73 65 6C 65 63 74 20 61 20 61 73 20 C3 A9 20 66 72 6F 6D 20 74 20 77 68 65 72 65 20 30]
+  prepare 0, column_count 1; step 101, count 1; reset 0, count 1; step 101
+  name 0: "\xC3\xA9" [C3 A9]
+  same bytes after step, reset, step: #t #t #t; same pointers: #t #t #t
+[a reprepare: another statement adds a column before the step]
+  prepare 0, column_count 1: ("a" [61])
+  step 100, column_count 2: ("a" [61] "z" [7A])
+  column 0's pointer the same after the reprepare: #f

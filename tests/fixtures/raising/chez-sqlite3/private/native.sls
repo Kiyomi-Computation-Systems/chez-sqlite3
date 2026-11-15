@@ -1,7 +1,7 @@
 #!r6rs
 ;;; tests/fixtures/raising/chez-sqlite3/private/native.sls: a stand-in
 ;;; (chez-sqlite3 private native) whose loaded-libsqlite3 raises a plain
-;;; error, not a refusal, for tests/test-library-loading.sps only. Run with
+;;; error, not a refusal, for tests/test-library-loading-real.sps only. Run with
 ;;; --libdirs tests/fixtures/raising:src, it shadows src/'s native, so the
 ;;; refusal probe and the preflight meet a raise that is a bug, and must
 ;;; report it as one: never as a refusal.

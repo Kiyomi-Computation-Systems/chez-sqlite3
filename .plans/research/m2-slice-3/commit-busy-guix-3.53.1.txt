@@ -1,0 +1,2 @@
+(select-mid-row (#t #f no-transaction))
+(returning-unfinished (#t (raised busy "cannot commit transaction - SQL statements in progress")))

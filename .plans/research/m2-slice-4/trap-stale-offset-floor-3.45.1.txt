@@ -1,0 +1,5 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+failed prepare rc 1: errcode 1, errmsg "no such column: nosuch_col", offset 7
+bind at index 0 rc 25: errcode 25, errmsg "column index out of range", offset 7
+bind at index 1 rc 0: errcode 0, errmsg "not an error", offset -1

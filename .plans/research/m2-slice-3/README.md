@@ -105,3 +105,14 @@ a scratch directory as its argument. The heap limit is in force for the one colu
 By the floor's `sqlite3VdbeHalt`, a reset or finalize halts the statement with its NOMEM. A
 statement that reads a database and has no statement journal then rolls back everything, and a
 SELECT has none.
+
+## COMMIT and the connection's own statements ([commit-busy.sps](commit-busy.sps))
+
+Added in M2 slice 4, to correct slice 3's "mid-row". Run on both libraries
+([commit-busy-guix-3.53.1.txt](commit-busy-guix-3.53.1.txt),
+[commit-busy-floor-3.45.1.txt](commit-busy-floor-3.45.1.txt)):
+
+- **Inside BEGIN, with a SELECT on the same connection stepped to a row,** COMMIT succeeds. The
+  step answers done, and a ROLLBACK after it finds no transaction.
+- **With an `insert … returning` stepped once and unfinished,** COMMIT answers `busy`, "cannot
+  commit transaction - SQL statements in progress".

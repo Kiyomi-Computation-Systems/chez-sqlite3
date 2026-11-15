@@ -1,0 +1,72 @@
+libversion: "3.45.1"
+sourceid: "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+[table, text [61 00 62]] bind 0, insert step 101
+  type 3; column_text then column_bytes: 3 bytes [61 00 62], the byte at [bytes] 0, strlen 1; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [61 00 62]; type after 3
+  column_text, then strlen alone: 1
+  length() 1, octet_length() 3, typeof() "text", hex() "610062"
+[table, text [00]] bind 0, insert step 101
+  type 3; column_text then column_bytes: 1 bytes [00], the byte at [bytes] 0, strlen 0; type after 3
+  type 3; column_blob then column_bytes: 1 bytes [00]; type after 3
+  column_text, then strlen alone: 0
+  length() 0, octet_length() 1, typeof() "text", hex() "00"
+[table, text [61 62 00]] bind 0, insert step 101
+  type 3; column_text then column_bytes: 3 bytes [61 62 00], the byte at [bytes] 0, strlen 2; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [61 62 00]; type after 3
+  column_text, then strlen alone: 2
+  length() 2, octet_length() 3, typeof() "text", hex() "616200"
+[table, text [00 61 62]] bind 0, insert step 101
+  type 3; column_text then column_bytes: 3 bytes [00 61 62], the byte at [bytes] 0, strlen 0; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [00 61 62]; type after 3
+  column_text, then strlen alone: 0
+  length() 0, octet_length() 3, typeof() "text", hex() "006162"
+[table, text [C3 A9 00 E2 82 AC]] bind 0, insert step 101
+  type 3; column_text then column_bytes: 6 bytes [C3 A9 00 E2 82 AC], the byte at [bytes] 0, strlen 2; type after 3
+  type 3; column_blob then column_bytes: 6 bytes [C3 A9 00 E2 82 AC]; type after 3
+  column_text, then strlen alone: 2
+  length() 1, octet_length() 6, typeof() "text", hex() "C3A900E282AC"
+[table, blob [61 00 62]] bind 0, insert step 101
+  type 4; column_text then column_bytes: 3 bytes [61 00 62], the byte at [bytes] 0, strlen 1; type after 3
+  type 4; column_blob then column_bytes: 3 bytes [61 00 62]; type after 4
+  column_text, then strlen alone: 1
+  length() 3, octet_length() 3, typeof() "blob", hex() "610062"
+[table, blob [00]] bind 0, insert step 101
+  type 4; column_text then column_bytes: 1 bytes [00], the byte at [bytes] 0, strlen 0; type after 3
+  type 4; column_blob then column_bytes: 1 bytes [00]; type after 4
+  column_text, then strlen alone: 0
+  length() 1, octet_length() 1, typeof() "blob", hex() "00"
+[select ?1, text [61 00 62]] bind 0
+  type 3; column_text then column_bytes: 3 bytes [61 00 62], the byte at [bytes] 0, strlen 1; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [61 00 62]; type after 3
+  column_text, then strlen alone: 1
+  length() 1, octet_length() 3, typeof() "text", hex() "610062"
+[select ?1, text [00]] bind 0
+  type 3; column_text then column_bytes: 1 bytes [00], the byte at [bytes] 0, strlen 0; type after 3
+  type 3; column_blob then column_bytes: 1 bytes [00]; type after 3
+  column_text, then strlen alone: 0
+  length() 0, octet_length() 1, typeof() "text", hex() "00"
+[select ?1, text [61 62 00]] bind 0
+  type 3; column_text then column_bytes: 3 bytes [61 62 00], the byte at [bytes] 0, strlen 2; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [61 62 00]; type after 3
+  column_text, then strlen alone: 2
+  length() 2, octet_length() 3, typeof() "text", hex() "616200"
+[select ?1, text [00 61 62]] bind 0
+  type 3; column_text then column_bytes: 3 bytes [00 61 62], the byte at [bytes] 0, strlen 0; type after 3
+  type 3; column_blob then column_bytes: 3 bytes [00 61 62]; type after 3
+  column_text, then strlen alone: 0
+  length() 0, octet_length() 3, typeof() "text", hex() "006162"
+[select ?1, text [C3 A9 00 E2 82 AC]] bind 0
+  type 3; column_text then column_bytes: 6 bytes [C3 A9 00 E2 82 AC], the byte at [bytes] 0, strlen 2; type after 3
+  type 3; column_blob then column_bytes: 6 bytes [C3 A9 00 E2 82 AC]; type after 3
+  column_text, then strlen alone: 2
+  length() 1, octet_length() 6, typeof() "text", hex() "C3A900E282AC"
+[select ?1, blob [61 00 62]] bind 0
+  type 4; column_text then column_bytes: 3 bytes [61 00 62], the byte at [bytes] 0, strlen 1; type after 3
+  type 4; column_blob then column_bytes: 3 bytes [61 00 62]; type after 4
+  column_text, then strlen alone: 1
+  length() 3, octet_length() 3, typeof() "blob", hex() "610062"
+[select ?1, blob [00]] bind 0
+  type 4; column_text then column_bytes: 1 bytes [00], the byte at [bytes] 0, strlen 0; type after 3
+  type 4; column_blob then column_bytes: 1 bytes [00]; type after 4
+  column_text, then strlen alone: 0
+  length() 1, octet_length() 1, typeof() "blob", hex() "00"

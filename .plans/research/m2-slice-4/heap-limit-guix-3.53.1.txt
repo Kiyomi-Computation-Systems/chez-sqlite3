@@ -1,0 +1,29 @@
+libversion 3.53.1
+sourceid 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+initialize 0
+memory count on (the default)
+[a 100000-byte TEXT read through select ?1]
+  prepare 0
+  bind text64 of 100000 bytes with its length 0
+  step 100, type 3
+  memory_used above 0; hard limit was 0, set to used + 1000, reads used + 1000
+  column_text NULL; errcode 7, extended 7, errmsg "out of memory"
+  type after 5
+  hard limit back to 0
+  reset 7
+  reset again 0
+  step 100, column_text a pointer
+  finalize 0
+[a 5-byte TEXT read through select ?1]
+  prepare 0
+  bind text64 of 5 bytes with its length 0
+  step 100, type 3
+  memory_used above 0; hard limit was 0, set to used + 1000, reads used + 1000
+  column_text a pointer; errcode 100, extended 100, errmsg "another row available"
+  type after 3
+  hard limit back to 0
+  reset 0
+  reset again 0
+  step 100, column_text a pointer
+  finalize 0
+close 0

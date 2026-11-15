@@ -8,6 +8,9 @@
   `sql-null` as one value (Q7). The reasons given here were put to the maintainer, and accepted
   with the record. Amended 2026-11-14 in M2 slice 1, from its measurements and its review, and
   accepted by the maintainer that day ([amendment](#amendment-2026-11-14-what-m2-slice-1-measured)).
+  Amended 2026-11-15 in M2 slice 4, and accepted by the maintainer that day: what it built and
+  measured, and a NULL pointer told by its
+  column's type ([amendment](#amendment-2026-11-15-what-m2-slice-4-built-and-measured)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every bound parameter and every column value
 - **Settles:** brief §3f, D4, D5 and D6
@@ -132,6 +135,9 @@
      raises `&sqlite-error`; any other code means an empty value, as an empty BLOB answers
      (measured). Running out of memory can't be caused on demand, so this reader is a pure
      function of what the bindings answer, tested with stand-ins, as M1's `failure-details` is.
+     Both halves were corrected in slice 4: the code can be another statement's, so the column's
+     type is read too, and running out of memory is caused for real by a suite (the slice 4
+     amendment).
    - **A UTF-16 database:** `sqlite3_column_text` converts its text to UTF-8 (measured), so decision
      9's check holds the converted bytes. Some invalid UTF-16 converts to valid UTF-8 for another
      character, which the check can't see. `docs/reference.md` says the check guards UTF-8
@@ -232,3 +238,52 @@ the code reads, or adds a measurement.
 - **Chez shares its empty bytevector:** `(eq? (make-bytevector 0 0) (make-bytevector 0 0))` is
   `#t` on 10.4.0. So "a fresh empty bytevector" can't be told from a shared one, and only
   non-empty plans and reads are held fresh.
+
+## Amendment, 2026-11-15: what M2 slice 4 built and measured
+
+Accepted by the maintainer on 2026-11-15 ("Accept it"), proposed in M2 slice 4, from its build, its
+Opus review and the research the M1 session measured for it
+([research/m2-slice-4/](../research/m2-slice-4/)). None of it changes a choice of the maintainer's. Measured on Guix's 3.53.1 and at the floor,
+3.45.1, alike, unless a line says otherwise.
+
+- **Decision 7's NULL pointer is told by the column's type as well as the code.**
+  - **What went wrong:** the slice's review found it. An empty BLOB answers a NULL pointer and sets
+    no code, so `sqlite3_extended_errcode` answers the connection's last code. After another
+    statement's NOMEM on the same connection, a read or a bind, that is 7. A healthy statement's
+    empty-BLOB read then raised `nomem` and moved to `failed`. Its raw read gave a NULL pointer,
+    code 7, and its column still BLOB.
+  - **Measured:** a real NOMEM read turns its column's type to NULL. Through `sqlite3_column_text`
+    on TEXT, the code is 7, then the type 5, and reading the type changes neither the code nor the
+    message. Through `sqlite3_column_blob`, a zeroblob bound with `sqlite3_bind_zeroblob64` gives
+    the same 7, then 5 ([stale-code.sps](../research/m2-slice-4/stale-code.sps)).
+  - **So, on a NULL pointer:** read the code. If its low byte isn't 7, the value is empty. If it
+    is 7, read `sqlite3_column_type` again: only a type turned NULL is NOMEM, and then
+    `sqlite3_errmsg` is read. Any other type is an empty value, and the 7 another statement's.
+    Slice 1's `read-column-bytes` takes the type as a procedure, between the code and the message.
+- **Running out of memory is caused for real,** where decisions 7 and 9 and the plan's §4.4 said it
+  couldn't be:
+  - a suite binds `sqlite3_hard_heap_limit64` itself, and sets it just above the memory used,
+    around the one read. A TEXT bigger than lookaside then answers NOMEM through
+    `sqlite3_column_text`;
+  - after the suite's own `sqlite3_column_name16`, under the limit, `sqlite3_column_name` answers
+    NULL with the code unchanged, so `column-name`'s path is held on a real library too;
+  - where SQLite keeps no memory count (`SQLITE_CONFIG_MEMSTATUS` 0, as Apple's library has it),
+    the limit reads back but isn't enforced. Those rows report themselves unavailable.
+- **The maintainer's NOMEM choice is built** (ADR-0014's slice 3 amendment): a value read's NOMEM
+  moves the statement to `failed`, raised once. Inside a transaction, the next reset rolls the
+  transaction back for a statement that reads a table. `column-name`'s NOMEM leaves the state,
+  since `sqlite3_column_name`'s NULL sets no code on the statement.
+- **Decision 2's limit, refined:** at `SQLITE_LIMIT_LENGTH`, 3.53.1 raises any value from 0 to 30
+  up to 30, and the floor raises 0 to 1 and keeps every value from 1. So "the floor doesn't" means
+  it doesn't clamp to 30. The limit also holds column names at prepare: a refused-bind row
+  prepares before it lowers the limit.
+- **A refused bind leaves its own code and message,** `sqlite3_errstr` of its code exactly, never
+  a stale one. So its `&sqlite-error` reads `sqlite3_errmsg` straight after the bind.
+- **Decision 6's names are byte-exact:** a name is its bytes as the SQL writes them, sigil
+  included, and case matters. `?32766` is the largest numbered parameter, which is
+  `SQLITE_LIMIT_VARIABLE_NUMBER` on both libraries.
+- **Built:** `(chez-sqlite3 private statement-values)`, with the six verbs. Native's three byte
+  helpers, `call-with-bytes`, `foreign-bytes` and `c-string->bytevector`, are there because
+  native alone touches foreign memory (ADR-0011). Slice 1's readers took copy procedures that no
+  slice had been given, and the builder's brief had put native off limits; the builder stopped
+  and said so.

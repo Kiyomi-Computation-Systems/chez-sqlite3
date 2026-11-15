@@ -9,11 +9,12 @@ newest first.
 - **M0 is done:** PRs #1 to #6.
 - **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
   closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
-- **M2 slices 0 to 2 are merged:**
+- **M2 slices 0 to 3 are merged:**
   - slice 0, as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their amendments to the
     older records;
   - slice 1, the pure core, as PR #16, `e6b2462`;
-  - slice 2, the bindings, as PR #17, `f2ffa0e`.
+  - slice 2, the bindings, as PR #17, `f2ffa0e`;
+  - slice 3, statements, as PR #18, `0572267`.
 - **The maintainer accepted ADR-0010 to ADR-0015 and their amendments** on 2026-11-14, ADR-0015's
   M2 slice 1 amendment among them. ADR-0014's slice 1 amendment records the maintainer's own
   choice, "Match SQLite". The global constraints carry no provisional rule.
@@ -21,11 +22,11 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2 slices 3 and 4 are built,** as PR #18 on `m2-slice-3-statements`, rebased onto
-  `main` once #17 merged, and PR #19 on `m2-slice-4-values`, stacked on it. The maintainer
-  approved #17 and #18 on 2026-11-15. Next are the Mac hand run and M2's closing review
-  ([the M2 plan](2026-11-14-m2-plan.md), §5). The maintainer asked for the stacked order on
-  2026-11-14: each slice opened as a PR, and the next begun on top of it.
+- **Now: M2 slice 4, values, is built,** as PR #19 on `m2-slice-4-values`, rebased onto `main` once
+  #18 merged. Each slice was opened as a PR, and the next begun on top of it: the maintainer's
+  order of 2026-11-14. The maintainer approved #17 and #18 on 2026-11-15. Next are the
+  maintainer's hand run on the Mac, and M2's closing review ([the M2 plan](2026-11-14-m2-plan.md),
+  §5).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -51,12 +52,90 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run for M2** (macOS, arm64, 2026-11-15):
+  - **On `m2-slice-4-values` at `7f9225f`, with Apple's 3.51.0,** 36 of 37 suites passed.
+    `test-statement`'s row for a refused SQL's prepare-time effect expected `cache_size` to start at
+    `-2000`, Guix's default, and Apple's library starts at 2000. The row now sets its own base
+    first ([traps.md](traps.md)). `check-dev` passed, and `check-test-fails` held in all 13 cases.
+    Homebrew's run didn't happen: the command block's `#` comments held apostrophes, and zsh read
+    them as a quote ([traps.md](traps.md)).
+  - **On `23aa075`, 37 of 37 passed with Apple's 3.51.0, and 37 of 37 with Homebrew's 3.54.1:**
+    - with Apple's, which keeps no memory count, each suite named the memory check unavailable,
+      and `test-statement-values-nomem` named its 9 NOMEM rows unavailable and passed 4;
+    - with Homebrew's, the memory check passed in every suite that loads libsqlite3, and the NOMEM
+      suite passed all 13;
+    - so what CI can't reach held on the Mac: `sqlite3_bind_text64`'s `unsigned-8` on Apple's
+      arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
+      caused for real.
 - **Open:** nothing. Brief D3 to D6 are settled (the M2 plan, §2), and slice 2 settled the
   split of `test-library-loading` (§7).
 
 ## Close-outs
 
-### 2026-11-15 — M2 slice 3: statements (PR #18)
+### 2026-11-15 — M2 slice 4: values (PR #19)
+
+- **Built:**
+  - `(chez-sqlite3 private statement-values)`: `bind!`, `bind-all!`, `clear-bindings!`,
+    `column-value`, `column-bytevector` and `column-name`, each through slice 3's accessor, in one
+    critical section, raising after it;
+  - native's byte helpers: `call-with-bytes`, `foreign-bytes` and `c-string->bytevector`;
+  - the public names, `sql-null`, the invalid-text condition, and the docs' Values section. The
+    public surface is now 51 names.
+- **Measured first,** by the M1 session, for this slice, and checked by it
+  ([research/m2-slice-4/](research/m2-slice-4/)):
+  - a refused bind's own message;
+  - `SQLITE_LIMIT_LENGTH`'s smallest values;
+  - byte-exact parameter names;
+  - running out of memory caused on demand by the heap limit;
+  - the sticky NOMEM after a read, and its rollback of a transaction.
+- **Every row of the plan's §4.3 and §4.4 on a real library,** on both libraries. Out-of-memory was
+  caused for real, for the value reads and for `column-name`.
+- **Decided by the maintainer** (2026-11-15):
+  - a NOMEM read moves the statement to `failed`, and is raised once (ADR-0014's slice 3
+    amendment);
+  - ADR-0015's slice 4 amendment, accepted ("Accept it").
+- **Watched failing:** each suite red first. Part A and the review's fixes: 97 mutations, 90
+  caught, 7 argued. Part B: 39, all caught ([the log](m2-slice-4-mutation-log.md)).
+- **The plants:**
+  - `clear-bindings!` while a row is ready: Valgrind reported 5,000 invalid reads in a freed
+    5,008-byte block, on both libraries;
+  - a boolean guessed from a declared type;
+  - parameters numbered from 0.
+- **Reviewed** (Opus, read-only): 1 blocker, 1 major and 5 minors, each reproduced, all fixed.
+  - **The blocker:** a NULL pointer read the connection's last code, so after another
+    statement's NOMEM a healthy empty-BLOB read raised `nomem` and failed its statement. The reader
+    now reads the column's type too (ADR-0015, amended).
+  - **The major:** no row held that an index is exact, so `1.0` would have reached C.
+- **CI:** passed in all five jobs on `7a8ea47`, before the review's fixes, `memory` taking 20m43s,
+  and on `1a53b13` after them, `memory` taking 28m51s.
+- **The gate split, in this PR** (the maintainer's choice after M2's closing review, "Split in
+  #19, rest after"):
+  - `test-library-loading` took 562.2 s on `1a53b13`'s run, 38 s from the timeout. It is now two
+    suites, 196 s and 184 s in the container.
+  - `make test-memory` fails any suite past three quarters of `MEMORY_TIMEOUT`, as `SLOW`
+    (ADR-0005, amended).
+  - The split's 8 mutants and the check's 7 were all caught.
+  - The builder: Opus, about 403k tokens, 121 calls, 76 min. The closing review: Opus, about 390k
+    tokens, 120 calls, 30 min; its other findings go to M2's closing-review PR.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Part A, two runs: the brief's contradiction, then the build | Opus | about 598k | 179 | 49 min |
+  | Part B: the public names and docs | Sonnet | about 143k | 37 | 8 min |
+  | Adversarial review | Opus | about 300k | 83 | 19 min |
+  | The review's fixes | Sonnet | about 148k | 69 | 24 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A code read "at once" can still be another statement's. Read what the call itself changed: here,
+    the column's type.
+  - Slice 1's readers took copy procedures no slice was given, and the brief put the one file that
+    could hold them off limits. Before a brief puts files off limits, check the work's every need
+    against them. The builder stopped and said so, as the brief told it to.
+  - Measurements made for a slice by another session, and checked by it, saved the build its first
+    hour.
+
+### 2026-11-15 — M2 slice 3: statements (PR #18, `0572267`)
 
 - **Built:**
   - `(chez-sqlite3 private statement)`: a statement is an integer handle in an opaque, sealed
@@ -79,7 +158,8 @@ newest first.
   - the tail scan agrees with SQLite's own prepare on 20,602 inputs.
 - **From M3's research,** found by the M1 session and reproduced here:
   - an interrupt doesn't end a lock wait;
-  - COMMIT answers BUSY while the connection's own statement is mid-row;
+  - COMMIT answers BUSY while the connection's own write is unfinished. Slice 4 corrected "mid-row":
+    a SELECT mid-row doesn't stop it;
   - an `ALTER TABLE` on the statement's own connection changes its column count at its next step;
   - inside a transaction, a NOMEM read rolls the transaction back at the next reset or finalize.
 - **Decided by the maintainer** (2026-11-15):
@@ -138,9 +218,9 @@ newest first.
   - prepare's error offsets: 10 and 13 bytes for an unknown column, 0 for an unknown keyword, and
     −1 for an error at the end of the SQL;
   - `select :alpha, ?7, $beta` has 8 parameters, at indexes 1, 7 and 8.
-- **The gate:** `test-library-loading` took 409.3 s on CI, against 308 s before, so it isn't split
-  in M2. Every child grew about 0.3 s, since each compiles native under Valgrind (ADR-0005,
-  amended).
+- **The gate:** `test-library-loading` took 409.3 s on CI, against 308 s before, so it wasn't split.
+  That was one fast run: on slower runners it reached 562 s, and slice 4 split it (ADR-0005,
+  amended). Every child grew about 0.3 s, since each compiles native under Valgrind.
 - **Decided by the maintainer:** on 2026-11-14, the stacked order, each slice opened as a PR and
   the next begun on it; on 2026-11-15, ADR-0005's and ADR-0011's amendments accepted
   ("Accept both").
@@ -171,7 +251,7 @@ newest first.
   - A REAL's text differs between SQLite versions.
   - A planted library must sit in a whole copy of the tree.
   - Arithmetic missed the gate both ways: the plan's 430 s and the review's 500 s against CI's
-    409 s. The cost is CI's to say.
+    409 s. The cost is CI's to say, and one run isn't CI: the closing review found 562 s.
 
 ### 2026-11-14 — M2 slice 1: the pure core (PR #16, `e6b2462`)
 

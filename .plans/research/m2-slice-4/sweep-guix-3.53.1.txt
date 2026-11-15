@@ -1,0 +1,28 @@
+libversion: "3.53.1"
+sourceid: "2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9"
+S1. BOOLEAN row 1: INTEGER 1, typeof TEXT "integer"
+S1. BOOLEAN row 2: INTEGER 0, typeof TEXT "integer"
+S1. BOOLEAN row 3: INTEGER 1, typeof TEXT "integer"
+S1. BOOLEAN row 4: INTEGER 0, typeof TEXT "integer"
+S1. BOOLEAN row 5: INTEGER 1, typeof TEXT "integer"
+S1. BOOLEAN row 6: INTEGER 0, typeof TEXT "integer"
+S1. BOOLEAN row 7: TEXT "true", typeof TEXT "text"
+S1. BOOLEAN row 8: INTEGER 1, typeof TEXT "integer"
+S1. BOOLEAN row 9: INTEGER 0, typeof TEXT "integer"
+S1. BOOLEAN row 10: TEXT "yes", typeof TEXT "text"
+S1. BOOLEAN row 11: INTEGER 2, typeof TEXT "integer"
+S1. select TRUE, FALSE, typeof(TRUE), TRUE = 1, FALSE = 0: INTEGER 1; INTEGER 0; TEXT "integer"; INTEGER 1; INTEGER 1
+S2. opened with EXRESCODE: a UNIQUE failure's step answered 2067; errcode 2067, extended 2067, errmsg "UNIQUE constraint failed: u.x"; finalize answered 2067; errcode 2067, extended 2067, errmsg "UNIQUE constraint failed: u.x"
+S2. opened without EXRESCODE: a UNIQUE failure's step answered 19; errcode 19, extended 2067, errmsg "UNIQUE constraint failed: u.x"; finalize answered 19; errcode 19, extended 2067, errmsg "UNIQUE constraint failed: u.x"
+S3. after the step (100): errcode 100, extended 100, errmsg "another row available"
+S3. column_blob of x'' null? #t, then extended 100; column_blob of '' null? #t, then 100; column_text of NULL null? #t, then 100
+S3. another statement's failed prepare (rc 1): errcode 1, extended 1, errmsg "no such column: nosuch_col"
+S3. then column_blob of x'' null? #t, extended 1; column_blob of NULL null? #t, extended 1
+S3. another statement's successful prepare (rc 0): errcode 0, extended 0, errmsg "not an error"; then column_blob of x'' null? #t, extended 0
+S4. TEXT: type 3, column_text twice same pointer? #t, bytes 4, type after 3
+S4. BLOB: type 4, column_blob twice same pointer? #t, bytes 2, type after 4
+S4. INTEGER: type 1, column_int64 42, type after 1; FLOAT: type 2, column_double 1.5, type after 2
+S4. against: TEXT read by column_blob, type 3 then 3; BLOB read by column_text, type 4 then 3; INTEGER read by column_text, type 1 then 1
+S5. binds 0 0 0 0; step 100: (TEXT "integer" TEXT "real" TEXT "text" TEXT "blob" TEXT "null")
+S5. reset 0, clear_bindings 0, step 100: (TEXT "null" TEXT "null" TEXT "null" TEXT "null" TEXT "null")
+S6. NULL pointer, limit 100: text64 lengths 0, 5, 101 answer 0 0 0; blob64 lengths 0, 5, 101 answer 0 0 0; step 100: (TEXT "null" TEXT "null" TEXT "null" TEXT "null" TEXT "null" TEXT "null")

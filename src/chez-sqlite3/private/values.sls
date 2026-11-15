@@ -108,24 +108,29 @@
 
   ;; --- the column readers ----------------------------------------------------------
 
-  ;; read-column-bytes : (-> Natural) (-> Integer) (-> String) (-> Natural)
+  ;; read-column-bytes : (-> Natural) (-> Integer) (-> Integer) (-> String) (-> Natural)
   ;;                      (Natural Natural -> Bytevector)
   ;;                      -> (U Bytevector (List 'nomem Integer String))
   ;; POINTER stands for sqlite3_column_text or _blob, ERRCODE for
-  ;; sqlite3_extended_errcode, ERRMSG for sqlite3_errmsg, BYTES for
-  ;; sqlite3_column_bytes and COPY for a copy out of a pointer. POINTER is
-  ;; called first. When it answers 0, ERRCODE is called at once, before
-  ;; anything else: a code whose low byte is 7 (NOMEM) then calls ERRMSG, right
-  ;; after the code, and answers (nomem CODE MESSAGE); any other code answers
-  ;; an empty bytevector, and ERRMSG is never called. BYTES and COPY are never
+  ;; sqlite3_extended_errcode, TYPE for sqlite3_column_type of the same
+  ;; column, ERRMSG for sqlite3_errmsg, BYTES for sqlite3_column_bytes and
+  ;; COPY for a copy out of a pointer. POINTER is called first. When it
+  ;; answers 0, ERRCODE is called at once, before anything else. A code whose
+  ;; low byte is not 7 answers an empty bytevector: TYPE and ERRMSG are never
+  ;; called. A code whose low byte is 7 (NOMEM) may be stale, since an empty
+  ;; value answers 0 and sets no code, so the connection's last code stands:
+  ;; TYPE is then called, and only a type of 5 (NULL), which a real NOMEM
+  ;; read turns its column to, calls ERRMSG right after and answers
+  ;; (nomem CODE MESSAGE). Any other type is an empty value under a stale 7:
+  ;; an empty bytevector, ERRMSG never called. BYTES and COPY are never
   ;; called on a 0 pointer. Otherwise BYTES is called, then (COPY pointer n)
-  ;; answered, and ERRCODE and ERRMSG never (ADR-0015, decision 7). It raises
-  ;; nothing itself; the order is the let*'s, never an argument order.
-  (define (read-column-bytes pointer errcode errmsg bytes copy)
+  ;; answered, and ERRCODE, TYPE and ERRMSG never (ADR-0015, decision 7). It
+  ;; raises nothing itself; the order is the let*'s, never an argument order.
+  (define (read-column-bytes pointer errcode type errmsg bytes copy)
     (let ((p (pointer)))
       (if (eqv? p 0)
           (let ((code (errcode)))
-            (if (= (bitwise-and code 255) 7)
+            (if (and (= (bitwise-and code 255) 7) (eqv? (type) 5))
                 (let ((message (errmsg)))
                   (list 'nomem code message))
                 (make-bytevector 0 0)))

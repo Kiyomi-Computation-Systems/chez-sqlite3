@@ -1,0 +1,70 @@
+libversion: "3.53.1"
+sourceid: "2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9"
+compile options (46): "ATOMIC_INTRINSICS=1" "COMPILER=gcc-14.3.0" "DEFAULT_AUTOVACUUM" "DEFAULT_CACHE_SIZE=-2000" "DEFAULT_FILE_FORMAT=4" "DEFAULT_JOURNAL_SIZE_LIMIT=-1" "DEFAULT_MMAP_SIZE=0" "DEFAULT_PAGE_SIZE=4096" "DEFAULT_PCACHE_INITSZ=20" "DEFAULT_RECURSIVE_TRIGGERS" "DEFAULT_SECTOR_SIZE=4096" "DEFAULT_SYNCHRONOUS=2" "DEFAULT_WAL_AUTOCHECKPOINT=1000" "DEFAULT_WAL_SYNCHRONOUS=2" "DEFAULT_WORKER_THREADS=0" "DIRECT_OVERFLOW_READ" "ENABLE_COLUMN_METADATA" "ENABLE_DBSTAT_VTAB" "ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5" "ENABLE_MATH_FUNCTIONS" "ENABLE_PERCENTILE" "ENABLE_UNLOCK_NOTIFY" "MALLOC_SOFT_LIMIT=1024" "MAX_ATTACHED=10" "MAX_COLUMN=2000" "MAX_COMPOUND_SELECT=500" "MAX_DEFAULT_PAGE_SIZE=8192" "MAX_EXPR_DEPTH=1000" "MAX_FUNCTION_ARG=1000" "MAX_LENGTH=1000000000" "MAX_LIKE_PATTERN_LENGTH=50000" "MAX_MMAP_SIZE=0x7fff0000" "MAX_PAGE_COUNT=0xfffffffe" "MAX_PAGE_SIZE=65536" "MAX_SQL_LENGTH=1000000000" "MAX_TRIGGER_DEPTH=1000" "MAX_VARIABLE_NUMBER=32766" "MAX_VDBE_OP=250000000" "MAX_WORKER_THREADS=8" "MUTEX_PTHREADS" "SECURE_DELETE" "SYSTEM_MALLOC" "TEMP_STORE=1" "THREADSAFE=1"
+limit id -1: default -1
+limit id 0: default 1000000000
+limit id 1: default 1000000000
+limit id 2: default 2000
+limit id 3: default 1000
+limit id 4: default 500
+limit id 5: default 250000000
+limit id 6: default 1000
+limit id 7: default 10
+limit id 8: default 50000
+limit id 9: default 32766
+limit id 10: default 1000
+limit id 11: default 0
+limit id 12: default 2500
+limit id 13: default -1
+LENGTH's hard maximum, read after setting 2147483647: 1000000000
+set LENGTH -2147483648: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+set LENGTH -2: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+set LENGTH -1: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+set LENGTH 0: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 1: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 2: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 10: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 29: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 30: answered 1000000000, then reads 30; SQL_LENGTH reads 1000000000
+set LENGTH 31: answered 1000000000, then reads 31; SQL_LENGTH reads 1000000000
+set LENGTH 32: answered 1000000000, then reads 32; SQL_LENGTH reads 1000000000
+set LENGTH 100: answered 1000000000, then reads 100; SQL_LENGTH reads 1000000000
+set LENGTH 1000: answered 1000000000, then reads 1000; SQL_LENGTH reads 1000000000
+set LENGTH 999999999: answered 1000000000, then reads 999999999; SQL_LENGTH reads 1000000000
+set LENGTH 1000000000: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+set LENGTH 1000000001: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+set LENGTH 2147483647: answered 1000000000, then reads 1000000000; SQL_LENGTH reads 1000000000
+scan, n then the value kept: ((0 . 30) (1 . 30) (2 . 30) (3 . 30) (4 . 30) (5 . 30) (6 . 30) (7 . 30) (8 . 30) (9 . 30) (10 . 30) (11 . 30) (12 . 30) (13 . 30) (14 . 30) (15 . 30) (16 . 30) (17 . 30) (18 . 30) (19 . 30) (20 . 30) (21 . 30) (22 . 30) (23 . 30) (24 . 30) (25 . 30) (26 . 30) (27 . 30) (28 . 30) (29 . 30) (30 . 30) (31 . 31) (32 . 32) (33 . 33) (34 . 34) (35 . 35) (36 . 36) (37 . 37) (38 . 38) (39 . 39) (40 . 40) (41 . 41) (42 . 42) (43 . 43) (44 . 44) (45 . 45) (46 . 46) (47 . 47) (48 . 48) (49 . 49) (50 . 50) (51 . 51) (52 . 52) (53 . 53) (54 . 54) (55 . 55) (56 . 56) (57 . 57) (58 . 58) (59 . 59) (60 . 60) (61 . 61) (62 . 62) (63 . 63) (64 . 64))
+smallest n kept as itself: 30
+one connection: set 500 answered 1000000000; set 50 answered 500; set 5 answered 50; read 30; set -7 answered 30; read 30
+at limit 30 (set, reads 30), "select ?":
+  text of 29 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 29
+  text of 30 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 30
+  text of 31 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+  blob of 29 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 29
+  blob of 30 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 30
+  blob of 31 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+at limit 30 (set, reads 30), "select ?":
+  text of 29 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 29
+  text of 30 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 30
+  text of 31 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+  blob of 29 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 29
+  blob of 30 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 30
+  blob of 31 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+at limit 100 (set, reads 100), "select ?":
+  text of 99 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 99
+  text of 100 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 3, bytes 100
+  text of 101 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+  blob of 99 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 99
+  blob of 100 bytes: prepare 0, bind 0 (errmsg "not an error"), step 100, type 4, bytes 100
+  blob of 101 bytes: prepare 0, bind 18 (errmsg "string or blob too big"), step 100, type 5, bytes 0
+at limit 30 (reads 30), what prepare and step answer:
+  "select 1 as x -- cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" (117 bytes): prepare 0, step 100 (errmsg "another row available")
+  "select 1 as nnnnnnnnnnnnnnnnnnnnnnnnnnnnnn" (42 bytes): prepare 0, step 100 (errmsg "another row available")
+  "select 1 as nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn" (43 bytes): prepare 18 (errmsg "string or blob too big")
+  "select 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'" (37 bytes): prepare 0, step 100 (errmsg "another row available")
+  "select 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'" (38 bytes): prepare 18 (errmsg "string or blob too big")
+  "select 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as x" (45 bytes): prepare 0, step 18 (errmsg "string or blob too big")
+  "select ?1" (9 bytes): prepare 0, step 100 (errmsg "another row available")
+limit set to 1, reads 30: "select ?1" prepare 0 (errmsg "not an error"), statement null? #f
+limit set to 2, reads 30: "select ?1" prepare 0 (errmsg "not an error"), statement null? #f

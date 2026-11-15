@@ -1,0 +1,7 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+limit set 30, reads 30: "select 1 as nnnnnnnnnnnnnnnnnnnnnnnnnnnnnn" (42 bytes) prepare 0, "not an error"
+limit set 30, reads 30: "select 1 as nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn" (43 bytes) prepare 18, "string or blob too big"
+limit set 30, reads 30: "select 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'" (38 bytes) prepare 18, "string or blob too big"
+limit set 1, reads 30: "select ?1" (9 bytes) prepare 0, "not an error"
+limit set 1, reads 30: "select ?" (8 bytes) prepare 0, "not an error"

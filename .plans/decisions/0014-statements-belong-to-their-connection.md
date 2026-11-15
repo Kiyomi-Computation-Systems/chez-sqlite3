@@ -331,9 +331,12 @@ own choice, of the same day. Measured on Guix's 3.53.1 and at the floor, 3.45.1,
   slice's library:
   - **an `ALTER TABLE` on the statement's own connection** changes its column count at its next
     step too: a held `select *` read 2, then 2 after the ALTER, then 3 after its step;
-  - **COMMIT answers BUSY while the connection's own statement is mid-row,** "cannot commit
-    transaction - SQL statements in progress", and no wait fixes it. `docs/reference.md` says to
-    reset or finalize it first;
+  - **COMMIT answers BUSY while the connection's own write is unfinished,** such as an
+    `insert … returning` that has answered a row: "cannot commit transaction - SQL statements in
+    progress", and no wait fixes it. `docs/reference.md` says to reset or finalize it first. As
+    first written, this said "mid-row". A SELECT mid-row doesn't stop a COMMIT: the COMMIT answers
+    0 and ends the transaction. The M1 session measured that, and M2 slice 4 reproduced it on both
+    libraries ([commit-busy.sps](../research/m2-slice-3/commit-busy.sps));
   - **an interrupt doesn't end a wait in the busy handler.** `begin immediate`, interrupted at
     100 ms in a 600 ms timeout, waited 601 ms and answered BUSY, where a long computation
     stopped at 100 ms. So the consequences' "M3's interrupt is how another thread stops a long

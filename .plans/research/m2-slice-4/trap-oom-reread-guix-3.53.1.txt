@@ -1,0 +1,6 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+step 100, type 3
+column_text while refusing: NULL, extended 7
+then type 5; column_text again: NULL, extended 7
+reset 7; step 100; column_text: "abcde"; finalize 0; close 0
