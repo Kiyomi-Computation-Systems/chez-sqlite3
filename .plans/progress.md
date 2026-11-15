@@ -52,15 +52,21 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
-- **The maintainer's Mac run for M2** (2026-11-15), on `m2-slice-4-values` at `7f9225f`:
-  - **With Apple's 3.51.0,** 36 of 37 suites passed. `test-statement`'s row for a refused SQL's
-    prepare-time effect expected `cache_size` to start at `-2000`, Guix's default, and Apple's
-    library starts at 2000. The row now sets its own base first ([traps.md](traps.md)).
-    `test-statement-values-nomem` named its 9 NOMEM rows unavailable, since Apple's library keeps
-    no memory count, and passed.
-  - `check-dev` passed, and `check-test-fails` held in all 13 cases.
-  - **Homebrew's 3.54.1 didn't run:** the command block's `#` comments held apostrophes, and zsh
-    read them as a quote ([traps.md](traps.md)). It is owed, with Apple's rerun.
+- **The maintainer's Mac run for M2** (macOS, arm64, 2026-11-15):
+  - **On `m2-slice-4-values` at `7f9225f`, with Apple's 3.51.0,** 36 of 37 suites passed.
+    `test-statement`'s row for a refused SQL's prepare-time effect expected `cache_size` to start at
+    `-2000`, Guix's default, and Apple's library starts at 2000. The row now sets its own base
+    first ([traps.md](traps.md)). `check-dev` passed, and `check-test-fails` held in all 13 cases.
+    Homebrew's run didn't happen: the command block's `#` comments held apostrophes, and zsh read
+    them as a quote ([traps.md](traps.md)).
+  - **On `23aa075`, 37 of 37 passed with Apple's 3.51.0, and 37 of 37 with Homebrew's 3.54.1:**
+    - with Apple's, which keeps no memory count, each suite named the memory check unavailable,
+      and `test-statement-values-nomem` named its 9 NOMEM rows unavailable and passed 4;
+    - with Homebrew's, the memory check passed in every suite that loads libsqlite3, and the NOMEM
+      suite passed all 13;
+    - so what CI can't reach held on the Mac: `sqlite3_bind_text64`'s `unsigned-8` on Apple's
+      arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
+      caused for real.
 - **Open:** nothing. Brief D3 to D6 are settled (the M2 plan, §2), and slice 2 settled the
   split of `test-library-loading` (§7).
 
