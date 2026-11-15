@@ -71,10 +71,18 @@
 ;;;       x)))), exported, would hand foreign-alloc to every library. Internal
 ;;;       macros are legal. Syntax bound any other way, a let-syntax or a
 ;;;       macro-defining macro, is not read: such a library is held by review.
+;;;   (l) a library other than (chez-sqlite3 private native) and (chez-sqlite3
+;;;       private utf8) holds the identifier utf8->string anywhere in its
+;;;       export, import or body forms: a vector literal, an import, a rename
+;;;       among them. Chez's drops a leading U+FEFF from the string, so the
+;;;       one decoder is utf8's strict-utf8->string, which restores it, and
+;;;       native's c-string->string reads through it. (rnrs bytevectors)
+;;;       exports utf8->string, so rule (e) lets every library import it.
+;;;       A name built at run time, (string->symbol ...), is not read.
 ;;;
 ;;; The letters are chez-curl's, where rules (a), (b) and (j) belonged to its
 ;;; two families and its escape hatch. This project has one family and no
-;;; hatch, so there is no (a), (b) or (j); (k) is new.
+;;; hatch, so there is no (a), (b) or (j); (k) and (l) are new.
 ;;;
 ;;; The lists are allowlists: a name or a library that is not on one fails,
 ;;; so a route nobody thought of is closed until a reviewer opens it.
@@ -202,6 +210,11 @@
     (format-condition? (chez-sqlite3 private native))
     (display-condition (chez-sqlite3 private native))
     (get-thread-id (chez-sqlite3 private connection))))
+
+;; utf8-string-libraries : (Listof (Listof Symbol))
+;; Rule (l): the libraries that alone may hold utf8->string.
+(define utf8-string-libraries
+  '((chez-sqlite3 private native) (chez-sqlite3 private utf8)))
 
 ;; rnrs-libraries : (Listof (Listof Symbol))
 ;; The standard libraries a library under src/ may import: R6RS's, but for
@@ -553,10 +566,41 @@
                                     pairs)))))
                 (cdr (caddr form))))))
 
+;; mentions? : Any Symbol -> Boolean
+;; Whether the datum holds ID, in a pair or a vector, at any depth. A cyclic
+;; datum, which a fixture's export can be, is walked once.
+(define (mentions? datum id)
+  (let ((seen (make-eq-hashtable)))
+    (let walk ((x datum))
+      (cond ((symbol? x) (eq? x id))
+            ((or (pair? x) (vector? x))
+             (and (not (hashtable-ref seen x #f))
+                  (begin
+                    (hashtable-set! seen x #t)
+                    (if (pair? x)
+                        (or (walk (car x)) (walk (cdr x)))
+                        (let loop ((i 0))
+                          (and (< i (vector-length x))
+                               (or (walk (vector-ref x i)) (loop (+ i 1)))))))))
+            (else #f)))))
+
+;; utf8-string-complaints : String Any -> (Listof String)
+;; Rule (l): one complaint when the library form FORM, read from PATH, holds
+;; utf8->string outside utf8-string-libraries. Its name is not read.
+(define (utf8-string-complaints path form)
+  (let ((name (reference-name (cadr form))))
+    (if (and (not (member name utf8-string-libraries))
+             (mentions? (cddr form) 'utf8->string))
+        (list (string-append path ": " (written name)
+                             " references utf8->string, but only (chez-sqlite3 private native)"
+                             " and (chez-sqlite3 private utf8) may: Chez's drops a leading"
+                             " U+FEFF, which strict-utf8->string restores"))
+        '())))
+
 ;; library-complaints : String Any (Listof (Listof Symbol)) -> (Listof String)
 ;; What is wrong with the library form FORM, read from PATH: its place in the
 ;; family (rule (d)), then its imports, in import order, then its exports, in
-;; export order.
+;; export order, then rule (l).
 (define (library-complaints path form defined)
   (let ((name (reference-name (cadr form))))
     (append
@@ -568,7 +612,8 @@
      (apply append
             (map (lambda (spec) (import-complaints path name spec defined))
                  (cdr (cadddr form))))
-     (export-complaints path name form))))
+     (export-complaints path name form)
+     (utf8-string-complaints path form))))
 
 ;; data-complaints : String (Listof Any) (Listof (Listof Symbol)) -> (Listof String)
 (define (data-complaints path data defined)

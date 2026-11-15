@@ -1,6 +1,7 @@
 # Traps: the full accounts
 
-AGENTS.md carries each trap's one-line rule; this file keeps the incident behind it. Each account
+AGENTS.md carries the one-line rule of each trap that binds every task, and this file keeps the
+incident behind every trap, those too. Each account
 names the repository it happened in. The traps the family hit before this repository existed are
 told in chez-curl's `.plans/traps.md`.
 

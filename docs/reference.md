@@ -124,7 +124,9 @@ Opens a database as `open-database` does, calls the procedure, last of the
 arguments, with the connection, and gives the procedure's answers. The
 connection is closed when the procedure returns, raises, or leaves through a
 continuation, and its live statements are finalized as `close-database!`
-does. A raise reaches the caller unchanged. Its refusals are
+does. A raise reaches the caller unchanged. A normal return can still raise
+the close's own failure, as a commit that was lost, and then you get no
+answers. Its refusals are
 `open-database`'s: a name that is not a string or holds U+0000, and a bad
 option, are assertion violations, and nothing is opened.
 
@@ -184,6 +186,11 @@ not own its connection, a statement raises a wrong-thread condition.
 Prepare, step, reset and finalize can wait in SQLite's busy handler. Other
 threads collect meanwhile, but this thread's interrupts wait.
 
+So do the copies of a value, which run byte by byte with this thread's
+interrupts off: a `column-value` or `bind!` of 64 MiB takes about 2 seconds,
+and a keyboard interrupt, a timer or an engine waits that long. Other threads
+collect meanwhile.
+
 ### `prepare-statement`
 
 ```text
@@ -233,7 +240,9 @@ call-with-statement : Database String (Statement -> A ...) -> A ...
 Prepares the SQL as `prepare-statement` does, calls the procedure, last of
 the arguments, with the statement, and gives the procedure's answers. The
 statement is finalized when the procedure returns, raises, or leaves through
-a continuation. A raise reaches the caller unchanged.
+a continuation. A raise reaches the caller unchanged. A normal return can
+still raise the finalize's own failure, as a commit that was lost, and then
+you get no answers.
 
 ```scheme run
 (call-with-database ":memory:"
@@ -477,8 +486,8 @@ column-bytevector : Statement Natural -> (U Bytevector SqlNull)
 
 Reads a TEXT or BLOB column as bytes, as a fresh bytevector. A TEXT column
 gives its UTF-8 bytes undecoded, so it reads text that `column-value` refuses.
-NULL gives `sql-null`. An INTEGER or FLOAT column is an assertion violation:
-read it with `column-value`. Its column number and out-of-memory are
+NULL gives `sql-null`. A value stored as INTEGER or REAL is an assertion
+violation, whatever its column is declared: read it with `column-value`. Its column number and out-of-memory are
 `column-value`'s.
 
 ```scheme run
@@ -630,7 +639,7 @@ its own predicate:
 | `sqlite-library-unavailable?` | SQLite could not be loaded: not found, too old, not threadsafe, or missing a function. |
 | `sqlite-error?` | SQLite answered with an error code. |
 | `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?` | An `sqlite-error?` of one kind: see below. |
-| `sqlite-wrong-thread?` | A connection is used by a thread that did not open it. |
+| `sqlite-wrong-thread?` | A connection, or a statement of one, is used by a thread that did not open it. |
 | `sqlite-closed?` | A connection, or a statement, is used after it was closed or finalized. |
 | `sqlite-invalid-text?` | TEXT, or a column's name, that is not well-formed UTF-8. |
 
@@ -779,7 +788,8 @@ Every path that was looked at, in order, for `not-found`.
 sqlite-wrong-thread? : Any -> Boolean
 ```
 
-Whether the value says a connection was used off its thread.
+Whether the value says a connection, or a statement of one, was used off its
+thread.
 
 ### `sqlite-wrong-thread-owner`
 
@@ -787,7 +797,8 @@ Whether the value says a connection was used off its thread.
 sqlite-wrong-thread-owner : SqliteWrongThread -> Natural
 ```
 
-The id of the thread that opened the connection.
+The id of the thread that opened the connection, which owns its statements
+too.
 
 ### `sqlite-wrong-thread-caller`
 
@@ -795,7 +806,7 @@ The id of the thread that opened the connection.
 sqlite-wrong-thread-caller : SqliteWrongThread -> Natural
 ```
 
-The id of the thread that used it.
+The id of the thread that used the connection or the statement.
 
 ### `sqlite-closed?`
 

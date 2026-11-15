@@ -510,5 +510,8 @@ rest after". The split and a check that holds the rule land in PR #19, before it
     must be named `SLOW`, and one just under it, which must pass. Each of seven mutants of the check
     fails case r.
   - The check adds two `date` calls a suite, and case r about 20 s to the job.
+- **On CI,** on `785234b`, the halves took 225 s and 195 s, on a runner where `test-check-ci`
+  took 84 s, between the fast runners' 65 s and the slow ones' 135 s. So on the slowest runner seen
+  they would take about 360 s and 310 s. The `memory` job took 21m55s, and named no suite `SLOW`.
 - **So M3's entry points add to one half,** and the check names a half before it nears the
   timeout.

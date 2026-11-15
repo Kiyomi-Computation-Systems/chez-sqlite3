@@ -8,8 +8,11 @@
   `sql-null` as one value (Q7). The reasons given here were put to the maintainer, and accepted
   with the record. Amended 2026-11-14 in M2 slice 1, from its measurements and its review, and
   accepted by the maintainer that day ([amendment](#amendment-2026-11-14-what-m2-slice-1-measured)).
-  Amended 2026-11-15 in M2 slice 4, and accepted by the maintainer that day: what it built and
-  measured, and a NULL pointer told by its
+  Amended 2026-11-15 in M2's closing review, and accepted by the maintainer that day: what a big
+  value costs, and the copies reworded
+  ([amendment](#amendment-2026-11-15-what-m2s-closing-review-measured)). Amended 2026-11-15 in M2
+  slice 4, and accepted by the maintainer that day: what it built and measured, and a NULL pointer
+  told by its
   column's type ([amendment](#amendment-2026-11-15-what-m2-slice-4-built-and-measured)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every bound parameter and every column value
@@ -88,8 +91,10 @@
    the maintainer: a read gives back 0, which is true in Scheme, and `#f` also means "not found"
    (`assq`, `member`), so accepting it would store 0 for "absent". A refusal can be loosened
    later; an acceptance can't be withdrawn.
-5. **Strings and bytevectors are counted copies.** A string is copied, encoded to UTF-8, and put
-   in a counted block; a bytevector is copied into one (ADR-0011, decisions 1 and 2). Each is
+5. **Strings and bytevectors are counted copies.** A string is encoded to UTF-8 and put in a
+   counted block; a bytevector is copied into one (ADR-0011, decisions 1 and 2). (M2's closing
+   review reworded this from "a string is copied": the code makes no copy of the string before
+   it encodes it, which binding needs no check between.) Each is
    bound with its byte length, `SQLITE_UTF8` for text, and `SQLITE_TRANSIENT`, so SQLite makes its
    own copy, and the block is freed after the call on every path.
    - **A bound string keeps any U+0000 in it,** since its length is given. Brief §3f keeps a NUL
@@ -198,8 +203,10 @@
 ## Consequences
 
 - **`-0.0` comes back `0.0` from a REAL column** (measured), and `docs/reference.md` says so.
-- **A bound string is copied three times by our code,** once by `string-copy`, once to a
-  bytevector and once into the block, and once more by SQLite. Small beside a step.
+- **A bound string is copied three times by our code:** encoded into a fresh bytevector by
+  `string->utf8`, copied again by `call-with-bytes`, and written into the block. SQLite then makes
+  its own copy. Each byte is copied in Scheme, with this thread's interrupts off: about 2 s for
+  64 MiB (M2's closing review, amended).
 - **Every TEXT read is checked byte by byte.** Slice 1 measures the cost against `utf8->string`.
 - **A program reading a database other programs wrote may meet `&sqlite-invalid-text`,** and
   reads the column with `column-bytevector` instead.
@@ -287,3 +294,19 @@ Opus review and the research the M1 session measured for it
   native alone touches foreign memory (ADR-0011). Slice 1's readers took copy procedures that no
   slice had been given, and the builder's brief had put native off limits; the builder stopped
   and said so.
+
+## Amendment, 2026-11-15: what M2's closing review measured
+
+Accepted by the maintainer on 2026-11-15 ("Accept it"), proposed in M2's closing review. It changes no
+choice of the maintainer's.
+
+- **Big values are copied byte by byte, with this thread's interrupts off.** A 64 MiB BLOB's
+  `column-value` took 1932 ms, and a 64 MiB `bind!` 2000 ms, about 30 ns a byte. Under an engine
+  the read ran with no expiry in 1.8 s, against 64,000 for a plain loop as long. Another thread's
+  `collect-rendezvous` wasn't held: 0 to 7 ms. So a keyboard interrupt, a timer or an engine waits
+  out a big copy, and `docs/reference.md` says so, where it says the blocking calls hold them. The
+  probes are the review's, `big-read-section.sps` and `big-read-engine.sps`.
+- **Decision 5's copies are reworded** to the ones the code makes: `string->utf8`, then
+  `call-with-bytes`' copy, then the block's fill. There is no `string-copy`.
+- **M3's row reading follows this:** each value in a section of its own (M3's plan, Q15), so no
+  section holds a whole row's copies.

@@ -1,0 +1,5 @@
+#!r6rs
+;;; Fixture for tests/test-check-seam.sps
+(library (chez-sqlite3 private b-import)
+  (export (rename (utf8->string decode)))
+  (import (only (rnrs bytevectors) utf8->string)))

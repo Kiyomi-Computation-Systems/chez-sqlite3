@@ -265,6 +265,13 @@
           (make-failure #f)
           (free-failure #f))
       (dynamic-wind
+        ;; Latent, today: a raise that left PROC under a guard that did not
+        ;; match it would be handed on from inside PROC's extent, which
+        ;; re-enters this thunk, and the refusal below would replace the
+        ;; raise. No raise gets that far, since the catch-all guard just
+        ;; inside the critical section of call-with-open-handle
+        ;; (connection.sls) takes every one. Whoever narrows that guard, or
+        ;; calls this outside it, must meet this first.
         (lambda ()
           (when freed
             (assertion-violation who "re-entered after its block was freed")))
@@ -738,8 +745,8 @@
        (foreign-procedure "sqlite3_column_count" (uptr) int))))
 
   ;; sqlite3-column-name : Positive-Integer Integer -> Natural
-  ;; const char *sqlite3_column_name(sqlite3_stmt*, int N): an address, for
-  ;; c-string->string; 0 when SQLite has none to give.
+  ;; const char *sqlite3_column_name(sqlite3_stmt*, int N): an address, read by
+  ;; c-string->bytevector; 0 when SQLite has none to give.
   (define sqlite3-column-name
     (load-step
      (bind-required report
