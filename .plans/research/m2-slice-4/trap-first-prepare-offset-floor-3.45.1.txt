@@ -1,0 +1,22 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+"select ?0": "variable number must be between ?1 and ?32766"
+  offset as the first prepare 7, again 7, after a good prepare 7, after a failed one (its offset 7) 7
+"select ?32767": "variable number must be between ?1 and ?32766"
+  offset as the first prepare 7, again 7, after a good prepare 7, after a failed one (its offset 7) 7
+"select ?1, ?0": "variable number must be between ?1 and ?32766"
+  offset as the first prepare 11, again 11, after a good prepare 11, after a failed one (its offset 7) 11
+"select nosuch_col": "no such column: nosuch_col"
+  offset as the first prepare 7, again 7, after a good prepare 7, after a failed one (its offset 7) 7
+"select 1 from nosuch_table": "no such table: nosuch_table"
+  offset as the first prepare -1, again -1, after a good prepare -1, after a failed one (its offset 7) -1
+"selectx 1": "near \"selectx\": syntax error"
+  offset as the first prepare 0, again 0, after a good prepare 0, after a failed one (its offset 7) 0
+"select 1 +": "incomplete input"
+  offset as the first prepare -1, again -1, after a good prepare -1, after a failed one (its offset 7) -1
+"select ?0 where 1": "variable number must be between ?1 and ?32766"
+  offset as the first prepare 7, again 7, after a good prepare 7, after a failed one (its offset 7) 7
+"select 1 from nosuch_table where 1": "no such table: nosuch_table"
+  offset as the first prepare -1, again -1, after a good prepare -1, after a failed one (its offset 7) -1
+"select nosuch_col where 1": "no such column: nosuch_col"
+  offset as the first prepare 7, again 7, after a good prepare 7, after a failed one (its offset 7) 7

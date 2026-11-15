@@ -11,7 +11,8 @@
 ;;; A connection belongs to the thread that opened it, and is closed
 ;;; explicitly: no collection closes one (ADR-0010, ADR-0012). A statement
 ;;; belongs to its connection and its thread, and closing the connection
-;;; finalizes it (ADR-0014).
+;;; finalizes it (ADR-0014). Its values are bound and read by
+;;; (chez-sqlite3 private statement-values) (ADR-0015).
 (library (chez-sqlite3)
   (export
    ;; --- connections (chez-sqlite3 private connection) ---
@@ -44,6 +45,24 @@
    reset!
    ;; column-count : Statement -> Natural
    column-count
+
+   ;; --- values (chez-sqlite3 private statement-values, chez-sqlite3 private values) ---
+   ;; bind! : Statement (U Positive-Integer String) Value -> Void
+   bind!
+   ;; bind-all! : Statement Value ... -> Void
+   bind-all!
+   ;; clear-bindings! : Statement -> Void
+   clear-bindings!
+   ;; column-value : Statement Natural -> Value
+   column-value
+   ;; column-bytevector : Statement Natural -> (U Bytevector SqlNull)
+   column-bytevector
+   ;; column-name : Statement Natural -> String
+   column-name
+   ;; sql-null : SqlNull
+   sql-null
+   ;; sql-null? : Any -> Boolean
+   sql-null?
 
    ;; --- the library (chez-sqlite3 private report) ---
    ;; sqlite-version : -> String
@@ -101,13 +120,22 @@
    ;; sqlite-constraint? : Any -> Boolean
    sqlite-constraint?
    ;; sqlite-read-only? : Any -> Boolean
-   sqlite-read-only?)
+   sqlite-read-only?
+   ;; sqlite-invalid-text? : Any -> Boolean
+   sqlite-invalid-text?
+   ;; sqlite-invalid-text-column : SqliteInvalidText -> Natural
+   sqlite-invalid-text-column
+   ;; sqlite-invalid-text-offset : SqliteInvalidText -> Natural
+   sqlite-invalid-text-offset)
   (import (chez-sqlite3 private require-threaded)
           (only (chez-sqlite3 private connection)
                 open-database close-database! call-with-database database?)
           (only (chez-sqlite3 private statement)
                 prepare-statement finalize-statement! call-with-statement statement?
                 statement-sql parameter-count step! reset! column-count)
+          (only (chez-sqlite3 private statement-values)
+                bind! bind-all! clear-bindings! column-value column-bytevector column-name)
+          (only (chez-sqlite3 private values) sql-null sql-null?)
           (only (chez-sqlite3 private report)
                 sqlite-version sqlite-version-number sqlite-source-id sqlite-library-path
                 sqlite-library-source sqlite-compile-option? sqlite-compile-options)
@@ -119,4 +147,5 @@
                 sqlite-library-unavailable-path sqlite-library-unavailable-source
                 sqlite-library-unavailable-detail sqlite-library-unavailable-candidates
                 sqlite-wrong-thread? sqlite-wrong-thread-owner sqlite-wrong-thread-caller
-                sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?)))
+                sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?
+                sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset)))

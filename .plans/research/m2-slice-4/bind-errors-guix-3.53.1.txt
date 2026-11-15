@@ -1,0 +1,496 @@
+libversion: "3.53.1"
+sourceid: "2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9"
+errstr 18 "string or blob too big", 21 "bad parameter or other API misuse", 25 "column index out of range"
+[TOOBIG text64, 101 bytes over a limit of 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 101 bytes over a limit of 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 101 bytes over a limit of 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 101 bytes over a limit of 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 101 bytes over a limit of 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 101 bytes over a limit of 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, limit 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, limit 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, limit 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, limit 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, limit 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, limit 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, default limit] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, default limit] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^31 mapped bytes, default limit] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, default limit] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, default limit] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^31 mapped bytes, default limit] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, limit 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, limit 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, limit 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, limit 100] control none: nothing
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, limit 100] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, limit 100] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 100; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, default limit] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, default limit] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG text64, 2^32+1 mapped bytes, default limit] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, default limit] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, default limit] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset 7
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[TOOBIG blob64, 2^32+1 mapped bytes, default limit] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 18, errstr(rc) "string or blob too big"
+  after:  errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  reset none, step 100: ?1 type 5 bytes NULL typeof "null"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 0 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 0 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 0 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 0 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 0 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 0 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 0 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 0 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 0 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 0 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 0 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 0 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 0 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 0 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 0 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 3 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 3 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE text64 at index 3 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 3 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 3 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE blob64 at index 3 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 3 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 3 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE int64 at index 3 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 3 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 3 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE double at index 3 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 3 of 2] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 3 of 2] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset 7
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[RANGE null at index 3 of 2] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind none none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 25, errstr(rc) "column index out of range"
+  after:  errcode 25, extended 25, errmsg "column index out of range", offset -1
+  reset none, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 while a row is ready] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 100, extended 100, errmsg "another row available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 while a row is ready] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 while a row is ready] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE blob64 of ?1 while a row is ready] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 100, extended 100, errmsg "another row available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE blob64 of ?1 while a row is ready] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE blob64 of ?1 while a row is ready] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 while a row is ready] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 100, extended 100, errmsg "another row available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 while a row is ready] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 while a row is ready] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE double of ?1 while a row is ready] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 100, extended 100, errmsg "another row available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE double of ?1 while a row is ready] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE double of ?1 while a row is ready] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE null of ?1 while a row is ready] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 100, extended 100, errmsg "another row available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE null of ?1 while a row is ready] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE null of ?1 while a row is ready] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 none
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 after done, before a reset] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 101, extended 101, errmsg "no more rows available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 after done, before a reset] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE text64 of ?1 after done, before a reset] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 after done, before a reset] control none: nothing
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 101, extended 101, errmsg "no more rows available", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 after done, before a reset] control error: prepare of "select nosuch_col" rc 1
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 1, extended 1, errmsg "no such column: nosuch_col", offset 7
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset 7
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[MISUSE int64 of ?1 after done, before a reset] control success: prepare of "select 1" rc 0
+  limit length was 1000000000, is 1000000000; prepare rc 0; bind 'old' rc 0, bind 42 rc 0; steps before the bind 100 101
+  before: errcode 0, extended 0, errmsg "not an error", offset -1
+  refused bind rc 21, errstr(rc) "bad parameter or other API misuse"
+  after:  errcode 21, extended 21, errmsg "bad parameter or other API misuse", offset -1
+  reset 0, step 100: ?1 type 3 bytes "old" typeof "text"; ?2 42 typeof "integer"; finalize 0, close 0
+[one connection: RANGE, then TOOBIG, then a clean bind]
+  RANGE rc 25: errcode 25, extended 25, errmsg "column index out of range", offset -1
+  TOOBIG rc 18: errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  clean bind rc 0: errcode 0, extended 0, errmsg "not an error", offset -1
+[bind-all!'s order: ?1 bound, then ?2 refused]
+  bind ?1 rc 0, bind ?2 (101 bytes) rc 18: errcode 18, extended 18, errmsg "string or blob too big", offset -1
+  step 100: ?1 type 3 bytes "first"; ?2 type 5

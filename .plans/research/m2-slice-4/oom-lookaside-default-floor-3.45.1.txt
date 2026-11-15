@@ -1,0 +1,47 @@
+libversion: "3.45.1"
+sourceid: "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+header: "3.45.1" 3045001 "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+sqlite3_sourceid's text is in: .../m2s4-floor/libsqlite3-floor.so
+config GETMALLOC 0, MALLOC 0, lookaside kept, initialize 0
+errstr(7): "out of memory"
+1. bind 0, step 100
+[5000-byte TEXT bound with its length, through select ?1] type 3; column_text while refusing: NULL, 1 allocation(s) refused; errcode 7, extended 7, errmsg "out of memory"
+  then column_bytes 0, type 5; read again with nothing refused: NULL, 0 bytes; errcode 7, extended 7, errmsg "out of memory"
+  step 7, finalize 7
+1b. step 100
+[the same, then a reset] type 3; column_text while refusing: NULL, 1 allocation(s) refused; errcode 7, extended 7, errmsg "out of memory"
+  then column_bytes 0, type 5; read again with nothing refused: NULL, 0 bytes; errcode 7, extended 7, errmsg "out of memory"
+  reset straight after 7; errcode 7, extended 7, errmsg "out of memory"
+  then step 100; errcode 100, extended 100, errmsg "another row available"
+  step 101, finalize 0
+1c. step 100
+[the same, then a finalize] type 3; column_text while refusing: NULL, 1 allocation(s) refused; errcode 7, extended 7, errmsg "out of memory"
+  then column_bytes 0, type 5; read again with nothing refused: NULL, 0 bytes; errcode 7, extended 7, errmsg "out of memory"
+  finalize straight after 7; errcode 7, extended 7, errmsg "out of memory"
+1d. bind 0, step 100
+[5-byte TEXT bound with its length, through select ?1] type 3; column_text while refusing: a pointer, 0 allocation(s) refused; errcode 100, extended 100, errmsg "another row available"
+  then column_bytes 5, type 3; read again with nothing refused: a pointer, 5 bytes; errcode 100, extended 100, errmsg "another row available"
+  step 101, finalize 0
+2. insert 101, step 100
+[5000-byte TEXT read from a table] type 3; column_text while refusing: a pointer, 0 allocation(s) refused; errcode 100, extended 100, errmsg "another row available"
+  then column_bytes 5000, type 3; read again with nothing refused: a pointer, 5000 bytes; errcode 100, extended 100, errmsg "another row available"
+  step 101, finalize 0
+3. step 100
+[zeroblob(5000)] type 4; column_blob while refusing: a pointer, 0 allocation(s) refused; errcode 100, extended 100, errmsg "another row available"
+  then column_bytes 5000, type 4; read again with nothing refused: a pointer, 5000 bytes; errcode 100, extended 100, errmsg "another row available"
+  step 101, finalize 0
+4. step 100
+[5000-byte BLOB read from a table] type 4; column_blob while refusing: a pointer, 0 allocation(s) refused; errcode 100, extended 100, errmsg "another row available"
+  then column_bytes 5000, type 4; read again with nothing refused: a pointer, 5000 bytes; errcode 100, extended 100, errmsg "another row available"
+  step 101, finalize 0
+5. after prepare, column 0's name while refusing: "plain", 0 refused; errcode 0, extended 0, errmsg "not an error"
+5. after prepare, column 1's name while refusing: "\xc3\xa9\xe5\x90\x8d", 0 refused; errcode 0, extended 0, errmsg "not an error"
+5. step 100
+5. after a step, column 0's name while refusing: "plain", 0 refused; errcode 100, extended 100, errmsg "another row available"
+5. after a step, column 1's name while refusing: "\xc3\xa9\xe5\x90\x8d", 0 refused; errcode 100, extended 100, errmsg "another row available"
+5. a failed prepare, rc 1: errcode 1, extended 1, errmsg "no such column: nosuch_col"
+5. column_name16 of column 1: a pointer; errcode 1, extended 1, errmsg "no such column: nosuch_col"
+5. then column_name of column 1 while refusing: "\xc3\xa9\xe5\x90\x8d", 0 refused; errcode 1, extended 1, errmsg "no such column: nosuch_col"
+5. and again with nothing refused: "\xc3\xa9\xe5\x90\x8d"; errcode 1, extended 1, errmsg "no such column: nosuch_col"
+  finalize 0
+close 0

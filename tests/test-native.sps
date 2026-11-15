@@ -36,6 +36,12 @@
 ;;;                  re-entry refused. c-string->string reads them back
 ;;;   out-pointers   call-with-out-pointer: a zeroed, counted slot, read after
 ;;;                  PROC and freed on every path
+;;;   bytes          call-with-bytes: a bytevector's bytes, U+0000 and bytes
+;;;                  past ASCII kept, in a counted block of at least one byte,
+;;;                  never NULL for none, freed on return, raise and escape,
+;;;                  re-entry refused; foreign-bytes and c-string->bytevector
+;;;                  read bytes back undecoded into fresh bytevectors, and
+;;;                  c-string->string reads through the second (M2 slice 4)
 ;;;   after the section
 ;;;                  each helper's refusals are raised outside the critical
 ;;;                  dynamic-wind thunks that make and free its block: a
@@ -135,6 +141,9 @@
 (define call-with-c-string (native-procedure 'call-with-c-string))
 (define c-string->string (native-procedure 'c-string->string))
 (define call-with-out-pointer (native-procedure 'call-with-out-pointer))
+(define call-with-bytes (native-procedure 'call-with-bytes))
+(define foreign-bytes (native-procedure 'foreign-bytes))
+(define c-string->bytevector (native-procedure 'c-string->bytevector))
 (define sqlite3-prepare-v3 (native-procedure 'sqlite3-prepare-v3))
 (define sqlite3-finalize (native-procedure 'sqlite3-finalize))
 (define sqlite3-step (native-procedure 'sqlite3-step))
@@ -344,7 +353,7 @@
   counts-after-load)
 
 ;; No back door: the exports, written out whole.
-(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings and M2's 21, sqlite-transient, and the C-string and out-pointer helpers"
+(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings and M2's 21, sqlite-transient, and the C-string, out-pointer and byte helpers"
   (sorted-names '(loaded-libsqlite3 loaded-threadsafe
                   sqlite3-open-v2 sqlite3-close sqlite3-errmsg sqlite3-errstr sqlite3-errcode
                   sqlite3-extended-errcode sqlite3-next-stmt sqlite3-memory-used
@@ -355,7 +364,8 @@
                   sqlite3-bind-blob64 sqlite3-column-count sqlite3-column-name sqlite3-column-type
                   sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
                   sqlite3-column-bytes sqlite3-error-offset sqlite-transient
-                  call-with-c-string c-string->string call-with-out-pointer))
+                  call-with-c-string c-string->string call-with-out-pointer
+                  call-with-bytes foreign-bytes c-string->bytevector))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private native)))))
 
@@ -1291,6 +1301,180 @@
          (b (raised (lambda () (call-with-out-pointer 42 (lambda (slot) slot))))))
     (list a b (native-counts))))
 
+;; --- call-with-bytes, foreign-bytes and c-string->bytevector (M2 slice 4) -------------------------
+;; A bound TEXT or BLOB, and a column's bytes and name read back, cross in
+;; counted blocks and are copied by native's own code (ADR-0011, decisions 2
+;; and 4; ADR-0015, decisions 5, 7 and 9). No other library may read or write
+;; foreign memory (check-seam).
+
+;; long-bytes : Bytevector
+;; 5,000 bytes, each its index modulo 256, so a copy that drops, repeats or
+;; shifts a byte is told apart.
+(define long-bytes
+  (let ((b (make-bytevector 5000 0)))
+    (let loop ((i 0))
+      (when (< i 5000)
+        (bytevector-u8-set! b i (mod i 256))
+        (loop (+ i 1))))
+    b))
+
+;; in-block : Bytevector -> Any
+;; What call-with-bytes hands PROC for BYTES: whether the address is a
+;; pointer, never NULL; the block's first (max 1 n) bytes, read with
+;; foreign-ref, as a bytevector, or same when they equal BYTES whole; and the
+;; counts while PROC runs. Or what was raised.
+(define (in-block bytes)
+  (guard (e ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other (describe e))))
+    (call-with-bytes 'bind! bytes
+      (lambda (address)
+        (let ((read (u8-list->bytevector (peek address (max 1 (bytevector-length bytes))))))
+          (list (if (and (integer? address) (exact? address) (positive? address)) 'pointer address)
+                (if (and (> (bytevector-length bytes) 0) (equal? read bytes)) 'same read)
+                (native-counts)))))))
+
+(test-equal "call-with-bytes hands C a bytevector's bytes in a counted block, never NULL: none is one byte, 0; 00, 61 00 62, 00 00 00 and C3 A9 FF FE 80 as given, U+0000 kept; 5,000 bytes whole; one block counted while PROC runs, and none after"
+  (list (list 'pointer #vu8(0) (counts-with '((block . 1))))
+        (list 'pointer 'same (counts-with '((block . 1))))
+        (list 'pointer 'same (counts-with '((block . 1))))
+        (list 'pointer 'same (counts-with '((block . 1))))
+        (list 'pointer 'same (counts-with '((block . 1))))
+        (list 'pointer 'same (counts-with '((block . 1))))
+        zero-counts)
+  (let* ((a (in-block #vu8()))
+         (b (in-block #vu8(0)))
+         (c (in-block #vu8(#x61 0 #x62)))
+         (d (in-block #vu8(0 0 0)))
+         (e (in-block #vu8(#xC3 #xA9 #xFF #xFE #x80)))
+         (f (in-block long-bytes)))
+    (list a b c d e f (native-counts))))
+
+(test-equal "call-with-bytes: a raise from PROC frees the block, and reaches the caller; so does an escape"
+  (list 'proc-raised 'escaped zero-counts)
+  (let* ((a (guard (e ((eq? e 'from-proc) 'proc-raised)
+                      (#t (list 'other (describe e))))
+              (call-with-bytes 'bind! #vu8(1 2 3) (lambda (address) (raise 'from-proc)))))
+         (b (guard (e (#t (list 'other (describe e))))
+              (call/cc
+               (lambda (k)
+                 (call-with-bytes 'bind! #vu8(1 2 3) (lambda (address) (k 'escaped))))))))
+    (list a b (native-counts))))
+
+(test-equal "call-with-bytes: re-entering PROC through a continuation, once the block is freed, raises from its WHO, and PROC runs once"
+  (list (list 'assertion-violation 'bind! '()) 1 zero-counts)
+  (let ((k #f) (runs 0))
+    (let ((r (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
+                             (irritants-condition? e))
+                        (list 'assertion-violation (condition-who e) (condition-irritants e)))
+                       (#t (list 'other (describe e))))
+               (call-with-bytes 'bind! #vu8(1 2 3)
+                 (lambda (address)
+                   (call/cc (lambda (c) (set! k c)))
+                   (set! runs (+ runs 1))))
+               (if (= runs 1) (k #f) (list 'reentered runs)))))
+      (list r runs (native-counts)))))
+
+;; refused-at-raise : (-> Any) -> (List Any Any Symbol)
+;; What THUNK, a call-with-bytes whose PROC records that it ran, raised; the
+;; counts at the raise; and whether PROC ran.
+(define (refused-at-raise make-thunk)
+  (let* ((ran #f)
+         (r (at-raise (make-thunk (lambda (address) (set! ran #t) 'ran))
+                      (lambda (e)
+                        (if (and (assertion-violation? e) (who-condition? e)
+                                 (message-condition? e) (irritants-condition? e))
+                            (list 'assertion-violation (condition-who e) (condition-irritants e))
+                            (list 'other (describe e)))))))
+    (append r (list (if ran 'proc-ran 'proc-not-run)))))
+
+(test-equal "call-with-bytes refuses what is no bytevector and a PROC that is no procedure, from its WHO, and a WHO that is no symbol, from itself, each by shown-value, with nothing allocated at the raise and PROC not run"
+  (list (list (list 'assertion-violation 'bind! '((kind string))) zero-counts 'proc-not-run)
+        (list (list 'assertion-violation 'bind! '(abc)) zero-counts 'proc-not-run)
+        (list (list 'assertion-violation 'bind! '((kind vector))) zero-counts 'proc-not-run)
+        (list (list 'assertion-violation 'bind! '(not-a-procedure)) zero-counts 'proc-not-run)
+        (list (list 'assertion-violation 'call-with-bytes '((kind string))) zero-counts 'proc-not-run)
+        zero-counts)
+  (let* ((a (refused-at-raise (lambda (proc) (lambda () (call-with-bytes 'bind! "abc" proc)))))
+         (b (refused-at-raise (lambda (proc) (lambda () (call-with-bytes 'bind! 'abc proc)))))
+         (c (refused-at-raise (lambda (proc) (lambda () (call-with-bytes 'bind! (vector 1 2) proc)))))
+         (d (refused-at-raise (lambda (proc) (lambda () (call-with-bytes 'bind! #vu8(1) 'not-a-procedure)))))
+         (e (refused-at-raise (lambda (proc) (lambda () (call-with-bytes "bind!" #vu8(1) proc))))))
+    (list a b c d e (native-counts))))
+
+;; in-written-block : (Listof Natural) (Natural -> Any) -> Any
+;; PROC's answer, given a counted block of at least BYTES' length holding
+;; BYTES, freed after; or what was raised.
+(define (in-written-block bytes proc)
+  (guard (e ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other (describe e))))
+    (with-block (max 1 (length bytes))
+      (lambda (block) (poke! block bytes) (proc block)))))
+
+(test-equal "foreign-bytes reads N bytes at an address, undecoded, into a bytevector: 00 61 00 FF 80 C3 whole, its first 2, none at the block, and none at NULL, which it never reads"
+  (list #vu8(0 #x61 0 #xFF #x80 #xC3) #vu8(0 #x61) #vu8() #vu8())
+  (let* ((a (in-written-block '(0 #x61 0 #xFF #x80 #xC3) (lambda (b) (foreign-bytes b 6))))
+         (b (in-written-block '(0 #x61 0 #xFF #x80 #xC3) (lambda (b) (foreign-bytes b 2))))
+         (c (in-written-block '(#x61) (lambda (b) (foreign-bytes b 0))))
+         (d (guard (e (#t (list 'raised (describe e)))) (foreign-bytes 0 0))))
+    (list a b c d)))
+
+(test-equal "foreign-bytes answers a fresh bytevector: the block written after the read leaves it, and two reads are two bytevectors"
+  (list #vu8(1 2 3) 'two)
+  (in-written-block '(1 2 3)
+    (lambda (block)
+      (let* ((first (foreign-bytes block 3))
+             (second (foreign-bytes block 3)))
+        (poke! block '(9 9 9))
+        (list first (if (eq? first second) 'one 'two))))))
+
+(test-equal "foreign-bytes refuses an address and a count that are no exact naturals, each named by its field and shown-value, and NULL with bytes to read, from itself"
+  (list (list 'assertion-violation 'foreign-bytes '(address x))
+        (list 'assertion-violation 'foreign-bytes '(address -1))
+        (list 'assertion-violation 'foreign-bytes '(address 1.5))
+        (list 'assertion-violation 'foreign-bytes '(count x))
+        (list 'assertion-violation 'foreign-bytes '(count -1))
+        (list 'assertion-violation 'foreign-bytes '(count 1.5))
+        (list 'assertion-violation 'foreign-bytes '(null-address 1)))
+  (let* ((a (raised (lambda () (foreign-bytes 'x 1))))
+         (b (raised (lambda () (foreign-bytes -1 1))))
+         (c (raised (lambda () (foreign-bytes 1.5 1))))
+         (d (in-written-block '(1) (lambda (block) (raised (lambda () (foreign-bytes block 'x))))))
+         (e (in-written-block '(1) (lambda (block) (raised (lambda () (foreign-bytes block -1))))))
+         (f (in-written-block '(1) (lambda (block) (raised (lambda () (foreign-bytes block 1.5))))))
+         (g (raised (lambda () (foreign-bytes 0 1)))))
+    (list a b c d e f g)))
+
+(test-equal "c-string->bytevector reads the bytes up to the NUL, undecoded: 61 62, none, FF, EF BB BF kept, C3 A9 before a NUL and 78; #f for NULL, compared as the symbol null"
+  (list #vu8(#x61 #x62) #vu8() #vu8(#xFF) #vu8(#xEF #xBB #xBF) #vu8(#xC3 #xA9) 'null)
+  (let* ((a (in-written-block '(#x61 #x62 0) c-string->bytevector))
+         (b (in-written-block '(0) c-string->bytevector))
+         (c (in-written-block '(#xFF 0) c-string->bytevector))
+         (d (in-written-block '(#xEF #xBB #xBF 0) c-string->bytevector))
+         (e (in-written-block '(#xC3 #xA9 0 #x78 0) c-string->bytevector))
+         (f (guard (e (#t (list 'raised (describe e))))
+              (let ((r (c-string->bytevector 0))) (if (eq? r #f) 'null r)))))
+    (list a b c d e f)))
+
+(test-equal "c-string->bytevector answers a fresh bytevector: the block written after the read leaves it, and two reads are two bytevectors"
+  (list #vu8(1 2 3) 'two)
+  (in-written-block '(1 2 3 0)
+    (lambda (block)
+      (let* ((first (c-string->bytevector block))
+             (second (c-string->bytevector block)))
+        (poke! block '(9 9 9 0))
+        (list first (if (eq? first second) 'one 'two))))))
+
+(test-equal "c-string->bytevector refuses what is no address, from itself, by shown-value"
+  (list (list 'assertion-violation 'c-string->bytevector '(x))
+        (list 'assertion-violation 'c-string->bytevector '(-1))
+        (list 'assertion-violation 'c-string->bytevector '(1.5)))
+  (let* ((a (raised (lambda () (c-string->bytevector 'x))))
+         (b (raised (lambda () (c-string->bytevector -1))))
+         (c (raised (lambda () (c-string->bytevector 1.5)))))
+    (list a b c)))
+
 ;; --- raised after the section ---------------------------------------------------------------------
 ;; A raise made inside a critical section, or a critical dynamic-wind thunk,
 ;; reaches a with-exception-handler handler with interrupts still disabled:
@@ -1352,6 +1536,30 @@
 ;; is asked: call-with-out-pointer reads its slot once PROC returns, and a
 ;; slot PROC freed is a read after free, which the gate's Valgrind reports
 ;; (measured).
+(test-equal "call-with-bytes refuses a re-entry outside its critical thunks, and its argument refusals come before any: a handler of each runs at depth 1, and PROC runs once"
+  (list (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'bind! '())) 1 zero-counts)
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'bind! '((kind string))))
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'bind! '(x)))
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'call-with-bytes '(42))))
+  (let* ((a (reentered (lambda (proc) (call-with-bytes 'bind! #vu8(1 2 3) proc))))
+         (b (handler-depth (lambda () (call-with-bytes 'bind! "abc" (lambda (address) address)))))
+         (c (handler-depth (lambda () (call-with-bytes 'bind! #vu8(1) 'x))))
+         (d (handler-depth (lambda () (call-with-bytes 42 #vu8(1) (lambda (address) address))))))
+    (list a b c d)))
+
+(test-equal "call-with-bytes raises a failed free outside its critical after thunk: a PROC that freed its block itself makes free-foreign-block! refuse it, and a handler of that runs at depth 1; every count is zero after"
+  (list (list 'raised-at-depth 'depth-1 '(assertion-violation free-foreign-block! (that-block))) zero-counts)
+  (let* ((given #f)
+         (r (handler-depth
+             (lambda ()
+               (call-with-bytes 'bind! #vu8(1 2 3)
+                 (lambda (address) (set! given address) (free-foreign-block! address) 'freed-by-proc))))))
+    (list (if (and (eq? (car r) 'raised-at-depth)
+                   (equal? (caddr r) (list 'assertion-violation 'free-foreign-block! (list given))))
+              (list (car r) (cadr r) '(assertion-violation free-foreign-block! (that-block)))
+              r)
+          (native-counts))))
+
 (test-equal "call-with-c-string raises a failed free outside its critical after thunk: a PROC that freed its block itself makes free-foreign-block! refuse it, and a handler of that runs at depth 1; every count is zero after"
   (list (list 'raised-at-depth 'depth-1 '(assertion-violation free-foreign-block! (that-block))) zero-counts)
   (let* ((given #f)

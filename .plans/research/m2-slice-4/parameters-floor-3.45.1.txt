@@ -1,0 +1,193 @@
+libversion: "3.45.1"
+sourceid: "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a"
+[each prefix] SQL "select ?, ?5, :name, @name, $name" [73 65 6C 65 63 74 20 3F 2C 20 3F 35 2C 20 3A 6E 61 6D 65 2C 20 40 6E 61 6D 65 2C 20 24 6E 61 6D 65]
+  prepare 0, count 8
+  name 0: NULL
+  name 1: NULL
+  name 2: NULL
+  name 3: NULL
+  name 4: NULL
+  name 5: "?5" [3F 35]
+  name 6: ":name" [3A 6E 61 6D 65]
+  name 7: "@name" [40 6E 61 6D 65]
+  name 8: "$name" [24 6E 61 6D 65]
+  name 9: NULL
+  index of "?" [3F]: 0
+  index of "?1" [3F 31]: 0
+  index of "?5" [3F 35]: 5
+  index of "?6" [3F 36]: 0
+  index of ":name" [3A 6E 61 6D 65]: 6
+  index of "@name" [40 6E 61 6D 65]: 7
+  index of "$name" [24 6E 61 6D 65]: 8
+  index of "name" [6E 61 6D 65]: 0
+  index of ":NAME" [3A 4E 41 4D 45]: 0
+  index of "" []: 0
+  index of ":" [3A]: 0
+[names that differ only in prefix] SQL "select :a, @a, $a" [73 65 6C 65 63 74 20 3A 61 2C 20 40 61 2C 20 24 61]
+  prepare 0, count 3
+  name 0: NULL
+  name 1: ":a" [3A 61]
+  name 2: "@a" [40 61]
+  name 3: "$a" [24 61]
+  name 4: NULL
+  index of ":a" [3A 61]: 1
+  index of "@a" [40 61]: 2
+  index of "$a" [24 61]: 3
+  index of "a" [61]: 0
+[a name used three times] SQL "select :a, :a, @a, :a" [73 65 6C 65 63 74 20 3A 61 2C 20 3A 61 2C 20 40 61 2C 20 3A 61]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: ":a" [3A 61]
+  name 2: "@a" [40 61]
+  name 3: NULL
+  index of ":a" [3A 61]: 1
+  index of "@a" [40 61]: 2
+[?1 used twice] SQL "select ?1, ?1, ?2" [73 65 6C 65 63 74 20 3F 31 2C 20 3F 31 2C 20 3F 32]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: "?1" [3F 31]
+  name 2: "?2" [3F 32]
+  name 3: NULL
+  index of "?1" [3F 31]: 1
+  index of "?2" [3F 32]: 2
+[:a, then ?1] SQL "select :a, ?1" [73 65 6C 65 63 74 20 3A 61 2C 20 3F 31]
+  prepare 0, count 1
+  name 0: NULL
+  name 1: ":a" [3A 61]
+  name 2: NULL
+  index of ":a" [3A 61]: 1
+  index of "?1" [3F 31]: 0
+[?1, then :a] SQL "select ?1, :a" [73 65 6C 65 63 74 20 3F 31 2C 20 3A 61]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: "?1" [3F 31]
+  name 2: ":a" [3A 61]
+  name 3: NULL
+  index of ":a" [3A 61]: 2
+  index of "?1" [3F 31]: 1
+  index of "?2" [3F 32]: 0
+[?2, then :a] SQL "select ?2, :a" [73 65 6C 65 63 74 20 3F 32 2C 20 3A 61]
+  prepare 0, count 3
+  name 0: NULL
+  name 1: NULL
+  name 2: "?2" [3F 32]
+  name 3: ":a" [3A 61]
+  name 4: NULL
+  index of "?1" [3F 31]: 0
+  index of "?2" [3F 32]: 2
+  index of ":a" [3A 61]: 3
+  index of "?3" [3F 33]: 0
+[names that differ only in case] SQL "select :a, :A" [73 65 6C 65 63 74 20 3A 61 2C 20 3A 41]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: ":a" [3A 61]
+  name 2: ":A" [3A 41]
+  name 3: NULL
+  index of ":a" [3A 61]: 1
+  index of ":A" [3A 41]: 2
+[multibyte names] SQL "select :\xC3\xA9, @\xE5\x90\x8D\xE5\x89\x8D, $\xCF\x80" [73 65 6C 65 63 74 20 3A C3 A9 2C 20 40 E5 90 8D E5 89 8D 2C 20 24 CF 80]
+  prepare 0, count 3
+  name 0: NULL
+  name 1: ":\xC3\xA9" [3A C3 A9]
+  name 2: "@\xE5\x90\x8D\xE5\x89\x8D" [40 E5 90 8D E5 89 8D]
+  name 3: "$\xCF\x80" [24 CF 80]
+  name 4: NULL
+  index of ":\xC3\xA9" [3A C3 A9]: 1
+  index of "@\xE5\x90\x8D\xE5\x89\x8D" [40 E5 90 8D E5 89 8D]: 2
+  index of "$\xCF\x80" [24 CF 80]: 3
+  index of ":\xC3\x89" [3A C3 89]: 0
+  index of ":e\xCC\x81" [3A 65 CC 81]: 0
+  index of ":" [3A]: 0
+[U+FEFF inside a name, and just after its prefix] SQL "select :a\xEF\xBB\xBFb, :\xEF\xBB\xBFa" [73 65 6C 65 63 74 20 3A 61 EF BB BF 62 2C 20 3A EF BB BF 61]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: ":a\xEF\xBB\xBFb" [3A 61 EF BB BF 62]
+  name 2: ":\xEF\xBB\xBFa" [3A EF BB BF 61]
+  name 3: NULL
+  index of ":a\xEF\xBB\xBFb" [3A 61 EF BB BF 62]: 1
+  index of ":ab" [3A 61 62]: 0
+  index of ":\xEF\xBB\xBFa" [3A EF BB BF 61]: 2
+  index of ":a" [3A 61]: 0
+[U+FEFF before a name's prefix] SQL "select \xEF\xBB\xBF:a" [73 65 6C 65 63 74 20 EF BB BF 3A 61]
+  prepare 0, count 1
+  name 0: NULL
+  name 1: ":a" [3A 61]
+  name 2: NULL
+  index of ":a" [3A 61]: 1
+  index of "\xEF\xBB\xBF:a" [EF BB BF 3A 61]: 0
+[Tcl-style $ names] SQL "select $a::b, $c(xy)" [73 65 6C 65 63 74 20 24 61 3A 3A 62 2C 20 24 63 28 78 79 29]
+  prepare 0, count 2
+  name 0: NULL
+  name 1: "$a::b" [24 61 3A 3A 62]
+  name 2: "$c(xy)" [24 63 28 78 79 29]
+  name 3: NULL
+  index of "$a::b" [24 61 3A 3A 62]: 1
+  index of "$c(xy)" [24 63 28 78 79 29]: 2
+  index of "$a" [24 61]: 0
+  index of "$c" [24 63]: 0
+[a space inside a Tcl-style name] SQL "select $c(x y)" [73 65 6C 65 63 74 20 24 63 28 78 20 79 29]
+  prepare 1, errmsg "unrecognized token: \x22$c(x\x22"
+[?NNN with leading zeros] SQL "select ?0005, ?5" [73 65 6C 65 63 74 20 3F 30 30 30 35 2C 20 3F 35]
+  prepare 0, count 5
+  name 0: NULL
+  name 1: NULL
+  name 2: NULL
+  name 3: NULL
+  name 4: NULL
+  name 5: "?0005" [3F 30 30 30 35]
+  name 6: NULL
+  index of "?5" [3F 35]: 0
+  index of "?0005" [3F 30 30 30 35]: 5
+  index of "?05" [3F 30 35]: 0
+[a name of digits] SQL "select :1, ?1" [73 65 6C 65 63 74 20 3A 31 2C 20 3F 31]
+  prepare 0, count 1
+  name 0: NULL
+  name 1: ":1" [3A 31]
+  name 2: NULL
+  index of ":1" [3A 31]: 1
+  index of "?1" [3F 31]: 0
+[one anonymous ?] SQL "select ?" [73 65 6C 65 63 74 20 3F]
+  prepare 0, count 1
+  name 0: NULL
+  name 1: NULL
+  name 2: NULL
+  index of "?" [3F]: 0
+  index of "" []: 0
+  index of "?1" [3F 31]: 0
+[no parameters] SQL "select 1" [73 65 6C 65 63 74 20 31]
+  prepare 0, count 0
+  name 0: NULL
+  name 1: NULL
+  index of ":a" [3A 61]: 0
+  index of "" []: 0
+VARIABLE_NUMBER reads 32766
+  "select ?32765": prepare 0, count 32765, bind at the count 0, at count+1 25
+  "select ?32766": prepare 0, count 32766, bind at the count 0, at count+1 25
+  "select ?32767": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+  "select ?0": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+  "select ?00": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+  "select ?2147483648": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+  "select ?99999999999999999999": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+VARIABLE_NUMBER set to 2147483647: answered 32766, reads 32766
+  "select ?32767": prepare 1, errmsg "variable number must be between ?1 and ?32766", offset 7
+VARIABLE_NUMBER set to 10: answered 32766, reads 10
+  "select ?10": prepare 0, count 10, bind at the count 0, at count+1 25
+  "select ?11": prepare 1, errmsg "variable number must be between ?1 and ?10", offset 7
+  10 anonymous parameters: prepare 0, count 10, errmsg "not an error"
+  11 anonymous parameters: prepare 1, count none, errmsg "too many SQL variables"
+  10 named parameters: prepare 0, count 10, errmsg "not an error"
+  11 named parameters: prepare 1, count none, errmsg "too many SQL variables"
+VARIABLE_NUMBER set to 1: answered 32766, reads 1
+  "select ?1": prepare 0, count 1, bind at the count 0, at count+1 25
+  "select ?2": prepare 1, errmsg "variable number must be between ?1 and ?1", offset 7
+  1 anonymous parameters: prepare 0, count 1, errmsg "not an error"
+  2 anonymous parameters: prepare 1, count none, errmsg "too many SQL variables"
+  1 named parameters: prepare 0, count 1, errmsg "not an error"
+  2 named parameters: prepare 1, count none, errmsg "too many SQL variables"
+VARIABLE_NUMBER set to 0: answered 32766, reads 0
+  "select ?1": prepare 1, errmsg "variable number must be between ?1 and ?0", offset 7
+  "select ?1": prepare 1, errmsg "variable number must be between ?1 and ?0", offset 7
+  0 anonymous parameters: not tried
+  1 anonymous parameters: prepare 1, count none, errmsg "too many SQL variables"
+  0 named parameters: not tried
+  1 named parameters: prepare 1, count none, errmsg "too many SQL variables"
