@@ -1,0 +1,21 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+rounds per loop 2000, runs 25
+time: insert, prepare each round, __collect_safe, flags 0      min    3063  median    3208  max    3879  ns/round
+time: insert, reuse one statement, __collect_safe, flags 0     min    1114  median    1175  max    1238  ns/round
+time: select, prepare each round, __collect_safe, flags 0      min    2992  median    3214  max    3346  ns/round
+time: select, reuse one statement, __collect_safe, flags 0     min     830  median     872  max    1073  ns/round
+time: insert, prepare each round, __collect_safe, PERSISTENT   min    3514  median    3570  max    3904  ns/round
+time: insert, reuse one statement, __collect_safe, PERSISTENT  min    1104  median    1126  max    1215  ns/round
+time: select, prepare each round, __collect_safe, PERSISTENT   min    3567  median    3661  max    4034  ns/round
+time: select, reuse one statement, __collect_safe, PERSISTENT  min     828  median     848  max     986  ns/round
+time: insert, prepare each round, plain, flags 0               min    2837  median    2917  max    3228  ns/round
+time: insert, reuse one statement, plain, flags 0              min    1006  median    1027  max    1179  ns/round
+time: select, prepare each round, plain, flags 0               min    2767  median    2887  max    3272  ns/round
+time: select, reuse one statement, plain, flags 0              min     726  median     736  max     851  ns/round
+time: insert, prepare each round, plain, PERSISTENT            min    3341  median    3384  max    3692  ns/round
+time: insert, reuse one statement, plain, PERSISTENT           min    1007  median    1014  max    1185  ns/round
+time: select, prepare each round, plain, PERSISTENT            min    3441  median    3490  max    6333  ns/round
+time: select, reuse one statement, plain, PERSISTENT           min     723  median     733  max     793  ns/round
+rows in t afterwards: 417000
+select checksum: 214032000

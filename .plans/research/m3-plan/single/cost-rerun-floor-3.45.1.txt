@@ -1,0 +1,13 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+rounds per loop 2000, runs 25
+time: insert, prepare each round, flags 0          min    1092  median    1104  max    1166  ns/round
+time: insert, reuse one statement, flags 0         min     534  median     542  max     561  ns/round
+time: select, prepare each round, flags 0          min    1115  median    1140  max    1201  ns/round
+time: select, reuse one statement, flags 0         min     252  median     260  max     279  ns/round
+time: insert, prepare each round, PERSISTENT       min    1587  median    1601  max    1627  ns/round
+time: insert, reuse one statement, PERSISTENT      min     548  median     554  max     604  ns/round
+time: select, prepare each round, PERSISTENT       min    1747  median    1761  max    1911  ns/round
+time: select, reuse one statement, PERSISTENT      min     271  median     276  max     284  ns/round
+rows in t afterwards: 209000
+select checksum: 107016000

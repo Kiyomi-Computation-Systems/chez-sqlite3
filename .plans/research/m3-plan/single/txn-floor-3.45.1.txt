@@ -1,0 +1,625 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+T1. BEGIN (deferred), a read, a write, COMMIT; BEGIN, a write, ROLLBACK
+  (idle, after setup)
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  txn_state(db, "temp") NONE, txn_state(db, "nosuch") -1
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SELECT count(*) FROM t
+    row: 3
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) READ, txn_state(main) READ
+  sql: INSERT INTO t VALUES (4)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db2 sees: 1,2,3
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,4
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (5)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db sees: 1,2,3,4
+
+T2. BEGIN IMMEDIATE, a read, a write, COMMIT
+  sql: BEGIN IMMEDIATE
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: SELECT count(*) FROM t
+    row: 4
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (5)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+T3. BEGIN EXCLUSIVE, a read, ROLLBACK
+  sql: BEGIN EXCLUSIVE
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: SELECT count(*) FROM t
+    row: 5
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+T4. Empty transactions, and the other spellings
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN TRANSACTION
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: END TRANSACTION
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN DEFERRED TRANSACTION
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: END
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN IMMEDIATE
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TRANSACTION
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+T5. A SELECT stepped once and not finished, in autocommit
+  prepared, not stepped
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  step 1: step rc 100 ROW, value 1
+    state: autocommit 1, txn_state(NULL) READ, txn_state(main) READ
+  reset: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  step 1 again: step rc 100 ROW, value 1
+    state: autocommit 1, txn_state(NULL) READ, txn_state(main) READ
+  step 2: step rc 100 ROW, value 2
+  step 3: step rc 100 ROW, value 3
+  step 4: step rc 100 ROW, value 4
+  step 5: step rc 100 ROW, value 5
+  step 6: step rc 101 DONE
+  (done, not reset)
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  reset: rc 0
+  finalize: rc 0
+
+T6. In a transaction, a SELECT stepped once, then finalized
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  step 1: step rc 100 ROW, value 1
+    state: autocommit 0, txn_state(NULL) READ, txn_state(main) READ
+  finalize: rc 0
+    state: autocommit 0, txn_state(NULL) READ, txn_state(main) READ
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+T7. A temp table: txn_state(NULL) against txn_state(main) and (temp)
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: CREATE TEMP TABLE tt(x)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) NONE
+    txn_state(temp) WRITE
+  sql: INSERT INTO tt VALUES (1)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) NONE
+    txn_state(temp) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    txn_state(temp) NONE
+
+S1. SAVEPOINT outside a transaction, a write, RELEASE of it
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SELECT count(*) FROM t
+    row: 3
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) READ, txn_state(main) READ
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db2 sees: 1,2,3
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10
+
+S2. Nested: RELEASE of an inner savepoint, ROLLBACK TO the outer, and after
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (20)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (21)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,20,21
+  sql: ROLLBACK TO a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10
+  (is a still open? a write, then ROLLBACK TO a again)
+  sql: INSERT INTO t VALUES (22)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TO a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10
+  sql: INSERT INTO t VALUES (23)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23
+
+S3. ROLLBACK TO an inner savepoint: is it still open, and the outer?
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (30)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (31)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TO b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,23,30
+  sql: INSERT INTO t VALUES (32)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,23,30,32
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32
+
+S4. ROLLBACK TO the outermost savepoint, which began the transaction
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (40)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TO a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db2 sees: 1,2,3,10,23,30,32
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32
+
+S5. SAVEPOINT inside BEGIN: RELEASE leaves the transaction open
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (50)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db2 sees: 1,2,3,10,23,30,32
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32,50
+
+S6. COMMIT and ROLLBACK with savepoints open, the first begun by SAVEPOINT
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (60)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32,50,60
+  sql: RELEASE a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (61)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32,50,60
+  sql: ROLLBACK TO a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+S7. BEGIN after a SAVEPOINT that began the transaction
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot start a transaction within a transaction"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+S8. Savepoint names: case, quoting
+  sql: SAVEPOINT Foo
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE foo
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT foo
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "FOO"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT "a b"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "a b"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT 'q'
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE q
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT [br]
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE br
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT `bt`
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "bt"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT "Ä"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "ä"
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: ä"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "Ä"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT ""
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE ""
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT begin
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT "x""y"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE 'x"y'
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE "begin"
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+S9. A name used twice: which one ROLLBACK TO and RELEASE reach
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (70)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (71)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TO a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,23,30,32,50,60,70
+  sql: INSERT INTO t VALUES (72)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db2 sees: 1,2,3,10,23,30,32,50,60
+  sql: ROLLBACK TO a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,23,30,32,50,60
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+    rows db2 sees: 1,2,3,10,23,30,32,50,60
+
+S10. RELEASE of an outer savepoint releases the inner ones
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT c
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE b
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE c
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: c"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK TO c
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: c"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+S11. The long forms
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK TRANSACTION TO SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: RELEASE SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+S12. An unknown savepoint, outside and inside a transaction
+  sql: RELEASE nosuch
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: nosuch"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK TO nosuch
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: nosuch"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: INSERT INTO t VALUES (80)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: RELEASE nosuch
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: nosuch"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK TO nosuch
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: nosuch"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+    rows db sees: 1,2,3,10,23,30,32,50,60,80
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+X1. BEGIN inside a transaction begun by BEGIN, and by SAVEPOINT
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot start a transaction within a transaction"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN IMMEDIATE
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot start a transaction within a transaction"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: BEGIN EXCLUSIVE
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot start a transaction within a transaction"
+    finalize: rc 1
+    state: autocommit 0, txn_state(NULL) WRITE, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+X2. COMMIT, END and ROLLBACK with no transaction open
+  sql: COMMIT
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot commit - no transaction is active"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: END
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot commit - no transaction is active"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot rollback - no transaction is active"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+
+X3. RELEASE and ROLLBACK TO with no savepoint at all
+  sql: RELEASE a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE
+  sql: ROLLBACK TO a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+    state: autocommit 1, txn_state(NULL) NONE, txn_state(main) NONE

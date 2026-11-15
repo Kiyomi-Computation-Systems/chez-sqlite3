@@ -1,0 +1,354 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+O1. A SELECT that has answered a row, then COMMIT
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM t ORDER BY x
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+    rows of t db2 sees: 1,2,3,4
+  next step 1: step rc 100 ROW, row 2, stmt_busy 1
+  next step 2: step rc 100 ROW, row 3, stmt_busy 1
+  next step 3: step rc 100 ROW, row 4, stmt_busy 1
+  next step 4: step rc 101 DONE, stmt_busy 0
+    state: autocommit 1, txn_state(main) NONE
+  reset: rc 0
+  finalize: rc 0
+
+O2. A SELECT on the table the transaction wrote, one row answered, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4), (5)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM t ORDER BY x
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 2, stmt_busy 1
+  next step 2: step rc 100 ROW, row 3, stmt_busy 1
+  next step 3: step rc 100 ROW, row 4, stmt_busy 1
+  next step 4: step rc 100 ROW, row 5, stmt_busy 1
+  next step 5: step rc 101 DONE, stmt_busy 0
+    state: autocommit 1, txn_state(main) NONE
+  reset: rc 0
+  step after reset: step rc 100 ROW, row 1, stmt_busy 1
+  finalize: rc 0
+    rows of t db sees: 1,2,3
+
+O2b. The same, a rowid scan with no ORDER BY
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4), (5)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM t
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 2, stmt_busy 1
+  next step 2: step rc 100 ROW, row 3, stmt_busy 1
+  next step 3: step rc 101 DONE, stmt_busy 0
+  finalize: rc 0
+
+O3. A SELECT on a table the transaction didn't write, one row answered, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM u ORDER BY x
+  step 1: step rc 100 ROW, row 100, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 200, stmt_busy 1
+  next step 2: step rc 100 ROW, row 300, stmt_busy 1
+  next step 3: step rc 101 DONE, stmt_busy 0
+  finalize: rc 0
+
+O3b. A SELECT, one row answered, in a transaction that wrote nothing, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM u ORDER BY x
+  step 1: step rc 100 ROW, row 100, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 200, stmt_busy 1
+  next step 2: step rc 100 ROW, row 300, stmt_busy 1
+  next step 3: step rc 101 DONE, stmt_busy 0
+  finalize: rc 0
+
+O4. A SELECT, one row answered, in a transaction that created a table, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE TABLE v(x)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM u ORDER BY x
+  step 1: step rc 100 ROW, row 100, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 200, stmt_busy 1
+  next step 2: step rc 100 ROW, row 300, stmt_busy 1
+  next step 3: step rc 101 DONE, stmt_busy 0
+  finalize: rc 0
+
+O4b. The same, a rowid scan with no ORDER BY
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE TABLE v(x)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM u
+  step 1: step rc 100 ROW, row 100, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 516 ABORT, extended_errcode 516, errmsg "abort due to ROLLBACK", stmt_busy 0
+  reset: rc 516
+  finalize: rc 0
+
+O4c. A rowid scan of the table the transaction wrote and altered, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4), (5)
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: ALTER TABLE t ADD COLUMN y
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM t
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 516 ABORT, extended_errcode 516, errmsg "abort due to ROLLBACK", stmt_busy 0
+  reset: rc 516
+  finalize: rc 0
+
+O5. In autocommit: a SELECT that has answered a row, then an INSERT
+  held: SELECT x FROM t ORDER BY x
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+    state: autocommit 1, txn_state(main) READ
+  sql: INSERT INTO t VALUES (4)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+    rows of t db2 sees: 1,2,3,4
+  next step 1: step rc 100 ROW, row 2, stmt_busy 1
+  next step 2: step rc 100 ROW, row 3, stmt_busy 1
+  next step 3: step rc 101 DONE, stmt_busy 0
+    state: autocommit 1, txn_state(main) NONE
+  finalize: rc 0
+
+O6. A write stepped to DONE and not reset, then COMMIT
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: INSERT INTO t VALUES (5)
+  step 1: step rc 101 DONE, stmt_busy 0
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2 sees: 1,2,3,5
+  reset: rc 0
+  finalize: rc 0
+
+O7. INSERT ... RETURNING stepped once, then COMMIT
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: INSERT INTO t VALUES (6), (7) RETURNING x
+  step 1: step rc 100 ROW, row 6, stmt_busy 1
+  sql: COMMIT
+    step: rc 5 BUSY, extended_errcode 5, errmsg "cannot commit transaction - SQL statements in progress"
+    finalize: rc 5
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,3,6,7
+    rows of t db2 sees: 1,2,3
+  next step 1: step rc 100 ROW, row 7, stmt_busy 1
+  next step 2: step rc 101 DONE, stmt_busy 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2 sees: 1,2,3,6,7
+  reset: rc 0
+  finalize: rc 0
+
+O7b. INSERT ... RETURNING stepped once, then ROLLBACK
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: INSERT INTO t VALUES (6), (7) RETURNING x
+  step 1: step rc 100 ROW, row 6, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) READ
+  next step 1: step rc 100 ROW, row 7, stmt_busy 1
+  next step 2: step rc 101 DONE, stmt_busy 0
+  reset: rc 0
+  finalize: rc 0
+    rows of t db sees: 1,2,3
+
+O7c. UPDATE ... RETURNING stepped once, then COMMIT
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: UPDATE t SET x = x + 10 RETURNING x
+  step 1: step rc 100 ROW, row 11, stmt_busy 1
+  sql: COMMIT
+    step: rc 5 BUSY, extended_errcode 5, errmsg "cannot commit transaction - SQL statements in progress"
+    finalize: rc 5
+    state: autocommit 0, txn_state(main) WRITE
+  reset: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+  finalize: rc 0
+    rows of t db sees: 11,12,13
+
+O7d. INSERT ... RETURNING stepped once, then reset, inside BEGIN: does the reset commit?
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  held: INSERT INTO t VALUES (6), (7) RETURNING x
+  step 1: step rc 100 ROW, row 6, stmt_busy 1
+  reset: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,3,6,7
+    rows of t db2 sees: 1,2,3
+  finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+    rows of t db sees: 1,2,3
+    rows of t db2 sees: 1,2,3
+
+O8. A SELECT answered a row, then ROLLBACK; reset it before its next step
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (4)
+    step: rc 101 DONE
+    finalize: rc 0
+  held: SELECT x FROM t ORDER BY x
+  step 1: step rc 100 ROW, row 1, stmt_busy 1
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+  reset: rc 0, then extended_errcode 0
+  step after reset: step rc 100 ROW, row 1, stmt_busy 1
+  finalize: rc 0
+
+D1. DDL inside a transaction, rolled back
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE TABLE n(x)
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO n VALUES (1)
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: ALTER TABLE t ADD COLUMN y DEFAULT 7
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE INDEX ti ON t(x)
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: DROP TABLE u
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE VIEW vw AS SELECT x FROM t
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT type, name FROM sqlite_schema ORDER BY name
+    row: 'table' 'n'
+    row: 'table' 't'
+    row: 'index' 'ti'
+    row: 'view' 'vw'
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: ROLLBACK
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT type, name FROM sqlite_schema ORDER BY name
+    row: 'table' 't'
+    row: 'table' 'u'
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT x FROM n
+    prepare: rc 1 ERROR, extended_errcode 1, errmsg "no such table: n"
+  sql: SELECT y FROM t
+    prepare: rc 1 ERROR, extended_errcode 1, errmsg "no such column: y"
+  sql: SELECT count(*) FROM u
+    row: 3
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT name FROM pragma_table_info('t')
+    row: 'x'
+    step: rc 101 DONE
+    finalize: rc 0
+
+D2. DDL inside a savepoint, rolled back to it
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: CREATE TABLE n(x)
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: ALTER TABLE t ADD COLUMN y
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: ROLLBACK TO b
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT name FROM pragma_table_info('t')
+    row: 'x'
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: SELECT type, name FROM sqlite_schema ORDER BY name
+    row: 'table' 'n'
+    row: 'table' 't'
+    row: 'table' 'u'
+    step: rc 101 DONE
+    finalize: rc 0

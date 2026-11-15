@@ -1,0 +1,249 @@
+libversion 3.53.1
+sourceid 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+I1 FULLMUTEX: a long step (a recursive CTE counting to 2e9), interrupted from a second thread after 100 ms
+  fresh connection: is_interrupted 0
+  after prepare: is_interrupted 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after the step: errcode 9, is_interrupted 1, stmt_busy 0
+  reset answered 9 INTERRUPT; then is_interrupted 1
+  finalize answered 0 OK; then is_interrupted 1
+  next statement SELECT 1: prepare 0 OK, then is_interrupted 0
+  ... its step 100 ROW, then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I1 NOMUTEX: a long step (a recursive CTE counting to 2e9), interrupted from a second thread after 100 ms
+  fresh connection: is_interrupted 0
+  after prepare: is_interrupted 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after the step: errcode 9, is_interrupted 1, stmt_busy 0
+  reset answered 9 INTERRUPT; then is_interrupted 1
+  finalize answered 0 OK; then is_interrupted 1
+  next statement SELECT 1: prepare 0 OK, then is_interrupted 0
+  ... its step 100 ROW, then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I2a: a fresh connection, no statement ever prepared
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  then: is_interrupted 1, autocommit 1, txn_state(main) 0
+  prepare SELECT 1: 0 OK; then is_interrupted 0
+  its step: 100 ROW; then is_interrupted 0
+I2b: a statement prepared, not yet stepped
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  its step: 100 ROW; then is_interrupted 0
+I2c: after a statement was stepped to a row, then reset
+  step 100 ROW; reset 0 OK; stmt_busy 0
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  the same statement stepped again: 100 ROW; then is_interrupted 0
+I2d: after a statement was stepped, then finalized
+  step 100 ROW; finalize 0 OK
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  a new statement prepared: is_interrupted 0
+  its step: 100 ROW; then is_interrupted 0
+I2e: after a statement ran to DONE and was left unreset
+  step 100 ROW, step 101 DONE; stmt_busy 0
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  another statement's step: 100 ROW; then is_interrupted 0
+I3: statement A (three rows) stepped once and held at its row, then an interrupt
+  A's step 100 ROW; stmt_busy 1
+  interrupt from a second thread: made yes; is_interrupted 0 before, 1 after
+  prepare "SELECT 2" (whitespace inside): 9 INTERRUPT, extended 9, "interrupted", statement NULL
+  prepare "SELECT(2)" (no whitespace): 9 INTERRUPT, statement NULL
+  is_interrupted 1
+  A's next step: 9 INTERRUPT, "interrupted"; stmt_busy 0; is_interrupted 1
+  A's reset: 9 INTERRUPT
+  then a new statement: 100 ROW; is_interrupted 0
+  and A after its reset: 100 ROW
+I4a: long S1 interrupted after 100 ms; S2 started before S1's reset
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  S1's step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  S1 not reset: stmt_busy 0; is_interrupted 1
+  S2 "SELECT 1": prepare 0 OK, step 100 ROW; then is_interrupted 0
+  S2' "SELECT(1)": prepare 0 OK, step 100 ROW
+  runs whose facts equal run 1's: 21 of 21
+I4b: long S1 interrupted after 100 ms; S2 started before S1's reset, while H holds a row
+  holder H stepped once: 100 ROW
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  S1's step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  S1 not reset: stmt_busy 0; is_interrupted 1
+  S2 "SELECT 1": prepare 9 INTERRUPT; then is_interrupted 1
+  S2' "SELECT(1)": prepare 9 INTERRUPT
+  H's next step: 9 INTERRUPT
+  after H's finalize, a new statement: 100 ROW; is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I5 INSERT of 2000 rows inside BEGIN, after a marker row
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: INSERT INTO t(x, y) SELECT x + 100000, 1 FROM t WHERE x > 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 UPDATE of 2000 rows inside BEGIN, after a marker row
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: UPDATE t SET y = y + 1 WHERE x > 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 DELETE of 2000 rows inside BEGIN, after a marker row
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: DELETE FROM t WHERE x > 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 SELECT inside BEGIN, after a marker row (a write transaction)
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: SELECT count(*) FROM t, big
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 0, txn_state(main) 2
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2001, markers 1, sum(y) -1
+  COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2001, markers 1, sum(y) -1
+I5 SELECT inside BEGIN that has only read (a read transaction)
+  BEGIN: 101 DONE
+  SELECT count(*) FROM t: 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 1
+  the statement: SELECT count(*) FROM t, big
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 0, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 UPDATE inside nested savepoints a > b, no BEGIN
+  SAVEPOINT a: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  SAVEPOINT b: 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: UPDATE t SET y = y + 1 WHERE x > 0
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  ROLLBACK TO b: 1 ERROR, extended 1 ERROR, "no such savepoint: b"
+  RELEASE a: 1 ERROR, extended 1 ERROR, "no such savepoint: a"
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 INSERT ... SELECT abs(i) FROM a 2e9-row recursive CTE inside BEGIN, after a marker row, no trigger (the statement calls a function)
+  DROP TRIGGER ti: 101 DONE
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: INSERT INTO t(x, y) WITH RECURSIVE c(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM c WHERE i < 2000000000) SELECT abs(i), 1 FROM c
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I5 INSERT ... SELECT i FROM a 2e9-row recursive CTE inside BEGIN, after a marker row, no trigger (no function called)
+  DROP TRIGGER ti: 101 DONE
+  BEGIN: 101 DONE
+  INSERT INTO t(x, y) VALUES(-1, -1): 101 DONE
+  reader R on t stepped once: 100 ROW
+  before the statement: is_interrupted 0, autocommit 0, txn_state(main) 2
+  the statement: INSERT INTO t(x, y) WITH RECURSIVE c(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM c WHERE i < 2000000000) SELECT i, 1 FROM c
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  its step answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  after it: is_interrupted 1, autocommit 1, txn_state(main) 1
+  R's next step: 9 INTERRUPT, extended 9 INTERRUPT, "interrupted"
+  this connection sees: rows 2000, markers 0, sum(y) 0
+  COMMIT: 1 ERROR, extended 1 ERROR, "cannot commit - no transaction is active"
+  ROLLBACK: 1 ERROR, extended 1 ERROR, "cannot rollback - no transaction is active"
+  then: is_interrupted 0, autocommit 1, txn_state(main) 0
+  a new connection then sees: rows 2000, markers 0, sum(y) 0
+I6a: rollback journal: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE; busy timeout 600 ms; interrupted after 100 ms
+  the blocked connection read 3 rows first
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 5 BUSY, extended 5 BUSY, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then: is_interrupted 1, autocommit 1, txn_state(main) 0
+  next statement SELECT 1 on it: 100 ROW; then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I6b: rollback journal: an autocommit INSERT under the other's BEGIN IMMEDIATE; busy timeout 600 ms; interrupted after 100 ms
+  the blocked connection read 3 rows first
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 5 BUSY, extended 5 BUSY, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then: is_interrupted 1, autocommit 1, txn_state(main) 0
+  next statement SELECT 1 on it: 100 ROW; then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I6c: WAL: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE; busy timeout 600 ms; interrupted after 100 ms
+  journal_mode: wal
+  the blocked connection read 3 rows first
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 5 BUSY, extended 5 BUSY, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then: is_interrupted 1, autocommit 1, txn_state(main) 0
+  next statement SELECT 1 on it: 100 ROW; then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I6d: rollback journal: COMMIT under the other's read (a statement at a row); busy timeout 600 ms; interrupted after 100 ms
+  the blocked connection read 3 rows first
+  the other's reader stepped: 100 ROW
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  step answered 5 BUSY, extended 5 BUSY, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then: is_interrupted 1, autocommit 0, txn_state(main) 2
+  next statement SELECT 1 on it: 100 ROW; then is_interrupted 0
+  after the other's reader finalized, COMMIT again: 101 DONE
+  runs whose facts equal run 1's: 21 of 21
+I6e: rollback journal: a fresh connection's prepare under the other's BEGIN EXCLUSIVE and a write; busy timeout 600 ms; interrupted after 100 ms
+  peer: interrupted yes; the call was still running then: yes; is_interrupted 0 just before the interrupt, 1 just after
+  prepare answered 5 BUSY, extended 5 BUSY, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then: is_interrupted 1, autocommit 1, txn_state(main) 0
+  next statement SELECT 1 on it: 5 BUSY; then is_interrupted 0
+  runs whose facts equal run 1's: 21 of 21
+I7: prepare_v2 of "SELECT 1" and 20000000 comments (100000008 bytes), interrupted after 50 ms
+  peer: interrupted yes; the prepare was still running then: yes
+  prepare answered 9 INTERRUPT, extended 9 INTERRUPT, "interrupted", statement NULL
+  then is_interrupted 1
+  runs whose facts equal run 1's: 21 of 21
+  afterwards SELECT 1 on the connection: 100 ROW
+I8: FULLMUTEX; a long step; thread E calls sqlite3_errmsg at 100 ms, thread I calls sqlite3_interrupt at 300 ms
+  step answered 9 INTERRUPT
+  errmsg thread: called while the step ran: yes; returned only after the interrupt was made: yes
+  interrupt thread: called while errmsg was still waiting: yes; the interrupt call returned before the step did: yes
+  runs whose facts equal run 1's: 21 of 21
+end

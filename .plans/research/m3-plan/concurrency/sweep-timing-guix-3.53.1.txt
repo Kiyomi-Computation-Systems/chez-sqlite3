@@ -1,0 +1,11 @@
+libversion 3.53.1
+sourceid 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+RUNS 21 per distribution; the machine was shared with other probes
+S5: the last connection's close, its WAL holding about 4 MB unchecked: n 21, min 4.885, median 5.447, max 10.219 ms
+  sorted: 4.885 4.957 5.003 5.092 5.092 5.128 5.151 5.214 5.265 5.313 5.447 5.518 5.609 5.617 5.655 6.085 6.199 6.286 6.640 7.186 10.219
+S5: the last connection's close, its WAL checkpointed and truncated: n 21, min 0.032, median 0.041, max 0.106 ms
+  sorted: 0.032 0.032 0.033 0.033 0.033 0.033 0.035 0.035 0.037 0.038 0.041 0.042 0.052 0.055 0.062 0.063 0.063 0.063 0.064 0.069 0.106
+S6a: sqlite3_exec, ms from the call to its return: n 21, min 250.838, median 250.895, max 251.189 ms
+  sorted: 250.838 250.848 250.857 250.860 250.860 250.867 250.872 250.874 250.875 250.878 250.895 250.899 250.906 250.916 250.921 250.937 250.947 250.954 250.965 251.108 251.189
+S6b: sqlite3_exec, ms from the call to its return: n 21, min 250.717, median 250.869, max 251.233 ms
+  sorted: 250.717 250.725 250.756 250.796 250.846 250.850 250.853 250.860 250.865 250.869 250.869 250.877 250.878 250.882 250.883 250.890 250.897 250.900 250.902 250.953 251.233

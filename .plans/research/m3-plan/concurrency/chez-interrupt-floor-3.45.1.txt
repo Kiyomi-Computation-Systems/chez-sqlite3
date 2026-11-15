@@ -1,0 +1,39 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+Chez Chez Scheme Version 10.4.0, threaded #t
+C1a: a long step in the owner's critical-section; main calls (collect), then interrupts
+  main thread's (collect) while the step blocked: returned with the step still blocked: yes; collections rose by 1
+  main thread's sqlite3_interrupt: the step still blocked then: yes; is_interrupted just after: 1
+  the owner's step answered 9 INTERRUPT, extended 9, "interrupted"
+  the owner then: released #t, finalize 9, close 0
+  runs whose facts equal run 1's: 21 of 21
+C1b: the same; main calls (collect-rendezvous), then interrupts
+  main thread's (collect-rendezvous) while the step blocked: returned with the step still blocked: yes; collections rose by 1
+  main thread's sqlite3_interrupt: the step still blocked then: yes; is_interrupted just after: 1
+  the owner's step answered 9 INTERRUPT, extended 9, "interrupted"
+  the owner then: released #t, finalize 9, close 0
+  runs whose facts equal run 1's: 21 of 21
+C2a: the owner's BEGIN IMMEDIATE blocked in a 1000 ms busy timeout; main calls (collect), then interrupts
+  main thread's (collect) while the step blocked: returned with the step still blocked: yes; collections rose by 1
+  main thread's sqlite3_interrupt: the step still blocked then: yes; is_interrupted just after: 1
+  the owner's step answered 5 BUSY, extended 5, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  the owner then: released #t, finalize 5, close 0
+  runs whose facts equal run 1's: 21 of 21
+C2b: the same; main calls (collect-rendezvous), then interrupts
+  main thread's (collect-rendezvous) while the step blocked: returned with the step still blocked: yes; collections rose by 1
+  main thread's sqlite3_interrupt: the step still blocked then: yes; is_interrupted just after: 1
+  the owner's step answered 5 BUSY, extended 5, "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  the owner then: released #t, finalize 5, close 0
+  runs whose facts equal run 1's: 21 of 21
+C3: a long step with a Chez timer interrupt armed on the owner, outside any critical section; main interrupts
+  main thread's sqlite3_interrupt: the step still blocked then: yes; is_interrupted just after: 1
+  the owner's step answered 9 INTERRUPT, extended 9, "interrupted"
+  the owner's timer interrupt fired only after the step returned
+  the owner then: released #t, finalize 9, close 0
+  runs whose facts equal run 1's: 21 of 21
+C3 control: the same timer armed on the main thread during a 200 ms loop of Scheme code
+  it fired during the loop
+  runs whose facts equal run 1's: 21 of 21
+end

@@ -1,0 +1,35 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+RUNS 21 per distribution; the machine was shared with other probes
+C1a: a long step in the owner's critical-section; main calls (collect), then interrupts: the collection's ms: n 21, min 0.037, median 0.053, max 2.923 ms
+  sorted: 0.037 0.037 0.044 0.045 0.046 0.047 0.047 0.047 0.051 0.052 0.053 0.055 0.056 0.056 0.058 0.059 0.064 0.064 0.347 2.199 2.923
+C1a: a long step in the owner's critical-section; main calls (collect), then interrupts: ms from the interrupt call to the step's return: n 21, min 0.005, median 0.011, max 0.020 ms
+  sorted: 0.005 0.006 0.007 0.007 0.007 0.007 0.008 0.009 0.009 0.009 0.011 0.011 0.011 0.013 0.014 0.014 0.015 0.016 0.018 0.019 0.020
+C1a: a long step in the owner's critical-section; main calls (collect), then interrupts: ms the step took: n 21, min 200.251, median 200.327, max 203.179 ms
+  sorted: 200.251 200.271 200.274 200.289 200.297 200.304 200.307 200.314 200.316 200.318 200.327 200.327 200.338 200.367 200.367 200.374 200.399 200.422 200.632 202.437 203.179
+C1b: the same; main calls (collect-rendezvous), then interrupts: the collection's ms: n 21, min 0.051, median 0.062, max 0.079 ms
+  sorted: 0.051 0.053 0.054 0.055 0.058 0.058 0.059 0.060 0.060 0.060 0.062 0.062 0.065 0.066 0.067 0.068 0.070 0.072 0.072 0.073 0.079
+C1b: the same; main calls (collect-rendezvous), then interrupts: ms from the interrupt call to the step's return: n 21, min 0.005, median 0.013, max 0.019 ms
+  sorted: 0.005 0.007 0.009 0.012 0.012 0.013 0.013 0.013 0.013 0.013 0.013 0.013 0.014 0.015 0.016 0.016 0.018 0.018 0.019 0.019 0.019
+C1b: the same; main calls (collect-rendezvous), then interrupts: ms the step took: n 21, min 200.247, median 200.329, max 200.400 ms
+  sorted: 200.247 200.253 200.253 200.260 200.277 200.285 200.286 200.299 200.310 200.317 200.329 200.332 200.336 200.339 200.344 200.347 200.354 200.359 200.364 200.366 200.400
+C2a: the owner's BEGIN IMMEDIATE blocked in a 1000 ms busy timeout; main calls (collect), then interrupts: the collection's ms: n 21, min 0.054, median 0.060, max 0.548 ms
+  sorted: 0.054 0.055 0.055 0.055 0.055 0.056 0.057 0.058 0.059 0.060 0.060 0.064 0.070 0.070 0.070 0.084 0.084 0.091 0.097 0.324 0.548
+C2a: the owner's BEGIN IMMEDIATE blocked in a 1000 ms busy timeout; main calls (collect), then interrupts: ms from the interrupt call to the step's return: n 21, min 800.837, median 801.716, max 801.924 ms
+  sorted: 800.837 801.237 801.281 801.361 801.456 801.555 801.665 801.665 801.681 801.704 801.716 801.719 801.725 801.777 801.781 801.784 801.794 801.803 801.808 801.885 801.924
+C2a: the owner's BEGIN IMMEDIATE blocked in a 1000 ms busy timeout; main calls (collect), then interrupts: ms the step took: n 21, min 1001.478, median 1002.002, max 1002.211 ms
+  sorted: 1001.478 1001.547 1001.693 1001.733 1001.920 1001.928 1001.936 1001.957 1001.965 1001.971 1002.002 1002.020 1002.035 1002.039 1002.045 1002.057 1002.084 1002.118 1002.163 1002.181 1002.211
+C2b: the same; main calls (collect-rendezvous), then interrupts: the collection's ms: n 21, min 0.058, median 0.068, max 0.125 ms
+  sorted: 0.058 0.059 0.061 0.061 0.062 0.062 0.063 0.063 0.067 0.067 0.068 0.068 0.072 0.076 0.081 0.082 0.082 0.087 0.092 0.100 0.125
+C2b: the same; main calls (collect-rendezvous), then interrupts: ms from the interrupt call to the step's return: n 21, min 801.500, median 801.805, max 802.030 ms
+  sorted: 801.500 801.531 801.603 801.705 801.718 801.723 801.734 801.742 801.753 801.767 801.805 801.825 801.842 801.849 801.879 801.886 801.916 801.921 801.944 802.027 802.030
+C2b: the same; main calls (collect-rendezvous), then interrupts: ms the step took: n 21, min 1001.741, median 1002.070, max 1002.273 ms
+  sorted: 1001.741 1001.958 1001.977 1001.978 1001.988 1001.995 1001.999 1002.012 1002.018 1002.030 1002.070 1002.077 1002.089 1002.127 1002.138 1002.156 1002.183 1002.185 1002.218 1002.265 1002.273
+C3: a long step with a Chez timer interrupt armed on the owner, outside any critical section; main interrupts: ms from the interrupt call to the step's return: n 21, min 0.005, median 0.012, max 0.019 ms
+  sorted: 0.005 0.005 0.007 0.007 0.008 0.009 0.009 0.009 0.010 0.012 0.012 0.014 0.015 0.015 0.016 0.016 0.016 0.018 0.018 0.018 0.019
+C3: a long step with a Chez timer interrupt armed on the owner, outside any critical section; main interrupts: ms the step took: n 21, min 200.209, median 200.280, max 200.368 ms
+  sorted: 200.209 200.215 200.218 200.233 200.234 200.255 200.263 200.265 200.273 200.276 200.280 200.285 200.287 200.289 200.294 200.305 200.307 200.342 200.361 200.365 200.368
+C3: a long step with a Chez timer interrupt armed on the owner, outside any critical section; main interrupts: ms from the step's return to the timer handler: n 21, min 0.668, median 0.694, max 0.765 ms
+  sorted: 0.668 0.678 0.684 0.686 0.688 0.688 0.688 0.691 0.692 0.692 0.694 0.696 0.699 0.700 0.706 0.709 0.709 0.733 0.746 0.750 0.765
+C3 control: ms from arming the timer to its handler: n 21, min 0.695, median 0.721, max 0.779 ms
+  sorted: 0.695 0.702 0.706 0.707 0.707 0.709 0.714 0.715 0.717 0.719 0.721 0.734 0.737 0.741 0.742 0.746 0.746 0.746 0.758 0.766 0.779
