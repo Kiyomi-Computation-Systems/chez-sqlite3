@@ -13,8 +13,9 @@
 #            (chez-sqlite3 private native), (chez-sqlite3 private
 #            libsqlite3-info), (chez-sqlite3-testing) and (srfi :64) have all
 #            imported, which takes the suites' whole library path and make
-#            deps' links, and native has loaded libsqlite3. Until M1 slice 4
-#            there is no public library to import instead. The version and
+#            deps' links, and native has loaded libsqlite3. The forms import
+#            native, not the public (chez-sqlite3), to read what it loaded.
+#            The version and
 #            path lines must equal build's own, after their labels, whole. A
 #            REPL that fails an import prints the error, reads on, and exits 0
 #            at the end of its input, so the lines are the evidence, and the

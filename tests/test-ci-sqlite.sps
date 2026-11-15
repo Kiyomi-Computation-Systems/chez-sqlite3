@@ -1016,6 +1016,19 @@
   'found
   (if (and (string? real-cc) (string-prefix? "/" real-cc)) 'found real-cc))
 
+;; real-chez : (U String #f)
+;; The path of the Chez $CHEZ names. The Makefile's default is a bare name,
+;; scheme or chez, found on PATH, as on a Mac with Homebrew's chez; the build
+;; rows' PATH holds only shim/ and tools/, so they get this path instead.
+(define real-chez
+  (guard (e (#t #f))
+    (let ((found (capture-command (list "sh" "-c" "command -v \"$0\"" chez))))
+      (and (eqv? (car found) 0) (first-line (cadr found))))))
+
+(test-equal "CHEZ is a file on this PATH, which the build rows run check-sqlite.sh's probe with"
+  'found
+  (if (and (string? real-chez) (string-prefix? "/" real-chez)) 'found real-chez))
+
 (define row-tools
   '("sh" "dirname" "sed" "tr" "grep" "awk" "mktemp" "rm" "mkdir" "cp" "cat" "cmp" "diff"))
 
@@ -1125,14 +1138,15 @@
           build-floor-spec))
 
 ;; build-env : String String (Listof String) -> (Listof String)
-;; The row's environment: PATH and TMPDIR in the tree, CHEZ this suite's,
-;; CC unset so cc is found on PATH, and nothing that names a library or a
-;; header; then EXTRA.
+;; The row's environment: PATH and TMPDIR in the tree, CHEZ this suite's
+;; Chez by its path, since PATH no longer finds a bare name, CC unset so cc
+;; is found on PATH, and nothing that names a library or a header; then
+;; EXTRA.
 (define (build-env root prefix extra)
   (append (list "-u" "CHEZ_SQLITE3_LIBRARY" "-u" "C_INCLUDE_PATH" "-u" "CPATH" "-u" "CC"
                 (string-append "PATH=" root "/shim:" root "/tools")
                 (string-append "TMPDIR=" root "/tmp")
-                (string-append "CHEZ=" chez))
+                (string-append "CHEZ=" (or real-chez chez)))
           extra))
 
 ;; make-build-tree! : String Build-Spec -> Unit

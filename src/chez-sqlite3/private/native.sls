@@ -73,7 +73,14 @@
 ;;; raises or escapes, and a PROC re-entered after that raises. Each takes the
 ;;; WHO of the public procedure it serves, so its refusals name that one
 ;;; (ADR-0013, decision 2), and names a refused value by shown-value, never a
-;;; string's text (ADR-0013, decision 7).
+;;; string's text (ADR-0013, decision 7). None raises inside the critical
+;;; thunks that make and free its block: a raise there would reach a
+;;; with-exception-handler handler with interrupts still disabled (M1's
+;;; closing review). An engine's expiry unwinds the extent and frees the
+;;; block, and its resume is a re-entry, so a caller under engines holds the
+;;; whole extent in one critical section, and raises what it caught there
+;;; after it: (chez-sqlite3 private connection)'s open, and report's
+;;; sqlite-compile-option?.
 ;;;
 ;;; Every refusal is a &sqlite-library-unavailable, raised through
 ;;; raise-library-unavailable, carrying the path and its source. The reasons
@@ -194,24 +201,56 @@
   ;; that FILL! has written. The block is freed once PROC returns, raises or
   ;; escapes, and re-entering PROC through a continuation after that raises an
   ;; assertion violation from WHO, so the address is never used after. The
-  ;; extent is a critical dynamic-wind: its before thunk, with the block's
-  ;; making, and its after thunk, with the block's freeing, each run in one
-  ;; critical section with the record that the extent was entered or left, so
-  ;; no escaping interrupt leaves a block made and unrecorded.
+  ;; block's extent is a critical dynamic-wind: its before thunk, with the
+  ;; block's making, and its after thunk, with the block's freeing, each run in
+  ;; one critical section with the record that the extent was entered or left,
+  ;; so no escaping interrupt leaves a block made and unrecorded.
+  ;;
+  ;; Neither critical thunk raises. Each records what it caught, and the
+  ;; raise follows, from a plain thunk of a dynamic-wind around the block's:
+  ;;   - a re-entry: from its before thunk, before the block's extent is
+  ;;     entered again, so no second block is made. A resume between the free
+  ;;     and the end of the outer extent would be refused too, though PROC
+  ;;     had returned; with a PROC that did nothing, an engine of 1 to 300
+  ;;     ticks a slice was never refused once PROC had returned (measured,
+  ;;     Chez 10.4.0);
+  ;;   - a block that could not be made: from the body, before FILL!;
+  ;;   - a free that failed, as when PROC freed the block itself: from its
+  ;;     after thunk, once the block's extent is left.
   (define (call-with-block who size fill! proc)
     (let ((block #f)
-          (freed #f))
-      (dynamic-wind #t
+          (freed #f)
+          (make-failure #f)
+          (free-failure #f))
+      (dynamic-wind
         (lambda ()
           (when freed
-            (assertion-violation who "re-entered after its block was freed"))
-          (set! block (foreign-block size)))
+            (assertion-violation who "re-entered after its block was freed")))
         (lambda ()
-          (fill! block)
-          (proc block))
+          (dynamic-wind #t
+            (lambda ()
+              (set! make-failure
+                    (guard (c (#t (list c)))
+                      (set! block (foreign-block size))
+                      #f)))
+            (lambda ()
+              (when make-failure (raise (car make-failure)))
+              (fill! block)
+              (proc block))
+            (lambda ()
+              (set! freed #t)
+              (when block
+                (let ((made block))
+                  (set! block #f)
+                  (set! free-failure
+                        (guard (c (#t (list c)))
+                          (free-foreign-block! made)
+                          #f)))))))
         (lambda ()
-          (set! freed #t)
-          (free-foreign-block! block)))))
+          (when free-failure
+            (let ((failure (car free-failure)))
+              (set! free-failure #f)
+              (raise failure)))))))
 
   ;; call-with-c-string : Symbol String (Positive-Integer -> A) -> A
   ;; PROC's answer, PROC given the address of STRING as C reads it: its UTF-8

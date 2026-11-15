@@ -17,6 +17,14 @@
 ;;; 4); then whether it ran under memcheck, which this suite requires to be yes
 ;;; exactly when the gate asked, so a child that escaped the gate fails its row.
 ;;;
+;;; Every refusal is raised after the critical section that decided it,
+;;; never inside one: a with-exception-handler handler of it runs at depth 1,
+;;; with interrupts enabled (disable-interrupts answers 1 outside any
+;;; section). A row per site: the free of what is no live block, the free
+;;; whose count-down finds the count at zero, made so by a count-down! this
+;;; suite makes first, and a malloc that fails, asked for the greatest fixnum
+;;; of bytes, which no address space holds.
+;;;
 ;;; A test that raises a count on purpose lowers it again under dynamic-wind,
 ;;; and this suite exits through suite-exit-status, which fails it if any
 ;;; count is left. Each expected value is one the code under test cannot
@@ -25,7 +33,8 @@
 ;;; against a no-raise sentinel.
 (import (rnrs)
         (srfi :64)
-        (only (chezscheme) foreign-ref foreign-set! getenv library-exports)
+        (only (chezscheme) foreign-ref foreign-set! getenv library-exports disable-interrupts
+              enable-interrupts)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (chez-sqlite3 private memory))
@@ -214,6 +223,69 @@
          (capture-command (gated-command getenv
                                          (list (getenv "CHEZ") "--libdirs" "src:tests:build/scheme-libs"
                                                "--program" program))))))))
+
+;; --- raised after the section ------------------------------------------------
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once. 1 outside any section.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, as depth-N, and what it raised:
+;; an assertion violation by its who, as a symbol, and its irritants, else
+;; (other TEXT). The handler escapes, so nothing returns into the raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let* ((depth (interrupt-depth))
+               (what (if (and (assertion-violation? c) (who-condition? c) (irritants-condition? c))
+                         (list 'assertion-violation
+                               (let ((who (condition-who c)))
+                                 (if (string? who) (string->symbol who) who))
+                               (condition-irritants c))
+                         (list 'other (describe c)))))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   what))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+(test-equal "free-foreign-block! refuses what is no live block after its critical section: a handler of it runs at depth 1, and nothing is counted"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'free-foreign-block! '(x)))
+        zero-counts)
+  (let ((r (handler-depth (lambda () (free-foreign-block! 'x)))))
+    (list r (native-counts))))
+
+;; The block's count is taken away by this suite first, so the free's
+;; count-down finds it at zero: a double free, which count-down! refuses
+;; once the block is freed. A free that did not run is a leak, which the
+;; gate's Valgrind sees: no second free is tried here, since one that ran
+;; anyway would abort this process (the dead-address row's child).
+(test-equal "free-foreign-block! raises its count-down's double free after its critical section: a handler of it runs at depth 1, and the count stays at zero"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'count-down! '(double-free block)))
+        zero-counts)
+  (let* ((block (foreign-block 8))
+         (taken (count-down! 'block))
+         (r (handler-depth (lambda () (free-foreign-block! block)))))
+    (list r (native-counts))))
+
+;; foreign-alloc refuses a malloc that answers NULL with an assertion
+;; violation of its own, whose who is the string "foreign-alloc" on Chez
+;; 10.4.0, and its irritant the system's text for ENOMEM, which this row
+;; does not read.
+(test-equal "foreign-block raises a failed malloc after its critical section: asked for the greatest fixnum of bytes, a handler of foreign-alloc's refusal runs at depth 1, and nothing is counted"
+  (list (list 'raised-at-depth 'depth-1 'foreign-alloc) zero-counts)
+  (let ((r (handler-depth (lambda () (foreign-block (greatest-fixnum))))))
+    (list (if (and (eq? (car r) 'raised-at-depth) (eq? (car (caddr r)) 'assertion-violation))
+              (list (car r) (cadr r) (cadr (caddr r)))
+              r)
+          (native-counts))))
 
 (test-equal "every count is zero at the end"
   zero-counts

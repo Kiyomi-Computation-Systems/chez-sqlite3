@@ -15,6 +15,14 @@
 ;;; continuation, cannot fall between them and leave a block no table and no
 ;;; count sees, nor leave the table's mutex held.
 ;;;
+;;; Nothing raises inside those sections. Each answers data, and the refusal
+;;; it decided is raised after it: a raise inside one would reach a
+;;; with-exception-handler handler with interrupts still disabled, where an
+;;; engine never expires and another thread's collection waits for the
+;;; handler (M1's closing review). A raise from a call made in a section,
+;;; foreign-alloc's or count-down!'s, is caught there and raised again, the
+;;; same object, after it.
+;;;
 ;;; A refusal names the value it refused by shown-value: a number as itself,
 ;;; a string by its kind, never its text (ADR-0013, decision 7).
 ;;;
@@ -43,31 +51,47 @@
 
   ;; foreign-block : Positive-Integer -> Positive-Integer
   ;; A fresh block of SIZE bytes, uninitialised, counted: its address. An
-  ;; assertion violation for a SIZE that is not a positive exact integer,
-  ;; and an error when foreign-alloc answers 0.
+  ;; assertion violation for a SIZE that is not a positive exact integer.
+  ;; foreign-alloc never answers 0: a malloc that fails is its own
+  ;; assertion violation, raised again after the section, and nothing is
+  ;; counted.
   (define (foreign-block size)
     (unless (and (integer? size) (exact? size) (positive? size))
       (assertion-violation 'foreign-block "a block's size is a positive exact integer"
                            (shown-value size)))
-    (critical-section
-     (let ((address (foreign-alloc size)))
-       (when (eqv? address 0)
-         (error 'foreign-block "foreign-alloc answered 0: no memory for a block" size))
-       (locked lock (lambda () (hashtable-set! live address size)))
-       (count-up! 'block)
-       address)))
+    (let ((outcome
+           (critical-section
+            (let ((allocated (guard (c (#t (list 'failed c)))
+                               (list 'allocated (foreign-alloc size)))))
+              (when (eq? (car allocated) 'allocated)
+                (locked lock (lambda () (hashtable-set! live (cadr allocated) size)))
+                (count-up! 'block))
+              allocated))))
+      (if (eq? (car outcome) 'allocated)
+          (cadr outcome)
+          (raise (cadr outcome)))))
 
   ;; free-foreign-block! : Positive-Integer -> Void
   ;; Frees the live block at ADDRESS, and counts it down. An address that
   ;; is not a live block raises an assertion violation, and nothing is
-  ;; freed.
+  ;; freed. A count-down that finds the count at zero is count-down!'s
+  ;; double free, raised once the block is freed.
   (define (free-foreign-block! address)
-    (critical-section
-     (let ((was-live (locked lock
-                       (lambda ()
-                         (and (hashtable-contains? live address)
-                              (begin (hashtable-delete! live address) #t))))))
-       (unless was-live
+    (let ((outcome
+           (critical-section
+            (let ((was-live (locked lock
+                              (lambda ()
+                                (and (hashtable-contains? live address)
+                                     (begin (hashtable-delete! live address) #t))))))
+              (if (not was-live)
+                  '(not-live)
+                  (begin
+                    (foreign-free address)
+                    (guard (c (#t (list 'double-free c)))
+                      (count-down! 'block)
+                      '(freed))))))))
+      (case (car outcome)
+        ((not-live)
          (assertion-violation 'free-foreign-block! "not a live block" (shown-value address)))
-       (foreign-free address)
-       (count-down! 'block)))))
+        ((double-free) (raise (cadr outcome)))
+        (else (if #f #f))))))

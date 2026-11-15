@@ -49,11 +49,17 @@
 #     check (a cache is told by its path, the Chez cache's or the SQLite
 #     cache's); and in the lanes the SQLite restore comes after the step that
 #     names the compiler;
+#   - every step whose whole run line begins scripts/ci/NAME: that file exists
+#     and is executable, under CHECK_CI_ROOT (the repository root if unset);
+#     floor.sh is run with sh by the others, so it needs no bit and is not held;
+#   - no other line names scripts/, a comment apart: it is a step's whole run
+#     line in that form, or a cache key's hashFiles( list;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
 #     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...), the
 #     compiler's and the loader's among them (CC, C_INCLUDE_PATH, CPATH,
 #     LD_LIBRARY_PATH, LD_PRELOAD), which could steer test-constants or the
-#     load. CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH are the one exception, as
+#     load, and CHECK_CI_ROOT, which would point this check's execute-bit rule
+#     at another tree. CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH are the one exception, as
 #     an env key of floor and current, above. Job main is the one job that
 #     tests discovery, so there, in memory and in nothreads they stay refused;
 #     and
@@ -468,7 +474,7 @@ BEGIN {
   gname[1] = "check-memory-gate"; gjob[1] = "memory"
   gname[2] = "test-memory";       gjob[2] = "memory"
   gname[3] = "check-nothreads";   gjob[3] = "nothreads"
-  nbw = split("MAKEFLAGS MFLAGS GNUMAKEFLAGS VALGRIND MEMORY_SUITES MEMORY_TIMEOUT TEST_TIMEOUT LIBDIRS TIMEOUT SUITES CHEZ_SQLITE3_LIBRARY CHEZ_SQLITE3_DECOY CHEZ_SQLITE3_GATE_CHILD CC C_INCLUDE_PATH CPATH LD_LIBRARY_PATH LD_PRELOAD", bw, " ")
+  nbw = split("MAKEFLAGS MFLAGS GNUMAKEFLAGS VALGRIND MEMORY_SUITES MEMORY_TIMEOUT TEST_TIMEOUT LIBDIRS TIMEOUT SUITES CHEZ_SQLITE3_LIBRARY CHEZ_SQLITE3_DECOY CHEZ_SQLITE3_GATE_CHILD CC C_INCLUDE_PATH CPATH LD_LIBRARY_PATH LD_PRELOAD CHECK_CI_ROOT", bw, " ")
   for (i = 1; i <= nbw; i++) banned[bw[i]] = 1
   HASHLIST = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh'"
   IFLINE = "if: steps.chez.outputs.cache-hit != 'true'"
@@ -662,6 +668,41 @@ AWKPROGRAM
     if [ "$status" -ne 0 ]; then
       note "$file: the check (awk) exited $status: $(cat "$tmp/awkerr")"
     fi
+
+    # A step whose whole run line begins scripts/ci/NAME runs that file by its
+    # path, so the file must be there and carry the execute bit: a runner
+    # fails the step otherwise, and nothing else here would see it. The files
+    # are read under CHECK_CI_ROOT, which is the repository root when unset
+    # (tests/test-check-ci.sps points it at a copy). scripts/ci/floor.sh is
+    # no such step's script: the other scripts run it with sh, so it needs no
+    # bit and is not held.
+    root=${CHECK_CI_ROOT:-$(dirname "$0")/..}
+    grep -n -E '^( {8}| {6}- )run: scripts/ci/[A-Za-z0-9._-]+( |$)' "$file" >"$tmp/runs" || :
+    while IFS= read -r entry; do
+      lineno=${entry%%:*}
+      cmd=${entry#*run: }
+      name=${cmd%% *}
+      if [ ! -f "$root/$name" ] || [ ! -x "$root/$name" ]; then
+        note "$file:$lineno: runs $name, which is missing or not executable: a step runs it by its path, so it must be there and carry the execute bit"
+      fi
+    done <"$tmp/runs"
+
+    # The rule above reads one spelling of a step that runs a script of
+    # scripts/ci/. A line that names scripts/ci/ in any other spelling (a
+    # quoted path, a block scalar, ./scripts/ci/, scripts/ci//, a path with a
+    # slash after the directory, a command after the name, or a path to the
+    # directory that holds no scripts/ci/, such as scripts/./ci/) would run a
+    # script the rule never held, so it is a problem itself: bar a comment, a
+    # line of the workflow that names scripts/ is a step's whole run line, in
+    # the form the rule reads, or a cache key's hashFiles( list.
+    grep -n 'scripts/' "$file" |
+      grep -v -E '^[0-9]+: *#' |
+      grep -v -E '^[0-9]+:( {8}| {6}- )run: scripts/ci/[A-Za-z0-9._-]+( |$)' |
+      grep -v -E '^[0-9]+: +key: .*hashFiles\(' >"$tmp/stray" || :
+    while IFS= read -r entry; do
+      lineno=${entry%%:*}
+      note "$file:$lineno: names scripts/ other than as a step's whole run line of scripts/ci/ or a cache key's hashed files"
+    done <"$tmp/stray"
   fi
 fi
 

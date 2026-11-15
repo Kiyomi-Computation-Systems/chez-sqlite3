@@ -174,8 +174,17 @@
         (lambda () #f)
         (lambda ()
           ;; Made and recorded in one critical section, so that no escape
-          ;; leaves a directory the after thunk cannot see.
-          (critical-section (set! dir (make-capture-directory)))
+          ;; leaves a directory the after thunk cannot see. The section
+          ;; answers what was made, and a failure is raised after it: a raise
+          ;; inside one would reach a with-exception-handler handler with
+          ;; interrupts still disabled (M1's closing review).
+          (let ((made (critical-section
+                       (let ((outcome (make-capture-directory)))
+                         (when (eq? (car outcome) 'made) (set! dir (cadr outcome)))
+                         outcome))))
+            (unless (eq? (car made) 'made)
+              (error 'capture-command "could not make a directory for the command's output"
+                     (cadr made))))
           (let* ((out (string-append dir "/out"))
                  (err (string-append dir "/err"))
                  (status (system (string-append (join-words (map shell-quote argv))
@@ -191,26 +200,27 @@
                       '("out" "err"))
             (delete-directory dir))))))
 
-  ;; make-capture-directory : -> String
-  ;; A fresh directory for one capture's files: the scratch directory, then
-  ;; chez-sqlite3-testing-PID-N, N counted for this process under a mutex. Chez's
-  ;; mkdir makes it with mode 700, and refuses a name that anything already
-  ;; holds, a dangling symbolic link included (measured at 10.4.0). So no
-  ;; two captures share a file, in this process or any other, and none
-  ;; writes through a name someone else planted. A name that is taken costs
-  ;; the next N, up to 100 tries; any other failure raises, before the
-  ;; command runs. The mutex keeps this process's numbers distinct, so a
-  ;; name is taken only by another process or what one left behind.
+  ;; make-capture-directory : -> (U (List 'made String) (List 'failed String))
+  ;; A fresh directory for one capture's files, made: the scratch directory,
+  ;; then chez-sqlite3-testing-PID-N, N counted for this process under a
+  ;; mutex. Chez's mkdir makes it with mode 700, and refuses a name that
+  ;; anything already holds, a dangling symbolic link included (measured at
+  ;; 10.4.0). So no two captures share a file, in this process or any other,
+  ;; and none writes through a name someone else planted. A name that is
+  ;; taken costs the next N, up to 100 tries; any other failure answers
+  ;; (failed DIR), the last name tried, for capture-command to raise before
+  ;; the command runs. It raises nothing, since it runs in a critical
+  ;; section. The mutex keeps this process's numbers distinct, so a name is
+  ;; taken only by another process or what one left behind.
   (define (make-capture-directory)
     (let ((base (string-append (scratch-root) "/chez-sqlite3-testing-"
                                (number->string (get-process-id)) "-")))
       (let try ((tries 1))
         (let ((dir (string-append base (number->string (next-capture)))))
           (cond
-            ((guard (e (#t #f)) (mkdir dir #o700) #t) dir)
+            ((guard (e (#t #f)) (mkdir dir #o700) #t) (list 'made dir))
             ((and (< tries 100) (chez:file-exists? dir #f)) (try (+ tries 1)))
-            (else (error 'capture-command "could not make a directory for the command's output"
-                         dir)))))))
+            (else (list 'failed dir)))))))
 
   ;; next-capture : -> Positive-Integer
   ;; How many captures this process has begun, this one included. The

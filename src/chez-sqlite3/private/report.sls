@@ -14,6 +14,7 @@
           sqlite-library-source sqlite-compile-option? sqlite-compile-options)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
+          (only (chezscheme) critical-section)
           (chez-sqlite3 private native)
           (chez-sqlite3 private libsqlite3-info)
           (only (chez-sqlite3 private conditions) shown-value))
@@ -50,11 +51,23 @@
   ;; A NAME that is no string is an assertion violation, by its rule and
   ;; shown-value; one holding U+0000 is call-with-c-string's, naming its
   ;; kind; each from sqlite-compile-option?.
+  ;;
+  ;; The C string's whole extent is one critical section, so no engine's
+  ;; expiry frees its block before the call has read it. Nothing raises
+  ;; inside it: what call-with-c-string raises is caught there and raised
+  ;; again after it, the same object.
   (define (sqlite-compile-option? name)
     (unless (string? name)
       (assertion-violation 'sqlite-compile-option? "an option's name is a string" 'not-a-string
                            (shown-value name)))
-    (eqv? (call-with-c-string 'sqlite-compile-option? name sqlite3-compileoption-used) 1))
+    (let ((outcome
+           (critical-section
+            (guard (c (#t (list 'raised c)))
+              (list 'answered
+                    (call-with-c-string 'sqlite-compile-option? name sqlite3-compileoption-used))))))
+      (if (eq? (car outcome) 'answered)
+          (eqv? (cadr outcome) 1)
+          (raise (cadr outcome)))))
 
   ;; sqlite-compile-options : -> (Listof String)
   ;; Every option the library was compiled with, as

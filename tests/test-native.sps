@@ -27,6 +27,13 @@
 ;;;                  re-entry refused. c-string->string reads them back
 ;;;   out-pointers   call-with-out-pointer: a zeroed, counted slot, read after
 ;;;                  PROC and freed on every path
+;;;   after the section
+;;;                  each helper's refusals are raised outside the critical
+;;;                  dynamic-wind thunks that make and free its block: a
+;;;                  with-exception-handler handler of one runs at depth 1,
+;;;                  with interrupts enabled (disable-interrupts answers 1
+;;;                  outside any section). A row each for re-entry, and for
+;;;                  the free of a block PROC freed itself
 ;;;   the body       native.sls read as data: its load steps in order, and
 ;;;                  every foreign-procedure form bound eagerly, as the value
 ;;;                  of a top-level load-step definition. With one good library
@@ -53,7 +60,7 @@
         (srfi :64)
         (only (chezscheme) foreign-ref foreign-set! foreign-sizeof getenv machine-type
               library-exports fork-thread make-mutex with-mutex collect-rendezvous
-              sleep make-time)
+              sleep make-time disable-interrupts enable-interrupts)
         (chez-sqlite3-testing)
         (libsqlite3-oracle)
         (chez-sqlite3 private counters)
@@ -647,6 +654,80 @@
   (let* ((a (raised (lambda () (call-with-out-pointer 'open-database 'not-a-procedure))))
          (b (raised (lambda () (call-with-out-pointer 42 (lambda (slot) slot))))))
     (list a b (native-counts))))
+
+;; --- raised after the section ---------------------------------------------------------------------
+;; A raise made inside a critical section, or a critical dynamic-wind thunk,
+;; reaches a with-exception-handler handler with interrupts still disabled:
+;; there an engine never expires, and another thread's collection waits for
+;; the handler (measured by M1's closing review). Each row's handler reads
+;; its depth, as depth-N, and what was raised.
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once. 1 outside any section.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, and what it raised: an assertion
+;; violation by its who and irritants, else (other TEXT). The handler
+;; escapes, so nothing returns into the raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let* ((depth (interrupt-depth))
+               (what (if (and (assertion-violation? c) (who-condition? c) (irritants-condition? c))
+                         (list 'assertion-violation (condition-who c) (condition-irritants c))
+                         (list 'other (describe c)))))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   what))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+;; reentered : ((Positive-Integer -> Any) -> Any) -> Any
+;; What a handler of a re-entry into WITH's PROC sees: PROC keeps its
+;; continuation, returns, and is entered again once its block is freed.
+(define (reentered with)
+  (let ((k #f) (runs 0))
+    (let ((r (handler-depth
+              (lambda ()
+                (with (lambda (address)
+                        (call/cc (lambda (c) (set! k c)))
+                        (set! runs (+ runs 1))))
+                (if (= runs 1) (k #f) (list 'reentered runs))))))
+      (list r runs (native-counts)))))
+
+(test-equal "call-with-c-string and call-with-out-pointer refuse a re-entry outside their critical thunks: a handler of it runs at depth 1, and PROC runs once"
+  (list (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'open-database '())) 1 zero-counts)
+        (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'open-database '())) 1 zero-counts))
+  (let* ((a (reentered (lambda (proc) (call-with-c-string 'open-database "abc" proc))))
+         (b (reentered (lambda (proc) (call-with-out-pointer 'open-database proc)))))
+    (list a b)))
+
+;; PROC frees the block it was handed, so the free on the way out finds no
+;; live block there: free-foreign-block!'s refusal, raised outside the
+;; critical after thunk that tried the free. Nothing is freed twice. Both
+;; helpers share that thunk, call-with-block's, and only call-with-c-string
+;; is asked: call-with-out-pointer reads its slot once PROC returns, and a
+;; slot PROC freed is a read after free, which the gate's Valgrind reports
+;; (measured).
+(test-equal "call-with-c-string raises a failed free outside its critical after thunk: a PROC that freed its block itself makes free-foreign-block! refuse it, and a handler of that runs at depth 1; every count is zero after"
+  (list (list 'raised-at-depth 'depth-1 '(assertion-violation free-foreign-block! (that-block))) zero-counts)
+  (let* ((given #f)
+         (r (handler-depth
+             (lambda ()
+               (call-with-c-string 'open-database "abc"
+                 (lambda (address) (set! given address) (free-foreign-block! address) 'freed-by-proc))))))
+    (list (if (and (eq? (car r) 'raised-at-depth)
+                   (equal? (caddr r) (list 'assertion-violation 'free-foreign-block! (list given))))
+              (list (car r) (cadr r) '(assertion-violation free-foreign-block! (that-block)))
+              r)
+          (native-counts))))
 
 ;; --- the body, read as data ----------------------------------------------------------------------
 ;; Neither the order of the load's steps nor whether a binding is eager can be

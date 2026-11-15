@@ -130,6 +130,10 @@
   first reference: only `eval` reaches a race on one.
 * A `guard` in a program cannot catch a raise from an imported library's body.
   A probe must `eval` its call inside the guard.
+* Nothing raises inside `critical-section` or a critical `dynamic-wind` thunk:
+  a `with-exception-handler` handler of the raise runs with interrupts
+  disabled, where an engine never expires and another thread's collection
+  waits. Answer data there, and raise after the section (ADR-0012, amended).
 
 ## Closing ritual
 

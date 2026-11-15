@@ -3,7 +3,9 @@
 - **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
   built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)), the workflow rules
   ([amendment](#amendment-2026-11-13-the-workflow-rules-m0-slice-4)), and the SQLite floor's numeric
-  forms ([amendment](#amendment-2026-11-13-the-sqlite-floors-numeric-forms-m0s-closing-review))
+  forms ([amendment](#amendment-2026-11-13-the-sqlite-floors-numeric-forms-m0s-closing-review));
+  amended 2026-11-14, and accepted by the maintainer that day: `check-floors` reads `scripts/ci/`
+  (M1 slice 5, [amendment](#amendment-2026-11-14-check-floors-reads-scriptsci-m1-slice-5))
 - **Date:** 2026-11-13
 - **Scope:** every statement of the Chez and SQLite floors
 - **Related:** chez-curl ADR-0016, which this copies · [ADR-0001](0001-bind-libsqlite3-directly.md)

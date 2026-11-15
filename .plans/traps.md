@@ -138,6 +138,26 @@ told in chez-curl's `.plans/traps.md`.
   scripts were first written without one, and every row passed. The workflow runs them by path.
   `test-ci-sqlite` holds both bits. (M1 slice 5, chez-sqlite3)
 
+- **A red run against a check that refuses the whole input proves no row.** Slice 5's new
+  workflow, run against the old `check-ci`, failed every new row, because the old script refused
+  the unedited file. Three rules' rows were logged as watched failing on that evidence. Turn each
+  rule off in the new check instead. (M1 slice 5, chez-sqlite3)
+
+- **A row that narrows `PATH` must hand each tool it names over by its path.** `test-ci-sqlite`'s
+  build rows run with only their shims on `PATH`, and passed `CHEZ` on as given. In CI and the
+  container that is an absolute path. On the maintainer's Mac the Makefile's default is the bare
+  name `chez`, and both rows failed: "chez: command not found". (M1, the Mac's run on `497d45b`,
+  chez-sqlite3)
+
+- **An engine spends no ticks inside a critical section.** A 100,000-step loop given 10 ticks a
+  slice took 10,001 slices outside a section, and 1 inside one. So a row that expects an expiry at
+  every fuel fails once the work moves into a section. Assert the outcome at every fuel instead.
+  (M1's closing review, chez-sqlite3)
+
+- **`diff -r` follows symbolic links.** Two trees holding the same dangling link made it exit 2,
+  "No such file or directory"; with `--no-dereference` it exits 0. The seam's fixtures hold such
+  links. (M1's closing review, chez-sqlite3)
+
 - **`false &&` before an `||` chain disables only its first test.** `false && A || B` runs `B`.
   A mutant meant to skip a whole check, written so, failed 1 row, not 5. Mutate the refusal
   instead: `true || fail …`. (M1 slice 5, chez-sqlite3)

@@ -154,8 +154,8 @@ build: ## Load libsqlite3 as chez-sqlite3 would and name it; fail with the reaso
 
 # Runs make deps and make build, then a REPL with the suites' library path:
 # chez-sqlite3's own libraries, (chez-sqlite3-testing) and SRFI-64. A refused
-# libsqlite3 stops make at build, before any REPL starts. Until M1 slice 4
-# there is no public library: import (chez-sqlite3 private native) to load.
+# libsqlite3 stops make at build, before any REPL starts. Import
+# (chez-sqlite3) there to load it.
 dev: deps build ## Start a REPL with the suites' library path, after make build; a refused libsqlite3 stops it
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs $(LIBDIRS)
@@ -292,21 +292,23 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 
 # Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
 # (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its
-# three jobs and every key in them, each check as a step's whole run line, no
+# five jobs and every key in them, each check as a step's whole run line, no
 # if: but the cache's own, no variable that steers a check, and no key
 # spelled so that a text check would miss it. make test runs it, so every
 # make test, the container's self-test and CI's main job among them, holds
 # the workflow. tests/test-check-ci.sps plants each fault in a copy of the
-# real file. It reads text with sh and awk, and needs no deps.
+# real file. It reads text with sh and awk, and needs no deps. The recipe
+# sets CHECK_CI_ROOT empty, which check-ci reads as unset, so a host's own
+# value never points the execute-bit rule at another tree.
 check-ci: ## Fail unless .github/workflows/ci.yml has the one shape tests/check-ci.sh reads
-	@sh tests/check-ci.sh .github/workflows
+	@CHECK_CI_ROOT= sh tests/check-ci.sh .github/workflows
 
 # Imports every library under src/, private ones too, and requires each
 # import to be refused, by name, as (chez-sqlite3 private require-threaded)
 # refuses a Chez that is not threaded: a syntax violation from chez-sqlite3,
 # whose message starts with the refusal's marker. Every library under src/
 # imports require-threaded first (ADR-0001, amended), so every one must be
-# refused, and M0 has no public library yet. It fails if it finds no
+# refused, the public (chez-sqlite3) among them. It fails if it finds no
 # library, and names each one that loaded or raised something else
 # (tests/check-nothreads.sps). tests/test-check-nothreads.sps holds each rule
 # on a fixture tree. On the threaded Chez that make test runs, every import
