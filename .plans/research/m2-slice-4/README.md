@@ -370,3 +370,20 @@ Each was reproduced twice on each library, by the minimal probe named, with the 
 No measurement here contradicts the existing research. Each earlier result these probes touched
 gave the same answer again: `-0.0` and NaN weren't re-run; the refused bind's NULL, MISUSE while a
 row is ready, and errcode 100 after a row were.
+
+## A stale code, and the column's type ([stale-code.sps](stale-code.sps))
+
+Added in slice 4's review fixes, run on both libraries
+([stale-code-guix-3.53.1.txt](stale-code-guix-3.53.1.txt),
+[stale-code-floor-3.45.1.txt](stale-code-floor-3.45.1.txt)). Pointers print as addresses, which
+differ by run.
+
+- **A real NOMEM through `sqlite3_column_text`:** a NULL pointer, then code 7, then type 5. Read
+  again, the code is still 7.
+- **A stale 7, then an empty BLOB:** another statement's NOMEM left 7 on the connection. The empty
+  BLOB's read gives a NULL pointer, code 7, and type 4: the column is still BLOB.
+- **An empty BLOB on a fresh connection:** a NULL pointer, and the code is 100, the row.
+- **A zeroblob under the limit:**
+  - `select zeroblob(1000000)`, literal or bound by `bind!`, reads without NOMEM;
+  - one bound with `sqlite3_bind_zeroblob64`, of 1 MB or 100 MB, gives a NULL pointer, 7, then 5,
+    through `sqlite3_column_blob`.

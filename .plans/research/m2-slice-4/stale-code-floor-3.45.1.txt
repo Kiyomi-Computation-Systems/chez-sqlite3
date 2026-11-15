@@ -1,0 +1,8 @@
+1 text NOMEM: ptr code type code2 type2 (msg ptr nonzero?): (0 7 5 7 ptr 7)
+2 stale: blobptr code type: (0 7 4)
+3 fresh: blobptr code type: (0 100 4)
+4 zeroblob under limit: type-before ptr code type: (4 128565326663704 100 4)
+4b zeroblob literal under limit: (4 128565325660184 100 4)
+4c zeroblob column_bytes then blob under limit: (128565324656664 100 4)
+4d bound zeroblob under limit: ptr code type: (0 7 5)
+4e bound zeroblob 100MB under limit: ptr code type: (0 7 5)

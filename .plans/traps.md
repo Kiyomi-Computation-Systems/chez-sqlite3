@@ -43,6 +43,10 @@ told in chez-curl's `.plans/traps.md`.
 - **Chez's `make-time` refuses a nanosecond field of 10⁹:** "invalid nanosecond 1000000000".
   Carry whole seconds into the seconds field. (M2 slice 3, chez-sqlite3)
 
+- **Chez turns a read of address 0 into a condition,** "invalid memory reference", not a crash.
+  So a planted read of NULL fails its row by name, and the suite goes on. (M2 slice 4,
+  chez-sqlite3)
+
 - **A condition type's name is syntax, not a record type.** `(record-type-parent &sqlite-busy)`
   is "invalid syntax" when it expands, so a row written so kills its suite before any test runs.
   `(record-type-descriptor &sqlite-busy)` gives the record type. (M2 slice 1, chez-sqlite3)
@@ -86,6 +90,35 @@ told in chez-curl's `.plans/traps.md`.
   way, stopped at 100 ms with 9. So a row that blocks a call can't end the wait early; only the
   timeout does. The M1 session found it in M3's research, and M2 slice 3 reproduced it
   ([research/m2-slice-3/](research/m2-slice-3/)). (M2 slice 3, chez-sqlite3)
+
+- **A NULL pointer reads the connection's last code, which can be another statement's.** An empty
+  BLOB answers a NULL pointer and sets no code. So after another statement's NOMEM, a read or a
+  bind, `sqlite3_extended_errcode` answers 7 for a healthy statement's empty BLOB, and slice 4's
+  reader raised `nomem` and failed the statement. A real NOMEM turns its column's type to NULL, so
+  the reader now reads the type too. Slice 4's review found it. (M2 slice 4, chez-sqlite3)
+
+- **A read past a stale column count answers NULL, not an error.** After another connection's
+  `alter table … drop column` and a step, `sqlite3_column_type` of the dropped index answers 5.
+  So only a count read with the read refuses it. (M2 slice 4, chez-sqlite3)
+
+- **In a UTF-16 database, `sqlite3_column_text` on a BLOB converts it as UTF-16 text and turns its
+  type to TEXT:** `x'4100'` reads `41`. So the type is read first, and a BLOB through
+  `sqlite3_column_blob`. (M2 slice 4, chez-sqlite3)
+
+- **After a NOMEM column read, the column reads as NULL,** type 5, and the 7 stays on the statement
+  until a reset. So a retried read gives `sql-null`, which is why a NOMEM read moves the
+  statement to `failed` (ADR-0014, amended). (The M1 session's research for M2 slice 4,
+  chez-sqlite3)
+
+- **`SQLITE_LIMIT_LENGTH` limits column names at prepare,** not only bound values. At a limit of
+  30, a 31-byte alias fails prepare with `SQLITE_TOOBIG`; at the floor's smallest, 1, even
+  `select ?1` does. So a refused-bind row prepares before it lowers the limit. (The M1 session's
+  research for M2 slice 4, chez-sqlite3)
+
+- **`sqlite3_error_offset` can be stale.** After a refused bind, it still answers an earlier
+  failed prepare's offset; a clean bind clears it. And on 3.53.1, `select ?0` gives −1 on a
+  connection's first prepare and 7 after it. So an offset is read only straight after the prepare
+  that failed. (The M1 session's research for M2 slice 4, chez-sqlite3)
 
 - **Some BUSY no wait fixes.** COMMIT answers `SQLITE_BUSY`, "cannot commit transaction - SQL
   statements in progress", while the connection's own statement is mid-row. So `sqlite-busy?` isn't

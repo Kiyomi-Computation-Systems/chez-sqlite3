@@ -1,0 +1,71 @@
+#!r6rs
+(import (rnrs) (rnrs eval) (only (chezscheme) foreign-procedure))
+(eval '(sqlite-version) (environment '(chez-sqlite3)))
+(define (reach lib name) (eval name (environment lib)))
+(define open-database (reach '(chez-sqlite3) 'open-database))
+(define prepare (reach '(chez-sqlite3 private statement) 'prepare-statement))
+(define step! (reach '(chez-sqlite3 private statement) 'step!))
+(define cwsh (reach '(chez-sqlite3 private statement) 'call-with-statement-handle))
+(define bind! (reach '(chez-sqlite3 private statement-values) 'bind!))
+(define memory-used (reach '(chez-sqlite3 private native) 'sqlite3-memory-used))
+(define column-type (reach '(chez-sqlite3 private native) 'sqlite3-column-type))
+(define column-blob (reach '(chez-sqlite3 private native) 'sqlite3-column-blob))
+(define column-text (reach '(chez-sqlite3 private native) 'sqlite3-column-text))
+(define errcode (reach '(chez-sqlite3 private native) 'sqlite3-extended-errcode))
+(define errmsg (reach '(chez-sqlite3 private native) 'sqlite3-errmsg))
+(define heap-limit (foreign-procedure "sqlite3_hard_heap_limit64" (integer-64) integer-64))
+(define (show l x) (display l) (display ": ") (write x) (newline))
+(define (raw st proc) (cwsh 'probe st 'column-name (lambda (c h sql) (values #f (proc c h)))))
+(define (limited thunk)
+  (dynamic-wind (lambda () (heap-limit (+ (memory-used) 1000))) thunk (lambda () (heap-limit 0))))
+(define (msg c) (let ((p (errmsg c)))  p))
+
+;; 1: real NOMEM via column_text; order code, type, msg
+(define db (open-database ":memory:"))
+(define a (prepare db "select x'', 1"))
+(step! a)
+(define b (prepare db "select ?1"))
+(bind! b 1 (make-string 100000 #\a))
+(step! b)
+(show "1 text NOMEM: ptr code type code2 type2 (msg ptr nonzero?)"
+  (raw b (lambda (c h)
+    (limited (lambda ()
+      (let* ((p (column-text h 0)) (e (errcode c)) (t (column-type h 0)) (e2 (errcode c)) (m (errmsg c)) (e3 (errcode c)))
+        (list p e t e2 (if (eqv? m 0) 0 'ptr) e3)))))))
+;; 2: stale 7 then empty blob on same connection (a is on same conn db)
+(show "2 stale: blobptr code type" (raw a (lambda (c h) (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list p e t)))))
+;; 3: fresh connection
+(define db2 (open-database ":memory:"))
+(define a2 (prepare db2 "select x''"))
+(step! a2)
+(show "3 fresh: blobptr code type" (raw a2 (lambda (c h) (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list p e t)))))
+;; 4: zeroblob NOMEM through column_blob
+(define db3 (open-database ":memory:"))
+(define z (prepare db3 "select zeroblob(?1)"))
+(bind! z 1 1000000)
+(step! z)
+(show "4 zeroblob under limit: type-before ptr code type"
+  (raw z (lambda (c h) (let ((t0 (column-type h 0)))
+    (limited (lambda () (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list t0 p e t))))))))
+(define z2 (prepare db3 "select zeroblob(1000000)"))
+(step! z2)
+(show "4b zeroblob literal under limit"
+  (raw z2 (lambda (c h) (let ((t0 (column-type h 0)))
+    (limited (lambda () (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list t0 p e t))))))))
+(define z3 (prepare db3 "select zeroblob(1000000)"))
+(step! z3)
+(show "4c zeroblob column_bytes then blob under limit"
+  (raw z3 (lambda (c h) (limited (lambda () (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list p e t)))))))
+
+;; 4d: bind_zeroblob64 raw, read under limit
+(define bind-zb (foreign-procedure "sqlite3_bind_zeroblob64" (uptr int unsigned-64) int))
+(define z4 (prepare db3 "select ?1"))
+(cwsh 'probe z4 'bind! (lambda (c h sql) (values #f (bind-zb h 1 1000000))))
+(step! z4)
+(show "4d bound zeroblob under limit: ptr code type"
+  (raw z4 (lambda (c h) (limited (lambda () (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list p e t)))))))
+(define z5 (prepare db3 "select ?1"))
+(cwsh 'probe z5 'bind! (lambda (c h sql) (values #f (bind-zb h 1 100000000))))
+(step! z5)
+(show "4e bound zeroblob 100MB under limit: ptr code type"
+  (raw z5 (lambda (c h) (limited (lambda () (let* ((p (column-blob h 0)) (e (errcode c)) (t (column-type h 0))) (list p e t)))))))
