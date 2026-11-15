@@ -1,0 +1,14 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+wal none BEGIN IMMEDIATE: n 5, min 1501.622, median 1501.655, max 1501.726 ms
+wal held BEGIN IMMEDIATE: n 5, min 0.001, median 0.001, max 0.003 ms
+wal none INSERT INTO t VALUES (100): n 5, min 1501.661, median 1501.731, max 1501.955 ms
+wal held INSERT INTO t VALUES (100): n 5, min 0.002, median 0.002, max 0.002 ms
+wal locked INSERT INTO t VALUES (100): n 5, min 0.003, median 0.003, max 0.008 ms
+wal locked SAVEPOINT s; INSERT INTO t VALUES (101); RELEASE s: n 5, min 0.005, median 0.005, max 0.006 ms
+delete none BEGIN IMMEDIATE: n 5, min 1501.939, median 1502.083, max 1502.154 ms
+delete held BEGIN IMMEDIATE: n 5, min 0.001, median 0.001, max 0.003 ms
+delete none INSERT INTO t VALUES (100): n 5, min 1501.899, median 1501.967, max 1502.017 ms
+delete held INSERT INTO t VALUES (100): n 5, min 0.002, median 0.002, max 0.003 ms
+delete locked INSERT INTO t VALUES (100): n 5, min 0.015, median 0.016, max 0.025 ms
+delete locked SAVEPOINT s; INSERT INTO t VALUES (101); RELEASE s: n 5, min 0.017, median 0.031, max 0.039 ms

@@ -1,0 +1,511 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+E1. A UNIQUE failure under the default conflict resolution (ABORT), one row
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (1)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E2. A UNIQUE failure in the third row of a four-row INSERT, default resolution
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (20), (21), (1), (22)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E3. NOT NULL and CHECK failures, default resolution
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (NULL)
+    step: rc 1299 CONSTRAINT, extended_errcode 1299, errmsg "NOT NULL constraint failed: t.x"
+    finalize: rc 1299
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (5000)
+    step: rc 275 CONSTRAINT, extended_errcode 275, errmsg "CHECK constraint failed: x < 1000"
+    finalize: rc 275
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E4. INSERT OR ROLLBACK, failing
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT OR ROLLBACK INTO t VALUES (1)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows of t db2, after sees: 1,2
+
+E5. INSERT OR ROLLBACK, failing, in a transaction begun by SAVEPOINT
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SAVEPOINT b
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT OR ROLLBACK INTO t VALUES (1)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 1, txn_state(main) NONE
+  sql: RELEASE b
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: b"
+    finalize: rc 1
+  sql: ROLLBACK TO a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+  sql: RELEASE a
+    step: rc 1 ERROR, extended_errcode 1, errmsg "no such savepoint: a"
+    finalize: rc 1
+  sql: ROLLBACK
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot rollback - no transaction is active"
+    finalize: rc 1
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows of t db2, after sees: 1,2
+
+E6. INSERT OR FAIL, failing at its third row of four
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT OR FAIL INTO t VALUES (30), (31), (1), (32)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10,30,31
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10,30,31
+
+E7. UPDATE OR ROLLBACK, failing
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: UPDATE OR ROLLBACK t SET x = 1 WHERE x = 2
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: t.x"
+    finalize: rc 2067
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows of t db2, after sees: 1,2
+
+E8. A trigger's RAISE(ROLLBACK, ...)
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (99)
+    step: rc 1811 CONSTRAINT, extended_errcode 1811, errmsg "trigger said rollback"
+    finalize: rc 1811
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows of t db2, after sees: 1,2
+
+E9. A trigger's RAISE(ABORT, ...), at the third row of four
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (40), (41), (99), (42)
+    step: rc 1811 CONSTRAINT, extended_errcode 1811, errmsg "trigger said abort"
+    finalize: rc 1811
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E10. A trigger's RAISE(FAIL, ...), at the third row of four
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (50), (51), (99), (52)
+    step: rc 1811 CONSTRAINT, extended_errcode 1811, errmsg "trigger said fail"
+    finalize: rc 1811
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10,50,51
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10,50,51
+
+E11. A trigger's RAISE(IGNORE), at the third row of four
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t VALUES (60), (61), (99), (62)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10,60,61,62
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10,60,61,62
+
+E12. An immediate foreign key failure
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO c VALUES (7)
+    step: rc 787 CONSTRAINT, extended_errcode 787, errmsg "FOREIGN KEY constraint failed"
+    finalize: rc 787
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E13. A deferred foreign key failure: COMMIT fails
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO c VALUES (7)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: COMMIT
+    step: rc 787 CONSTRAINT, extended_errcode 787, errmsg "FOREIGN KEY constraint failed"
+    finalize: rc 787
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db2, after the failed COMMIT sees: 1,2
+  sql: INSERT INTO p VALUES (7)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E14. A runtime error that isn't a constraint (integer overflow), third row of four
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t SELECT CASE WHEN v = 3 THEN abs(-9223372036854775807 - 1) ELSE 100 + v END FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4)
+    step: rc 1 ERROR, extended_errcode 1, errmsg "integer overflow"
+    finalize: rc 1
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E15. SQLITE_FULL, one row, into a table with no constraints
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: PRAGMA max_page_count = 1
+    rows: 1
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO b VALUES (zeroblob(100000))
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows in b db sees: 0
+    rows of t db2, after sees: 1,2
+    rows in b db2, after sees: 0
+
+E16. SQLITE_FULL, many rows, into a table with no constraints
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: PRAGMA max_page_count = 1
+    rows: 1
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO b SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+    rows in b db sees: 0
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+    rows in b db2, after sees: 0
+
+E17. SQLITE_FULL, one row, into a table with a NOT NULL column
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: PRAGMA max_page_count = 1
+    rows: 1
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO b VALUES (zeroblob(100000))
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows in b db sees: 0
+    rows of t db2, after sees: 1,2
+    rows in b db2, after sees: 0
+
+E18. SQLITE_FULL, many rows, into a table with a NOT NULL column
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: PRAGMA max_page_count = 1
+    rows: 1
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO b SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+    rows in b db sees: 0
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+    rows in b db2, after sees: 0
+
+E19. SQLITE_FULL, many rows, into t (UNIQUE, NOT NULL, CHECK)
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: PRAGMA max_page_count = 1
+    rows: 1
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t SELECT 100 + i FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 800) SELECT i FROM n)
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E20. SQLITE_NOMEM through the heap limit, one row, into a table with no constraints
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b VALUES (randomblob(100000))
+    (memory_used before the limit is above 0: 1)
+    (hard heap limit was memory_used + 1000 for the steps, now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows in b db sees: 0
+    rows of t db2, after sees: 1,2
+    rows in b db2, after sees: 0
+
+E21. SQLITE_NOMEM through the heap limit, many rows, into a table with a NOT NULL column
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b SELECT randomblob(100000) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (memory_used before the limit is above 0: 1)
+    (hard heap limit was memory_used + 1000 for the steps, now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows in b db sees: 0
+    rows of t db2, after sees: 1,2
+    rows in b db2, after sees: 0
+
+E22. SQLITE_NOMEM through the heap limit, many rows, into t (UNIQUE, NOT NULL, CHECK)
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO t SELECT 100 + v + 0 * length(randomblob(100000)) FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (memory_used before the limit is above 0: 1)
+    (hard heap limit was memory_used + 1000 for the steps, now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2
+    rows of t db2, after sees: 1,2
+
+E23. SQLITE_NOMEM through the heap limit, a SELECT that reads no table
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT randomblob(100000)
+    (memory_used before the limit is above 0: 1)
+    (hard heap limit was memory_used + 1000 for the steps, now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E24. A statement refused at prepare: no such table, then a syntax error
+  sql: BEGIN
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO nosuch VALUES (1)
+    prepare: rc 1 ERROR, extended_errcode 1, errmsg "no such table: nosuch"
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSRT INTO t VALUES (1)
+    prepare: rc 1 ERROR, extended_errcode 1, errmsg "near "INSRT": syntax error"
+    state: autocommit 0, txn_state(main) WRITE
+    rows of t db sees: 1,2,10
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db2, after sees: 1,2,10
+
+E25. A statement refused at prepare, in a transaction begun by SAVEPOINT
+  sql: SAVEPOINT a
+    step: rc 101 DONE
+    finalize: rc 0
+  sql: INSERT INTO t VALUES (10)
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO nosuch VALUES (1)
+    prepare: rc 1 ERROR, extended_errcode 1, errmsg "no such table: nosuch"
+    state: autocommit 0, txn_state(main) WRITE
+  sql: RELEASE a
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    rows of t db sees: 1,2,10
+    rows of t db2, after sees: 1,2,10

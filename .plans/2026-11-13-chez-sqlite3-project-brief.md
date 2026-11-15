@@ -5,8 +5,9 @@ Status: accepted 2026-11-13. §2 was settled by the maintainer on 2026-11-13. §
 are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. §3c, d, e and g are ADR-0010 to
 ADR-0013, from the M1 plan. Amended 2026-11-14 with the M1 plan: D2 settled, D7 measured, and the
 settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 to D6 settled
-by the maintainer (§5). §3f is ADR-0015, accepted. Where a record and this brief disagree, the
-record wins.
+by the maintainer (§5). §3f is ADR-0015, accepted. Amended 2026-11-15 with the M3 plan: D3's leaning
+settled (§5), and what M3's research measured of §2.7 and §3d. Where a record and this brief
+disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses
@@ -90,6 +91,12 @@ need prepared statements, and the conveniences are built on them. Nothing privat
    arrives in M3, not M1 (the maintainer, 2026-11-13): a setting is checked by reading its row
    back, which needs M2's statements. `journal_mode=wal` on a `:memory:` database answers
    `memory` while every call succeeds ([research/m1-plan/](research/m1-plan/)).
+   M3's research measured the rest: a set can answer no row, as `foreign_keys = 1` does, so a
+   setting is read back by a second statement; and SQLite coerces a bad value, and ignores an
+   unknown name, silently, so each is checked in Scheme first
+   ([research/m3-plan/](research/m3-plan/); ADR-0018). The list holds six of SQLite's settings
+   and one of the library's own, `statement-cache`, which SQLite never sees and so isn't read back
+   (the maintainer's Q8 and Q11, 2026-11-15).
 8. **`sqlite3_config` stays out:** it is process-wide and legal only before SQLite
    initialises. `sqlite3_db_config` is reached through a few named, checked options:
    extension loading, defensive mode, double-quoted strings.
@@ -107,6 +114,9 @@ need prepared statements, and the conveniences are built on them. Nothing privat
 | g | **Errors are condition types.** A base `&sqlite-error` carries the primary code, the extended code, the message, the SQL, and the error offset. Codes are symbols. Subtypes exist only for errors callers catch: busy/locked, constraint, read-only. Connections open with `SQLITE_OPEN_EXRESCODE`. | chez-curl ADR-0022, chez-libuv ADR-0006 |
 | h | **Windows is not supported.** | chez-curl ADR-0004 |
 | i | **Builds and tests run in a pinned, toolchain-only Guix container with no network.** | chez-curl ADR-0006 |
+
+§3d's `sqlite3_close` writes, a WAL checkpoint among other things, but never waited in the busy
+handler: a counting handler saw no call (M3's research, concurrency S5).
 
 ## 4. Scope
 
@@ -137,7 +147,7 @@ Out of v1:
 |---|---|---|
 | D1 | Is a threaded Chez required, as in chez-curl? | **Settled 2026-11-13: required** (ADR-0001's amendment). The counters need a mutex. |
 | D2 | The connection's mutex mode under §3c: `NOMUTEX` (one thread uses it anyway) or `FULLMUTEX` (defence if our check has a gap). | **Settled 2026-11-13: `FULLMUTEX` by default, `'no-mutex` per connection** (ADR-0010). A `THREADSAFE=0` library is refused. |
-| D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | **Settled 2026-11-14: in M3** (the maintainer). The leaning's "bounded and cleared by close" waits for M3's plan. |
+| D3 | A per-connection cache of prepared statements for `query` and `execute!`, as Python's `sqlite3` keeps. | **Settled 2026-11-14: in M3** (the maintainer). ADR-0020 builds it: bounded, at 32 statements a connection unless the `statement-cache` setting gives 0 (off) to 1024 (the maintainer's Q11 and Q13, 2026-11-15), the least recently used out first, and finalized by the close as tracked statements. |
 | D4 | Binding `+nan.0`: SQLite stores NULL without complaint (measured). | **Settled 2026-11-14: refused** (the maintainer). ADR-0015 makes it an assertion violation and binds infinities as REAL. |
 | D5 | Binding `#t` and `#f`. | **Settled 2026-11-14: refused; callers pass 1 or 0** (the maintainer). ADR-0015 gives the reasons put to the maintainer. |
 | D6 | TEXT that isn't valid UTF-8: `utf8->string` replaces bytes silently (measured). | **Settled 2026-11-14: a named condition naming the column, and the column readable as bytes instead** (the maintainer), `&sqlite-invalid-text` (the M2 plan's Q8). ADR-0015 and ADR-0013's amendment build it. |
@@ -159,6 +169,7 @@ Out of v1:
   savepoints, the settings list (§2.7, moved from M1), the busy timeout, interrupt, the change
   counters, the statement cache (D3). Two connections in WAL mode contending under a busy
   timeout.
+  [The M3 plan](2026-11-15-m3-plan.md).
 - **M4, extensions and `db_config`.** Loadable extensions opt-in, defensive mode, DQS. FTS5
   and JSON suites.
 - **M5, the release.** `/docs` finished, README, CHANGELOG, 0.1.0. `docs/reference.md` grows

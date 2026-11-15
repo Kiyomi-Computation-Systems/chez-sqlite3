@@ -1,0 +1,423 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+N1. NOMEM, the heap limit kept in force across the step
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT randomblob(100000) FROM src LIMIT 1
+    (the hard heap limit was memory_used + 1000 across every step; now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+N2. NOMEM, the heap limit kept in force across the step
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT randomblob(100000)
+    (the hard heap limit was memory_used + 1000 across every step; now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+N3. NOMEM, the heap limit kept in force across the step
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (the hard heap limit was memory_used + 1000 across every step; now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+N4. NOMEM, the heap limit kept in force across the step
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b VALUES (randomblob(100000))
+    (the hard heap limit was memory_used + 1000 across every step; now 0)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M1. NOMEM, exactly one allocation failing: the first after arming
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT randomblob(100000) FROM src LIMIT 1
+    (heap limits before arming: soft 0, hard 0)
+    (one allocation failed, of 100000 bytes, and the allocator disarmed)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M2. NOMEM, exactly one allocation failing: the first after arming
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT randomblob(100000)
+    (heap limits before arming: soft 0, hard 0)
+    (one allocation failed, of 100000 bytes, and the allocator disarmed)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M3. NOMEM, exactly one allocation failing: the first after arming
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (heap limits before arming: soft 0, hard 0)
+    (one allocation failed, of 56 bytes, and the allocator disarmed)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M4. NOMEM, exactly one allocation failing: the first after arming
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b VALUES (randomblob(100000))
+    (heap limits before arming: soft 0, hard 0)
+    (one allocation failed, of 100000 bytes, and the allocator disarmed)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M5. NOMEM, exactly one allocation failing: the first of at least 100,000 bytes
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (heap limits before arming: soft 0, hard 0)
+    (one allocation failed, of 100000 bytes, and the allocator disarmed)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+M6. NOMEM, the first allocation of at least 100,000 bytes failing, and every allocation after it until the step returns
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (heap limits before arming: soft 0, hard 0)
+    (the first allocation to fail was of 100000 bytes; 2 failed in all, until the step returned)
+    step: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    finalize: rc 7
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F1. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: INSERT INTO b SELECT x FROM src
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F2. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: INSERT INTO b SELECT lower(x) FROM src
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F3. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: INSERT INTO bn SELECT x FROM src
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F4. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: INSERT INTO b SELECT zeroblob(3000) FROM src
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F5. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: INSERT INTO b VALUES (zeroblob(100000))
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F6. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: UPDATE src SET x = x || x
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F7. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: UPDATE src SET x = lower(x || x)
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+F8. FULL, max_page_count set to the page count after the marker
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  PRAGMA page_count answered 15; PRAGMA max_page_count = 15 answered 15
+  sql: UPDATE src SET x = zeroblob(9000)
+    step: rc 13 FULL, extended_errcode 13, errmsg "database or disk is full"
+    finalize: rc 13
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+I1. INTERRUPT: sqlite3_interrupt at the 50th progress callback, one per 100 opcodes
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < 1000000) SELECT i FROM c
+    step: rc 9 INTERRUPT, extended_errcode 9, errmsg "interrupted"
+    finalize: rc 9
+    (progress callbacks: 50)
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+I2. INTERRUPT: sqlite3_interrupt at the 50th progress callback, one per 100 opcodes
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT INTO b WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < 1000000) SELECT abs(i) FROM c
+    step: rc 9 INTERRUPT, extended_errcode 9, errmsg "interrupted"
+    finalize: rc 9
+    (progress callbacks: 50)
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+I3. INTERRUPT: sqlite3_interrupt at the 50th progress callback, one per 100 opcodes
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < 1000000) SELECT count(*) FROM c, src
+    step: rc 9 INTERRUPT, extended_errcode 9, errmsg "interrupted"
+    finalize: rc 9
+    (progress callbacks: 50)
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+I4. INTERRUPT: sqlite3_interrupt at the 50th progress callback, one per 100 opcodes
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < 1000000) SELECT count(*) FROM c
+    step: rc 9 INTERRUPT, extended_errcode 9, errmsg "interrupted"
+    finalize: rc 9
+    (progress callbacks: 50)
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G1. A column read with no limit: the control
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT hex(x) FROM src
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text16, no limit: a pointer; errcode 100, extended_errcode 100, errmsg "another row available"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 0 OK, extended_errcode 0, errmsg "not an error"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_finalize: rc 0 OK, extended_errcode 0, errmsg "not an error"
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G2. A column read's NOMEM, a SELECT reading a table, then reset
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT hex(x) FROM src
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text16, the heap limit at memory_used + 1000 around this one call: NULL; errcode 7, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 1, txn_state(main) NONE
+    sqlite3_finalize: rc 0 OK, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G3. A column read's NOMEM, a SELECT reading a table, then finalize alone
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT hex(x) FROM src
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text16, the heap limit at memory_used + 1000 around this one call: NULL; errcode 7, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_finalize: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t (none); b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G4. A column read's NOMEM, a SELECT reading no table, then reset
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT ?1
+    bound ?1: 100000 bytes of TEXT, with their length
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text, the heap limit at memory_used + 1000 around this one call: NULL; errcode 7, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_finalize: rc 0 OK, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G5. A column read's NOMEM, a SELECT reading no table, then finalize alone
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT ?1
+    bound ?1: 100000 bytes of TEXT, with their length
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text, the heap limit at memory_used + 1000 around this one call: NULL; errcode 7, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_finalize: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+G6. A column read's NOMEM by sqlite3_column_text16, a SELECT reading no table, then reset
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: SELECT ?1
+    bound ?1: 100000 bytes of TEXT, with their length
+    step: rc 100 ROW
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_column_text16, the heap limit at memory_used + 1000 around this one call: NULL; errcode 7, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 7 NOMEM, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    sqlite3_finalize: rc 0 OK, extended_errcode 7, errmsg "out of memory"
+    state: autocommit 0, txn_state(main) WRITE
+    db sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, after sees: t marker; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+
+L1. INSERT OR ROLLBACK ends the transaction; the writes after it
+  BEGIN; INSERT INTO t VALUES ('marker')
+    state: autocommit 0, txn_state(main) WRITE
+  sql: INSERT OR ROLLBACK INTO u VALUES (1)
+    step: rc 2067 CONSTRAINT, extended_errcode 2067, errmsg "UNIQUE constraint failed: u.x"
+    finalize: rc 2067
+    state: autocommit 1, txn_state(main) NONE
+  sql: INSERT INTO t VALUES ('after 1')
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, at once sees: t after 1; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: INSERT INTO t VALUES ('after 2')
+    step: rc 101 DONE
+    finalize: rc 0
+    state: autocommit 1, txn_state(main) NONE
+    db2, at once sees: t after 1,after 2; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+  sql: COMMIT
+    step: rc 1 ERROR, extended_errcode 1, errmsg "cannot commit - no transaction is active"
+    finalize: rc 1
+    state: autocommit 1, txn_state(main) NONE
+    db sees: t after 1,after 2; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes
+    db2, after sees: t after 1,after 2; b 0 rows; bn 0 rows; src 10 rows of 30000 bytes

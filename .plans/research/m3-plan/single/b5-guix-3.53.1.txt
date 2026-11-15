@@ -1,0 +1,18 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+V1. TRUE and FALSE
+  SELECT TRUE, typeof(TRUE), FALSE, typeof(FALSE), TRUE + TRUE, true = 1, false = 0
+    row: int 1 text 'integer' int 0 text 'integer' int 2 int 1 int 1
+  SELECT f, typeof(f), f IS TRUE, f = TRUE FROM bl
+    row: int 1 text 'integer' int 1 int 1
+    row: int 0 text 'integer' int 0 int 0
+    row: text 'true' text 'text' int 0 int 0
+    row: int 2 text 'integer' int 1 int 0
+
+V2. sqlite3_close with an unfinalized statement
+  close with one prepared, unstepped: rc 5, errmsg "unable to close due to unfinalized statements or unfinished backups", next_stmt is the statement: 1
+  the connection still works: step rc 100
+  close with it mid-row: rc 5, errmsg "unable to close due to unfinalized statements or unfinished backups"
+  finalize: rc 0; next_stmt is NULL: 1
+  close: rc 0

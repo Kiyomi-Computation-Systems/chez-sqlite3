@@ -123,6 +123,18 @@
 * A thread a suite forks dies on a raise it does not catch, and a waiter with
   no bound then hangs the suite, naming no test. Make whatever a thread raises
   its answer, and bound every wait for one.
+* Whether a failure ended a transaction can't be told from its code or its
+  SQL: the same NOMEM or FULL undid one statement or the whole transaction,
+  by one function call. Read `sqlite3_get_autocommit` after it
+  (`.plans/research/m3-plan/single/`).
+* A busy wait's length is the build's: one without `nanosleep` sleeps whole
+  seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
+  a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms
+  (`.plans/research/m3-plan/concurrency/`).
+* A connection's own statement held at a row stops its writes from waiting:
+  under another's write lock they answered BUSY at once, where without the
+  held read they waited out a 1500 ms timeout. A row that waits on a lock
+  holds no read of its own (`.plans/research/m3-plan/slice-0/`, P12).
 
 **Chez and the FFI**
 
@@ -138,6 +150,12 @@
   a `with-exception-handler` handler of the raise runs with interrupts
   disabled, where an engine never expires and another thread's collection
   waits. Answer data there, and raise after the section (ADR-0012, amended).
+* A `guard` whose clauses don't match re-enters the raise's extent to raise
+  again, so a `dynamic-wind` before thunk that refuses a re-entry replaces
+  the caller's condition with its own. Let a re-entry through, as
+  `call-with-database`'s before thunks do. An after thunk whose work isn't
+  idempotent acts once, behind a flag, and whatever runs after a re-entry
+  reads that flag before it touches anything the first exit finished.
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

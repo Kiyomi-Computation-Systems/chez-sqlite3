@@ -1,0 +1,194 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+delete none PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.001, max 0.001 ms
+delete none PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete none PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete none PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete none PRAGMA journal_mode: prepare: n 7, min 0.023, median 0.030, max 0.081 ms
+delete none PRAGMA journal_mode: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete none PRAGMA synchronous = 1: prepare: n 7, min 0.022, median 0.030, max 0.034 ms
+delete none PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA synchronous: prepare: n 7, min 0.031, median 0.036, max 0.077 ms
+delete none PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete none PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete none PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete none PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete none PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete none PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.004 ms
+delete none PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete none SELECT count(*) FROM t: prepare: n 7, min 0.033, median 0.035, max 0.091 ms
+delete none SELECT count(*) FROM t: steps: n 7, min 0.004, median 0.004, max 0.025 ms
+delete none PRAGMA journal_mode = wal: prepare: n 7, min 0.039, median 0.050, max 0.076 ms
+delete none PRAGMA journal_mode = wal: steps: n 7, min 3.157, median 3.219, max 3.623 ms
+delete read PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.001, max 0.001 ms
+delete read PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA journal_mode: prepare: n 7, min 0.040, median 0.047, max 0.055 ms
+delete read PRAGMA journal_mode: steps: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA synchronous = 1: prepare: n 7, min 0.029, median 0.031, max 0.050 ms
+delete read PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA synchronous: prepare: n 7, min 0.027, median 0.031, max 0.061 ms
+delete read PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete read PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete read PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete read PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete read PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete read SELECT count(*) FROM t: prepare: n 7, min 0.030, median 0.031, max 0.044 ms
+delete read SELECT count(*) FROM t: steps: n 7, min 0.003, median 0.003, max 0.004 ms
+delete read PRAGMA journal_mode = wal: prepare: n 7, min 0.029, median 0.078, max 0.117 ms
+delete read PRAGMA journal_mode = wal: steps: n 7, min 200.697, median 200.728, max 200.818 ms
+delete reserved PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.000, max 0.001 ms
+delete reserved PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete reserved PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete reserved PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete reserved PRAGMA journal_mode: prepare: n 7, min 0.032, median 0.033, max 0.041 ms
+delete reserved PRAGMA journal_mode: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete reserved PRAGMA synchronous = 1: prepare: n 7, min 0.030, median 0.032, max 0.071 ms
+delete reserved PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved PRAGMA synchronous: prepare: n 7, min 0.031, median 0.036, max 0.044 ms
+delete reserved PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete reserved PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete reserved PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete reserved PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+delete reserved PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete reserved PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete reserved PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete reserved SELECT count(*) FROM t: prepare: n 7, min 0.034, median 0.037, max 0.043 ms
+delete reserved SELECT count(*) FROM t: steps: n 7, min 0.003, median 0.003, max 0.003 ms
+delete reserved PRAGMA journal_mode = wal: prepare: n 7, min 0.031, median 0.033, max 0.081 ms
+delete reserved PRAGMA journal_mode = wal: steps: n 7, min 0.003, median 0.003, max 0.006 ms
+delete exclusive PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.001, max 0.001 ms
+delete exclusive PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete exclusive PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.004 ms
+delete exclusive PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.003 ms
+delete exclusive PRAGMA journal_mode: prepare: n 7, min 200.653, median 200.711, max 200.843 ms
+delete exclusive PRAGMA journal_mode: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA synchronous = 1: prepare: n 7, min 200.703, median 200.715, max 200.743 ms
+delete exclusive PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA synchronous: prepare: n 7, min 200.708, median 200.727, max 200.777 ms
+delete exclusive PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+delete exclusive PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete exclusive PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+delete exclusive PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.004 ms
+delete exclusive PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.002 ms
+delete exclusive SELECT count(*) FROM t: prepare: n 7, min 200.665, median 200.732, max 200.742 ms
+delete exclusive SELECT count(*) FROM t: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+delete exclusive PRAGMA journal_mode = wal: prepare: n 7, min 200.664, median 200.717, max 200.740 ms
+delete exclusive PRAGMA journal_mode = wal: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA busy_timeout: prepare: n 7, min 0.001, median 0.001, max 0.004 ms
+wal none PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal none PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal none PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal none PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal none PRAGMA journal_mode: prepare: n 7, min 0.037, median 0.041, max 0.063 ms
+wal none PRAGMA journal_mode: steps: n 7, min 0.000, median 0.001, max 0.001 ms
+wal none PRAGMA synchronous = 1: prepare: n 7, min 0.035, median 0.041, max 0.053 ms
+wal none PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA synchronous: prepare: n 7, min 0.036, median 0.039, max 0.054 ms
+wal none PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal none PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal none PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal none PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.002, max 0.003 ms
+wal none PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal none PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal none PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal none SELECT count(*) FROM t: prepare: n 7, min 0.054, median 0.077, max 0.098 ms
+wal none SELECT count(*) FROM t: steps: n 7, min 0.003, median 0.005, max 0.006 ms
+wal none PRAGMA journal_mode = delete: prepare: n 7, min 0.050, median 0.056, max 0.057 ms
+wal none PRAGMA journal_mode = delete: steps: n 7, min 0.001, median 0.001, max 0.002 ms
+wal read PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.001, max 0.003 ms
+wal read PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal read PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal read PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal read PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read PRAGMA journal_mode: prepare: n 7, min 0.035, median 0.035, max 0.044 ms
+wal read PRAGMA journal_mode: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal read PRAGMA synchronous = 1: prepare: n 7, min 0.033, median 0.044, max 0.065 ms
+wal read PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read PRAGMA synchronous: prepare: n 7, min 0.032, median 0.034, max 0.104 ms
+wal read PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal read PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal read PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal read PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal read PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal read PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal read PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal read SELECT count(*) FROM t: prepare: n 7, min 0.029, median 0.050, max 0.084 ms
+wal read SELECT count(*) FROM t: steps: n 7, min 0.002, median 0.002, max 0.004 ms
+wal read PRAGMA journal_mode = delete: prepare: n 7, min 0.019, median 0.036, max 0.045 ms
+wal read PRAGMA journal_mode = delete: steps: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA busy_timeout: prepare: n 7, min 0.000, median 0.001, max 0.001 ms
+wal reserved PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA journal_mode: prepare: n 7, min 0.028, median 0.040, max 0.068 ms
+wal reserved PRAGMA journal_mode: steps: n 7, min 0.000, median 0.001, max 0.001 ms
+wal reserved PRAGMA synchronous = 1: prepare: n 7, min 0.035, median 0.037, max 0.045 ms
+wal reserved PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA synchronous: prepare: n 7, min 0.034, median 0.036, max 0.047 ms
+wal reserved PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal reserved PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal reserved PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal reserved PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal reserved SELECT count(*) FROM t: prepare: n 7, min 0.038, median 0.068, max 0.161 ms
+wal reserved SELECT count(*) FROM t: steps: n 7, min 0.002, median 0.003, max 0.007 ms
+wal reserved PRAGMA journal_mode = delete: prepare: n 7, min 0.039, median 0.057, max 0.073 ms
+wal reserved PRAGMA journal_mode = delete: steps: n 7, min 0.001, median 0.002, max 0.002 ms
+wal exclusive PRAGMA busy_timeout: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal exclusive PRAGMA busy_timeout: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA foreign_keys = 1: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal exclusive PRAGMA foreign_keys = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA foreign_keys: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal exclusive PRAGMA foreign_keys: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal exclusive PRAGMA journal_mode: prepare: n 7, min 0.060, median 0.075, max 0.102 ms
+wal exclusive PRAGMA journal_mode: steps: n 7, min 0.001, median 0.001, max 0.001 ms
+wal exclusive PRAGMA synchronous = 1: prepare: n 7, min 0.045, median 0.074, max 0.090 ms
+wal exclusive PRAGMA synchronous = 1: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA synchronous: prepare: n 7, min 0.041, median 0.048, max 0.055 ms
+wal exclusive PRAGMA synchronous: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA temp_store = 2: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal exclusive PRAGMA temp_store = 2: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA temp_store: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal exclusive PRAGMA temp_store: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal exclusive PRAGMA trusted_schema = 0: prepare: n 7, min 0.001, median 0.001, max 0.001 ms
+wal exclusive PRAGMA trusted_schema = 0: steps: n 7, min 0.000, median 0.000, max 0.000 ms
+wal exclusive PRAGMA trusted_schema: prepare: n 7, min 0.001, median 0.001, max 0.002 ms
+wal exclusive PRAGMA trusted_schema: steps: n 7, min 0.000, median 0.000, max 0.001 ms
+wal exclusive SELECT count(*) FROM t: prepare: n 7, min 0.043, median 0.046, max 0.064 ms
+wal exclusive SELECT count(*) FROM t: steps: n 7, min 0.002, median 0.002, max 0.003 ms
+wal exclusive PRAGMA journal_mode = delete: prepare: n 7, min 0.043, median 0.048, max 0.070 ms
+wal exclusive PRAGMA journal_mode = delete: steps: n 7, min 0.001, median 0.001, max 0.002 ms

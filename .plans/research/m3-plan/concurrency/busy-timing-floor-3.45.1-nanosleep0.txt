@@ -1,0 +1,39 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+RUNS 21 per distribution; the machine was shared with other probes
+B3 rollback journal, timeout 0 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.003 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002 0.002 0.002 0.002 0.002 0.002 0.003
+  predicted by the floor's source: 0 sleeps totalling 0 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 1 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.002 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002 0.002 0.002 0.002 0.002 0.002
+  predicted by the floor's source: 1 sleeps totalling 1 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 10 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.003 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002 0.002 0.003
+  predicted by the floor's source: 4 sleeps totalling 10 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 50 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.002 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002 0.002 0.002 0.002
+  predicted by the floor's source: 6 sleeps totalling 50 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 250 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.002 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002 0.002
+  predicted by the floor's source: 12 sleeps totalling 250 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 1500 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 1000.129, median 1000.145, max 1000.159 ms
+  sorted: 1000.129 1000.137 1000.141 1000.143 1000.143 1000.144 1000.145 1000.145 1000.145 1000.145 1000.145 1000.146 1000.146 1000.147 1000.147 1000.148 1000.149 1000.155 1000.157 1000.158 1000.159
+  predicted by the floor's source: 24 sleeps totalling 1500 ms; with HAVE_NANOSLEEP=0, 1 sleeps totalling 1000 ms
+B3 rollback journal, timeout 250 ms by PRAGMA busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.001, median 0.001, max 0.001 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001
+  predicted by the floor's source: 12 sleeps totalling 250 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 WAL, timeout 250 ms by sqlite3_busy_timeout: blocked BEGIN IMMEDIATE, ms to BUSY: n 21, min 0.000, median 0.000, max 0.001 ms
+  sorted: 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.001
+  predicted by the floor's source: 12 sleeps totalling 250 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B3 rollback journal, timeout 1500 ms: autocommit INSERT under a reader, ms to BUSY: n 21, min 1000.285, median 1000.453, max 1001.429 ms
+  sorted: 1000.285 1000.291 1000.292 1000.299 1000.302 1000.302 1000.306 1000.312 1000.442 1000.451 1000.453 1000.460 1000.467 1000.469 1000.470 1000.475 1000.515 1000.570 1001.045 1001.403 1001.429
+  predicted by the floor's source: 24 sleeps totalling 1500 ms; with HAVE_NANOSLEEP=0, 1 sleeps totalling 1000 ms
+B5 WAL, timeout 1500: deferred upgrade after another's commit, ms: n 21, min 0.002, median 0.002, max 0.006 ms
+  sorted: 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.003 0.003 0.004 0.004 0.004 0.005 0.005 0.005 0.006 0.006
+B5 WAL, timeout 1500: deferred upgrade while another's write is open, ms: n 21, min 0.001, median 0.001, max 0.001 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001
+B7 rollback journal, timeout 250 ms: COMMIT under a reader, ms to BUSY: n 21, min 0.001, median 0.001, max 0.002 ms
+  sorted: 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.002
+  predicted by the floor's source: 12 sleeps totalling 250 ms; with HAVE_NANOSLEEP=0, 0 sleeps totalling 0 ms
+B9 timeout 1500: DROP TABLE under the connection's own reader, ms: n 21, min 0.025, median 0.025, max 0.042 ms
+  sorted: 0.025 0.025 0.025 0.025 0.025 0.025 0.025 0.025 0.025 0.025 0.025 0.026 0.026 0.026 0.026 0.027 0.030 0.030 0.031 0.037 0.042

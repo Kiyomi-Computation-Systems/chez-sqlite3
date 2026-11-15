@@ -12,7 +12,9 @@
   Amended 2026-11-15 in M2 slice 3, and accepted by the maintainer that day: what it measured and
   built, and the maintainer's choice that
   a column read's out-of-memory moves a statement to `failed`
-  ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)).
+  ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)). Amended 2026-11-15, and
+  accepted by the maintainer that day: the cache's and the script runner's prepares (M3's plan,
+  [amendment](#amendment-2026-11-15-the-caches-and-the-script-runners-prepares-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -341,3 +343,39 @@ own choice, of the same day. Measured on Guix's 3.53.1 and at the floor, 3.45.1,
     100 ms in a 600 ms timeout, waited 601 ms and answered BUSY, where a long computation
     stopped at 100 ms. So the consequences' "M3's interrupt is how another thread stops a long
     one" holds for a long computation only.
+
+## Amendment, 2026-11-15: the cache's and the script runner's prepares (M3's plan)
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.1 and §4.6).
+
+- **Decision 4's "no prepare flags" is `prepare-statement`'s and `call-with-statement`'s.** While
+  a connection's statement cache can hold a statement, it prepares with
+  `SQLITE_PREPARE_PERSISTENT`, so a held statement takes no lookaside; at a `statement-cache` of 0
+  it prepares with no flags ([ADR-0020](0020-the-statement-cache.md); M3's research, single K1).
+- **A PRAGMA statement re-prepared itself at its second step,** the one measured, and applied
+  its setting again, with flags 0 and with `PERSISTENT`: its `SQLITE_STMTSTATUS_REPREPARE` count
+  went from 0 to 1 with nothing run between its two steps, where a SELECT's stayed 0 (M3 slice 0's
+  research, P1, P1b, P1d). The context's "preparing a PRAGMA changes the connection" holds at
+  that reuse too.
+- **Any set of `foreign_keys` or `trusted_schema` expires every other statement on its
+  connection,** with the value changed or not: a held SELECT re-prepared at its next step after
+  `foreign_keys = 1`, `= 0` and `= off`, and `trusted_schema = 0` and `= 1`, and after no read
+  form of the six settings and no set of the other four (slice 0's research, P13, P13b). Such a
+  statement re-prepares, as decision 5's column count already assumes.
+- **`execute-script!` prepares one statement at a time,** through a private prepare that answers
+  the statement and its tail's offset instead of refusing the tail. Each statement is prepared
+  only after the one before it has run, so nothing the script didn't reach is prepared, as R2
+  asked ([ADR-0016](0016-the-conveniences-and-the-counters.md); single P3). Decision 4's checks,
+  its out-parameters and its section are the same.
+- **The consequence "its statement cache (brief D3) holds statements its connection still
+  tracks" is built:** the cache's statements are tracked, and the close finalizes them with the
+  rest.
+- **The verbs take a who** (ADR-0013, decision 2), agreed with M2's session: private procedures in
+  `statement.sls` and `statement-values.sls` that take a WHO, for step, reset, finalize, bind,
+  clear and the column reads, each on `call-with-statement-handle`; the public verbs pass their own
+  names. So a convenience's raise names the convenience (the M3 plan, finding F11).
+- **A connection's own held read defeats the busy timeout for its writes:** with its SELECT held
+  at a row, its `BEGIN IMMEDIATE` and an autocommit INSERT answered BUSY at once under another's
+  write lock, where without the held read they waited out a 1500 ms timeout, in WAL and
+  rollback-journal mode alike (slice 0's research, P12).

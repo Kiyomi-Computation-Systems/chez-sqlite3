@@ -3,7 +3,9 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. Decisions 3 and 4
   were the maintainer's own, on 2026-11-13: brief D2, and the `THREADSAFE=0` refusal. Proposed first
   in the brief, §3c. Amended 2026-11-14: the mutex, measured
-  ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)).
+  ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)). Amended 2026-11-15, and
+  accepted by the maintainer that day: the interrupt, designed (M3's plan,
+  [amendment](#amendment-2026-11-15-the-interrupt-designed-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
 - **Settles:** brief §3c and D2. Closes ADR-0002's open question.
@@ -93,3 +95,16 @@
   `'no-mutex`. On that build a connection with no flag is multi-thread, so the default's
   `FULLMUTEX` is what serializes it. The plan's open question is settled.
 
+## Amendment, 2026-11-15: the interrupt, designed (M3's plan)
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.4).
+
+- **Decision 1's exception is `interrupt-database!`,** designed with `close-database!` by
+  [ADR-0019](0019-interrupt-and-close.md). It checks only that its argument is a database. A
+  mutex in the record keeps any interrupt from running once the close has begun, and on a closed
+  connection it does nothing.
+- **The context's "each connection takes a mutex around every call" isn't so for every call.**
+  Under `FULLMUTEX`, another thread's `sqlite3_errmsg` waited 200 ms for a running step, and its
+  `sqlite3_interrupt` returned before the step did (M3's research, concurrency I8). So the
+  interrupt calls nothing else of the connection.

@@ -1,0 +1,14 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+wal, BEGIN DEFERRED, c2 idle: BEGIN's time: n 11, min 0.001, median 0.001, max 0.002 ms
+wal, BEGIN DEFERRED, after c2's commit: BEGIN's time: n 11, min 0.001, median 0.001, max 0.003 ms
+wal, BEGIN IMMEDIATE, c2 idle: BEGIN's time: n 11, min 0.001, median 0.002, max 0.003 ms
+wal, BEGIN IMMEDIATE, after c2's commit: BEGIN's time: n 11, min 0.002, median 0.005, max 0.012 ms
+wal, BEGIN EXCLUSIVE, c2 idle: BEGIN's time: n 11, min 0.001, median 0.002, max 0.003 ms
+wal, BEGIN EXCLUSIVE, after c2's commit: BEGIN's time: n 11, min 0.002, median 0.005, max 0.005 ms
+delete, BEGIN DEFERRED, c2 idle: BEGIN's time: n 11, min 0.001, median 0.001, max 0.003 ms
+delete, BEGIN DEFERRED, after c2's commit: BEGIN's time: n 11, min 0.001, median 0.001, max 0.003 ms
+delete, BEGIN IMMEDIATE, c2 idle: BEGIN's time: n 11, min 0.001, median 0.001, max 0.002 ms
+delete, BEGIN IMMEDIATE, after c2's commit: BEGIN's time: n 11, min 0.001, median 0.002, max 0.003 ms
+delete, BEGIN EXCLUSIVE, c2 idle: BEGIN's time: n 11, min 0.002, median 0.002, max 0.003 ms
+delete, BEGIN EXCLUSIVE, after c2's commit: BEGIN's time: n 11, min 0.002, median 0.002, max 0.002 ms

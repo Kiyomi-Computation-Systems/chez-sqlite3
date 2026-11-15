@@ -1,0 +1,14 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+repetition 1: c2 reads 0 rows
+  c1 PRAGMA journal_mode: delete
+  c1, after PRAGMA journal_mode=wal, PRAGMA journal_mode: wal
+  c2 PRAGMA journal_mode: delete
+  c2 reads 0 rows
+  c2 PRAGMA journal_mode: wal
+repetition 2: c2 reads 0 rows
+  c1 PRAGMA journal_mode: delete
+  c1, after PRAGMA journal_mode=wal, PRAGMA journal_mode: wal
+  c2 PRAGMA journal_mode: delete
+  c2 reads 0 rows
+  c2 PRAGMA journal_mode: wal

@@ -1,0 +1,16 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+repetition 1: statement H stepped once: 100
+  an interrupt from a thread, while nothing runs; is_interrupted 1
+  new statement 1: prepare answered 9 "interrupted"
+  new statement 2: prepare answered 9 "interrupted"
+  new statement 3: prepare answered 9 "interrupted"
+  H reset: 0
+  then a new statement answered 101; is_interrupted 0
+repetition 2: statement H stepped once: 100
+  an interrupt from a thread, while nothing runs; is_interrupted 1
+  new statement 1: prepare answered 9 "interrupted"
+  new statement 2: prepare answered 9 "interrupted"
+  new statement 3: prepare answered 9 "interrupted"
+  H reset: 0
+  then a new statement answered 101; is_interrupted 0

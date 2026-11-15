@@ -1,0 +1,29 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+P9. BEGIN while the connection's own SELECT holds a read; codes are extended,
+    0 for SQLITE_OK, and -1 where c2 ran nothing
+  wal, BEGIN DEFERRED, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  wal, BEGIN DEFERRED, after c2 commits a row: H's step 100, autocommit 1; c2's insert 0; BEGIN 0 (at once), autocommit 0; INSERT 517, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  wal, BEGIN IMMEDIATE, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  wal, BEGIN IMMEDIATE, after c2 commits a row: H's step 100, autocommit 1; c2's insert 0; BEGIN 517 (at once), autocommit 1; INSERT 517, autocommit 1; COMMIT 1, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  wal, BEGIN EXCLUSIVE, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  wal, BEGIN EXCLUSIVE, after c2 commits a row: H's step 100, autocommit 1; c2's insert 0; BEGIN 517 (at once), autocommit 1; INSERT 517, autocommit 1; COMMIT 1, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN DEFERRED, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN DEFERRED, after c2 commits a row: H's step 100, autocommit 1; c2's insert 5; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN IMMEDIATE, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN IMMEDIATE, after c2 commits a row: H's step 100, autocommit 1; c2's insert 5; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN EXCLUSIVE, c2 idle: H's step 100, autocommit 1; c2's insert -1; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)
+  delete, BEGIN EXCLUSIVE, after c2 commits a row: H's step 100, autocommit 1; c2's insert 5; BEGIN 0 (at once), autocommit 0; INSERT 0, autocommit 0; COMMIT 0, autocommit 1; H's next step 100, finalize 0
+    (11 of 11 runs gave these facts)

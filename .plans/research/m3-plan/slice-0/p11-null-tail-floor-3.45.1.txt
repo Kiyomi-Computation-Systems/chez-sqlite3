@@ -1,0 +1,32 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+P11. What a prepare's tail leaves, a NULL statement's above all
+  v3 [;] (1 bytes): rc 0, NULL, tail at byte 1
+  v2 [;] (1 bytes): rc 0, NULL, tail at byte 1
+  v3 [;;] (2 bytes): rc 0, NULL, tail at byte 2
+  v2 [;;] (2 bytes): rc 0, NULL, tail at byte 2
+  v3 [ ; ] (3 bytes): rc 0, NULL, tail at byte 3
+  v2 [ ; ] (3 bytes): rc 0, NULL, tail at byte 3
+  v3 [;; select 2] (11 bytes): rc 0, a statement, tail at byte 11, sqlite3_sql [;; select 2]
+  v2 [;; select 2] (11 bytes): rc 0, a statement, tail at byte 11, sqlite3_sql [;; select 2]
+  v3 [; select 2] (10 bytes): rc 0, a statement, tail at byte 10, sqlite3_sql [; select 2]
+  v2 [; select 2] (10 bytes): rc 0, a statement, tail at byte 10, sqlite3_sql [; select 2]
+  v3 [; ;select 2] (11 bytes): rc 0, a statement, tail at byte 11, sqlite3_sql [; ;select 2]
+  v2 [; ;select 2] (11 bytes): rc 0, a statement, tail at byte 11, sqlite3_sql [; ;select 2]
+  v3 [/* c */ ; select 2] (18 bytes): rc 0, a statement, tail at byte 18, sqlite3_sql [/* c */ ; select 2]
+  v2 [/* c */ ; select 2] (18 bytes): rc 0, a statement, tail at byte 18, sqlite3_sql [/* c */ ; select 2]
+  v3 [-- c\n; select 2] (15 bytes): rc 0, a statement, tail at byte 15, sqlite3_sql [-- c\n; select 2]
+  v2 [-- c\n; select 2] (15 bytes): rc 0, a statement, tail at byte 15, sqlite3_sql [-- c\n; select 2]
+  v3 [-- c\nselect 2] (13 bytes): rc 0, a statement, tail at byte 13, sqlite3_sql [-- c\nselect 2]
+  v2 [-- c\nselect 2] (13 bytes): rc 0, a statement, tail at byte 13, sqlite3_sql [-- c\nselect 2]
+  v3 [/* c */ select 2] (16 bytes): rc 0, a statement, tail at byte 16, sqlite3_sql [/* c */ select 2]
+  v2 [/* c */ select 2] (16 bytes): rc 0, a statement, tail at byte 16, sqlite3_sql [/* c */ select 2]
+  v3 [\xEF\xBB\xBF; select 2] (13 bytes): rc 0, a statement, tail at byte 13, sqlite3_sql [\xEF\xBB\xBF; select 2]
+  v2 [\xEF\xBB\xBF; select 2] (13 bytes): rc 0, a statement, tail at byte 13, sqlite3_sql [\xEF\xBB\xBF; select 2]
+  v3 [;;; -- c\n /* d */ ; select 2 ; select 3] (39 bytes): rc 0, a statement, tail at byte 30, sqlite3_sql [;;; -- c\n /* d */ ; select 2 ;]
+  v2 [;;; -- c\n /* d */ ; select 2 ; select 3] (39 bytes): rc 0, a statement, tail at byte 30, sqlite3_sql [;;; -- c\n /* d */ ; select 2 ;]
+  v3 [select 1; select 2] (18 bytes): rc 0, a statement, tail at byte 9, sqlite3_sql [select 1;]
+  v2 [select 1; select 2] (18 bytes): rc 0, a statement, tail at byte 9, sqlite3_sql [select 1;]
+  v3 [select 1;; select 2] (19 bytes): rc 0, a statement, tail at byte 9, sqlite3_sql [select 1;]
+  v2 [select 1;; select 2] (19 bytes): rc 0, a statement, tail at byte 9, sqlite3_sql [select 1;]

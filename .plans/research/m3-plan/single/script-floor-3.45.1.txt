@@ -1,0 +1,212 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+X1. A constraint failure midway, in autocommit
+  script: [CREATE TABLE s(x UNIQUE); INSERT INTO s VALUES (1); INSERT INTO s VALUES (2); INSERT INTO s VALUES (1); INSERT INTO s VALUES (3);]
+  sqlite3_exec (no callback): rc 2067, its message "UNIQUE constraint failed: s.x"
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 1
+    rows of s: 1,2
+  prepare_v2 loop:
+    at byte 0: [CREATE TABLE s(x UNIQUE);] step rc 101, rows 0, finalize rc 0
+    at byte 25: [ INSERT INTO s VALUES (1);] step rc 101, rows 0, finalize rc 0
+    at byte 51: [ INSERT INTO s VALUES (2);] step rc 101, rows 0, finalize rc 0
+    at byte 77: [ INSERT INTO s VALUES (1);] step rc 2067, rows 0, finalize rc 2067
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 1
+    rows of s: 1,2
+
+X2. A constraint failure midway, inside BEGIN ... COMMIT
+  script: [BEGIN; INSERT INTO s VALUES (10); INSERT INTO s VALUES (10); INSERT INTO s VALUES (11); COMMIT;]
+  sqlite3_exec (no callback): rc 2067, its message "UNIQUE constraint failed: s.x"
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 0
+    rows of s: 10
+    (rolled back to close the probe's connection)
+  prepare_v2 loop:
+    at byte 0: [BEGIN;] step rc 101, rows 0, finalize rc 0
+    at byte 6: [ INSERT INTO s VALUES (10);] step rc 101, rows 0, finalize rc 0
+    at byte 33: [ INSERT INTO s VALUES (10);] step rc 2067, rows 0, finalize rc 2067
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 0
+    rows of s: 10
+    (rolled back to close the probe's connection)
+
+X3. A constraint failure midway, inside SAVEPOINT ... RELEASE
+  script: [SAVEPOINT sp; INSERT INTO s VALUES (20); INSERT INTO s VALUES (20); RELEASE sp;]
+  sqlite3_exec (no callback): rc 2067, its message "UNIQUE constraint failed: s.x"
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 0
+    rows of s: 20
+    (rolled back to close the probe's connection)
+  prepare_v2 loop:
+    at byte 0: [SAVEPOINT sp;] step rc 101, rows 0, finalize rc 0
+    at byte 13: [ INSERT INTO s VALUES (20);] step rc 101, rows 0, finalize rc 0
+    at byte 40: [ INSERT INTO s VALUES (20);] step rc 2067, rows 0, finalize rc 2067
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 0
+    rows of s: 20
+    (rolled back to close the probe's connection)
+
+X4. INSERT OR ROLLBACK failing midway, inside BEGIN ... COMMIT
+  script: [BEGIN; INSERT INTO s VALUES (30); INSERT OR ROLLBACK INTO s VALUES (30); INSERT INTO s VALUES (31); COMMIT;]
+  sqlite3_exec (no callback): rc 2067, its message "UNIQUE constraint failed: s.x"
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 1
+    rows of s: (none)
+  prepare_v2 loop:
+    at byte 0: [BEGIN;] step rc 101, rows 0, finalize rc 0
+    at byte 6: [ INSERT INTO s VALUES (30);] step rc 101, rows 0, finalize rc 0
+    at byte 33: [ INSERT OR ROLLBACK INTO s VALUES (30);] step rc 2067, rows 0, finalize rc 2067
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 1
+    rows of s: (none)
+
+X5. A syntax error in the second of three statements
+  script: [INSERT INTO s VALUES (40); SELEKT 1; INSERT INTO s VALUES (41);]
+  sqlite3_exec (no callback): rc 1, its message "near "SELEKT": syntax error"
+    errmsg "near "SELEKT": syntax error", extended_errcode 1, error_offset 0, autocommit 1
+    rows of s: 40
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (40);] step rc 101, rows 0, finalize rc 0
+    at byte 26: prepare rc 1, errmsg "near "SELEKT": syntax error", error_offset 1 (from the script's start: 27)
+    errmsg "near "SELEKT": syntax error", extended_errcode 1, error_offset 1, autocommit 1
+    rows of s: 40
+
+X6. No such table in the second of three statements
+  script: [INSERT INTO s VALUES (50);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO s VALUES (51);]
+  sqlite3_exec (no callback): rc 1, its message "no such table: nosuch"
+    errmsg "no such table: nosuch", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 50
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (50);] step rc 101, rows 0, finalize rc 0
+    at byte 26: prepare rc 1, errmsg "no such table: nosuch", error_offset -1 (from the script's start: 25)
+    errmsg "no such table: nosuch", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 50
+
+X7. Statements that return rows, among writes
+  script: [SELECT 1; INSERT INTO s VALUES (60); SELECT x FROM s; INSERT INTO s VALUES (61); SELECT count(*) FROM s;]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 60,61
+  prepare_v2 loop:
+    at byte 0: [SELECT 1;] step rc 101, rows 1, finalize rc 0
+    at byte 9: [ INSERT INTO s VALUES (60);] step rc 101, rows 0, finalize rc 0
+    at byte 36: [ SELECT x FROM s;] step rc 101, rows 1, finalize rc 0
+    at byte 53: [ INSERT INTO s VALUES (61);] step rc 101, rows 0, finalize rc 0
+    at byte 80: [ SELECT count(*) FROM s;] step rc 101, rows 1, finalize rc 0
+    end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 60,61
+
+X8. An incomplete last statement
+  script: [INSERT INTO s VALUES (70); INSERT INTO s VALUES (]
+  sqlite3_exec (no callback): rc 1, its message "incomplete input"
+    errmsg "incomplete input", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 70
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (70);] step rc 101, rows 0, finalize rc 0
+    at byte 26: prepare rc 1, errmsg "incomplete input", error_offset -1 (from the script's start: 25)
+    errmsg "incomplete input", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 70
+
+X9. A trailing comment and whitespace
+  script: [INSERT INTO s VALUES (80);  -- done\n  ]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 80
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (80);] step rc 101, rows 0, finalize rc 0
+    at byte 26: no statement; tail at byte 38, end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 80
+
+X10. Empty, only semicolons, only a comment
+  script: []
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+  prepare_v2 loop:
+    at byte 0: no statement; tail at byte 0, end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+
+X11. Only semicolons
+  script: [;;;]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+  prepare_v2 loop:
+    at byte 0: no statement; tail at byte 3, end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+
+X12. Only a comment
+  script: [-- nothing]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+  prepare_v2 loop:
+    at byte 0: no statement; tail at byte 10, end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: (none)
+
+X13. A statement with no semicolon at its end
+  script: [INSERT INTO s VALUES (90)]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 90
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (90)] step rc 101, rows 0, finalize rc 0
+    end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 90
+
+X14. PRAGMAs in a script
+  script: [PRAGMA foreign_keys = ON; PRAGMA user_version = 9; INSERT INTO s SELECT user_version FROM pragma_user_version;]
+  sqlite3_exec (no callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 9
+  prepare_v2 loop:
+    at byte 0: [PRAGMA foreign_keys = ON;] step rc 101, rows 0, finalize rc 0
+    at byte 25: [ PRAGMA user_version = 9;] step rc 101, rows 0, finalize rc 0
+    at byte 50: [ INSERT INTO s SELECT user_version FROM pragma_user_version;] step rc 101, rows 0, finalize rc 0
+    end of script
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 9
+
+X15. A runtime error (integer overflow) midway
+  script: [INSERT INTO s VALUES (100); SELECT abs(-9223372036854775807 - 1); INSERT INTO s VALUES (101);]
+  sqlite3_exec (no callback): rc 1, its message "integer overflow"
+    errmsg "integer overflow", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 100
+  prepare_v2 loop:
+    at byte 0: [INSERT INTO s VALUES (100);] step rc 101, rows 0, finalize rc 0
+    at byte 27: [ SELECT abs(-9223372036854775807 - 1);] step rc 1, rows 0, finalize rc 1
+    errmsg "integer overflow", extended_errcode 1, error_offset -1, autocommit 1
+    rows of s: 100
+
+X16. A failed COMMIT (a deferred foreign key) midway
+  script: [BEGIN; INSERT INTO s VALUES (110); INSERT INTO c VALUES (7); COMMIT; INSERT INTO s VALUES (111);]
+  sqlite3_exec (no callback): rc 787, its message "FOREIGN KEY constraint failed"
+    errmsg "FOREIGN KEY constraint failed", extended_errcode 787, error_offset -1, autocommit 0
+    rows of s: 110
+    (rolled back to close the probe's connection)
+  prepare_v2 loop:
+    at byte 0: [BEGIN;] step rc 101, rows 0, finalize rc 0
+    at byte 6: [ INSERT INTO s VALUES (110);] step rc 101, rows 0, finalize rc 0
+    at byte 34: [ INSERT INTO c VALUES (7);] step rc 101, rows 0, finalize rc 0
+    at byte 60: [ COMMIT;] step rc 787, rows 0, finalize rc 787
+    errmsg "FOREIGN KEY constraint failed", extended_errcode 787, error_offset -1, autocommit 0
+    rows of s: 110
+    (rolled back to close the probe's connection)
+
+X17. sqlite3_exec with a callback
+    callback row 1: x=120
+    callback row 2: x=121
+  sqlite3_exec (callback): rc 0, its message NULL
+    errmsg "not an error", extended_errcode 0, error_offset -1, autocommit 1
+    rows of s: 120,121,122
+
+X18. sqlite3_exec with a callback that answers nonzero at its first row
+    callback row 1: x=130
+  sqlite3_exec (callback stops at its row 1): rc 4, its message "query aborted"
+    errmsg "query aborted", extended_errcode 4, error_offset -1, autocommit 1
+    rows of s: 130,131
+
+X19. sqlite3_exec with no out-parameter for its message
+  sqlite3_exec: rc 2067
+    errmsg "UNIQUE constraint failed: s.x", extended_errcode 2067, error_offset -1, autocommit 1
+    rows of s: 1

@@ -7,7 +7,10 @@
   holds (M2's plan, [amendment](#amendment-2026-11-14-the-statements-a-connection-holds-m2s-plan)).
   Amended 2026-11-14, and accepted by the maintainer that day: raised after the section (M1's
   closing review,
-  [amendment](#amendment-2026-11-14-raised-after-the-section-m1s-closing-review)).
+  [amendment](#amendment-2026-11-14-raised-after-the-section-m1s-closing-review)). Amended
+  2026-11-15, and accepted by the maintainer that day: the settings, and the close's exclusion of
+  interrupts (M3's plan,
+  [amendment](#amendment-2026-11-15-the-settings-and-the-closes-exclusion-of-interrupts-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -299,3 +302,33 @@ approved its scope and the procedure's contract that day.
   older than these fixes, and M2's close, which raises a finalize's failure, makes it reachable
   without a defect. A program under engines takes `open-database`, and `docs/reference.md` says so.
 - **The M2-plan amendment's last bullets are met here.** M2 slice 3 builds on this contract.
+
+## Amendment, 2026-11-15: the settings, and the close's exclusion of interrupts (M3's plan)
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.3 and §4.4).
+
+- **The consequence's settings list is built** ([ADR-0018](0018-the-settings-list.md)): at most one
+  argument among `open-database`'s and `call-with-database`'s options may be a list, the
+  settings. The signatures become:
+
+  ```scheme
+  ;; open-database : String (U Symbol Settings) ... -> Database
+  ;; call-with-database : String (U Symbol Settings) ... (Database -> A ...) -> A ...
+  ```
+
+  The list is checked with the options, before anything is allocated.
+- **The record gains the statement cache's capacity,** from the list's `statement-cache`, 32 when
+  it gives none, fixed when the record is made ([ADR-0020](0020-the-statement-cache.md)). A size
+  can't be an option, which stays a symbol (decision 3).
+- **A setting that fails or mismatches closes the connection, then raises,** as decision 4's
+  failed open does. `call-with-database` then never calls its procedure.
+- **Decision 5's close first excludes interrupts** ([ADR-0019](0019-interrupt-and-close.md)): in
+  its critical section, before finalizing anything, it clears the record's `interruptible` flag
+  under the record's mutex. A close that leaves the connection open sets it again, on both paths:
+  a statement found untracked, and `sqlite3_close` failing.
+- **The close's section empties the record's statement cache, whether or not the connection
+  closes** ([ADR-0020](0020-the-statement-cache.md)): it has finalized every tracked statement,
+  the cache's among them, on either path.
+- **Decision 7's "every verb" has one exception, `interrupt-database!`,** which any thread may
+  call, and which does nothing on a closed connection (ADR-0010, amended).

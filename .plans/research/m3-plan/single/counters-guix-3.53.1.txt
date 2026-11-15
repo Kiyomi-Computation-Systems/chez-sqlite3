@@ -1,0 +1,273 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+C0. A fresh connection
+    before any statement: changes64 0, total_changes64 +0, last_insert_rowid 0
+    total_changes64 0
+
+C1. INSERT, UPDATE and DELETE of 3 rows
+  sql: INSERT INTO t(rowid, x) VALUES (101, 1), (102, 2), (103, 3)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 3, total_changes64 +3, last_insert_rowid 103
+    finalize: rc 0
+    after finalize: changes64 3, total_changes64 +3, last_insert_rowid 103
+  sql: UPDATE t SET x = x + 10
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 3, total_changes64 +3, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 3, total_changes64 +3, last_insert_rowid 7777
+  sql: UPDATE t SET x = x WHERE x > 1000
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+  sql: DELETE FROM t WHERE x > 11
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 7777
+  sql: INSERT INTO t(rowid, x) SELECT 200 + value, value FROM (WITH RECURSIVE n(value) AS (SELECT 1 UNION ALL SELECT value + 1 FROM n WHERE value < 5) SELECT value FROM n)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 5, total_changes64 +5, last_insert_rowid 205
+    finalize: rc 0
+    after finalize: changes64 5, total_changes64 +5, last_insert_rowid 205
+
+C2. DELETE FROM t with no WHERE, and of an empty table
+  sql: DELETE FROM t
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 6, total_changes64 +6, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 6, total_changes64 +6, last_insert_rowid 7777
+  sql: DELETE FROM t
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+
+C3. DDL
+  sql: CREATE TABLE d(x)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: CREATE INDEX ti ON t(x)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: ALTER TABLE t ADD COLUMN y
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: CREATE VIEW vw AS SELECT x FROM t
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: DROP TABLE d
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: DROP INDEX ti
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+
+C4. SELECT, PRAGMA and transaction statements
+  sql: SELECT x FROM t
+    step: rc 101 DONE, rows 3
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: PRAGMA user_version = 5
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: BEGIN
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+  sql: COMMIT
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+
+C5. A statement that fails partway
+  sql: INSERT INTO f(rowid, x) VALUES (301, 31), (302, 32), (303, 1), (304, 34)
+    step: rc 2067 CONSTRAINT, errmsg "UNIQUE constraint failed: f.x"
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 302
+    finalize: rc 2067
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 302
+  sql: INSERT OR FAIL INTO f(rowid, x) VALUES (401, 41), (402, 42), (403, 1), (404, 44)
+    step: rc 2067 CONSTRAINT, errmsg "UNIQUE constraint failed: f.x"
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 402
+    finalize: rc 2067
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 402
+  sql: INSERT INTO f(rowid, x) VALUES (501, 1)
+    step: rc 2067 CONSTRAINT, errmsg "UNIQUE constraint failed: f.x"
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 2067
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+  sql: UPDATE f SET x = 1 WHERE x > 40
+    step: rc 2067 CONSTRAINT, errmsg "UNIQUE constraint failed: f.x"
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 2067
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+  show: SELECT rowid, x FROM f ORDER BY rowid
+    row: 1 1
+    row: 401 41
+    row: 402 42
+
+C6. INSERT OR IGNORE that ignores, and that doesn't
+  sql: INSERT OR IGNORE INTO f(rowid, x) VALUES (601, 1)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+  sql: INSERT OR IGNORE INTO f(rowid, x) VALUES (602, 1), (603, 63)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 603
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 603
+
+C7. INSERT OR REPLACE that replaces
+  sql: INSERT OR REPLACE INTO r VALUES (1, 'a2')
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 1
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 1
+  sql: INSERT OR REPLACE INTO r VALUES (9, 'b')
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 9
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 9
+  sql: INSERT OR REPLACE INTO r VALUES (3, 'a2')
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 3
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 3
+  show: SELECT id, u FROM r ORDER BY id
+    row: 3 a2
+    row: 9 b
+
+C8. Upserts
+  sql: INSERT INTO up(rowid, k, v) VALUES (12, 1, 'uno') ON CONFLICT(k) DO UPDATE SET v = excluded.v
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 7777
+  sql: INSERT INTO up(rowid, k, v) VALUES (13, 1, 'eins') ON CONFLICT(k) DO NOTHING
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 0, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 0, total_changes64 +0, last_insert_rowid 7777
+  sql: INSERT INTO up(rowid, k, v) VALUES (14, 1, 'un'), (15, 5, 'cinq') ON CONFLICT(k) DO UPDATE SET v = excluded.v
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 15
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 15
+  sql: INSERT INTO up(rowid, k, v) VALUES (16, 5, 'fem'), (17, 1, 'en') ON CONFLICT(k) DO UPDATE SET v = excluded.v
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 7777
+  show: SELECT rowid, k, v FROM up ORDER BY rowid
+    row: 11 1 en
+    row: 15 5 fem
+
+C9. A trigger's own writes; last_insert_rowid() and changes() inside it
+  sql: INSERT INTO tg(rowid, x) VALUES (500, 'a'), (501, 'b')
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +8, last_insert_rowid 501
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +8, last_insert_rowid 501
+  show: SELECT rowid, tag, new_rowid, lir, ch FROM lg ORDER BY rowid
+    row: 1 before 500 7777 2
+    row: 2 after 1 500 500 2
+    row: 3 after 2 500 2 1
+    row: 4 before 501 500 2
+    row: 5 after 1 501 501 2
+    row: 6 after 2 501 5 1
+  sql: UPDATE tg SET x = x || '!'
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +4, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +4, last_insert_rowid 7777
+  show: SELECT rowid, tag, new_rowid, lir, ch FROM lg WHERE tag = 'update' ORDER BY rowid
+    row: 7 update 500 7777 2
+    row: 8 update 501 7777 2
+
+C10. A foreign-key cascade
+  sql: DELETE FROM p WHERE id = 1
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +4, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +4, last_insert_rowid 7777
+  sql: UPDATE p SET id = 20 WHERE id = 2
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +2, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +2, last_insert_rowid 7777
+  show: SELECT pid FROM ch
+    row: 20
+
+C11. A WITHOUT ROWID table
+  sql: INSERT INTO wr VALUES ('a', 1), ('b', 2)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 7777
+  sql: UPDATE wr SET v = v + 1
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +2, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +2, last_insert_rowid 7777
+  sql: INSERT OR REPLACE INTO wr VALUES ('a', 9)
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 1, total_changes64 +1, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 1, total_changes64 +1, last_insert_rowid 7777
+
+C12. INSERT ... RETURNING of 3 rows, step by step
+    prepared: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    step 1 (rc 100 ROW): changes64 2, total_changes64 +0, last_insert_rowid 903
+    step 2 (rc 100 ROW): changes64 2, total_changes64 +0, last_insert_rowid 903
+    step 3 (rc 100 ROW): changes64 2, total_changes64 +0, last_insert_rowid 903
+    step 4 (rc 101 DONE): changes64 3, total_changes64 +3, last_insert_rowid 903
+    reset: rc 0
+    after reset: changes64 3, total_changes64 +3, last_insert_rowid 903
+
+C12b. INSERT ... RETURNING of 3 rows, stepped once, then reset
+    step 1 (rc 100 ROW): changes64 2, total_changes64 +0, last_insert_rowid 913
+    reset: rc 0
+    after reset: changes64 3, total_changes64 +3, last_insert_rowid 913
+  show: SELECT count(*) FROM t WHERE rowid BETWEEN 911 AND 913
+    row: 3
+
+C12c. DELETE ... RETURNING of 3 rows, stepped once, then finalized
+    step 1 (rc 100 ROW): changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 3, total_changes64 +3, last_insert_rowid 7777
+
+C13. Another connection's writes
+    db, after db2's 3-row INSERT: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    db2 itself: changes64 3, total_changes64 +3, last_insert_rowid 8003
+    db, after db2's 3-row DELETE: changes64 2, total_changes64 +0, last_insert_rowid 7777
+
+C14. A statement prepared but never stepped, then finalized
+  sql: SELECT 1 WHERE 0
+    step: rc 101 DONE, rows 0
+    after the last step: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    finalize: rc 0
+    after finalize: changes64 2, total_changes64 +0, last_insert_rowid 7777
+    INSERT prepared and finalized, unstepped: changes64 2, total_changes64 +0, last_insert_rowid 7777
+
+C15. Rows written in a transaction that is rolled back
+    after the INSERT: changes64 2, total_changes64 +2, last_insert_rowid 7002
+    after ROLLBACK: changes64 2, total_changes64 +2, last_insert_rowid 7002

@@ -1,0 +1,9 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+P14. journal_mode = wal on a WAL file, from a fresh connection, busy timeout 200 ms;
+     codes extended: 100 ROW
+  c1 holding none             set: step 100, row wal, finalize 0 (at once); read-back: step 100, row wal, finalize 0 (at once) (7 of 7)
+  c1 holding read             set: step 100, row wal, finalize 0 (at once); read-back: step 100, row wal, finalize 0 (at once) (7 of 7)
+  c1 holding BEGIN IMMEDIATE  set: step 100, row wal, finalize 0 (at once); read-back: step 100, row wal, finalize 0 (at once) (7 of 7)
+  c1 holding BEGIN EXCLUSIVE  set: step 100, row wal, finalize 0 (at once); read-back: step 100, row wal, finalize 0 (at once) (7 of 7)

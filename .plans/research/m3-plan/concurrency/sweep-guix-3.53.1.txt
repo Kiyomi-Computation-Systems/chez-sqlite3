@@ -1,0 +1,71 @@
+libversion 3.53.1
+sourceid 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+S1: are busy_timeout and foreign_keys per connection?
+  c1 PRAGMA busy_timeout: row "0"
+  c1 PRAGMA foreign_keys: row "0"
+  c1, both set, PRAGMA busy_timeout: row "500"
+  c1 PRAGMA foreign_keys: row "1"
+  c2, a second connection to the file, PRAGMA busy_timeout: row "0"
+  c2 PRAGMA foreign_keys: row "0"
+  c1 closed and reopened, PRAGMA busy_timeout: row "0"
+  c1 PRAGMA foreign_keys: row "0"
+S2: a PRAGMA's value as a bound parameter
+  prepare "PRAGMA busy_timeout = ?": 1 ERROR, "near "?": syntax error", statement NULL
+  prepare "PRAGMA busy_timeout = :ms": 1 ERROR, "near ":ms": syntax error", statement NULL
+  prepare "PRAGMA busy_timeout(?)": 1 ERROR, "near "?": syntax error", statement NULL
+  prepare "PRAGMA journal_mode = ?": 1 ERROR, "near "?": syntax error", statement NULL
+  prepare "PRAGMA foreign_keys = ?": 1 ERROR, "near "?": syntax error", statement NULL
+S3: the rows the set forms answer
+  PRAGMA busy_timeout = 250: row "250"
+  PRAGMA foreign_keys = 1: no row, step 101 DONE
+  then PRAGMA foreign_keys: row "1"
+  PRAGMA journal_mode = wal: row "wal"
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  inside it, PRAGMA foreign_keys = 1: no row, step 101 DONE
+  then PRAGMA foreign_keys: row "0"
+  inside it, PRAGMA busy_timeout = 400: row "400"
+  COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  after COMMIT, PRAGMA foreign_keys: row "0"
+  PRAGMA busy_timeout: row "400"
+S4: PRAGMA journal_mode=wal where WAL can't be
+  open :memory:: 0 OK
+  PRAGMA journal_mode=wal: row "memory"
+  then PRAGMA journal_mode: row "memory"
+  close: 0 OK
+  open "" (a temporary database): 0 OK
+  PRAGMA journal_mode: row "delete"
+  PRAGMA journal_mode=wal: row "delete"
+  then PRAGMA journal_mode: row "delete"
+  close: 0 OK
+S5: closing WAL connections
+  journal_mode=wal: row "wal"
+  c1 alone wrote 1000 rows of 4000 bytes: database file 4096 bytes; WAL file 4144752 bytes
+  c1 close: 0 OK
+  then: database file 4112384 bytes; WAL file absent
+ with a second connection open, idle, having read:
+  journal_mode=wal: row "wal"
+  c2 reads 1000 rows
+  before c1's close: database file 4096 bytes; WAL file 4144752 bytes
+  c1 close: 0 OK
+  then: database file 4096 bytes; WAL file 4144752 bytes
+  c2 close: 0 OK
+  then: database file 4112384 bytes; WAL file absent
+ with a second connection's statement holding a row; a counting busy handler on c1:
+  journal_mode=wal: row "wal"
+  c2's reader stepped: 100 ROW
+  c1 close: 0 OK [busy handler calls 0]
+  then: database file 4096 bytes; WAL file 4144752 bytes
+  c2's reader finalized; c2 close: 0 OK
+  then: database file 4112384 bytes; WAL file absent
+S6a: sqlite3_exec of an INSERT under another connection's BEGIN IMMEDIATE, busy timeout 250 ms
+  sqlite3_exec answered 5 BUSY, extended 5 BUSY, message out-parameter "database is locked", sqlite3_errmsg "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then is_interrupted 0, autocommit 1, rows 3
+  runs whose facts equal run 1's: 21 of 21
+S6b: sqlite3_exec of an INSERT under another connection's BEGIN IMMEDIATE, busy timeout 250 ms, interrupted from another thread at 50 ms
+  the interrupt was sent: yes; the exec was still running then: yes
+  sqlite3_exec answered 5 BUSY, extended 5 BUSY, message out-parameter "database is locked", sqlite3_errmsg "database is locked"
+  it ended at the busy timeout: at least 90% of it
+  then is_interrupted 1, autocommit 1, rows 3
+  runs whose facts equal run 1's: 21 of 21
+end

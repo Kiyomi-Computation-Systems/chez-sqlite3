@@ -1,0 +1,289 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+K1. prepare_v3 with and without SQLITE_PREPARE_PERSISTENT (each on a fresh :memory: connection)
+
+ K1. flags 0
+    before                     lookaside_used    0 (high   62), stmt_used       0, lookaside hit   126, miss_size    1, miss_full    0, memory_used +0
+    holding 1                  lookaside_used   15 (high   62), stmt_used    5136, lookaside hit   154, miss_size    1, miss_full    0, memory_used +0
+    holding 10                 lookaside_used  116 (high  123), stmt_used   50600, lookaside hit   361, miss_size    1, miss_full   45, memory_used +4664
+    holding 50                 lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1130, memory_used +95640
+    sum of SQLITE_STMTSTATUS_MEMUSED over the 50: 143544
+    50 stepped once            lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +117640
+    50 reset                   lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +95640
+    50 finalized               lookaside_used    0 (high  123), stmt_used       0, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +0
+
+ K1. flags SQLITE_PREPARE_PERSISTENT
+    before                     lookaside_used    0 (high   62), stmt_used       0, lookaside hit   126, miss_size    1, miss_full    0, memory_used +0
+    holding 1                  lookaside_used    0 (high   62), stmt_used    2280, lookaside hit   126, miss_size    1, miss_full    0, memory_used +2280
+    holding 10                 lookaside_used    0 (high   62), stmt_used   22800, lookaside hit   126, miss_size    1, miss_full    0, memory_used +22800
+    holding 50                 lookaside_used    0 (high   62), stmt_used  114000, lookaside hit   126, miss_size    1, miss_full    0, memory_used +114000
+    sum of SQLITE_STMTSTATUS_MEMUSED over the 50: 114000
+    50 stepped once            lookaside_used   80 (high   86), stmt_used  114000, lookaside hit   206, miss_size    1, miss_full   20, memory_used +122640
+    50 reset                   lookaside_used    0 (high   86), stmt_used  114000, lookaside hit   206, miss_size    1, miss_full   20, memory_used +114000
+    50 finalized               lookaside_used    0 (high   86), stmt_used       0, lookaside hit   206, miss_size    1, miss_full   20, memory_used +0
+
+ K1. flags 0, again
+    before                     lookaside_used    0 (high   62), stmt_used       0, lookaside hit   126, miss_size    1, miss_full    0, memory_used +0
+    holding 1                  lookaside_used   15 (high   62), stmt_used    5136, lookaside hit   154, miss_size    1, miss_full    0, memory_used +0
+    holding 10                 lookaside_used  116 (high  123), stmt_used   50600, lookaside hit   361, miss_size    1, miss_full   45, memory_used +4664
+    holding 50                 lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1130, memory_used +95640
+    sum of SQLITE_STMTSTATUS_MEMUSED over the 50: 143544
+    50 stepped once            lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +117640
+    50 reset                   lookaside_used  123 (high  123), stmt_used  143544, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +95640
+    50 finalized               lookaside_used    0 (high  123), stmt_used       0, lookaside hit   396, miss_size    1, miss_full 1230, memory_used +0
+
+K2. A prepared statement held across a schema change
+
+ K2.1 Same connection: CREATE INDEX under a held SELECT, bound, never stepped
+  held (prepare_v3, PERSISTENT): SELECT * FROM t1 WHERE a = ?1
+    before: column_count 2 (a b), reprepares 0
+  a: CREATE INDEX t1a ON t1(a)
+    step: rc 101 DONE
+    after the DDL, before a step: column_count 2 (a b), reprepares 0
+    step 1: step rc 100 ROW, row 2 'two'
+    after step 1: column_count 2 (a b), reprepares 1
+    expanded_sql: SELECT * FROM t1 WHERE a = 2
+
+ K2.2 Same connection: ADD COLUMN under a held SELECT *, run once and reset
+  held (prepare_v3, PERSISTENT): SELECT * FROM t2
+    step 1: step rc 100 ROW, row 1 'one'
+    before: column_count 2 (a b), reprepares 0
+  a: ALTER TABLE t2 ADD COLUMN c DEFAULT 'cee'
+    step: rc 101 DONE
+    after the DDL, before a step: column_count 2 (a b), reprepares 0
+    step 1: step rc 100 ROW, row 1 'one' 'cee'
+    after step 1: column_count 3 (a b c), reprepares 1
+
+ K2.3 Same connection: ADD COLUMN while the held SELECT * has a row ready
+  held (prepare_v3, PERSISTENT): SELECT * FROM t3
+    step 1: step rc 100 ROW, row 1 'one'
+  a: ALTER TABLE t3 ADD COLUMN c DEFAULT 'cee'
+    step: rc 101 DONE
+    after the DDL: column_count 2 (a b), reprepares 0
+    step 2: step rc 100 ROW, row 2 'two'
+    step 3: step rc 101 DONE
+    step 1 after reset: step rc 100 ROW, row 1 'one' 'cee'
+    after it: column_count 3 (a b c), reprepares 1
+
+ K2.4 Same connection: DROP TABLE under a held SELECT, reset
+  held (prepare_v3, PERSISTENT): SELECT * FROM t4
+    step 1: step rc 100 ROW, row 1 'one'
+  a: DROP TABLE t4
+    step: rc 101 DONE
+    after the DDL, before a step: column_count 2 (a b), reprepares 0
+    step 1: step rc 1 ERROR, extended_errcode 1, errmsg "no such table: t4"
+    after the step: column_count 2 (a b), reprepares 0
+    reset: rc 1
+  a: CREATE TABLE t4(a, b, c); INSERT INTO t4 VALUES (7, 8, 9)
+    step: rc 101 DONE
+  a: INSERT INTO t4 VALUES (7, 8, 9)
+    step: rc 101 DONE
+    step 1 after the table is made again: step rc 100 ROW, row 7 8 9
+    after it: column_count 3 (a b c), reprepares 1
+    finalize: rc 0
+
+ K2.5 Same connection: DROP TABLE while a held SELECT on it has a row ready
+  held (prepare_v3, PERSISTENT): SELECT * FROM t5
+    step 1: step rc 100 ROW, row 1 'one'
+  a: DROP TABLE t5
+    step: rc 6 LOCKED, extended_errcode 6, errmsg "database table is locked"
+    step 2: step rc 100 ROW, row 2 'two'
+  a: DROP TABLE t5
+    step: rc 101 DONE
+
+ K2.6 Second connection: CREATE INDEX under a held SELECT
+  held (prepare_v3, PERSISTENT): SELECT * FROM t6 WHERE a = ?1
+    step 1: step rc 100 ROW, row 1 'one'
+  b: CREATE INDEX t6a ON t6(a)
+    step: rc 101 DONE
+    after b's DDL, before a step: column_count 2 (a b), reprepares 0
+    step 1: step rc 100 ROW, row 1 'one'
+    after it: column_count 2 (a b), reprepares 1
+
+ K2.7 Second connection: ADD COLUMN under a held SELECT *, run once and reset
+  held (prepare_v3, PERSISTENT): SELECT * FROM t7
+    step 1: step rc 100 ROW, row 1 'one'
+  b: ALTER TABLE t7 ADD COLUMN c DEFAULT 'cee'
+    step: rc 101 DONE
+    after b's DDL, before a step: column_count 2 (a b), reprepares 0
+    step 1: step rc 100 ROW, row 1 'one' 'cee'
+    after it: column_count 3 (a b c), reprepares 1
+
+ K2.8 Second connection: DROP TABLE under a held SELECT; then the table made again
+  held (prepare_v3, PERSISTENT): SELECT * FROM t8
+    step 1: step rc 100 ROW, row 1 'one'
+  b: DROP TABLE t8
+    step: rc 101 DONE
+    step 1: step rc 1 ERROR, extended_errcode 1, errmsg "no such table: t8"
+    after it: column_count 2 (a b), reprepares 0
+    reset: rc 1
+    step 1 again: step rc 1 ERROR, extended_errcode 1, errmsg "no such table: t8"
+    reset: rc 1
+  b: CREATE TABLE t8(x)
+    step: rc 101 DONE
+  b: INSERT INTO t8 VALUES ('new')
+    step: rc 101 DONE
+    step 1 after b made it again: step rc 100 ROW, row 'new'
+    after it: column_count 1 (x), reprepares 1
+    finalize: rc 0
+
+ K2.9 Second connection: DROP COLUMN under a held SELECT that names it
+  held (prepare_v3, PERSISTENT): SELECT a, b FROM t9
+    step 1: step rc 100 ROW, row 1 'one'
+  b: ALTER TABLE t9 DROP COLUMN b
+    step: rc 101 DONE
+    step 1: step rc 1 ERROR, extended_errcode 1, errmsg "no such column: b"
+    after it: column_count 2 (a b), reprepares 0
+    reset: rc 1
+    finalize: rc 0
+
+ K2.10 Second connection: changes under a held INSERT
+  held (prepare_v3, PERSISTENT): INSERT INTO t10 VALUES (?1, ?2)
+    step 1: step rc 101 DONE
+  b: ALTER TABLE t10 ADD COLUMN c DEFAULT 'cee'
+    step: rc 101 DONE
+    step 1 after b added a column: step rc 1 ERROR, extended_errcode 1, errmsg "table t10 has 3 columns but 2 values were supplied"
+  b: DROP TABLE t10
+    step: rc 101 DONE
+  b: CREATE TABLE t10(a, b, c, d)
+    step: rc 101 DONE
+    step 1 after b made t10 with 4 columns: step rc 1 ERROR, extended_errcode 1, errmsg "table t10 has 3 columns but 2 values were supplied"
+    reset: rc 1
+  a: SELECT count(*) FROM t10
+    step: rc 101 DONE
+    step 1 after a's own SELECT on t10: step rc 1 ERROR, extended_errcode 1, errmsg "table t10 has 4 columns but 2 values were supplied"
+    reset: rc 1
+
+ K2.11 The legacy sqlite3_prepare, for contrast: second connection adds a column
+  held (legacy sqlite3_prepare): SELECT * FROM t11, rc 0
+    step 1: step rc 100 ROW, row 1
+  b: ALTER TABLE t11 ADD COLUMN c
+    step: rc 101 DONE
+    step 1: step rc 1 ERROR, extended_errcode 1, errmsg "SQL logic error"
+    reset: rc 17 SCHEMA, then extended_errcode 17, errmsg "database schema has changed"
+    step 1 again: step rc 1 ERROR, extended_errcode 17, errmsg "database schema has changed"
+    after it: column_count 1 (a), reprepares 0
+
+ K2.12 prepare_v2 against prepare_v3 PERSISTENT: second connection adds a column
+  b: ALTER TABLE t12 ADD COLUMN c
+    step: rc 101 DONE
+    prepare_v2's step 1: step rc 100 ROW, row 1 NULL
+    prepare_v2's, after it: column_count 2 (a c), reprepares 1
+    prepare_v3's step 1: step rc 100 ROW, row 1 NULL
+    prepare_v3's, after it: column_count 2 (a c), reprepares 1
+
+K3. stmt_readonly, stmt_isexplain and stmt_busy at each state
+  (busy: prepared / after step 1 / after the last step / after reset)
+  SELECT x FROM t                                              readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 3, reset rc 0
+  SELECT x FROM t WHERE x = 99                                 readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  SELECT 1                                                     readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  SELECT changes()                                             readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3) SELECT i FROM n readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 3, reset rc 0
+  INSERT INTO t VALUES (9)                                     readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  INSERT INTO t VALUES (10) RETURNING x                        readonly 0, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  UPDATE t SET x = x RETURNING x                               readonly 0, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 5, reset rc 0
+  DELETE FROM t WHERE x > 8                                    readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  INSERT INTO u VALUES (1)                                     readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 2067, last rc 2067, rows 0, reset rc 2067
+  BEGIN                                                        readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  COMMIT                                                       readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  ROLLBACK                                                     readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  SAVEPOINT s                                                  readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  RELEASE s                                                    readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  ROLLBACK TO s                                                readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  PRAGMA user_version                                          readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  PRAGMA user_version = 3                                      readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  PRAGMA foreign_keys = ON                                     readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  PRAGMA foreign_keys                                          readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  PRAGMA journal_mode                                          readonly 0, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  PRAGMA journal_mode = DELETE                                 readonly 0, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  PRAGMA busy_timeout = 10                                     readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  PRAGMA cache_size = 100                                      readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  PRAGMA table_info(t)                                         readonly 1, isexplain 0; busy 0/1/0/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  CREATE TABLE z(x)                                            readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  DROP TABLE z                                                 readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  CREATE TEMP TABLE tz(x)                                      readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  INSERT INTO tz VALUES (1)                                    readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  EXPLAIN SELECT 1                                             readonly 1, isexplain 1; busy 0/1/1/0; step 1 rc 100, last rc 101, rows 5, reset rc 0
+  EXPLAIN INSERT INTO t VALUES (1)                             readonly 0, isexplain 1; busy 0/1/1/0; step 1 rc 100, last rc 101, rows 9, reset rc 0
+  EXPLAIN QUERY PLAN SELECT x FROM t                           readonly 1, isexplain 2; busy 0/1/1/0; step 1 rc 100, last rc 101, rows 1, reset rc 0
+  ATTACH ':memory:' AS aux                                     readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  DETACH aux                                                   readonly 1, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  ANALYZE                                                      readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  VACUUM                                                       readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+  REINDEX                                                      readonly 0, isexplain 0; busy 0/0/0/0; step 1 rc 101, last rc 101, rows 0, reset rc 0
+
+K4. sqlite3_sql against sqlite3_expanded_sql
+
+ K4.1 Every kind of value, and a parameter left unbound
+    before any bind
+      sql:          [SELECT ?1, ?2, :n, @m, $d, ?]
+      expanded_sql: [SELECT NULL, NULL, NULL, NULL, NULL, NULL]
+    bound 42, 1.5, 'it''s', x'00ff', NULL; the sixth unbound
+      sql:          [SELECT ?1, ?2, :n, @m, $d, ?]
+      expanded_sql: [SELECT 42, 1.5, 'it''s', x'00ff', NULL, NULL]
+    after a step
+      sql:          [SELECT ?1, ?2, :n, @m, $d, ?]
+      expanded_sql: [SELECT 42, 1.5, 'it''s', x'00ff', NULL, NULL]
+    after reset
+      sql:          [SELECT ?1, ?2, :n, @m, $d, ?]
+      expanded_sql: [SELECT 42, 1.5, 'it''s', x'00ff', NULL, NULL]
+    after clear_bindings
+      sql:          [SELECT ?1, ?2, :n, @m, $d, ?]
+      expanded_sql: [SELECT NULL, NULL, NULL, NULL, NULL, NULL]
+
+ K4.2 Whitespace, a comment, and a tail
+    prepared from "  SELECT 1 /* c */ ;  SELECT 2"
+      sql:          [  SELECT 1 /* c */ ;]
+      expanded_sql: [  SELECT 1 /* c */ ;]
+    prepared from "SELECT 'a''b', \"x\" -- tail comment\n"
+      sql:          [SELECT 'a''b', "x" -- tail comment
+]
+      expanded_sql: [SELECT 'a''b', "x" -- tail comment
+]
+
+ K4.3 Reals
+    bound 0.10000000000000001
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 0.1]
+    bound -0
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 0.0]
+    bound 1e+100
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 1.0e+100]
+    bound 1
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 1.0]
+    bound 100
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 100.0]
+    bound 1.2345678901234567e+19
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 1.23456789012346e+19]
+    bound 0.33333333333333331
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 0.333333333333333]
+    bound +inf and -inf
+      sql:          [SELECT ?, ?]
+      expanded_sql: [SELECT Inf, -Inf]
+
+ K4.4 Integers and text
+    bound -2^63, 'line1\nline2', U+00E9, 'a' NUL 'b' (3 bytes), bytes FF 41
+      sql:          [SELECT ?, ?, ?, ?, ?]
+      expanded_sql: [SELECT -9223372036854775808, 'line1
+line2', 'Ã©', 'a', 'ÿA']
+
+ K4.5 A parameter used twice, and numbered out of order
+    bound 5, 6, 7
+      sql:          [SELECT ?1 + ?1, ?3, ?2]
+      expanded_sql: [SELECT 5 + 5, 7, 6]
+
+ K4.6 Over SQLITE_LIMIT_LENGTH
+    limit was 1000000000, now 100
+    bound 90 bytes: the expanded text is 99 bytes
+      sql:          [SELECT ?]
+      expanded_sql: [SELECT 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']
+    bound 95 bytes: the expanded text would be 104 bytes
+      sql:          [SELECT ?]
+      expanded_sql: [(NULL)]

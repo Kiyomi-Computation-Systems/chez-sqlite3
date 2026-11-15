@@ -1,0 +1,292 @@
+libversion 3.53.1
+sourceid 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+B1: sqlite3_busy_timeout against PRAGMA busy_timeout
+  a new connection's PRAGMA busy_timeout: 0
+  sqlite3_busy_timeout(db, 1234) answered 0; the pragma reads 1234
+  PRAGMA busy_timeout = 4321: row "4321"
+  then the pragma reads 4321
+  sqlite3_busy_handler(db, counter) answered 0; the pragma reads 0
+  PRAGMA busy_timeout = 500, with the counter installed: row "500"
+  then, under another's BEGIN IMMEDIATE, BEGIN IMMEDIATE (is the counter still installed?) [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+  counter reinstalled, then sqlite3_busy_timeout(db, 0) answered 0; the pragma reads 0
+  under another's BEGIN IMMEDIATE, BEGIN IMMEDIATE [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+  counter reinstalled (answered 0), then sqlite3_busy_timeout(db, -1) answered 0; the pragma reads 0
+  under another's BEGIN IMMEDIATE, BEGIN IMMEDIATE [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+  sqlite3_busy_timeout(db, 300), then (db, -1) answered 0; the pragma reads 0
+  from 777, PRAGMA busy_timeout = -5: row "0"
+    then the pragma reads 0
+  from 777, PRAGMA busy_timeout = 0: row "0"
+    then the pragma reads 0
+  from 777, PRAGMA busy_timeout = 2147483647: row "2147483647"
+    then the pragma reads 2147483647
+  from 777, PRAGMA busy_timeout = 2147483648: row "0"
+    then the pragma reads 0
+  from 777, PRAGMA busy_timeout = 1.9: row "1"
+    then the pragma reads 1
+  from 777, PRAGMA busy_timeout = '250': row "250"
+    then the pragma reads 250
+  from 777, PRAGMA busy_timeout = ' 250': row "0"
+    then the pragma reads 0
+  from 777, PRAGMA busy_timeout = abc: row "0"
+    then the pragma reads 0
+  from 777, PRAGMA busy_timeout = 0x10: row "16"
+    then the pragma reads 16
+  from 777, PRAGMA busy_timeout = 1e3: row "1"
+    then the pragma reads 1
+  set to 777 by pragma; a second connection to the same file reads 0
+  the first closed and reopened reads 0
+B2 rollback journal: no busy timeout; c1 holds BEGIN IMMEDIATE
+  c2 reads 3 rows first
+  c1 BEGIN IMMEDIATE: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 BEGIN IMMEDIATE: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 1, txn_state(main) 0
+  c2 BEGIN EXCLUSIVE: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 autocommit INSERT: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 1, txn_state(main) 0
+  c2 BEGIN (deferred): 101 DONE, extended 101 DONE, "no more rows available"
+  c2 SELECT count(*): 3
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 INSERT, its first write: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+    c2 then: autocommit 1, txn_state(main) 0
+  with the counting handler on c2:
+  c2 BEGIN IMMEDIATE [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 autocommit INSERT [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 BEGIN [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 SELECT count(*) [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT, its first write, its read transaction open [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 COMMIT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 reads 4 rows
+B2 WAL: no busy timeout; c1 holds BEGIN IMMEDIATE
+  journal_mode=wal: row "wal"
+  c2 reads 3 rows first
+  c1 BEGIN IMMEDIATE: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 BEGIN IMMEDIATE: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 1, txn_state(main) 0
+  c2 BEGIN EXCLUSIVE: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 autocommit INSERT: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 1, txn_state(main) 0
+  c2 BEGIN (deferred): 101 DONE, extended 101 DONE, "no more rows available"
+  c2 SELECT count(*): 3
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 INSERT, its first write: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+    c2 then: autocommit 1, txn_state(main) 0
+  with the counting handler on c2:
+  c2 BEGIN IMMEDIATE [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 autocommit INSERT [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 BEGIN [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 SELECT count(*) [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT, its first write, its read transaction open [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 COMMIT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 reads 4 rows
+B3 rollback journal, timeout 0 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 1 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 10 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 50 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 250 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 1500 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 250 ms by PRAGMA busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 WAL, timeout 250 ms by sqlite3_busy_timeout: BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE answered 5 BUSY in all of 21 runs
+B3 rollback journal, timeout 1500 ms: an autocommit INSERT under another connection's read answered 5 BUSY in all of 21 runs; rows 3 before, 3 after; autocommit 1
+B4: WAL, no busy timeout
+  journal_mode=wal: row "wal"
+ a reader during a writer's open transaction:
+  c1 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 SELECT count(*): 100 ROW, count 3
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 counts 4
+ a writer during a reader's open transaction:
+  c2 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 4
+    c2 then: autocommit 0, txn_state(main) 1
+  c1 autocommit INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 BEGIN IMMEDIATE: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2, in its transaction, counts 4
+  c2 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 counts 6
+ a writer while a reader's statement holds a row, no transaction:
+  c2's reader stepped: 100 ROW
+  c1 autocommit INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+ the contrast, rollback journal: a reader during a writer's open transaction:
+  d1 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  d1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  d2 SELECT count(*): 100 ROW, count 3
+  d1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+B5: WAL; c2 BEGIN (deferred), reads, then writes after c1 committed a write; counting handler on c2
+  journal_mode=wal: row "wal"
+  c2 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 3
+  c1 autocommit INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT [busy handler calls 0]: 517 BUSY_SNAPSHOT, extended 517 BUSY_SNAPSHOT, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2, still in its transaction, counts 3
+  c2 INSERT again [busy handler calls 0]: 517 BUSY_SNAPSHOT, extended 517 BUSY_SNAPSHOT, "database is locked"
+  c2 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT in a new transaction [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 counts 5
+  sqlite3_busy_timeout(c2, 1500) restores it: answered 0; the pragma reads 1500
+ the same, but c1 still holds its write transaction when c2 writes; counting handler on c2 again
+  c2 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 5
+  c1 BEGIN IMMEDIATE: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT while c1's write is open [busy handler calls 0]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 INSERT after c1 committed [busy handler calls 0]: 517 BUSY_SNAPSHOT, extended 517 BUSY_SNAPSHOT, "database is locked"
+    c2 then: autocommit 0, txn_state(main) 1
+  c2 ROLLBACK: 101 DONE, extended 101 DONE, "no more rows available"
+ B6: the same race with BEGIN IMMEDIATE; counting handlers on both
+  c2 BEGIN IMMEDIATE [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 6
+  c1 autocommit INSERT [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c2 INSERT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 COMMIT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 autocommit INSERT, retried [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 committed first, then:
+  c2 BEGIN IMMEDIATE [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 8
+  c2 INSERT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 COMMIT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 holds an open write transaction, then:
+  c1 BEGIN IMMEDIATE: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 BEGIN IMMEDIATE [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+    c2 then: autocommit 1, txn_state(main) 0
+  c1 COMMIT: 101 DONE, extended 101 DONE, "no more rows available"
+  then c2 counts 9
+ the contrast, rollback journal: c2 BEGIN, reads; c1 writes; counting handlers on both
+  c2 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 counts 3
+  c1 autocommit INSERT [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+  c1 then counts 3
+  c2 INSERT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c2 COMMIT [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  then c1 counts 4
+B5 timing, WAL, busy timeout 1500 ms: a deferred transaction's first write after another's commit answered extended 517 BUSY_SNAPSHOT in all of 21 runs; while the other's write is open, 5 BUSY in all of 21
+B7: rollback journal; c2's statement holds a row (a SHARED lock); c1 commits; no busy timeout
+  c3 opened and read 3 rows
+  c2's reader stepped: 100 ROW
+  c1 BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 COMMIT: 5 BUSY, extended 5 BUSY, "database is locked"
+    c1 then: autocommit 0, txn_state(main) 2
+  c3, which had read before, SELECT count(*): 5 BUSY, extended 5 BUSY, "database is locked"
+  c4, a new connection, SELECT count(*): prepare answered 5 BUSY, extended 5 BUSY, "database is locked"
+  c2's reader steps again: 100 ROW
+  c1 COMMIT again, counting handler on c1 [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+    c1 then: autocommit 0, txn_state(main) 2
+  c2's reader finalized
+  c1 COMMIT again [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+    c1 then: autocommit 1, txn_state(main) 0
+  c3 then counts 4
+ an autocommit INSERT under c2's read:
+  c2's reader stepped: 100 ROW
+  c1 autocommit INSERT [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+    c1 then: autocommit 1, txn_state(main) 0
+  c2's reader finalized; c1 counts 4
+B7 timing, rollback journal, timeout 250 ms: COMMIT under a reader answered 5 BUSY in all of 21 runs
+B8: PRAGMA journal_mode on a file
+  c2 opened and read 3 rows; it stays open, idle
+  c1 PRAGMA journal_mode: row "delete"
+  c1 PRAGMA journal_mode=wal: row "wal"
+  c2 PRAGMA journal_mode: row "delete"
+  c2 then reads 3 rows
+  c2 PRAGMA journal_mode again: row "wal"
+  c3, opened after, PRAGMA journal_mode: row "wal"
+  all closed, then a new connection's PRAGMA journal_mode: row "wal"
+ inside an open transaction, on a rollback-journal file:
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  PRAGMA journal_mode=wal: no row, step 1 ERROR, extended 1 ERROR, "cannot change into wal mode from within a transaction"
+    then: autocommit 0, txn_state(main) 0
+  PRAGMA journal_mode: row "delete"
+  ROLLBACK: 101 DONE, extended 101 DONE, "no more rows available"
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  it reads 3 rows
+  PRAGMA journal_mode=wal: no row, step 1 ERROR, extended 1 ERROR, "cannot change into wal mode from within a transaction"
+    then: autocommit 0, txn_state(main) 1
+  ROLLBACK: 101 DONE, extended 101 DONE, "no more rows available"
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  PRAGMA journal_mode=truncate: row "truncate"
+  ROLLBACK: 101 DONE, extended 101 DONE, "no more rows available"
+  then PRAGMA journal_mode: row "truncate"
+  PRAGMA journal_mode=wal, outside a transaction: row "wal"
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  on WAL now, PRAGMA journal_mode=delete: no row, step 1 ERROR, extended 1 ERROR, "cannot change out of wal mode from within a transaction"
+    then: autocommit 0, txn_state(main) 0
+  ROLLBACK: 101 DONE, extended 101 DONE, "no more rows available"
+ rollback journal, another connection's statement holds a row:
+  c2's reader stepped: 100 ROW
+  c1 PRAGMA journal_mode=wal: no row, step 5 BUSY, extended 5 BUSY, "database is locked"
+  c1 then PRAGMA journal_mode: row "delete"
+  c2's reader finalized
+  c1 PRAGMA journal_mode=wal: row "wal"
+ WAL, back to delete while another connection is open and idle:
+  c2 reads 3 rows
+  c1 PRAGMA journal_mode=delete: no row, step 5 BUSY, extended 5 BUSY, "database is locked"
+  c1 then PRAGMA journal_mode: row "wal"
+  c2 closed
+  c1 PRAGMA journal_mode=delete: row "delete"
+B9: one connection's own conflict; counting handler on c1
+  c1's reader on t stepped: 100 ROW
+  c1 DROP TABLE t [busy handler calls 0]: 6 LOCKED, extended 6 LOCKED, "database table is locked"
+  c1 DROP TABLE u [busy handler calls 0]: 6 LOCKED, extended 6 LOCKED, "database table is locked"
+  c1 CREATE TABLE v(x) [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+  c1 INSERT INTO t [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+    c1 then: autocommit 1, txn_state(main) 1
+  the reader finalized
+  c1 DROP TABLE u [busy handler calls 0]: 101 DONE, extended 101 DONE, "no more rows available"
+ the same DROP against another connection's read:
+  c2's reader on t stepped: 100 ROW
+  c1 DROP TABLE t [busy handler calls 4]: 5 BUSY, extended 5 BUSY, "database is locked"
+B10: rollback journal; a fresh connection's first statements while another connection holds a lock; no busy timeout
+  the other holds BEGIN EXCLUSIVE and a write:
+    SELECT 1: prepare 5 BUSY, extended 5 BUSY
+    PRAGMA busy_timeout = 100: prepare 0 OK, step 100 ROW "100"
+    PRAGMA foreign_keys = 1: prepare 0 OK, step 101 DONE
+    PRAGMA foreign_keys: prepare 0 OK, step 100 ROW "0"
+    PRAGMA journal_mode: prepare 5 BUSY, extended 5 BUSY
+    PRAGMA journal_mode=wal: prepare 5 BUSY, extended 5 BUSY
+    PRAGMA synchronous: prepare 5 BUSY, extended 5 BUSY
+    SELECT count(*) FROM t: prepare 5 BUSY, extended 5 BUSY
+  the other holds BEGIN IMMEDIATE and a write:
+    SELECT 1: prepare 0 OK, step 100 ROW "1"
+    PRAGMA busy_timeout = 100: prepare 0 OK, step 100 ROW "100"
+    PRAGMA foreign_keys = 1: prepare 0 OK, step 101 DONE
+    PRAGMA foreign_keys: prepare 0 OK, step 100 ROW "0"
+    PRAGMA journal_mode: prepare 0 OK, step 100 ROW "delete"
+    PRAGMA journal_mode=wal: prepare 0 OK, step 5 BUSY, extended 5 BUSY
+    PRAGMA synchronous: prepare 0 OK, step 100 ROW "2"
+    SELECT count(*) FROM t: prepare 0 OK, step 100 ROW "3"
+  the other holds a statement holding a row:
+    SELECT 1: prepare 0 OK, step 100 ROW "1"
+    PRAGMA busy_timeout = 100: prepare 0 OK, step 100 ROW "100"
+    PRAGMA foreign_keys = 1: prepare 0 OK, step 101 DONE
+    PRAGMA foreign_keys: prepare 0 OK, step 100 ROW "0"
+    PRAGMA journal_mode: prepare 0 OK, step 100 ROW "delete"
+    PRAGMA journal_mode=wal: prepare 0 OK, step 5 BUSY, extended 5 BUSY
+    PRAGMA synchronous: prepare 0 OK, step 100 ROW "2"
+    SELECT count(*) FROM t: prepare 0 OK, step 100 ROW "3"
+B11: one connection, no other; COMMIT while its own INSERT ... RETURNING is stepped once and not finished
+  BEGIN: 101 DONE, extended 101 DONE, "no more rows available"
+  the INSERT ... RETURNING stepped: 100 ROW
+  COMMIT: 5 BUSY, extended 5 BUSY, "cannot commit transaction - SQL statements in progress"
+    then: autocommit 0, txn_state(main) 2
+  the INSERT ... RETURNING finalized
+  COMMIT again: 101 DONE, extended 101 DONE, "no more rows available"
+    then: autocommit 1, txn_state(main) 0
+  rows: 4
+B9 timing, busy timeout 1500 ms: DROP TABLE t under its own reader answered 6 LOCKED in all of 21 runs
+end

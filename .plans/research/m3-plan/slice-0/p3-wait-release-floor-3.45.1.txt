@@ -1,0 +1,13 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+P3. A busy wait the other connection ends by letting go after 150 ms;
+    busy timeout 1500 ms; codes extended
+  P3.1: wal, c1 holding BEGIN IMMEDIATE; c2's BEGIN IMMEDIATE:
+    busy_timeout = 1500 answered 0; c1's COMMIT 0; the call: done, after the release; then c2 counts 4 (21 of 21 runs)
+  P3.1: delete, c1 holding BEGIN IMMEDIATE; c2's BEGIN IMMEDIATE:
+    busy_timeout = 1500 answered 0; c1's COMMIT 0; the call: done, after the release; then c2 counts 4 (21 of 21 runs)
+  P3.2: delete, c1 holding read; c2's PRAGMA journal_mode = wal:
+    busy_timeout = 1500 answered 0; c1's COMMIT 0; the call: row wal, after the release (21 of 21 runs)
+  P3.3: delete, c1 holding BEGIN EXCLUSIVE; c2's PRAGMA journal_mode:
+    busy_timeout = 1500 answered 0; c1's COMMIT 0; the call: row delete, after the release (21 of 21 runs)

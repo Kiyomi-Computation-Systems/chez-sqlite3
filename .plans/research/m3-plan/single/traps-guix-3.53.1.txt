@@ -1,0 +1,278 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+T1
+
+ T1 rep 1: a BEGIN IMMEDIATE refused inside a transaction
+    a: BEGIN                                        DONE
+      autocommit 0, txn_state(main) NONE
+    a: BEGIN IMMEDIATE                              step rc 1 "cannot start a transaction within a transaction"
+      autocommit 0, txn_state(main) WRITE
+    b: BEGIN IMMEDIATE                              step rc 5 "database is locked"
+    a: ROLLBACK                                     DONE
+    b: BEGIN IMMEDIATE                              DONE
+    b: ROLLBACK                                     DONE
+  T1 rep 1: a BEGIN EXCLUSIVE refused inside a transaction
+    a: BEGIN                                        DONE
+    a: BEGIN EXCLUSIVE                              step rc 1 "cannot start a transaction within a transaction"
+      autocommit 0, txn_state(main) WRITE
+    b: SELECT count(*) FROM t                       prepare rc 5 "database is locked"
+    a: ROLLBACK                                     DONE
+    b: SELECT count(*) FROM t                       row 0; DONE
+
+ T1 rep 2: a BEGIN IMMEDIATE refused inside a transaction
+    a: BEGIN                                        DONE
+      autocommit 0, txn_state(main) NONE
+    a: BEGIN IMMEDIATE                              step rc 1 "cannot start a transaction within a transaction"
+      autocommit 0, txn_state(main) WRITE
+    b: BEGIN IMMEDIATE                              step rc 5 "database is locked"
+    a: ROLLBACK                                     DONE
+    b: BEGIN IMMEDIATE                              DONE
+    b: ROLLBACK                                     DONE
+  T1 rep 2: a BEGIN EXCLUSIVE refused inside a transaction
+    a: BEGIN                                        DONE
+    a: BEGIN EXCLUSIVE                              step rc 1 "cannot start a transaction within a transaction"
+      autocommit 0, txn_state(main) WRITE
+    b: SELECT count(*) FROM t                       prepare rc 5 "database is locked"
+    a: ROLLBACK                                     DONE
+    b: SELECT count(*) FROM t                       row 0; DONE
+
+T2
+
+ T2 rep 1: an open SELECT, then ROLLBACK of a transaction that inserted 4 and 5
+    SELECT x FROM t ORDER BY x: step 1 1; ROLLBACK; the next steps: 2 3 4 5 DONE
+    SELECT x FROM t: step 1 1; ROLLBACK; the next steps: 2 3 DONE
+    db: SELECT group_concat(x) FROM t                row 1,2,3; DONE
+
+ T2 rep 2: an open SELECT, then ROLLBACK of a transaction that inserted 4 and 5
+    SELECT x FROM t ORDER BY x: step 1 1; ROLLBACK; the next steps: 2 3 4 5 DONE
+    SELECT x FROM t: step 1 1; ROLLBACK; the next steps: 2 3 DONE
+    db: SELECT group_concat(x) FROM t                row 1,2,3; DONE
+
+T3
+
+ T3 rep 1: COMMIT while an INSERT ... RETURNING of its own has answered one row
+    db: BEGIN                                        DONE
+    db: INSERT INTO t VALUES (1), (2) RETURNING x, step 1: 1
+    db: COMMIT                                       step rc 5 "cannot commit transaction - SQL statements in progress"
+      extended_errcode 5
+    db: COMMIT                                       step rc 5 "cannot commit transaction - SQL statements in progress"
+      autocommit 0, txn_state(main) WRITE
+    db: COMMIT                                       DONE
+      autocommit 1, txn_state(main) NONE
+
+ T3 rep 2: COMMIT while an INSERT ... RETURNING of its own has answered one row
+    db: BEGIN                                        DONE
+    db: INSERT INTO t VALUES (1), (2) RETURNING x, step 1: 1
+    db: COMMIT                                       step rc 5 "cannot commit transaction - SQL statements in progress"
+      extended_errcode 5
+    db: COMMIT                                       step rc 5 "cannot commit transaction - SQL statements in progress"
+      autocommit 0, txn_state(main) WRITE
+    db: COMMIT                                       DONE
+      autocommit 1, txn_state(main) NONE
+
+T4
+
+ T4 rep 1: an unrecognised word for foreign_keys, and a misspelled name
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA foreign_keys                          row 1; DONE
+    db: PRAGMA foreign_keys = enable                 DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA foreign_keys = DEFAULT                DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA foreign_key = ON                      DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+
+ T4 rep 2: an unrecognised word for foreign_keys, and a misspelled name
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA foreign_keys                          row 1; DONE
+    db: PRAGMA foreign_keys = enable                 DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA foreign_keys = DEFAULT                DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA foreign_key = ON                      DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+
+T5
+
+ T5 rep 1: settings changed inside a transaction that hasn't written
+    db: BEGIN                                        DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA journal_mode = WAL                    step rc 1 "cannot change into wal mode from within a transaction"
+    db: PRAGMA synchronous = OFF                     prepare rc 1 "Safety level may not be changed inside a transaction"
+    db: COMMIT                                       DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA journal_mode                          row delete; DONE
+  T5 rep 1: the same, inside a transaction that has written
+    db: BEGIN                                        DONE
+    db: INSERT INTO t VALUES (1)                     DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA journal_mode = WAL                    row delete; DONE
+    db: PRAGMA synchronous = OFF                     prepare rc 1 "Safety level may not be changed inside a transaction"
+    db: COMMIT                                       DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA journal_mode                          row delete; DONE
+
+ T5 rep 2: settings changed inside a transaction that hasn't written
+    db: BEGIN                                        DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA journal_mode = WAL                    step rc 1 "cannot change into wal mode from within a transaction"
+    db: PRAGMA synchronous = OFF                     prepare rc 1 "Safety level may not be changed inside a transaction"
+    db: COMMIT                                       DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA journal_mode                          row delete; DONE
+  T5 rep 2: the same, inside a transaction that has written
+    db: BEGIN                                        DONE
+    db: INSERT INTO t VALUES (1)                     DONE
+    db: PRAGMA foreign_keys = ON                     DONE
+    db: PRAGMA journal_mode = WAL                    row delete; DONE
+    db: PRAGMA synchronous = OFF                     prepare rc 1 "Safety level may not be changed inside a transaction"
+    db: COMMIT                                       DONE
+    db: PRAGMA foreign_keys                          row 0; DONE
+    db: PRAGMA journal_mode                          row delete; DONE
+
+T6
+
+ T6 rep 1: a held INSERT; b adds a column, then rebuilds the table with 4 columns
+    a: held INSERT INTO t VALUES (1, 2), step: DONE
+    b: ALTER TABLE t ADD COLUMN r                   DONE
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    b: DROP TABLE t                                 DONE
+    b: CREATE TABLE t(p, q, r, s)                   DONE
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    a: SELECT count(*) FROM t                       row 0; DONE
+    a: the held INSERT, step: rc 1 "table t has 4 columns but 2 values were supplied"
+
+ T6 rep 2: a held INSERT; b adds a column, then rebuilds the table with 4 columns
+    a: held INSERT INTO t VALUES (1, 2), step: DONE
+    b: ALTER TABLE t ADD COLUMN r                   DONE
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    b: DROP TABLE t                                 DONE
+    b: CREATE TABLE t(p, q, r, s)                   DONE
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    a: the held INSERT, step: rc 1 "table t has 3 columns but 2 values were supplied"
+    a: SELECT count(*) FROM t                       row 0; DONE
+    a: the held INSERT, step: rc 1 "table t has 4 columns but 2 values were supplied"
+
+T7
+
+ T7 rep 1: last_insert_rowid after rolled-back rows
+      last_insert_rowid 1
+    db: INSERT INTO t(rowid, x) VALUES (50, 50), (51, 1) step rc 2067 "UNIQUE constraint failed: t.x"
+      last_insert_rowid 50; rows with rowid 50: 0
+      after BEGIN; INSERT rowid 60; ROLLBACK: last_insert_rowid 60; rows with rowid 60: 0
+
+ T7 rep 2: last_insert_rowid after rolled-back rows
+      last_insert_rowid 1
+    db: INSERT INTO t(rowid, x) VALUES (50, 50), (51, 1) step rc 2067 "UNIQUE constraint failed: t.x"
+      last_insert_rowid 50; rows with rowid 50: 0
+      after BEGIN; INSERT rowid 60; ROLLBACK: last_insert_rowid 60; rows with rowid 60: 0
+
+T8
+
+ T8 rep 1: SQLITE_FULL inside a transaction, with and without a function call
+    db: PRAGMA max_page_count = 14                   row 14; DONE
+    db: INSERT INTO b SELECT x FROM src              step rc 13 "database or disk is full"
+      autocommit 1, txn_state(main) NONE
+    db: SELECT count(*) FROM t                       row 0; DONE
+    db: PRAGMA max_page_count = 14                   row 14; DONE
+    db: INSERT INTO b SELECT lower(x) FROM src       step rc 13 "database or disk is full"
+      autocommit 0, txn_state(main) WRITE
+    db: SELECT count(*) FROM t                       row 1; DONE
+
+ T8 rep 2: SQLITE_FULL inside a transaction, with and without a function call
+    db: PRAGMA max_page_count = 14                   row 14; DONE
+    db: INSERT INTO b SELECT x FROM src              step rc 13 "database or disk is full"
+      autocommit 1, txn_state(main) NONE
+    db: SELECT count(*) FROM t                       row 0; DONE
+    db: PRAGMA max_page_count = 14                   row 14; DONE
+    db: INSERT INTO b SELECT lower(x) FROM src       step rc 13 "database or disk is full"
+      autocommit 0, txn_state(main) WRITE
+    db: SELECT count(*) FROM t                       row 1; DONE
+
+T9
+
+ T9 rep 1: heap limits set through one connection's PRAGMA
+    a: PRAGMA soft_heap_limit = 50000000            row 50000000; DONE
+    b: PRAGMA soft_heap_limit                       row 50000000; DONE
+    a: PRAGMA hard_heap_limit = 60000000            row 60000000; DONE
+    b: PRAGMA hard_heap_limit                       row 60000000; DONE
+    a: PRAGMA hard_heap_limit = 0                   row 60000000; DONE
+    a: PRAGMA hard_heap_limit = 90000000            row 60000000; DONE
+    a: PRAGMA soft_heap_limit = 0                   row 60000000; DONE
+    after both closed, and sqlite3_hard_heap_limit64(0): soft 0, hard 0
+
+ T9 rep 2: heap limits set through one connection's PRAGMA
+    a: PRAGMA soft_heap_limit = 50000000            row 50000000; DONE
+    b: PRAGMA soft_heap_limit                       row 50000000; DONE
+    a: PRAGMA hard_heap_limit = 60000000            row 60000000; DONE
+    b: PRAGMA hard_heap_limit                       row 60000000; DONE
+    a: PRAGMA hard_heap_limit = 0                   row 60000000; DONE
+    a: PRAGMA hard_heap_limit = 90000000            row 60000000; DONE
+    a: PRAGMA soft_heap_limit = 0                   row 60000000; DONE
+    after both closed, and sqlite3_hard_heap_limit64(0): soft 0, hard 0
+
+T10
+
+ T10 rep 1: sqlite3_exec's error offset for a syntax error at byte 27 of the script
+    exec rc 1, errmsg "near "SELEKT": syntax error", error_offset 0; the script's byte 27 starts "SELEKT"
+
+ T10 rep 2: sqlite3_exec's error offset for a syntax error at byte 27 of the script
+    exec rc 1, errmsg "near "SELEKT": syntax error", error_offset 0; the script's byte 27 starts "SELEKT"
+
+T11
+
+ T11 rep 1: sqlite3_stmt_busy after the last step
+    SELECT 1                     1 rows, last step rc 101, then stmt_busy 0; after reset 0
+    EXPLAIN SELECT 1             5 rows, last step rc 101, then stmt_busy 1; after reset 0
+    EXPLAIN QUERY PLAN SELECT 1  1 rows, last step rc 101, then stmt_busy 1; after reset 0
+
+ T11 rep 2: sqlite3_stmt_busy after the last step
+    SELECT 1                     1 rows, last step rc 101, then stmt_busy 0; after reset 0
+    EXPLAIN SELECT 1             5 rows, last step rc 101, then stmt_busy 1; after reset 0
+    EXPLAIN QUERY PLAN SELECT 1  1 rows, last step rc 101, then stmt_busy 1; after reset 0
+
+T12
+
+ T12 rep 1: NOMEM in a statement with a statement journal, by two methods
+    db: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3, the hard heap limit at memory_used + 1000 across the step: step rc 7 "out of memory"
+      finalize rc 7
+      autocommit 1, txn_state(main) NONE
+    db: SELECT count(*) FROM t                       row 0; DONE
+    db: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3, the first allocation of at least 100000 bytes failing, alone: step rc 7 "out of memory"; one failed, of 100000 bytes
+      finalize rc 7
+      autocommit 0, txn_state(main) WRITE
+    db: SELECT count(*) FROM t                       row 1; DONE
+
+ T12 rep 2: NOMEM in a statement with a statement journal, by two methods
+    db: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3, the hard heap limit at memory_used + 1000 across the step: step rc 7 "out of memory"
+      finalize rc 7
+      autocommit 1, txn_state(main) NONE
+    db: SELECT count(*) FROM t                       row 0; DONE
+    db: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3, the first allocation of at least 100000 bytes failing, alone: step rc 7 "out of memory"; one failed, of 100000 bytes
+      finalize rc 7
+      autocommit 0, txn_state(main) WRITE
+    db: SELECT count(*) FROM t                       row 1; DONE
+
+T13
+
+ T13 rep 1: a column read's NOMEM, then reset
+    db: SELECT hex(x) FROM src, step 1: ROW
+    sqlite3_column_text16 under the heap limit: NULL, extended_errcode 7
+      autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 7
+      autocommit 1, txn_state(main) NONE
+    sqlite3_finalize: rc 0
+    db: SELECT count(*) FROM t                       row 0; DONE
+
+ T13 rep 2: a column read's NOMEM, then reset
+    db: SELECT hex(x) FROM src, step 1: ROW
+    sqlite3_column_text16 under the heap limit: NULL, extended_errcode 7
+      autocommit 0, txn_state(main) WRITE
+    sqlite3_reset: rc 7
+      autocommit 1, txn_state(main) NONE
+    sqlite3_finalize: rc 0
+    db: SELECT count(*) FROM t                       row 0; DONE

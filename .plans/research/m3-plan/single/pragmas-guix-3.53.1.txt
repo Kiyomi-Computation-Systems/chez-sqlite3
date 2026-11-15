@@ -1,0 +1,904 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+P1. Set, read back, close, reopen the same file, read again
+  (each on a database file of its own, which holds one table before the PRAGMA)
+
+ P1.1 foreign_keys = ON
+  [default]  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  [set]      PRAGMA foreign_keys = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+  [reopen]   PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+
+ P1.2 busy_timeout = 1234
+  [default]  PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 0
+  [set]      PRAGMA busy_timeout = 1234
+    -> columns 1: "timeout"; row int 1234
+  [read]     PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 1234
+  [reopen]   PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 0
+
+ P1.3 synchronous = NORMAL
+  [default]  PRAGMA synchronous
+    -> columns 1: "synchronous"; row int 2
+  [set]      PRAGMA synchronous = NORMAL
+    -> columns 0:; no rows
+  [read]     PRAGMA synchronous
+    -> columns 1: "synchronous"; row int 1
+  [reopen]   PRAGMA synchronous
+    -> columns 1: "synchronous"; row int 2
+
+ P1.4 cache_size = -4321
+  [default]  PRAGMA cache_size
+    -> columns 1: "cache_size"; row int -2000
+  [set]      PRAGMA cache_size = -4321
+    -> columns 0:; no rows
+  [read]     PRAGMA cache_size
+    -> columns 1: "cache_size"; row int -4321
+  [reopen]   PRAGMA cache_size
+    -> columns 1: "cache_size"; row int -2000
+
+ P1.5 temp_store = MEMORY
+  [default]  PRAGMA temp_store
+    -> columns 1: "temp_store"; row int 0
+  [set]      PRAGMA temp_store = MEMORY
+    -> columns 0:; no rows
+  [read]     PRAGMA temp_store
+    -> columns 1: "temp_store"; row int 2
+  [reopen]   PRAGMA temp_store
+    -> columns 1: "temp_store"; row int 0
+
+ P1.6 recursive_triggers = ON
+  [default]  PRAGMA recursive_triggers
+    -> columns 1: "recursive_triggers"; row int 0
+  [set]      PRAGMA recursive_triggers = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA recursive_triggers
+    -> columns 1: "recursive_triggers"; row int 1
+  [reopen]   PRAGMA recursive_triggers
+    -> columns 1: "recursive_triggers"; row int 0
+
+ P1.7 defer_foreign_keys = ON
+  [default]  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+  [set]      PRAGMA defer_foreign_keys = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 1
+  [reopen]   PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+
+ P1.8 query_only = ON
+  [default]  PRAGMA query_only
+    -> columns 1: "query_only"; row int 0
+  [set]      PRAGMA query_only = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA query_only
+    -> columns 1: "query_only"; row int 1
+  [reopen]   PRAGMA query_only
+    -> columns 1: "query_only"; row int 0
+
+ P1.9 trusted_schema = OFF
+  [default]  PRAGMA trusted_schema
+    -> columns 1: "trusted_schema"; row int 1
+  [set]      PRAGMA trusted_schema = OFF
+    -> columns 0:; no rows
+  [read]     PRAGMA trusted_schema
+    -> columns 1: "trusted_schema"; row int 0
+  [reopen]   PRAGMA trusted_schema
+    -> columns 1: "trusted_schema"; row int 1
+
+ P1.10 secure_delete = FAST
+  [default]  PRAGMA secure_delete
+    -> columns 1: "secure_delete"; row int 1
+  [set]      PRAGMA secure_delete = FAST
+    -> columns 1: "secure_delete"; row int 2
+  [read]     PRAGMA secure_delete
+    -> columns 1: "secure_delete"; row int 2
+  [reopen]   PRAGMA secure_delete
+    -> columns 1: "secure_delete"; row int 1
+
+ P1.11 automatic_index = OFF
+  [default]  PRAGMA automatic_index
+    -> columns 1: "automatic_index"; row int 1
+  [set]      PRAGMA automatic_index = OFF
+    -> columns 0:; no rows
+  [read]     PRAGMA automatic_index
+    -> columns 1: "automatic_index"; row int 0
+  [reopen]   PRAGMA automatic_index
+    -> columns 1: "automatic_index"; row int 1
+
+ P1.12 journal_mode = WAL
+  [default]  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+  [set]      PRAGMA journal_mode = WAL
+    -> columns 1: "journal_mode"; row text 'wal'
+  [read]     PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'wal'
+  [reopen]   PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'wal'
+
+ P1.13 journal_mode = TRUNCATE
+  [default]  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+  [set]      PRAGMA journal_mode = TRUNCATE
+    -> columns 1: "journal_mode"; row text 'truncate'
+  [read]     PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'truncate'
+  [reopen]   PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+
+ P1.14 user_version = 42
+  [default]  PRAGMA user_version
+    -> columns 1: "user_version"; row int 0
+  [set]      PRAGMA user_version = 42
+    -> columns 0:; no rows
+  [read]     PRAGMA user_version
+    -> columns 1: "user_version"; row int 42
+  [reopen]   PRAGMA user_version
+    -> columns 1: "user_version"; row int 42
+
+ P1.15 application_id = 1234567
+  [default]  PRAGMA application_id
+    -> columns 1: "application_id"; row int 0
+  [set]      PRAGMA application_id = 1234567
+    -> columns 0:; no rows
+  [read]     PRAGMA application_id
+    -> columns 1: "application_id"; row int 1234567
+  [reopen]   PRAGMA application_id
+    -> columns 1: "application_id"; row int 1234567
+
+ P1.16 locking_mode = EXCLUSIVE
+  [default]  PRAGMA locking_mode
+    -> columns 1: "locking_mode"; row text 'normal'
+  [set]      PRAGMA locking_mode = EXCLUSIVE
+    -> columns 1: "locking_mode"; row text 'exclusive'
+  [read]     PRAGMA locking_mode
+    -> columns 1: "locking_mode"; row text 'exclusive'
+  [reopen]   PRAGMA locking_mode
+    -> columns 1: "locking_mode"; row text 'normal'
+
+ P1.17 cache_spill = OFF
+  [default]  PRAGMA cache_spill
+    -> columns 1: "cache_spill"; row int 483
+  [set]      PRAGMA cache_spill = OFF
+    -> columns 0:; no rows
+  [read]     PRAGMA cache_spill
+    -> columns 1: "cache_spill"; row int 0
+  [reopen]   PRAGMA cache_spill
+    -> columns 1: "cache_spill"; row int 483
+
+ P1.18 cell_size_check = ON
+  [default]  PRAGMA cell_size_check
+    -> columns 1: "cell_size_check"; row int 0
+  [set]      PRAGMA cell_size_check = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA cell_size_check
+    -> columns 1: "cell_size_check"; row int 1
+  [reopen]   PRAGMA cell_size_check
+    -> columns 1: "cell_size_check"; row int 0
+
+ P1.19 max_page_count = 5000
+  [default]  PRAGMA max_page_count
+    -> columns 1: "max_page_count"; row int 4294967294
+  [set]      PRAGMA max_page_count = 5000
+    -> columns 1: "max_page_count"; row int 5000
+  [read]     PRAGMA max_page_count
+    -> columns 1: "max_page_count"; row int 5000
+  [reopen]   PRAGMA max_page_count
+    -> columns 1: "max_page_count"; row int 4294967294
+
+ P1.20 wal_autocheckpoint = 77
+  [default]  PRAGMA wal_autocheckpoint
+    -> columns 1: "wal_autocheckpoint"; row int 1000
+  [set]      PRAGMA wal_autocheckpoint = 77
+    -> columns 1: "wal_autocheckpoint"; row int 77
+  [read]     PRAGMA wal_autocheckpoint
+    -> columns 1: "wal_autocheckpoint"; row int 77
+  [reopen]   PRAGMA wal_autocheckpoint
+    -> columns 1: "wal_autocheckpoint"; row int 1000
+
+ P1.21 journal_size_limit = 65536
+  [default]  PRAGMA journal_size_limit
+    -> columns 1: "journal_size_limit"; row int -1
+  [set]      PRAGMA journal_size_limit = 65536
+    -> columns 1: "journal_size_limit"; row int 65536
+  [read]     PRAGMA journal_size_limit
+    -> columns 1: "journal_size_limit"; row int 65536
+  [reopen]   PRAGMA journal_size_limit
+    -> columns 1: "journal_size_limit"; row int -1
+
+ P1.22 mmap_size = 1048576
+  [default]  PRAGMA mmap_size
+    -> columns 1: "mmap_size"; row int 0
+  [set]      PRAGMA mmap_size = 1048576
+    -> columns 1: "mmap_size"; row int 1048576
+  [read]     PRAGMA mmap_size
+    -> columns 1: "mmap_size"; row int 1048576
+  [reopen]   PRAGMA mmap_size
+    -> columns 1: "mmap_size"; row int 0
+
+ P1.23 legacy_alter_table = ON
+  [default]  PRAGMA legacy_alter_table
+    -> columns 1: "legacy_alter_table"; row int 0
+  [set]      PRAGMA legacy_alter_table = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA legacy_alter_table
+    -> columns 1: "legacy_alter_table"; row int 1
+  [reopen]   PRAGMA legacy_alter_table
+    -> columns 1: "legacy_alter_table"; row int 0
+
+ P1.24 reverse_unordered_selects = ON
+  [default]  PRAGMA reverse_unordered_selects
+    -> columns 1: "reverse_unordered_selects"; row int 0
+  [set]      PRAGMA reverse_unordered_selects = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA reverse_unordered_selects
+    -> columns 1: "reverse_unordered_selects"; row int 1
+  [reopen]   PRAGMA reverse_unordered_selects
+    -> columns 1: "reverse_unordered_selects"; row int 0
+
+ P1.25 ignore_check_constraints = ON
+  [default]  PRAGMA ignore_check_constraints
+    -> columns 1: "ignore_check_constraints"; row int 0
+  [set]      PRAGMA ignore_check_constraints = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA ignore_check_constraints
+    -> columns 1: "ignore_check_constraints"; row int 1
+  [reopen]   PRAGMA ignore_check_constraints
+    -> columns 1: "ignore_check_constraints"; row int 0
+
+ P1.26 case_sensitive_like = ON
+  [default]  PRAGMA case_sensitive_like
+    -> columns 0:; no rows
+  [set]      PRAGMA case_sensitive_like = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA case_sensitive_like
+    -> columns 0:; no rows
+  [reopen]   PRAGMA case_sensitive_like
+    -> columns 0:; no rows
+
+ P1.27 threads = 2
+  [default]  PRAGMA threads
+    -> columns 1: "threads"; row int 0
+  [set]      PRAGMA threads = 2
+    -> columns 1: "threads"; row int 2
+  [read]     PRAGMA threads
+    -> columns 1: "threads"; row int 2
+  [reopen]   PRAGMA threads
+    -> columns 1: "threads"; row int 0
+
+ P1.28 count_changes = ON
+  [default]  PRAGMA count_changes
+    -> columns 1: "count_changes"; row int 0
+  [set]      PRAGMA count_changes = ON
+    -> columns 0:; no rows
+  [read]     PRAGMA count_changes
+    -> columns 1: "count_changes"; row int 1
+  [reopen]   PRAGMA count_changes
+    -> columns 1: "count_changes"; row int 0
+
+ P1.29 analysis_limit = 100
+  [default]  PRAGMA analysis_limit
+    -> columns 1: "analysis_limit"; row int 0
+  [set]      PRAGMA analysis_limit = 100
+    -> columns 1: "analysis_limit"; row int 100
+  [read]     PRAGMA analysis_limit
+    -> columns 1: "analysis_limit"; row int 100
+  [reopen]   PRAGMA analysis_limit
+    -> columns 1: "analysis_limit"; row int 0
+
+ P1.30 auto_vacuum = FULL
+  [default]  PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 0
+  [set]      PRAGMA auto_vacuum = FULL
+    -> columns 0:; no rows
+  [read]     PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 0
+  [reopen]   PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 0
+
+ P1.31 page_size = 8192
+  [default]  PRAGMA page_size
+    -> columns 1: "page_size"; row int 4096
+  [set]      PRAGMA page_size = 8192
+    -> columns 0:; no rows
+  [read]     PRAGMA page_size
+    -> columns 1: "page_size"; row int 4096
+  [reopen]   PRAGMA page_size
+    -> columns 1: "page_size"; row int 4096
+
+ P1.32 encoding = 'UTF-16le'
+  [default]  PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+  [set]      PRAGMA encoding = 'UTF-16le'
+    -> columns 0:; no rows
+  [read]     PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+  [reopen]   PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+
+P2. Process-wide settings: set on one connection, read on others
+  PRAGMA soft_heap_limit
+    -> columns 1: "soft_heap_limit"; row int 0
+  PRAGMA soft_heap_limit = 50000000
+    -> columns 1: "soft_heap_limit"; row int 50000000
+  PRAGMA soft_heap_limit
+    -> columns 1: "soft_heap_limit"; row int 50000000
+  PRAGMA soft_heap_limit
+    -> columns 1: "soft_heap_limit"; row int 50000000
+  sqlite3_soft_heap_limit64(-1) reads 50000000
+  PRAGMA soft_heap_limit = 0
+    -> columns 1: "soft_heap_limit"; row int 0
+  PRAGMA soft_heap_limit
+    -> columns 1: "soft_heap_limit"; row int 0
+  PRAGMA hard_heap_limit
+    -> columns 1: "hard_heap_limit"; row int 0
+  PRAGMA hard_heap_limit = 60000000
+    -> columns 1: "hard_heap_limit"; row int 60000000
+  PRAGMA hard_heap_limit
+    -> columns 1: "hard_heap_limit"; row int 60000000
+  PRAGMA hard_heap_limit = 70000000
+    -> columns 1: "hard_heap_limit"; row int 60000000
+  PRAGMA hard_heap_limit = 0
+    -> columns 1: "hard_heap_limit"; row int 60000000
+  PRAGMA hard_heap_limit
+    -> columns 1: "hard_heap_limit"; row int 60000000
+  sqlite3_hard_heap_limit64(0); then hard_heap_limit reads:
+  PRAGMA hard_heap_limit
+    -> columns 1: "hard_heap_limit"; row int 0
+
+P3. Prepared, never stepped: does the setting change?
+  (each on a fresh file; the value read before the prepare, while it is held, and after its finalize)
+  PRAGMA foreign_keys = ON                 prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA busy_timeout = 1234               prepare rc 0, finalize rc 0: before 0, held 1234, after 1234 -> CHANGED AT PREPARE
+  PRAGMA synchronous = NORMAL              prepare rc 0, finalize rc 0: before 2, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA cache_size = -4321                prepare rc 0, finalize rc 0: before -2000, held -4321, after -4321 -> CHANGED AT PREPARE
+  PRAGMA temp_store = MEMORY               prepare rc 0, finalize rc 0: before 0, held 2, after 2 -> CHANGED AT PREPARE
+  PRAGMA recursive_triggers = ON           prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA defer_foreign_keys = ON           prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA query_only = ON                   prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA trusted_schema = OFF              prepare rc 0, finalize rc 0: before 1, held 0, after 0 -> CHANGED AT PREPARE
+  PRAGMA secure_delete = FAST              prepare rc 0, finalize rc 0: before 1, held 2, after 2 -> CHANGED AT PREPARE
+  PRAGMA automatic_index = OFF             prepare rc 0, finalize rc 0: before 1, held 0, after 0 -> CHANGED AT PREPARE
+  PRAGMA journal_mode = WAL                prepare rc 0, finalize rc 0: before delete, held delete, after delete -> unchanged
+  PRAGMA journal_mode = TRUNCATE           prepare rc 0, finalize rc 0: before delete, held delete, after delete -> unchanged
+  PRAGMA user_version = 42                 prepare rc 0, finalize rc 0: before 0, held 0, after 0 -> unchanged
+  PRAGMA application_id = 1234567          prepare rc 0, finalize rc 0: before 0, held 0, after 0 -> unchanged
+  PRAGMA locking_mode = EXCLUSIVE          prepare rc 0, finalize rc 0: before normal, held exclusive, after exclusive -> CHANGED AT PREPARE
+  PRAGMA cache_spill = OFF                 prepare rc 0, finalize rc 0: before 483, held 0, after 0 -> CHANGED AT PREPARE
+  PRAGMA cell_size_check = ON              prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA max_page_count = 5000             prepare rc 0, finalize rc 0: before 4294967294, held 4294967294, after 4294967294 -> unchanged
+  PRAGMA wal_autocheckpoint = 77           prepare rc 0, finalize rc 0: before 1000, held 77, after 77 -> CHANGED AT PREPARE
+  PRAGMA journal_size_limit = 65536        prepare rc 0, finalize rc 0: before -1, held 65536, after 65536 -> CHANGED AT PREPARE
+  PRAGMA mmap_size = 1048576               prepare rc 0, finalize rc 0: before 0, held 1048576, after 1048576 -> CHANGED AT PREPARE
+  PRAGMA legacy_alter_table = ON           prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA reverse_unordered_selects = ON    prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA ignore_check_constraints = ON     prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA threads = 2                       prepare rc 0, finalize rc 0: before 0, held 2, after 2 -> CHANGED AT PREPARE
+  PRAGMA count_changes = ON                prepare rc 0, finalize rc 0: before 0, held 1, after 1 -> CHANGED AT PREPARE
+  PRAGMA analysis_limit = 100              prepare rc 0, finalize rc 0: before 0, held 100, after 100 -> CHANGED AT PREPARE
+  PRAGMA auto_vacuum = FULL                prepare rc 0, finalize rc 0: before 0, held 0, after 0 -> unchanged
+  PRAGMA page_size = 8192                  prepare rc 0, finalize rc 0: before 4096, held 4096, after 4096 -> unchanged
+  PRAGMA encoding = 'UTF-16le'             prepare rc 0, finalize rc 0: before UTF-8, held UTF-8, after UTF-8 -> unchanged
+
+P4. Invalid values, each from a non-default base of its own
+  base 3        PRAGMA synchronous = bogus                 answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = ''                    answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = -1                    answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = 4                     answers (no rows); reads 4 -> changed
+  base 3        PRAGMA synchronous = 99                    answers (no rows); reads 3 -> kept
+  base 3        PRAGMA synchronous = 1.5                   answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = '2abc'                answers (no rows); reads 2 -> changed
+  base 3        PRAGMA synchronous = normal                answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = NORMAL                answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = Full                  answers (no rows); reads 2 -> changed
+  base 3        PRAGMA synchronous = 0x1                   answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = DEFAULT               answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = ON                    answers (no rows); reads 1 -> changed
+  base 3        PRAGMA synchronous = yes                   answers (no rows); reads 1 -> changed
+  base 1        PRAGMA foreign_keys = bogus                answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = ''                   answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = enable               answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = 'off'                answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = 0.5                  answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = DEFAULT              answers (no rows); reads 0 -> changed
+  base 1        PRAGMA foreign_keys = -1                   answers (no rows); reads 0 -> changed
+  base 0        PRAGMA foreign_keys = 2                    answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = -1                   answers (no rows); reads 0 -> kept
+  base 0        PRAGMA foreign_keys = yes                  answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = true                 answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = TRUE                 answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = On                   answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = 'on'                 answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = 1.5                  answers (no rows); reads 1 -> changed
+  base 0        PRAGMA foreign_keys = 256                  answers (no rows); reads 0 -> kept
+  base 0        PRAGMA foreign_keys = 0x1                  answers (no rows); reads 1 -> changed
+  base 777      PRAGMA cache_size = 'abc'                  answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = ''                     answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = -100                   answers (no rows); reads -100 -> changed
+  base 777      PRAGMA cache_size = '12abc'                answers (no rows); reads 12 -> changed
+  base 777      PRAGMA cache_size = 1.9                    answers (no rows); reads 1 -> changed
+  base 777      PRAGMA cache_size = 9223372036854775807    answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = -9223372036854775808   answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = 99999999999            answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = DEFAULT                answers (no rows); reads 0 -> changed
+  base 777      PRAGMA cache_size = 0x10                   answers (no rows); reads 16 -> changed
+  base 777      PRAGMA cache_size = 1e3                    answers (no rows); reads 1 -> changed
+  base 1234     PRAGMA busy_timeout = -5                   answers 0; reads 0 -> changed
+  base 1234     PRAGMA busy_timeout = 'abc'                answers 0; reads 0 -> changed
+  base 1234     PRAGMA busy_timeout = ''                   answers 0; reads 0 -> changed
+  base 1234     PRAGMA busy_timeout = 2147483648           answers 0; reads 0 -> changed
+  base 1234     PRAGMA busy_timeout = 1.5                  answers 1; reads 1 -> changed
+  base 1234     PRAGMA busy_timeout = 0                    answers 0; reads 0 -> changed
+  base 2        PRAGMA temp_store = 7                      answers (no rows); reads 0 -> changed
+  base 2        PRAGMA temp_store = -1                     answers (no rows); reads 0 -> changed
+  base 2        PRAGMA temp_store = 'bogus'                answers (no rows); reads 0 -> changed
+  base 2        PRAGMA temp_store = file                   answers (no rows); reads 1 -> changed
+  base 2        PRAGMA temp_store = 3                      answers (no rows); reads 0 -> changed
+  base 42       PRAGMA user_version = -1                   answers (no rows); reads -1 -> changed
+  base 42       PRAGMA user_version = 'abc'                answers (no rows); reads 0 -> changed
+  base 42       PRAGMA user_version = 4294967296           answers (no rows); reads 0 -> changed
+  base 42       PRAGMA user_version = 2147483648           answers (no rows); reads 0 -> changed
+  base 42       PRAGMA user_version = 1.5                  answers (no rows); reads 1 -> changed
+  base 42       PRAGMA user_version = ''                   answers (no rows); reads 0 -> changed
+  base 42       PRAGMA user_version = '42'                 answers (no rows); reads 42 -> kept
+  base 42       PRAGMA user_version = +42                  answers (no rows); reads 42 -> kept
+  base 42       PRAGMA user_version = 0x2A                 answers (no rows); reads 42 -> kept
+  base 7        PRAGMA application_id = -1                 answers (no rows); reads -1 -> changed
+  base 7        PRAGMA application_id = 'abc'              answers (no rows); reads 0 -> changed
+  base 7        PRAGMA application_id = 4294967297         answers (no rows); reads 0 -> changed
+  base truncate PRAGMA journal_mode = bogus                answers truncate; reads truncate -> kept
+  base truncate PRAGMA journal_mode = ''                   answers delete; reads delete -> changed
+  base truncate PRAGMA journal_mode = 'WAL '               answers truncate; reads truncate -> kept
+  base truncate PRAGMA journal_mode = 1                    answers truncate; reads truncate -> kept
+  base normal   PRAGMA locking_mode = bogus                answers normal; reads normal -> kept
+  base normal   PRAGMA locking_mode = ''                   answers normal; reads normal -> kept
+  base normal   PRAGMA locking_mode = 1                    answers normal; reads normal -> kept
+  base 2        PRAGMA secure_delete = bogus               answers 0; reads 0 -> changed
+  base 2        PRAGMA secure_delete = 5                   answers 1; reads 1 -> changed
+  base 2        PRAGMA secure_delete = -1                  answers 0; reads 0 -> changed
+  base 1        PRAGMA recursive_triggers = bogus          answers (no rows); reads 0 -> changed
+  base 0        PRAGMA recursive_triggers = 2              answers (no rows); reads 1 -> changed
+  base 1        PRAGMA query_only = bogus                  answers (no rows); reads 0 -> changed
+  base 0        PRAGMA query_only = 2                      answers (no rows); reads 1 -> changed
+  base 1        PRAGMA trusted_schema = bogus              answers (no rows); reads 0 -> changed
+  base 0        PRAGMA trusted_schema = 2                  answers (no rows); reads 1 -> changed
+  base 1        PRAGMA automatic_index = bogus             answers (no rows); reads 0 -> changed
+  base 0        PRAGMA automatic_index = 2                 answers (no rows); reads 1 -> changed
+  base 1        PRAGMA defer_foreign_keys = bogus          answers (no rows); reads 0 -> changed
+  base 0        PRAGMA defer_foreign_keys = 2              answers (no rows); reads 1 -> changed
+  base 1        PRAGMA cell_size_check = bogus             answers (no rows); reads 0 -> changed
+  base 0        PRAGMA cell_size_check = 2                 answers (no rows); reads 1 -> changed
+
+P5. Unknown names, in the set form and the read form, and a misspelling
+  PRAGMA nosuch
+    -> columns 0:; no rows
+  PRAGMA nosuch = 1
+    -> columns 0:; no rows
+  PRAGMA nosuch(1)
+    -> columns 0:; no rows
+  PRAGMA main.nosuch
+    -> columns 0:; no rows
+  PRAGMA foreign_key
+    -> columns 0:; no rows
+  PRAGMA foreign_key = ON
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  PRAGMA busytimeout = 100
+    -> columns 0:; no rows
+  PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 0
+  PRAGMA nosuchschema.user_version
+    -> prepare rc 1 ERROR, extended 1, errmsg "unknown database nosuchschema", error_offset 7
+  PRAGMA nosuchschema.user_version = 3
+    -> prepare rc 1 ERROR, extended 1, errmsg "unknown database nosuchschema", error_offset 7
+  PRAGMA nosuchschema.foreign_keys = ON
+    -> prepare rc 1 ERROR, extended 1, errmsg "unknown database nosuchschema", error_offset 7
+  PRAGMA nosuchschema.busy_timeout = 5
+    -> prepare rc 1 ERROR, extended 1, errmsg "unknown database nosuchschema", error_offset 7
+  PRAGMA temp.foreign_keys = ON
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+
+P6. foreign_keys inside a transaction
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  BEGIN
+    -> columns 0:; no rows
+  PRAGMA foreign_keys = ON
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  INSERT INTO c VALUES (99)
+    -> columns 0:; no rows
+  COMMIT
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  PRAGMA foreign_keys = ON
+    -> columns 0:; no rows
+  SAVEPOINT s
+    -> columns 0:; no rows
+  PRAGMA foreign_keys = OFF
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+  INSERT INTO c VALUES (98)
+    -> columns 0:; no rows; step rc 787 CONSTRAINT, extended 787, errmsg "FOREIGN KEY constraint failed"
+  ROLLBACK
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+
+P6b. defer_foreign_keys across statements and transactions
+  PRAGMA defer_foreign_keys = ON
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 1
+  SELECT 1
+    -> columns 1: "1"; row int 1
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 1
+  INSERT INTO p VALUES (1)
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+  BEGIN
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys = ON
+    -> columns 0:; no rows
+  INSERT INTO c VALUES (2)
+    -> columns 0:; no rows
+  INSERT INTO p VALUES (2)
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 1
+  COMMIT
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+  BEGIN
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys = ON
+    -> columns 0:; no rows
+  ROLLBACK
+    -> columns 0:; no rows
+  PRAGMA defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+
+P6c. journal_mode and synchronous inside a transaction that hasn't written
+  BEGIN
+    -> columns 0:; no rows
+  PRAGMA journal_mode = WAL
+    -> columns 1: "journal_mode"; no rows; step rc 1 ERROR, extended 1, errmsg "cannot change into wal mode from within a transaction"
+  PRAGMA journal_mode = TRUNCATE
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA synchronous = OFF
+    -> prepare rc 1 ERROR, extended 1, errmsg "Safety level may not be changed inside a transaction", error_offset -1
+  ROLLBACK
+    -> columns 0:; no rows
+  PRAGMA journal_mode = DELETE
+    -> columns 1: "journal_mode"; row text 'delete'
+
+P6d. journal_mode and other settings inside a transaction that has written
+  BEGIN
+    -> columns 0:; no rows
+  INSERT INTO p VALUES (3)
+    -> columns 0:; no rows
+  PRAGMA journal_mode = WAL
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA synchronous = OFF
+    -> prepare rc 1 ERROR, extended 1, errmsg "Safety level may not be changed inside a transaction", error_offset -1
+  PRAGMA synchronous
+    -> columns 1: "synchronous"; row int 2
+  PRAGMA busy_timeout = 250
+    -> columns 1: "timeout"; row int 250
+  PRAGMA user_version = 9
+    -> columns 0:; no rows
+  ROLLBACK
+    -> columns 0:; no rows
+  PRAGMA synchronous
+    -> columns 1: "synchronous"; row int 2
+  PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 250
+  PRAGMA user_version
+    -> columns 1: "user_version"; row int 0
+
+P7. Bound parameters, a schema name, and the grammar of a value
+  PRAGMA busy_timeout = ?
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "?": syntax error", error_offset 22
+  PRAGMA busy_timeout = ?1
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "?1": syntax error", error_offset 22
+  PRAGMA busy_timeout = :t
+    -> prepare rc 1 ERROR, extended 1, errmsg "near ":t": syntax error", error_offset 22
+  PRAGMA busy_timeout(?)
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "?": syntax error", error_offset 20
+  PRAGMA user_version = ?
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "?": syntax error", error_offset 22
+  PRAGMA main.user_version = ?
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "?": syntax error", error_offset 27
+  PRAGMA main.user_version = 5
+    -> columns 0:; no rows
+  PRAGMA main.user_version
+    -> columns 1: "user_version"; row int 5
+  PRAGMA "main".user_version
+    -> columns 1: "user_version"; row int 5
+  PRAGMA user_version
+    -> columns 1: "user_version"; row int 5
+  PRAGMA temp.user_version
+    -> columns 1: "user_version"; row int 0
+  PRAGMA main.busy_timeout = 77
+    -> columns 1: "timeout"; row int 77
+  PRAGMA busy_timeout
+    -> columns 1: "timeout"; row int 77
+  PRAGMA main.foreign_keys = ON
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+  PRAGMA foreign_keys = OFF
+    -> columns 0:; no rows
+  PRAGMA busy_timeout = 1 + 1
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "+": syntax error", error_offset 24
+  PRAGMA busy_timeout = (5)
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "(": syntax error", error_offset 22
+  PRAGMA busy_timeout = NULL
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "NULL": syntax error", error_offset 22
+  PRAGMA busy_timeout =
+    -> prepare rc 1 ERROR, extended 1, errmsg "incomplete input", error_offset -1
+  PRAGMA busy_timeout()
+    -> prepare rc 1 ERROR, extended 1, errmsg "near ")": syntax error", error_offset 20
+  PRAGMA busy_timeout = -0
+    -> columns 1: "timeout"; row int 0
+  PRAGMA busy_timeout = +300
+    -> columns 1: "timeout"; row int 300
+  PRAGMA busy_timeout(400)
+    -> columns 1: "timeout"; row int 400
+  PRAGMA busy_timeout = '500'
+    -> columns 1: "timeout"; row int 500
+  PRAGMA busy_timeout = "600"
+    -> columns 1: "timeout"; row int 600
+  PRAGMA busy_timeout = x'37'
+    -> prepare rc 1 ERROR, extended 1, errmsg "near "x'37'": syntax error", error_offset 22
+  PRAGMA busy_timeout = 700;
+    -> columns 1: "timeout"; row int 700
+  PRAGMA busy_timeout = 800 -- a comment
+    -> columns 1: "timeout"; row int 800
+  PRAGMA journal_mode = DELETE
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA cache_size = DEFAULT
+    -> columns 0:; no rows
+  PRAGMA cache_size
+    -> columns 1: "cache_size"; row int 0
+  PRAGMA foreign_keys = ON
+    -> columns 0:; no rows
+  PRAGMA foreign_keys = DEFAULT
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+
+P8. Case, in names and values, and in what comes back
+  PRAGMA FOREIGN_KEYS = on
+    -> columns 0:; no rows
+  PRAGMA Foreign_Keys
+    -> columns 1: "foreign_keys"; row int 1
+  PRAGMA foreign_keys = Off
+    -> columns 0:; no rows
+  PRAGMA foreign_keys
+    -> columns 1: "foreign_keys"; row int 0
+  PRAGMA Journal_Mode = Wal
+    -> columns 1: "journal_mode"; row text 'wal'
+  PRAGMA journal_mode = 'DELETE'
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA journal_mode = "Truncate"
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA JOURNAL_MODE
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA journal_mode = delete
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA locking_mode = Exclusive
+    -> columns 1: "locking_mode"; row text 'exclusive'
+  PRAGMA LOCKING_MODE
+    -> columns 1: "locking_mode"; row text 'exclusive'
+  PRAGMA locking_mode = normal
+    -> columns 1: "locking_mode"; row text 'normal'
+  PRAGMA synchronous = Normal
+    -> columns 0:; no rows
+  PRAGMA SYNCHRONOUS
+    -> columns 1: "synchronous"; row int 1
+  PRAGMA temp_store = Memory
+    -> columns 0:; no rows
+  PRAGMA temp_store
+    -> columns 1: "temp_store"; row int 2
+  PRAGMA secure_delete = FAST
+    -> columns 1: "secure_delete"; row int 2
+  PRAGMA secure_delete
+    -> columns 1: "secure_delete"; row int 2
+  PRAGMA MAIN.User_Version = 3
+    -> columns 0:; no rows
+  PRAGMA Main.USER_VERSION
+    -> columns 1: "user_version"; row int 3
+  PRAGMA BUSY_TIMEOUT = 10
+    -> columns 1: "timeout"; row int 10
+  PRAGMA Busy_Timeout
+    -> columns 1: "timeout"; row int 10
+
+P9. Reading settings through table-valued pragma functions
+  SELECT * FROM pragma_foreign_keys
+    -> columns 1: "foreign_keys"; row int 1
+  SELECT * FROM pragma_busy_timeout
+    -> columns 1: "timeout"; row int 321
+  SELECT * FROM pragma_synchronous
+    -> columns 1: "synchronous"; row int 2
+  SELECT * FROM pragma_cache_size
+    -> columns 1: "cache_size"; row int -2000
+  SELECT * FROM pragma_temp_store
+    -> columns 1: "temp_store"; row int 0
+  SELECT * FROM pragma_recursive_triggers
+    -> columns 1: "recursive_triggers"; row int 0
+  SELECT * FROM pragma_defer_foreign_keys
+    -> columns 1: "defer_foreign_keys"; row int 0
+  SELECT * FROM pragma_query_only
+    -> columns 1: "query_only"; row int 0
+  SELECT * FROM pragma_trusted_schema
+    -> columns 1: "trusted_schema"; row int 1
+  SELECT * FROM pragma_secure_delete
+    -> columns 1: "secure_delete"; row int 1
+  SELECT * FROM pragma_automatic_index
+    -> columns 1: "automatic_index"; row int 1
+  SELECT * FROM pragma_journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+  SELECT * FROM pragma_user_version
+    -> columns 1: "user_version"; row int 8
+  SELECT * FROM pragma_application_id
+    -> columns 1: "application_id"; row int 0
+  SELECT * FROM pragma_locking_mode
+    -> columns 1: "locking_mode"; row text 'normal'
+  SELECT * FROM pragma_user_version('main')
+    -> prepare rc 1 ERROR, extended 1, errmsg "too many arguments on pragma_user_version() - max 0", error_offset -1
+  SELECT * FROM pragma_user_version(5)
+    -> prepare rc 1 ERROR, extended 1, errmsg "too many arguments on pragma_user_version() - max 0", error_offset -1
+  PRAGMA user_version
+    -> columns 1: "user_version"; row int 8
+  SELECT * FROM pragma_busy_timeout(5)
+    -> prepare rc 1 ERROR, extended 1, errmsg "too many arguments on pragma_busy_timeout() - max 0", error_offset -1
+  SELECT * FROM pragma_cache_size(?)
+    -> columns 1: "cache_size"; row int -2000
+  SELECT name FROM pragma_table_info(?)   [?1 bound to 'k']
+    -> columns 1: "name"; row text 'x'
+  SELECT * FROM pragma_user_version(?)   [?1 bound to 'main']
+    -> prepare rc 1 ERROR, extended 1, errmsg "too many arguments on pragma_user_version() - max 0", error_offset -1
+  SELECT * FROM main.pragma_user_version
+    -> columns 1: "user_version"; row int 8
+
+P10. query_only refusing a write
+  PRAGMA query_only = ON
+    -> columns 0:; no rows
+  INSERT INTO k VALUES (1)
+    -> columns 0:; no rows; step rc 8 READONLY, extended 8, errmsg "attempt to write a readonly database"
+  CREATE TABLE k2(x)
+    -> columns 0:; no rows; step rc 8 READONLY, extended 8, errmsg "attempt to write a readonly database"
+  PRAGMA user_version = 4
+    -> columns 0:; no rows; step rc 8 READONLY, extended 8, errmsg "attempt to write a readonly database"
+  PRAGMA user_version
+    -> columns 1: "user_version"; row int 0
+  BEGIN IMMEDIATE
+    -> columns 0:; no rows; step rc 8 READONLY, extended 8, errmsg "attempt to write a readonly database"
+  ROLLBACK
+    -> columns 0:; no rows; step rc 1 ERROR, extended 1, errmsg "cannot rollback - no transaction is active"
+  CREATE TEMP TABLE tt(x)
+    -> columns 0:; no rows; step rc 8 READONLY, extended 8, errmsg "attempt to write a readonly database"
+  PRAGMA query_only = OFF
+    -> columns 0:; no rows
+
+P11. journal_mode=wal on :memory:, and on a temporary database
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'memory'
+  PRAGMA journal_mode = wal
+    -> columns 1: "journal_mode"; row text 'memory'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'memory'
+  PRAGMA journal_mode = delete
+    -> columns 1: "journal_mode"; row text 'memory'
+  PRAGMA journal_mode = off
+    -> columns 1: "journal_mode"; row text 'off'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'off'
+
+P12. Set on a file holding a table, then VACUUM, then a reopen
+
+ P12.1 page_size = 8192
+  [default]  PRAGMA page_size
+    -> columns 1: "page_size"; row int 4096
+  [set]      PRAGMA page_size = 8192
+    -> columns 0:; no rows
+  [read]     PRAGMA page_size
+    -> columns 1: "page_size"; row int 4096
+  [vacuum]   VACUUM
+    -> columns 0:; no rows
+  [read]     PRAGMA page_size
+    -> columns 1: "page_size"; row int 8192
+  [rows]     SELECT group_concat(x) FROM k
+    -> columns 1: "group_concat(x)"; row text 'one,two'
+  [reopen]   PRAGMA page_size
+    -> columns 1: "page_size"; row int 8192
+
+ P12.2 auto_vacuum = FULL
+  [default]  PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 0
+  [set]      PRAGMA auto_vacuum = FULL
+    -> columns 0:; no rows
+  [read]     PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 0
+  [vacuum]   VACUUM
+    -> columns 0:; no rows
+  [read]     PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 1
+  [rows]     SELECT group_concat(x) FROM k
+    -> columns 1: "group_concat(x)"; row text 'one,two'
+  [reopen]   PRAGMA auto_vacuum
+    -> columns 1: "auto_vacuum"; row int 1
+
+ P12.3 encoding = 'UTF-16le'
+  [default]  PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+  [set]      PRAGMA encoding = 'UTF-16le'
+    -> columns 0:; no rows
+  [read]     PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+  [vacuum]   VACUUM
+    -> columns 0:; no rows
+  [read]     PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+  [rows]     SELECT group_concat(x) FROM k
+    -> columns 1: "group_concat(x)"; row text 'one,two'
+  [reopen]   PRAGMA encoding
+    -> columns 1: "encoding"; row text 'UTF-8'
+
+P13. journal_mode set in autocommit while a SELECT on the same connection holds a row
+
+ P13.1 PRAGMA journal_mode = wal
+  reader: SELECT x FROM k, step 1: rc 100 ROW
+    autocommit 1, txn_state(main) READ
+  PRAGMA journal_mode = wal
+    -> columns 1: "journal_mode"; no rows; step rc 1 ERROR, extended 1, errmsg "cannot change into wal mode from within a transaction"
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+    autocommit 1, txn_state(main) READ
+  reader: finalize rc 0
+    autocommit 1, txn_state(main) NONE
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'delete'
+  PRAGMA journal_mode = wal
+    -> columns 1: "journal_mode"; row text 'wal'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'wal'
+
+ P13.2 PRAGMA journal_mode = truncate
+  reader: SELECT x FROM k, step 1: rc 100 ROW
+    autocommit 1, txn_state(main) READ
+  PRAGMA journal_mode = truncate
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'truncate'
+    autocommit 1, txn_state(main) READ
+  reader: finalize rc 0
+    autocommit 1, txn_state(main) NONE
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA journal_mode = truncate
+    -> columns 1: "journal_mode"; row text 'truncate'
+  PRAGMA journal_mode
+    -> columns 1: "journal_mode"; row text 'truncate'

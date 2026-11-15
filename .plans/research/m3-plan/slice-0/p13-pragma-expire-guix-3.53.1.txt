@@ -1,0 +1,35 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+P13. A PRAGMA between a held SELECT's two steps; codes as SQLite answers them
+  T: nothing (the control)                     S first 101, reset 0; T -1; S's reprepares 0, its second step 101, then 0; reset 0
+  T: SELECT 1                                  S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA busy_timeout = 5, a change         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA busy_timeout = 5, unchanged        S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA busy_timeout                       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA foreign_keys = 1, a change         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA foreign_keys = 1, unchanged        S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA foreign_keys                       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA journal_mode = wal, a change       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA journal_mode = wal, unchanged      S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA journal_mode                       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA synchronous = 1, a change          S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA synchronous = 1, unchanged         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA synchronous                        S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA temp_store = 2, a change           S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA temp_store = 2, unchanged          S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA temp_store                         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA trusted_schema = 0, a change       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA trusted_schema = 0, unchanged      S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA trusted_schema                     S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA cache_size = 123, a change         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA cache_size = 123, unchanged        S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+  T: PRAGMA cache_size                         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 0; reset 0
+
+P13b. The other values of foreign_keys and trusted_schema
+  T: PRAGMA foreign_keys = 0, a change         S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA foreign_keys = 0, unchanged        S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA foreign_keys = off, a change       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA foreign_keys = off, unchanged      S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA trusted_schema = 1, a change       S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0
+  T: PRAGMA trusted_schema = 1, unchanged      S first 101, reset 0; T 101; S's reprepares 0, its second step 101, then 1; reset 0

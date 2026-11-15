@@ -1,0 +1,10 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+repetition 1: BEGIN; a marker row; SAVEPOINT s; rows 2
+  a long INSERT, interrupted from a thread at 100 ms: answered 9; autocommit then 1; rows 1
+  ROLLBACK TO s: 1 "no such savepoint: s"
+  ROLLBACK: 1 "cannot rollback - no transaction is active"
+repetition 2: BEGIN; a marker row; SAVEPOINT s; rows 2
+  a long INSERT, interrupted from a thread at 100 ms: answered 9; autocommit then 1; rows 1
+  ROLLBACK TO s: 1 "no such savepoint: s"
+  ROLLBACK: 1 "cannot rollback - no transaction is active"

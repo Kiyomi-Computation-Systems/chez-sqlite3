@@ -1,0 +1,18 @@
+libversion 3.45.1
+sourceid 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+rollback journal, repetition 1: journal_mode read on c1: delete, on c2: delete
+  c1 holds BEGIN IMMEDIATE; c2 has busy timeout 2000 ms
+  c2 autocommit INSERT: 5, after waiting out the timeout
+  c2 BEGIN, reads 0 rows, INSERT: 5, at once; autocommit then 0
+rollback journal, repetition 2: journal_mode read on c1: delete, on c2: delete
+  c1 holds BEGIN IMMEDIATE; c2 has busy timeout 2000 ms
+  c2 autocommit INSERT: 5, after waiting out the timeout
+  c2 BEGIN, reads 0 rows, INSERT: 5, at once; autocommit then 0
+WAL, repetition 1: journal_mode read on c1: wal, on c2: wal
+  c1 holds BEGIN IMMEDIATE; c2 has busy timeout 2000 ms
+  c2 autocommit INSERT: 5, after waiting out the timeout
+  c2 BEGIN, reads 0 rows, INSERT: 5, at once; autocommit then 0
+WAL, repetition 2: journal_mode read on c1: wal, on c2: wal
+  c1 holds BEGIN IMMEDIATE; c2 has busy timeout 2000 ms
+  c2 autocommit INSERT: 5, after waiting out the timeout
+  c2 BEGIN, reads 0 rows, INSERT: 5, at once; autocommit then 0
