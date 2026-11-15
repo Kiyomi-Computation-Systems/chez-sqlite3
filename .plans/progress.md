@@ -38,6 +38,10 @@ newest first.
   - **On `m1-closing-review` at `0c2aad2`,** after the closing review's fixes, 26 of 26 suites
     passed with Apple's library and with Homebrew's. `test-ci-sqlite` passed 80, its build rows
     included, and so did the new depth and engine rows.
+  - **On `m1-closing-review` at `594ef6a`,** after the second review's fixes, 26 of 26 suites
+    passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
+    re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
+    GNU grep does.
 - **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs
@@ -71,7 +75,7 @@ newest first.
 - **Records:** amendments to ADR-0012, ADR-0011 and ADR-0005, which the maintainer accepted on
   2026-11-14. Also the acceptance of slice 5's and PR #12's amendments, and the rule in
   `AGENTS.md` and the constraints, approved by the maintainer that day.
-- **The Mac:** 26 of 26, on both libraries, on `0c2aad2`.
+- **The Mac:** 26 of 26, on both libraries, on `0c2aad2` and again on `594ef6a`.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
