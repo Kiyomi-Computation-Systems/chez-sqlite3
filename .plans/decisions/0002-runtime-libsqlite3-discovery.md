@@ -4,8 +4,8 @@
   2026-11-14: `not-threadsafe`, and what the Mac showed
   ([amendment](#amendment-2026-11-14-not-threadsafe-and-what-the-mac-showed-m1s-plan)). Amended
   2026-11-14: M2's required entry points
-  ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)). Amended 2026-11-15: M3's
-  required entry points (M3's plan,
+  ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)). Amended 2026-11-15, and
+  accepted by the maintainer that day: M3's required entry points (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
@@ -205,7 +205,8 @@ Accepted by the maintainer on 2026-11-14, proposed in M2 slice 0
 
 ## Amendment, 2026-11-15: M3's required entry points (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.7).
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.7).
 
 - **M3 adds five required entry points** to item 5 of the M1 amendment's "What is bound, in
   order", after M2's, in the same step, the seventh of native's load. Each is checked with

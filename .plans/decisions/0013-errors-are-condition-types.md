@@ -4,8 +4,9 @@
   chose decision 1's root and decision 6's closed type on 2026-11-14. Proposed first in the brief,
   §3g. Amended 2026-11-14: what slice 4 built
   ([amendment](#amendment-2026-11-14-what-m1-slice-4-built)). Amended 2026-11-14: M2's conditions (M2's plan,
-  [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)). Amended 2026-11-15: M3's conditions
-  (M3's plan, [amendment](#amendment-2026-11-15-m3s-conditions-m3s-plan)).
+  [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)). Amended 2026-11-15, and accepted by
+  the maintainer that day: M3's conditions (M3's plan,
+  [amendment](#amendment-2026-11-15-m3s-conditions-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -176,7 +177,8 @@ the same day ([the M2 plan](../2026-11-14-m2-plan.md), §3): `offset` in charact
 
 ## Amendment, 2026-11-15: M3's conditions (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.2 to §4.5).
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.2 to §4.5).
 
 - **The hierarchy, with M3's types:**
 

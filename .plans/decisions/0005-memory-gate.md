@@ -24,7 +24,7 @@
   by the maintainer's choice, "Split in #19, rest after": one run was one sample, and the suite
   is split, with a check that holds the rule (M2's closing review,
   [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)). Amended
-  2026-11-15: M3's entry points and suites (M3's plan,
+  2026-11-15, and accepted by the maintainer that day: M3's entry points and suites (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
@@ -520,10 +520,11 @@ rest after". The split and a check that holds the rule land in PR #19, before it
 
 ## Amendment, 2026-11-15: M3's entry points and suites (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.7). M2 split
-`test-library-loading` in PR #19, its 36 entry points alternating between two halves, and `make
-test-memory` fails a suite past three quarters of `MEMORY_TIMEOUT` as `SLOW` (the split's
-amendment, above). This amendment adds only what M3 brings.
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.7). M2 split `test-library-loading` in PR #19, its 36
+entry points alternating between two halves, and `make test-memory` fails a suite past three
+quarters of `MEMORY_TIMEOUT` as `SLOW` (the split's amendment, above). This amendment adds only what
+M3 brings.
 
 - **M3's five entry points add five decoy children,** each to one half, as the split amendment
   says, continuing the alternation: three to `test-library-loading-decoys` and two to

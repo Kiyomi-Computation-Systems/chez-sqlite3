@@ -88,7 +88,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   argument is a database, that it runs on the owning thread, and that the connection is open,
   before anything reaches C. The wrong thread raises `&sqlite-wrong-thread`, and a closed
   connection `&sqlite-closed`. `interrupt-database!` is the one exception, and checks only that its
-  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019) *(provisional)*.
+  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019).
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
 - **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
@@ -148,7 +148,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
   562 s on a slow runner (ADR-0005, amended).
 
-## Conveniences, transactions, settings and interrupt *(provisional)*
+## Conveniences, transactions, settings and interrupt
 
 - **A convenience runs one statement and finishes it on every path** before it returns or raises:
   back in the cache, reset with its bindings cleared, or finalized. None is left at a row once it

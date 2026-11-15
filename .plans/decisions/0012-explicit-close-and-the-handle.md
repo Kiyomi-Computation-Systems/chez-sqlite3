@@ -8,7 +8,8 @@
   Amended 2026-11-14, and accepted by the maintainer that day: raised after the section (M1's
   closing review,
   [amendment](#amendment-2026-11-14-raised-after-the-section-m1s-closing-review)). Amended
-  2026-11-15: the settings, and the close's exclusion of interrupts (M3's plan,
+  2026-11-15, and accepted by the maintainer that day: the settings, and the close's exclusion of
+  interrupts (M3's plan,
   [amendment](#amendment-2026-11-15-the-settings-and-the-closes-exclusion-of-interrupts-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
@@ -304,7 +305,8 @@ approved its scope and the procedure's contract that day.
 
 ## Amendment, 2026-11-15: the settings, and the close's exclusion of interrupts (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.3 and §4.4).
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.3 and §4.4).
 
 - **The consequence's settings list is built** ([ADR-0018](0018-the-settings-list.md)): at most one
   argument among `open-database`'s and `call-with-database`'s options may be a list, the

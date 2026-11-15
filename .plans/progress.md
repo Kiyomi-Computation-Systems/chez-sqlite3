@@ -25,8 +25,8 @@ newest first.
   ADR-0014's slice 1 amendment and ADR-0005's split record the maintainer's own choices ("Match
   SQLite"; "Split in #19, rest after").
 - **The maintainer accepted ADR-0016 to ADR-0020** on 2026-11-15, with the M3 plan's Q1 to Q15
-  settled. The plan's amendments to the older records (its §10), applied in M3 slice 0, are
-  proposed, and the global constraints mark their rules *(provisional)*.
+  settled, and the plan's amendments to the older records (its §10), applied in M3 slice 0, the
+  same day ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
@@ -84,9 +84,9 @@ newest first.
 ### 2026-11-15 — M3 slice 0: the plan and the records (PR #21)
 
 - **Built:** [the M3 plan](2026-11-15-m3-plan.md), and ADR-0016 to ADR-0020, accepted by the
-  maintainer with the plan's Q1 to Q15. The plan's owed amendments are applied, each proposed:
-  the brief, ADR-0002, ADR-0005, ADR-0010 to ADR-0014, the global constraints, AGENTS.md and
-  `traps.md`.
+  maintainer with the plan's Q1 to Q15. The plan's owed amendments are applied, and the maintainer
+  accepted them ("Accept all"): the brief, ADR-0002, ADR-0005, ADR-0010 to ADR-0014, the global
+  constraints, AGENTS.md and `traps.md`.
 - **Measured** on Guix's 3.53.1 and at the floor, 3.45.1: M3's research, in two halves, while M2
   was being built, and slice 0's probes P1, P2, P3, P7, P9, P11, P12, P13 and P14
   ([research/m3-plan/](research/m3-plan/README.md)).

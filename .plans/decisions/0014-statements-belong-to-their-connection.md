@@ -12,8 +12,8 @@
   Amended 2026-11-15 in M2 slice 3, and accepted by the maintainer that day: what it measured and
   built, and the maintainer's choice that
   a column read's out-of-memory moves a statement to `failed`
-  ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)). Amended 2026-11-15: the
-  cache's and the script runner's prepares (M3's plan,
+  ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)). Amended 2026-11-15, and
+  accepted by the maintainer that day: the cache's and the script runner's prepares (M3's plan,
   [amendment](#amendment-2026-11-15-the-caches-and-the-script-runners-prepares-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
@@ -346,7 +346,8 @@ own choice, of the same day. Measured on Guix's 3.53.1 and at the floor, 3.45.1,
 
 ## Amendment, 2026-11-15: the cache's and the script runner's prepares (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.1 and §4.6).
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.1 and §4.6).
 
 - **Decision 4's "no prepare flags" is `prepare-statement`'s and `call-with-statement`'s.** While
   a connection's statement cache can hold a statement, it prepares with

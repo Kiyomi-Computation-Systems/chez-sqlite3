@@ -3,8 +3,8 @@
 - **Status:** Accepted (the maintainer, 2026-11-14), proposed in M1 slice 0. Decisions 3 and 4
   were the maintainer's own, on 2026-11-13: brief D2, and the `THREADSAFE=0` refusal. Proposed first
   in the brief, §3c. Amended 2026-11-14: the mutex, measured
-  ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)). Amended 2026-11-15: the
-  interrupt, designed (M3's plan,
+  ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)). Amended 2026-11-15, and
+  accepted by the maintainer that day: the interrupt, designed (M3's plan,
   [amendment](#amendment-2026-11-15-the-interrupt-designed-m3s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
@@ -97,7 +97,8 @@
 
 ## Amendment, 2026-11-15: the interrupt, designed (M3's plan)
 
-Proposed in M3 slice 0 ([the M3 plan](../2026-11-15-m3-plan.md), §4.4).
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
+([the M3 plan](../2026-11-15-m3-plan.md), §4.4).
 
 - **Decision 1's exception is `interrupt-database!`,** designed with `close-database!` by
   [ADR-0019](0019-interrupt-and-close.md). It checks only that its argument is a database. A
