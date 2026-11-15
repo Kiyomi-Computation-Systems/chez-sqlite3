@@ -1,0 +1,3 @@
+library 3.45.1
+select ?1: step 100, column_text NULL, extended 7
+  reset 7, autocommit 0, marker rows 1

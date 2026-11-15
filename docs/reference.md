@@ -4,6 +4,7 @@ Every name `(chez-sqlite3)` exports, one entry each. Import it with
 `(import (chez-sqlite3))`.
 
 - [Connections](#connections)
+- [Statements](#statements)
 - [The library](#the-library)
 - [Conditions](#conditions)
 
@@ -13,6 +14,7 @@ and `#f` is false. These names stand for:
 
 ```text
 Database               a connection, made by open-database
+Statement              a prepared statement, made by prepare-statement
 Void                   no useful value
 Natural                an exact integer, 0 or more
 SqliteError            a condition that sqlite-error? holds
@@ -94,6 +96,10 @@ connection refuses every other verb with a condition that `sqlite-closed?`
 holds. Closing from another thread raises a wrong-thread condition, closed
 or not.
 
+Closing finalizes the connection's live statements first, oldest first. If
+one of those finalizes failed, the connection is closed all the same, and
+the first failure is raised after.
+
 ```scheme run
 (let ((db (open-database ":memory:")))
   (close-database! db)
@@ -111,7 +117,8 @@ call-with-database : String Symbol ... (Database -> A ...) -> A ...
 Opens a database as `open-database` does, calls the procedure, last of the
 arguments, with the connection, and gives the procedure's answers. The
 connection is closed when the procedure returns, raises, or leaves through a
-continuation. A raise reaches the caller unchanged. Its refusals are
+continuation, and its live statements are finalized as `close-database!`
+does. A raise reaches the caller unchanged. Its refusals are
 `open-database`'s: a name that is not a string or holds U+0000, and a bad
 option, are assertion violations, and nothing is opened.
 
@@ -143,6 +150,170 @@ Whether the value is a connection, open or closed.
 (list (database? 'x) (call-with-database ":memory:" database?))
 ;; => (#f #t)
 ```
+
+## Statements
+
+A statement is one piece of SQL, prepared on a connection. It belongs to that
+connection and to the thread that owns it. Parameters count from 1 and
+columns from 0.
+
+A statement is always in one state. `prepare-statement` and `reset!` leave it
+ready. `step!` leaves it on a row, done, or failed. Only `reset!` takes a
+done or failed statement back to ready: `step!` on one is an assertion
+violation, and the state is kept.
+
+SQL holds exactly one statement. SQL that holds none, such as `""`, or more
+than one, is an assertion violation. The first of two is prepared before the
+second is found, so its effect stands: after
+`pragma cache_size = 7; select 1` is refused, the cache size is 7. SQL that
+holds U+0000, or is longer than 2^31-2 bytes of UTF-8, is an assertion
+violation too, and nothing is prepared.
+
+A statement that is finalized, or whose connection is closed, refuses every
+verb but `finalize-statement!` with a condition that `sqlite-closed?` holds,
+and a second `finalize-statement!` does nothing. Used from a thread that does
+not own its connection, a statement raises a wrong-thread condition.
+
+Prepare, step, reset and finalize can wait in SQLite's busy handler. Other
+threads collect meanwhile, but this thread's interrupts wait.
+
+### `prepare-statement`
+
+```text
+prepare-statement : Database String -> Statement
+```
+
+Prepares the SQL on the connection, and gives the statement, ready. It stays
+the connection's until it is finalized. If SQLite refuses the SQL, it raises
+a condition that `sqlite-error?` holds, with the SQL and, where SQLite names
+one, the place.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (let ((st (prepare-statement db "select ?1, ?2")))
+      (let ((n (parameter-count st)))
+        (finalize-statement! st)
+        n))))
+;; => 2
+```
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (guard (e ((assertion-violation? e) 'refused))
+      (prepare-statement db "select 1; select 2"))))
+;; => refused
+```
+
+### `finalize-statement!`
+
+```text
+finalize-statement! : Statement -> Void
+```
+
+Finalizes the statement, in any state, and frees it. A second finalize does
+nothing. It raises a condition that `sqlite-error?` holds when the finalize
+fails on its own, as when the commit of an `insert ... returning` that was
+stepped once is lost. The statement is finalized all the same.
+
+### `call-with-statement`
+
+```text
+call-with-statement : Database String (Statement -> A ...) -> A ...
+```
+
+Prepares the SQL as `prepare-statement` does, calls the procedure, last of
+the arguments, with the statement, and gives the procedure's answers. The
+statement is finalized when the procedure returns, raises, or leaves through
+a continuation. A raise reaches the caller unchanged.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (call-with-statement db "select 1, 2"
+      (lambda (st)
+        (let* ((row (step! st))
+               (columns (column-count st))
+               (done (step! st)))
+          (list row columns done))))))
+;; => (#t 2 #f)
+```
+
+It does not survive an engine's preemption: an engine that runs out of fuel
+leaves the procedure, and the statement is finalized under it. If you use
+engines, use `prepare-statement` and finalize it yourself.
+
+### `statement?`
+
+```text
+statement? : Any -> Boolean
+```
+
+Whether the value is a statement, finalized or not.
+
+### `statement-sql`
+
+```text
+statement-sql : Statement -> String
+```
+
+The SQL the statement was prepared from. Each call gives a fresh copy.
+
+### `parameter-count`
+
+```text
+parameter-count : Statement -> Natural
+```
+
+The statement's largest parameter index: 2 for `select ?1, ?2`, and 0 for
+a statement with none.
+
+### `step!`
+
+```text
+step! : Statement -> Boolean
+```
+
+Runs the statement to its next row. It gives `#t` when a row is ready, and
+`#f` when the statement is done. When SQLite fails, the statement is failed,
+and it raises a condition that `sqlite-error?` holds, with the statement's
+SQL and no place.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (call-with-statement db "select 1"
+      (lambda (st)
+        (let* ((first (step! st))
+               (second (step! st)))
+          (reset! st)
+          (list first second (step! st)))))))
+;; => (#t #f #t)
+```
+
+### `reset!`
+
+```text
+reset! : Statement -> Void
+```
+
+Rewinds the statement, ready again, with the values bound to it kept. A
+statement that is done or failed needs this before it steps again. It raises
+a condition that `sqlite-error?` holds when the reset fails on its own, as
+a finalize can. The statement is ready all the same. A step that failed
+raised already, and its reset does not raise it again.
+
+### `column-count`
+
+```text
+column-count : Statement -> Natural
+```
+
+How many columns the statement's rows have: 0 for a statement that gives
+none, such as a `create table`. It is read afresh at each call. After an
+`alter table` on any connection, its own included, a held `select *` still
+answers the old count until its next `step!`, then the new one.
 
 ## The library
 
@@ -233,15 +404,17 @@ gives a fresh list.
 ## Conditions
 
 Everything this library raises on purpose is one of four conditions, and
-each is a `chez-sqlite3-error?`. Catch the family with it, or one kind with
+each is a `chez-sqlite3-error?`. An `sqlite-error?` can also be a busy, a
+constraint or a read-only one. Catch the family with it, or one kind with
 its own predicate:
 
 | Predicate | Raised when |
 |---|---|
 | `sqlite-library-unavailable?` | SQLite could not be loaded: not found, too old, not threadsafe, or missing a function. |
 | `sqlite-error?` | SQLite answered with an error code. |
+| `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?` | An `sqlite-error?` of one kind: see below. |
 | `sqlite-wrong-thread?` | A connection is used by a thread that did not open it. |
-| `sqlite-closed?` | A connection is used after it was closed. |
+| `sqlite-closed?` | A connection, or a statement, is used after it was closed or finalized. |
 
 A caller's mistake is not one of these. A name that is not a string, a bad
 option, a value that is not a connection, or an accessor given the wrong
@@ -316,7 +489,11 @@ as an open does.
 sqlite-error-offset : SqliteError -> (U Natural #f)
 ```
 
-Where in the SQL SQLite found the error, or `#f` when it gives none.
+Where in the SQL SQLite found the error, as a character index into
+`sqlite-error-sql`, or `#f` when it gives none. It gives none for an error at
+the end of the SQL, nor for some errors in the middle, such as a missing
+table. Only a failed prepare has one, `prepare-statement`'s or
+`call-with-statement`'s; a failed step, reset or finalize has none.
 
 ### `sqlite-library-unavailable?`
 
@@ -408,4 +585,34 @@ The id of the thread that used it.
 sqlite-closed? : Any -> Boolean
 ```
 
-Whether the value says a connection was used after it was closed.
+Whether the value says a connection was used after it was closed, or a
+statement after it was finalized or its connection was closed.
+
+### `sqlite-busy?`
+
+```text
+sqlite-busy? : Any -> Boolean
+```
+
+Whether the value is an `sqlite-error?` whose primary code is `busy` or
+`locked`: another connection holds what this one needs. A `commit` refused
+while the connection's own statement is mid-row is `busy` too, and no wait
+fixes it: `reset!` or finalize that statement first.
+
+### `sqlite-constraint?`
+
+```text
+sqlite-constraint? : Any -> Boolean
+```
+
+Whether the value is an `sqlite-error?` whose primary code is `constraint`,
+as a unique or not-null violation.
+
+### `sqlite-read-only?`
+
+```text
+sqlite-read-only? : Any -> Boolean
+```
+
+Whether the value is an `sqlite-error?` whose primary code is `readonly`:
+the database cannot be written.

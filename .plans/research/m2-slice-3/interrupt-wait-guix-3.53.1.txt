@@ -1,0 +1,3 @@
+libversion 3.53.1
+lock wait: rc 5 (database is locked) after 601 ms, is_interrupted 1
+long computation: rc 9 (interrupted) after 100 ms

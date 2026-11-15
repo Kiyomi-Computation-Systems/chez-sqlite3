@@ -1,0 +1,2 @@
+(alter-own-connection (2 2 #t 3))
+(commit-with-own-statement-mid-row (#t (raised busy "cannot commit transaction - SQL statements in progress" #t)))

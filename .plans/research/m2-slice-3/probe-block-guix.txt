@@ -1,0 +1,9 @@
+libversion: "3.53.1"
+step, plain: answer, ms, collect ms, the call returned before the collect did; message; finalize after; rows after: ((5 1502 1403 #t) "database is locked" 5 1)
+step, collect-safe: answer, ms, collect ms, the call returned before the collect did; message; finalize after; rows after: ((5 1502 0 #f) "database is locked" 5 1)
+prepare, plain: answer, ms, collect ms, returned first; message: ((5 1502 1402 #t) "database is locked")
+prepare, collect-safe: answer, ms, collect ms, returned first; message: ((5 1502 0 #f) "database is locked")
+reset, plain: first step; answer, ms, collect ms, returned first; message; finalize after a reset: (100 (5 1502 1402 #t) "database is locked" 0)
+reset, collect-safe: first step; answer, ms, collect ms, returned first; message; finalize after a reset: (100 (5 1502 0 #f) "database is locked" 0)
+finalize, plain: first step; answer, ms, collect ms, returned first; message; finalize after a reset: (100 (5 1502 1402 #t) "database is locked" freed)
+finalize, collect-safe: first step; answer, ms, collect ms, returned first; message; finalize after a reset: (100 (5 1502 0 #f) "database is locked" freed)

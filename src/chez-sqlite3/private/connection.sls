@@ -2,7 +2,9 @@
 ;;; (chez-sqlite3 private connection): a connection to a database, opened,
 ;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its four
 ;;; public procedures; call-with-open-handle, the one way to a connection's
-;;; handle, is M2's, and failure-details is exported for its suite.
+;;; handle, and check-database-owner are M2's statements', with the tracking
+;;; procedures below; failure-details and first-finalize-failure are exported
+;;; for the suites too.
 ;;;
 ;;; A connection is a database record, opaque and sealed, holding the
 ;;; sqlite3* as an integer, so Valgrind sees one never closed (the M1 plan,
@@ -42,19 +44,29 @@
 ;;;   a failure   its extended code and message read from its handle, then
 ;;;               the handle closed, then &sqlite-error raised; a NULL handle
 ;;;               takes its message from sqlite3_errstr (decision 4)
-;;;   the close   sqlite3_next_stmt must find no statement, since the
-;;;               connection tracks none until M2: one found is a defect of
-;;;               chez-sqlite3's, an assertion violation naming the count,
-;;;               and the connection stays open. Then sqlite3_close, never
-;;;               sqlite3_close_v2; an answer but SQLITE_OK is &sqlite-error,
-;;;               and the connection stays open and counted (decision 5)
+;;;   the close   every statement the connection tracks is finalized, oldest
+;;;               first, keeping the first failure a finalize reported (M2;
+;;;               ADR-0014, decision 8). Then sqlite3_next_stmt must find no
+;;;               statement: one found is a defect of chez-sqlite3's, an
+;;;               assertion violation naming the count, and the connection
+;;;               stays open. Then sqlite3_close, never sqlite3_close_v2; an
+;;;               answer but SQLITE_OK is &sqlite-error, and the connection
+;;;               stays open and counted (decision 5). Once it is closed, the
+;;;               first finalize failure is raised (R1)
+;;;
+;;; A connection tracks its live statements (ADR-0012, amended; ADR-0014,
+;;; decision 8). (chez-sqlite3 private statement) makes them and imports this
+;;; library, so this one cannot name a statement's record: it holds, for each,
+;;; an entry that statement.sls made, and track-statement!, untrack-statement!
+;;; and tracked-statements are its private procedures for them.
 ;;;
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
 ;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
 (library (chez-sqlite3 private connection)
   (export open-database close-database! call-with-database database?
-          call-with-open-handle failure-details)
+          call-with-open-handle failure-details check-database-owner
+          track-statement! untrack-statement! tracked-statements first-finalize-failure)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind get-thread-id)
@@ -69,9 +81,16 @@
   ;; database? : Any -> Boolean
   ;; Opaque, so record-rtd on a database raises, and sealed, so no type
   ;; extends it; not nongenerative, so no other definition makes its type.
+  ;; LIVE is the statements it tracks, an eq-hashtable from each statement to
+  ;; its entry; SERIAL the number the next one tracked takes, so the close
+  ;; can finalize them oldest first.
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
-            (immutable owner unchecked-database-owner))
+            (immutable owner unchecked-database-owner)
+            (immutable live unchecked-database-live)
+            (mutable serial unchecked-database-serial set-database-serial!))
+    (protocol (lambda (new)
+                (lambda (handle owner) (new handle owner (make-eq-hashtable) 0))))
     (sealed #t)
     (opaque #t))
 
@@ -92,6 +111,15 @@
           (caller (get-thread-id)))
       (unless (eqv? owner caller)
         (raise-wrong-thread who owner caller))))
+
+  ;; check-database-owner : Symbol Any -> Void
+  ;; check-owned, for a verb that makes its own checks of other arguments
+  ;; between these two and call-with-open-handle's open check, as
+  ;; prepare-statement checks its SQL. It hands over no handle, and raises
+  ;; outside any section: neither a database's type nor its owner can change.
+  (define (check-database-owner who db)
+    (check-who 'check-database-owner who)
+    (check-owned who db))
 
   ;; call-with-open-handle : Symbol Any (Positive-Integer -> A ...) -> A ...
   ;; PROC's answers, given DB's handle, once DB is checked: a database, else
@@ -147,6 +175,105 @@
         ((answered) (apply values (cdr outcome)))
         ((closed) (raise-closed who))
         (else (raise (cadr outcome))))))
+
+  ;; --- the statements a connection tracks ------------------------------------------------
+  ;;
+  ;; An entry is a statement's record, as KEY, and FINALIZE, a procedure that
+  ;; (chez-sqlite3 private statement) made for it when it was prepared:
+  ;;
+  ;;   FINALIZE : Positive-Integer -> Finalize-Outcome
+  ;;   Finalize-Outcome = (U 'finalized
+  ;;                         (List 'failed Integer String String)
+  ;;                         (List 'raised Any))
+  ;;
+  ;; Given the connection's handle, inside the close's critical section, it
+  ;; finalizes the statement, clears its handle, makes it finalized and counts
+  ;; it down, whatever sqlite3_finalize answers, and answers data, raising
+  ;; nothing: finalized; or (failed CODE MESSAGE SQL) for a failure of the
+  ;; finalize's own, CODE its answer, MESSAGE sqlite3_errmsg read straight
+  ;; after it, SQL the statement's; or (raised C) for what a call inside it
+  ;; raised, count-down!'s double free. A statement already finalized answers
+  ;; finalized, and reaches no C.
+  ;;
+  ;; Why a procedure: statement.sls imports this library, so this one cannot
+  ;; import it, nor name the statement record's fields. The procedure closes
+  ;; over the record and carries the statement's own finalize with it, so the
+  ;; close needs no accessor of a statement, and a statement's handle has one
+  ;; accessor still, in statement.sls. Why the record as KEY: untracking and
+  ;; tracked-statements find it by eq?, and a record of an opaque type cannot
+  ;; be forged. Each entry also takes the database's next serial number, so
+  ;; the close finalizes oldest first (ADR-0014, decision 8) with an O(1) add
+  ;; and remove.
+  ;;
+  ;; Each procedure here is called inside the critical section of the verb
+  ;; that prepares, finalizes or closes, with the connection's handle in hand,
+  ;; so it reads and changes the table with interrupts off; none raises for a
+  ;; database, which is all a caller gives it.
+
+  ;; track-statement! : Database Any (Positive-Integer -> Finalize-Outcome) -> Boolean
+  ;; KEY tracked by DB, newest, with FINALIZE: #t; #f, tracking nothing, for a
+  ;; DB that is no database. Raises nothing.
+  (define (track-statement! db key finalize)
+    (and (database? db)
+         (let ((serial (unchecked-database-serial db)))
+           (set-database-serial! db (+ serial 1))
+           (hashtable-set! (unchecked-database-live db) key (cons serial finalize))
+           #t)))
+
+  ;; untrack-statement! : Database Any -> Boolean
+  ;; KEY no longer tracked by DB: #t when it was; #f when it was not, or DB is
+  ;; no database. Raises nothing.
+  (define (untrack-statement! db key)
+    (and (database? db)
+         (let ((live (unchecked-database-live db)))
+           (and (hashtable-contains? live key)
+                (begin (hashtable-delete! live key) #t)))))
+
+  ;; entries-oldest-first : Database -> (Listof (Pairof Any (Pairof Natural Procedure)))
+  ;; DB's entries, each (KEY SERIAL . FINALIZE), oldest first.
+  (define (entries-oldest-first db)
+    (let-values (((keys entries) (hashtable-entries (unchecked-database-live db))))
+      (list-sort (lambda (a b) (< (cadr a) (cadr b)))
+                 (map cons (vector->list keys) (vector->list entries)))))
+
+  ;; tracked-statements : Database -> (Listof Any)
+  ;; The statements DB tracks, oldest first, read in one critical section.
+  ;; DB checked by check-owned first, from tracked-statements. For the
+  ;; suites, and for M3's statement cache.
+  (define (tracked-statements db)
+    (check-owned 'tracked-statements db)
+    (critical-section (map car (entries-oldest-first db))))
+
+  ;; first-finalize-failure : (Listof Finalize-Outcome) -> (U Finalize-Outcome #f)
+  ;; The first of OUTCOMES that is not finalized, in their order; #f when
+  ;; every one is. Pure and total.
+  (define (first-finalize-failure outcomes)
+    (cond ((null? outcomes) #f)
+          ((eq? (car outcomes) 'finalized) (first-finalize-failure (cdr outcomes)))
+          (else (car outcomes))))
+
+  ;; finalize-tracked! : Database Positive-Integer -> (U Finalize-Outcome #f)
+  ;; Every statement DB tracks finalized, oldest first, each by its entry's
+  ;; FINALIZE given HANDLE, and none tracked after: the first failure any
+  ;; reported, or #f. Called inside the close's critical section; it raises
+  ;; nothing, a FINALIZE that raised counting as (raised C).
+  (define (finalize-tracked! db handle)
+    (let ((entries (entries-oldest-first db)))
+      (hashtable-clear! (unchecked-database-live db))
+      (let loop ((rest entries) (outcomes '()))
+        (if (null? rest)
+            (first-finalize-failure (reverse outcomes))
+            (let ((outcome (guard (c (#t (list 'raised c)))
+                             ((cddr (car rest)) handle))))
+              (loop (cdr rest) (cons outcome outcomes)))))))
+
+  ;; raise-finalize-failure : Symbol Finalize-Outcome -> Nothing
+  ;; OUTCOME, a failure, raised from WHO: (failed CODE MESSAGE SQL) as an
+  ;; &sqlite-error carrying SQL and no offset, (raised C) as C itself.
+  (define (raise-finalize-failure who outcome)
+    (if (eq? (car outcome) 'failed)
+        (raise-sqlite-error who (cadr outcome) (caddr outcome) (cadddr outcome) #f)
+        (raise (cadr outcome))))
 
   ;; --- a failure's details -------------------------------------------------------------
 
@@ -269,9 +396,14 @@
           (loop (sqlite3-next-stmt handle statement) (+ n 1)))))
 
   ;; close-connection : Symbol Any -> Void
-  ;; DB closed, for WHO; nothing when it is closed already. A count-down
-  ;; that finds the count at zero is count-down!'s double free, raised once
-  ;; the connection is closed and its handle cleared.
+  ;; DB closed, for WHO; nothing when it is closed already. In one critical
+  ;; section: every tracked statement finalized, oldest first, the first
+  ;; failure kept; sqlite3_next_stmt; sqlite3_close; the handle cleared and
+  ;; the count down. After it, by what it answered: a statement found
+  ;; untracked, or sqlite3_close's failure, each raised in place of a
+  ;; finalize's failure, with the connection open and counted; else, the
+  ;; connection closed, the first finalize failure (R1), then a count-down
+  ;; that found the count at zero, count-down!'s double free.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
@@ -279,28 +411,35 @@
             (let ((handle (unchecked-database-handle db)))
               (if (not handle)
                   '(already-closed)
-                  (let ((untracked (statements-on handle)))
+                  (let* ((failure (finalize-tracked! db handle))
+                         (untracked (statements-on handle)))
                     (if (> untracked 0)
                         (list 'untracked untracked)
                         (let ((rc (sqlite3-close handle)))
                           (if (eqv? rc sqlite-ok)
                               (begin
                                 (set-database-handle! db #f)
-                                (guard (c (#t (list 'double-free c)))
-                                  (count-down! 'connection)
-                                  '(closed)))
+                                (let ((double-free (guard (c (#t c))
+                                                     (count-down! 'connection)
+                                                     #f)))
+                                  (cond (failure (list 'finalize-failed failure))
+                                        (double-free (list 'double-free double-free))
+                                        (else '(closed)))))
                               (cons 'failed (details-of rc handle)))))))))))
       (case (car outcome)
         ((untracked)
          (assertion-violation who "the connection has statements chez-sqlite3 does not track"
                               'untracked-statements (cadr outcome)))
         ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))
+        ((finalize-failed) (raise-finalize-failure who (cadr outcome)))
         ((double-free) (raise (cadr outcome)))
         (else (if #f #f)))))
 
   ;; close-database! : Database -> Void
-  ;; DB closed; nothing when it is closed already. From another thread,
-  ;; &sqlite-wrong-thread, closed or not.
+  ;; DB closed, every statement it tracks finalized first, oldest first; then
+  ;; the first failure a finalize reported, raised with DB closed. Nothing
+  ;; when it is closed already. From another thread, &sqlite-wrong-thread,
+  ;; closed or not.
   (define (close-database! db)
     (close-connection 'close-database! db))
 

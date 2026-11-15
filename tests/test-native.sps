@@ -1162,6 +1162,25 @@
          (c (raised (lambda () (c-string->string 1.5)))))
     (list null a b c)))
 
+;; Chez's utf8->string drops one leading U+FEFF; an error message is data a
+;; user controls (a trigger's RAISE), so c-string->string keeps it. Each block
+;; is read as bytes the row writes itself, so no encoder is under test.
+;; Invalid bytes are replaced, never refused: the second block's FF is U+FFFD.
+(test-equal "c-string->string reads EF BB BF 61 as U+FEFF then a, keeps a second U+FEFF, keeps one before an invalid byte (replaced, not refused), and reads a BOM-less block and a 2-byte EF BB as before"
+  (list "\xFEFF;a" "\xFEFF;\xFEFF;a" "\xFEFF;\xFFFD;" "a\xFEFF;" "\xFFFD;")
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((read (lambda (bytes)
+                  (with-block 8
+                    (lambda (block)
+                      (poke! block (append bytes '(0)))
+                      (c-string->string block))))))
+      (let* ((a (read '(#xEF #xBB #xBF #x61)))
+             (b (read '(#xEF #xBB #xBF #xEF #xBB #xBF #x61)))
+             (c (read '(#xEF #xBB #xBF #xFF)))
+             (d (read '(#x61 #xEF #xBB #xBF)))
+             (e2 (read '(#xEF #xBB))))
+        (list a b c d e2)))))
+
 (test-equal "call-with-c-string: a raise from PROC frees the block, and reaches the caller"
   (list 'proc-raised zero-counts)
   (let ((r (guard (e ((eq? e 'from-proc) 'proc-raised)

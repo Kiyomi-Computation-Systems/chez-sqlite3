@@ -319,7 +319,10 @@
   ;; c-string->string : Natural -> (U String #f)
   ;; The NUL-terminated string at ADDRESS, read byte by byte up to its NUL,
   ;; into a bytevector of exactly that length, and decoded as UTF-8; #f for
-  ;; NULL. An ADDRESS that is no exact natural is an assertion violation.
+  ;; NULL. The decoding is lenient: an invalid byte is replaced, never
+  ;; refused. Chez's utf8->string drops one leading U+FEFF, so when the bytes
+  ;; begin EF BB BF the string begins U+FEFF, as strict-utf8->string restores
+  ;; it. An ADDRESS that is no exact natural is an assertion violation.
   (define (c-string->string address)
     (unless (exact-natural? address)
       (assertion-violation 'c-string->string "an address is an exact non-negative integer"
@@ -332,7 +335,12 @@
              (when (< i n)
                (bytevector-u8-set! bytes i (foreign-ref 'unsigned-8 address i))
                (fill (+ i 1))))
-           (utf8->string bytes))))
+           (let ((decoded (utf8->string bytes)))
+             (if (and (>= n 3) (eqv? (bytevector-u8-ref bytes 0) #xEF)
+                      (eqv? (bytevector-u8-ref bytes 1) #xBB)
+                      (eqv? (bytevector-u8-ref bytes 2) #xBF))
+                 (string-append (string #\xFEFF) decoded)
+                 decoded)))))
 
   ;; call-with-out-pointer : Symbol (Positive-Integer -> A) -> (Values A Natural)
   ;; PROC's answer, and the pointer its slot holds once PROC has returned:
