@@ -21,6 +21,27 @@ told in chez-curl's `.plans/traps.md`.
   turning it off gave `abc` at every site. The probe and its outputs are in
   [research/evaluation-order/](research/evaluation-order/). (chez-sqlite3)
 
+- **Chez's `utf8->string` drops one leading U+FEFF.** On 10.4.0,
+  `(utf8->string #vu8(#xef #xbb #xbf #x69 #x64))` is `"id"`, and a UTF-8 transcoder decodes it
+  the same way. Of two leading U+FEFF only the first goes, and one that isn't leading stays. M2
+  slice 1's strict decoder answered `utf8->string`'s string once the bytes were well-formed, so a
+  TEXT value starting with U+FEFF read back changed, which D6 exists to prevent. Its round trips
+  sampled every 257th scalar value and skipped U+FEFF; the Opus review found it. The brief had
+  called `utf8->string` exact, and the builder inherited that. The decoder now restores the
+  U+FEFF, and a row round-trips every scalar value alone (ADR-0015, amended). M1's
+  `c-string->string` reads the same way. M1 decodes only SQLite's own text with it (messages, the
+  version, the source id, compile options), none of which starts with U+FEFF, so text a user
+  controls, column values and names, goes through `strict-utf8->string`. (M2 slice 1,
+  chez-sqlite3)
+
+- **A condition type's name is syntax, not a record type.** `(record-type-parent &sqlite-busy)`
+  is "invalid syntax" when it expands, so a row written so kills its suite before any test runs.
+  `(record-type-descriptor &sqlite-busy)` gives the record type. (M2 slice 1, chez-sqlite3)
+
+- **Chez shares its empty bytevector.** `(eq? (make-bytevector 0) (bytevector-copy #vu8()))` is
+  `#t`, so no row can tell a fresh empty result from a shared one. Assert an empty bytevector by
+  its contents only. (M2 slice 1, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -28,6 +49,14 @@ told in chez-curl's `.plans/traps.md`.
   library's. A test rule in the brief, §7, was built on it. The command links no `libsqlite3`. In
   M0 slice 1, the library beside it, read through the FFI, reported no `DQS`, `RTREE` or
   `STMTVTAB` option ([research/guix-pin/](research/guix-pin/)). (chez-sqlite3)
+
+- **SQLite's whitespace run continues on `\v`, and U+FEFF is whitespace wherever it stands.** A
+  run starts on space, `\t`, `\n`, `\f` or `\r`, then runs on any of those or `\v`
+  (`sqlite3Isspace`); `\v` can't start one. `EF BB BF` is a whitespace token of its own
+  (`CC_BOM`). ADR-0014's tail scan, as accepted, held neither, and disagreed with SQLite's prepare
+  on 56,425 inputs of 2 to 6 bytes. M2 slice 1 found it by preparing every short SQL on 3.53.1 and
+  the floor, before any code was built on the model; the maintainer chose to match SQLite
+  (ADR-0014, amended; [research/m2-slice-1/](research/m2-slice-1/)). (M2 slice 1, chez-sqlite3)
 
 ## Checks and environment
 

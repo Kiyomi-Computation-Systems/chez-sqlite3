@@ -6,8 +6,8 @@
   condition for TEXT that isn't UTF-8, with the column readable as bytes instead (D6), and its type
   and fields (Q8, in [ADR-0013](0013-errors-are-condition-types.md)'s amendment); and decision 10's
   `sql-null` as one value (Q7). The reasons given here were put to the maintainer, and accepted
-  with the record. Amended 2026-11-14 in M2 slice 1, from its measurements and its review
-  ([amendment](#amendment-2026-11-14-what-m2-slice-1-measured)).
+  with the record. Amended 2026-11-14 in M2 slice 1, from its measurements and its review, and
+  accepted by the maintainer that day ([amendment](#amendment-2026-11-14-what-m2-slice-1-measured)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every bound parameter and every column value
 - **Settles:** brief §3f, D4, D5 and D6
@@ -205,8 +205,8 @@
 
 ## Amendment, 2026-11-14: what M2 slice 1 measured
 
-Proposed in M2 slice 1, from its build and its Opus review, for the maintainer to accept with the
-slice. None of it changes a choice of the maintainer's; each item corrects what the record says
+Accepted by the maintainer on 2026-11-14 ("Accept it"), proposed in M2 slice 1, from its build and
+its Opus review. None of it changes a choice of the maintainer's; each item corrects what the record says
 the code reads, or adds a measurement.
 
 - **Chez's `utf8->string` drops one leading U+FEFF,** besides replacing invalid bytes with U+FFFD

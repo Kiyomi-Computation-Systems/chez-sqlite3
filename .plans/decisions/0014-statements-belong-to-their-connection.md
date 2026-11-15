@@ -60,8 +60,8 @@
 - **A `with-exception-handler` handler of a raise inside `critical-section` runs with interrupts
   disabled;** a `guard` clause, which runs after unwinding, doesn't (measured). M1's
   `call-with-open-handle` raises its refusals inside its section, and `call-with-database`'s failed
-  open raises inside one, so their callers' handlers do (measured). M1's closing review fixes both
-  (ADR-0012, amended).
+  open raises inside one, so their callers' handlers do (measured). M1's closing review fixed both,
+  in PR #15 (ADR-0012, amended).
 - **Thunderchez leaked prepare's out-parameter, and its close stopped after finalizing the first
   statement,** joining return codes with `or`, where 0 is true (the assessment).
 
