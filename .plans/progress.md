@@ -52,6 +52,15 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run for M2** (2026-11-15), on `m2-slice-4-values` at `7f9225f`:
+  - **With Apple's 3.51.0,** 36 of 37 suites passed. `test-statement`'s row for a refused SQL's
+    prepare-time effect expected `cache_size` to start at `-2000`, Guix's default, and Apple's
+    library starts at 2000. The row now sets its own base first ([traps.md](traps.md)).
+    `test-statement-values-nomem` named its 9 NOMEM rows unavailable, since Apple's library keeps
+    no memory count, and passed.
+  - `check-dev` passed, and `check-test-fails` held in all 13 cases.
+  - **Homebrew's 3.54.1 didn't run:** the command block's `#` comments held apostrophes, and zsh
+    read them as a quote ([traps.md](traps.md)). It is owed, with Apple's rerun.
 - **Open:** nothing. Brief D3 to D6 are settled (the M2 plan, §2), and slice 2 settled the
   split of `test-library-loading` (§7).
 

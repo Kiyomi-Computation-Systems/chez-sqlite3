@@ -120,6 +120,11 @@ told in chez-curl's `.plans/traps.md`.
   connection's first prepare and 7 after it. So an offset is read only straight after the prepare
   that failed. (The M1 session's research for M2 slice 4, chez-sqlite3)
 
+- **A PRAGMA's default is a build option.** Apple's 3.51.0 starts `cache_size` at 2000 pages,
+  and Guix's and the CI builds at −2000 KiB (`DEFAULT_CACHE_SIZE`). A row that read the default as
+  its base passed on Linux and failed on the Mac. A row sets its own base first. (M2's Mac run,
+  chez-sqlite3)
+
 - **Some BUSY no wait fixes.** COMMIT answers `SQLITE_BUSY`, "cannot commit transaction - SQL
   statements in progress", while the connection's own write is unfinished, such as an
   `insert … returning` that has answered a row. A SELECT mid-row doesn't stop it. So
@@ -291,6 +296,12 @@ told in chez-curl's `.plans/traps.md`.
   plant's loss record at 3.45.1 is byte-identical to the connection plant's: 57,432 bytes in one
   block. At 3.53.1 the statement adds 5,152 bytes in 19 blocks. So the plant's own counts line,
   `(statement . 1)`, is what holds that the counters saw the statement. (M2 slice 3, chez-sqlite3)
+
+- **zsh doesn't treat `#` as a comment at an interactive prompt.** That's `interactivecomments`,
+  off by default. A command block given to the maintainer with `# Apple's …` after a command passed
+  the comment as arguments, and its apostrophe opened a quote that swallowed the next line. So the
+  Homebrew run of M2's Mac run never ran. Commands for the maintainer to paste carry no comments.
+  (M2's Mac run, chez-sqlite3)
 
 ## Editing the records
 
