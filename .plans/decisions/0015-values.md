@@ -215,10 +215,12 @@ the code reads, or adds a measurement.
   is dropped. Decision 9's strict decoder put a value through `utf8->string` once it was checked,
   so a TEXT value or a column name starting with U+FEFF read back changed, which decision 9 exists
   to prevent. The decoder now restores it, and a round trip of every scalar value holds it.
-- **Decision 7's code is read through `sqlite3_extended_errcode`,** which M1 binds, not
-  `sqlite3_errcode`, which isn't among the required entry points (ADR-0002, amended). A connection
-  opens with `SQLITE_OPEN_EXRESCODE`, so both would answer the extended code; `(nomem CODE)`
-  carries it to `raise-sqlite-error`, which takes an extended code.
+- **Decision 7's code is read through `sqlite3_extended_errcode`,** not `sqlite3_errcode`. M1
+  binds both (ADR-0002, amended). A connection opens with `SQLITE_OPEN_EXRESCODE`, so both would
+  answer the extended code, but only `sqlite3_extended_errcode` answers it whatever the open's
+  flags. `(nomem CODE MESSAGE)` carries it to `raise-sqlite-error`, which takes an extended code.
+  As first written, this bullet said M1 doesn't bind `sqlite3_errcode`. M1 slice 2 does; the
+  reason was corrected before slice 1 merged, and the decision is unchanged.
 - **The reader reads the message too:** on `SQLITE_NOMEM` it calls `sqlite3_errmsg` straight after
   the code and answers `(nomem CODE MESSAGE)`, so the order decision 7 asks for lives inside the
   reader its stand-ins test, not in the slice 4 code around it.

@@ -106,6 +106,9 @@ newest first.
   - A record's model of SQLite's tokenizer disagreed with prepare on 56,425 short inputs. Measured
     over the whole complement before the build, it cost an amendment, not a rewrite.
   - A condition type's name is syntax, not a record type, and Chez shares its empty bytevector.
+  - ADR-0015's amendment gave a false reason, that M1 doesn't bind `sqlite3_errcode`, and the
+    maintainer accepted it so. It was found reading the records for slice 2, and corrected before
+    the merge. A record's claim about the code is checked against the code, like any other.
 
 ### 2026-11-14 — M1's closing review and its fixes (PR #15, `1b2f688`)
 
