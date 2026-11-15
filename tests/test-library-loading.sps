@@ -324,13 +324,19 @@
 
 ;; The entry points (chez-sqlite3 private native) binds, in its order
 ;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-;; rest. A sixteenth that native binds and the decoy lacks refuses the
-;; control, and the control's row fails.
+;; rest, M1's ten and then M2's 21. A thirty-seventh that native binds and
+;; the decoy lacks refuses the control, and the control's row fails.
 (define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
 (define rest-entries
   '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
     "sqlite3_errmsg" "sqlite3_errstr" "sqlite3_errcode" "sqlite3_extended_errcode"
-    "sqlite3_next_stmt" "sqlite3_memory_used"))
+    "sqlite3_next_stmt" "sqlite3_memory_used"
+    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"
+    "sqlite3_clear_bindings" "sqlite3_bind_parameter_count" "sqlite3_bind_parameter_index"
+    "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
+    "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
+    "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
+    "sqlite3_column_bytes" "sqlite3_error_offset"))
 (define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
 
 (define (lacks entry) (string-append "-DDECOY_LACKS_" entry))

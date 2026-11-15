@@ -11,7 +11,8 @@
 ;;;                        records that decide it
 ;;;   allowed-argument-types, allowed-result-types
 ;;;                        the only types a binding may write: exactly the
-;;;                        types the table uses, and void as a result
+;;;                        types the table uses as arguments, and as results
+;;;                        with void
 ;;;   scan-tree            every foreign-procedure form under a directory,
 ;;;                        read as data, each with the library it sits in
 ;;;   violations           the scan held against a table: what a suite
@@ -53,11 +54,14 @@
   ;;   RESULT      Symbol: the Chez result type
   ;;   CONVENTION  collect-safe or plain
   ;;   RECORDS     (Listof String): each begins with the record it cites
-  ;; In ADR-0002's amended order. Every call that can block is collect-safe:
-  ;; sqlite3_open_v2 and sqlite3_close in M1. Every other binding is plain
-  ;; (ADR-0011, decision 5). No binding takes a Scheme object: every
-  ;; argument is an integer or the address of a block we allocated, and a
-  ;; string SQLite returns is an address we read ourselves (decisions 1 and 4).
+  ;; In ADR-0002's amended order: M1's 15, then M2's 21. Every call that can
+  ;; block is collect-safe: sqlite3_open_v2 and sqlite3_close in M1, and
+  ;; sqlite3_prepare_v3, sqlite3_step, sqlite3_reset and sqlite3_finalize in
+  ;; M2. Every other binding is plain (ADR-0011, decision 5, amended). No
+  ;; binding takes a Scheme object: every argument is an integer, a flonum or
+  ;; the address of a block we allocated, SQLITE_TRANSIENT is a pointer-width
+  ;; integer, and a string or blob SQLite returns is an address we read
+  ;; ourselves (decisions 1 and 4).
   (define conventions-table
     '(("sqlite3_libversion_number" ("int" ()) () int plain
        ("ADR-0011 decision 5: it cannot block, so it is plain"
@@ -111,7 +115,89 @@
         "ADR-0002 amendment: a required entry point"))
       ("sqlite3_memory_used" ("sqlite3_int64" ()) () integer-64 plain
        ("ADR-0011 decision 5: plain"
-        "ADR-0002 amendment: a required entry point"))))
+        "ADR-0002 amendment: a required entry point"))
+      ("sqlite3_prepare_v3"
+       ("int" ("sqlite3 *" "const char *" "int" "unsigned int" "sqlite3_stmt **" "const char **"))
+       (uptr uptr int unsigned-int uptr uptr) int collect-safe
+       ("ADR-0011 decision 5, M2 amendment: it can block, reading the schema under another connection's lock, so it is __collect_safe"
+        "ADR-0011 decisions 1 to 3, M2 amendment: the SQL is a block we allocated, and the statement and the tail are counted out-pointers"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_finalize" ("int" ("sqlite3_stmt *")) (uptr) int collect-safe
+       ("ADR-0011 decision 5, M2 amendment: it was measured waiting in the busy handler, so it is __collect_safe"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_step" ("int" ("sqlite3_stmt*")) (uptr) int collect-safe
+       ("ADR-0011 decision 5, M2 amendment: it can do I/O and wait in the busy handler, so it is __collect_safe"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_reset" ("int" ("sqlite3_stmt *")) (uptr) int collect-safe
+       ("ADR-0011 decision 5, M2 amendment: it was measured waiting in the busy handler, so it is __collect_safe"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_clear_bindings" ("int" ("sqlite3_stmt*")) (uptr) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_parameter_count" ("int" ("sqlite3_stmt*")) (uptr) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_parameter_index" ("int" ("sqlite3_stmt*" "const char *")) (uptr uptr) int plain
+       ("ADR-0011 decision 1, M2 amendment: the name is the address of a block we allocated"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_null" ("int" ("sqlite3_stmt*" "int")) (uptr int) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_int64" ("int" ("sqlite3_stmt*" "int" "sqlite3_int64")) (uptr int integer-64) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0015 decision 2: the value is 64 bits, never an int (the M2 plan, section 4.8)"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_double" ("int" ("sqlite3_stmt*" "int" "double")) (uptr int double) int plain
+       ("ADR-0011 decision 1: a flonum, passed as a double"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_text64"
+       ("int" ("sqlite3_stmt*" "int" "const char*" "sqlite3_uint64" "void(*)(void*)" "unsigned char"))
+       (uptr int uptr unsigned-64 uptr unsigned-8) int plain
+       ("ADR-0011 decision 1, M2 amendment: the text is a counted block we allocated, never NULL, given its byte length"
+        "ADR-0001: the destructor is SQLITE_TRANSIENT, a pointer-width integer, so SQLite copies the text"
+        "ADR-0015 decision 5: the encoding is SQLITE_UTF8"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_bind_blob64"
+       ("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_uint64" "void(*)(void*)"))
+       (uptr int uptr unsigned-64 uptr) int plain
+       ("ADR-0011 decision 1, M2 amendment: the bytes are a counted block we allocated, never NULL, given their length"
+        "ADR-0001: the destructor is SQLITE_TRANSIENT, a pointer-width integer, so SQLite copies the bytes"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_count" ("int" ("sqlite3_stmt *")) (uptr) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_name" ("const char *" ("sqlite3_stmt*" "int")) (uptr int) uptr plain
+       ("ADR-0011 decision 4: a returned string is an address, read by our own code"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_type" ("int" ("sqlite3_stmt*" "int")) (uptr int) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_int64" ("sqlite3_int64" ("sqlite3_stmt*" "int")) (uptr int) integer-64 plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0015 decision 7: the value is 64 bits, never an int (the M2 plan, section 4.8)"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_double" ("double" ("sqlite3_stmt*" "int")) (uptr int) double plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_text" ("const unsigned char *" ("sqlite3_stmt*" "int")) (uptr int) uptr plain
+       ("ADR-0011 decision 4, M2 amendment: the text is an address, read by our own code for sqlite3_column_bytes' count"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_blob" ("const void *" ("sqlite3_stmt*" "int")) (uptr int) uptr plain
+       ("ADR-0011 decision 4, M2 amendment: the bytes are an address, read by our own code for sqlite3_column_bytes' count"
+        "ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_column_bytes" ("int" ("sqlite3_stmt*" "int")) (uptr int) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))
+      ("sqlite3_error_offset" ("int" ("sqlite3 *")) (uptr) int plain
+       ("ADR-0011 decision 5: plain"
+        "ADR-0002 M2 amendment: a required entry point"))))
 
   (define (row-name row) (car row))
   (define (row-prototype row) (cadr row))
@@ -122,9 +208,12 @@
 
   ;; allowed-argument-types, allowed-result-types : (Listof Symbol)
   ;; Written here, not read from the table: a table loosened together with the
-  ;; binding it holds would otherwise pass. void is a result only.
-  (define allowed-argument-types '(int uptr integer-64))
-  (define allowed-result-types '(int uptr integer-64 void))
+  ;; binding it holds would otherwise pass. Each is exactly the types the
+  ;; table writes there: unsigned-int (prepare's flags), unsigned-64 (a
+  ;; length) and unsigned-8 (an encoding) are arguments only, and void is a
+  ;; result only.
+  (define allowed-argument-types '(int uptr integer-64 unsigned-int double unsigned-64 unsigned-8))
+  (define allowed-result-types '(int uptr integer-64 double void))
 
   ;; --- the reader ----------------------------------------------------------------
 
