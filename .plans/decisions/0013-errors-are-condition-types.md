@@ -145,7 +145,9 @@ the same day ([the M2 plan](../2026-11-14-m2-plan.md), §3): `offset` in charact
 - **`offset` counts characters** (Q6): an index into the `sql` field's string, converted from
   SQLite's byte offset, which measured 13 for a token at character 12, after an `é`
   ([research/m2-plan/](../research/m2-plan/)). SQLite's −1, which it answers for an error at the
-  end of the SQL, gives `#f` ([research/m2-review/](../research/m2-review/)).
+  end of the SQL, gives `#f` ([research/m2-review/](../research/m2-review/)). It answers −1 for a
+  missing table, a missing collation and a busy prepare too, mid-statement or not
+  ([research/m2-slice-3/](../research/m2-slice-3/)).
 - **`sql` and `offset`, by where the failure came from**
   ([ADR-0014](0014-statements-belong-to-their-connection.md), [ADR-0015](0015-values.md)). This
   amends decision 3, whose `sql` came from prepare alone:

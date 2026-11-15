@@ -144,8 +144,16 @@
 ;; this thread's connection; a thread of its own opens a connection, sets
 ;; the busy timeout, runs SETUP, then CALL, the verb that blocks, whatever it
 ;; raises being its answer. Answers what collect-during saw, the call's
-;; answer, the lock's undoing, and the counts once everything is closed.
+;; answer, and the counts once everything is closed: a list of three.
 (define (blocking-row lock! setup call)
+  (let ((r (blocking-run lock! setup call)))
+    (if (and (pair? r) (eq? (car r) 'raised))
+        r
+        (append r (list (native-counts))))))
+
+;; blocking-run : like blocking-row, answering what collect-during saw and the
+;; call's answer, once the lock is undone.
+(define (blocking-run lock! setup call)
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory
      (lambda (dir)
@@ -205,14 +213,16 @@
 
 (test-equal "step!: a plain insert under another connection's read waits in the busy handler, and another thread's collection ends within its bound while the step is still blocked; the step then raises &sqlite-busy from step!, with the SQL"
   (list seen-blocked
-        (list 'raised (list 'sqlite-error 'step! 'busy 'busy "insert into t values (1)" #f 'busy)))
+        (list 'raised (list 'sqlite-error 'step! 'busy 'busy "insert into t values (1)" #f 'busy))
+        zero-counts)
   (blocking-row read-lock!
                 (lambda (db) (prepare-statement db "insert into t values (1)"))
                 (lambda (st) (guard (e (#t (finalize-statement! st) (raise e))) (step! st)))))
 
 (test-equal "prepare-statement: a fresh connection's prepare under another's begin exclusive waits, and the collection ends while it is blocked; it then raises &sqlite-busy from prepare-statement, with the SQL and no offset"
   (list seen-blocked
-        (list 'raised (list 'sqlite-error 'prepare-statement 'busy 'busy "select x from t" #f 'busy)))
+        (list 'raised (list 'sqlite-error 'prepare-statement 'busy 'busy "select x from t" #f 'busy))
+        zero-counts)
   (blocking-row (lambda (db) (exec! db "begin exclusive"))
                 (lambda (db) db)
                 (lambda (db) (let ((st (prepare-statement db "select x from t")))
@@ -222,7 +232,8 @@
 (test-equal "reset!: an insert ... returning stepped once, reset under another's read, waits, and the collection ends while it is blocked; the reset then raises &sqlite-busy from reset!, and the statement is ready"
   (list seen-blocked
         (list (list 'raised (list 'sqlite-error 'reset! 'busy 'busy "insert into t values (1), (2) returning x" #f 'busy))
-              'ready))
+              'ready)
+        zero-counts)
   (blocking-row read-lock!
                 (lambda (db) (let ((st (prepare-statement db "insert into t values (1), (2) returning x")))
                                (step! st)
@@ -235,7 +246,8 @@
 (test-equal "finalize-statement!: the same insert, finalized under another's read, waits, and the collection ends while it is blocked; the finalize then raises &sqlite-busy from finalize-statement!, and the statement is finalized"
   (list seen-blocked
         (list (list 'raised (list 'sqlite-error 'finalize-statement! 'busy 'busy "insert into t values (1), (2) returning x" #f 'busy))
-              'finalized))
+              'finalized)
+        zero-counts)
   (blocking-row read-lock!
                 (lambda (db) (let ((st (prepare-statement db "insert into t values (1), (2) returning x")))
                                (step! st)

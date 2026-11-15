@@ -29,10 +29,19 @@ told in chez-curl's `.plans/traps.md`.
   sampled every 257th scalar value and skipped U+FEFF; the Opus review found it. The brief had
   called `utf8->string` exact, and the builder inherited that. The decoder now restores the
   U+FEFF, and a row round-trips every scalar value alone (ADR-0015, amended). M1's
-  `c-string->string` reads the same way. M1 decodes only SQLite's own text with it (messages, the
-  version, the source id, compile options), none of which starts with U+FEFF, so text a user
-  controls, column values and names, goes through `strict-utf8->string`. (M2 slice 1,
+  `c-string->string` read the same way. M2 slice 1 held that it decoded only SQLite's own text, and
+  M2 slice 3 found otherwise: an error message can be the user's, and a trigger's
+  `RAISE(ABORT, '\xFEFF;boom')` reached the raised condition as `"boom"`. `c-string->string` now
+  keeps a leading U+FEFF too. Column values and names go through `strict-utf8->string`. (M2 slices
+  1 and 3, chez-sqlite3)
+
+- **An R6RS `\x` escape ends at its own semicolon.** `"a;\xFEFF;b"` holds four characters, `a`,
+  `;`, U+FEFF and `b`, and `"\xFEFF "` is a reader error. So `"select 1;\xFEFF;"` has one
+  semicolon, not two. M2 slice 3's tail suite hit it in its first draft. (M2 slice 3,
   chez-sqlite3)
+
+- **Chez's `make-time` refuses a nanosecond field of 10⁹:** "invalid nanosecond 1000000000".
+  Carry whole seconds into the seconds field. (M2 slice 3, chez-sqlite3)
 
 - **A condition type's name is syntax, not a record type.** `(record-type-parent &sqlite-busy)`
   is "invalid syntax" when it expands, so a row written so kills its suite before any test runs.
@@ -70,6 +79,23 @@ told in chez-curl's `.plans/traps.md`.
 - **A REAL's text differs by version.** `cast(4.9406564584124654e-324 as text)` is that on 3.53.1,
   and `4.94065645841247e-324` on 3.45.1. So a row that reads a REAL as text writes no expected
   value, and compares two readings of the same library instead. (M2 slice 2, chez-sqlite3)
+
+- **An interrupt doesn't end a wait in the busy handler.** `begin immediate` under another
+  connection's exclusive lock, with a 600 ms busy timeout and `sqlite3_interrupt` at 100 ms, waited
+  601 ms and answered BUSY, its interrupt flag left set. A long computation, interrupted the same
+  way, stopped at 100 ms with 9. So a row that blocks a call can't end the wait early; only the
+  timeout does. The M1 session found it in M3's research, and M2 slice 3 reproduced it
+  ([research/m2-slice-3/](research/m2-slice-3/)). (M2 slice 3, chez-sqlite3)
+
+- **Some BUSY no wait fixes.** COMMIT answers `SQLITE_BUSY`, "cannot commit transaction - SQL
+  statements in progress", while the connection's own statement is mid-row. So `sqlite-busy?` isn't
+  always "retry later": reset or finalize the statement first. (M3's research, reproduced in M2
+  slice 3, chez-sqlite3)
+
+- **A statement's column count changes at its next step, after an `ALTER TABLE` on its own
+  connection too,** not only another's: a held `select *` read 2, then 2 after the ALTER, then 3
+  after its step. So a count read before a step can be stale, and a column read checks the count
+  in its own section. (M3's research, reproduced in M2 slice 3, chez-sqlite3)
 
 ## Checks and environment
 
@@ -219,6 +245,17 @@ told in chez-curl's `.plans/traps.md`.
   decoy and a `missing-api` row for each entry point in a written list. With one entry deleted the
   suite passed 90 of 90, and with four reordered 91 of 91. A row now holds the list to the
   convention table, which `test-conventions` holds to native. (M2 slice 2's review, chez-sqlite3)
+
+- **A flag set by a blocked thread can't show that its call returned before a collection.** The
+  blocked thread joins the collection before it runs its `set!`, so the flag read "still blocked"
+  under every plain binding of M2 slice 3's four blocking calls, and only the time bound failed.
+  Bound the collection's time against the call's, and read the time, not a flag. (M2 slice 3,
+  chez-sqlite3)
+
+- **At the floor, Valgrind can't tell a leaked statement from its connection.** The statement
+  plant's loss record at 3.45.1 is byte-identical to the connection plant's: 57,432 bytes in one
+  block. At 3.53.1 the statement adds 5,152 bytes in 19 blocks. So the plant's own counts line,
+  `(statement . 1)`, is what holds that the counters saw the statement. (M2 slice 3, chez-sqlite3)
 
 ## Editing the records
 

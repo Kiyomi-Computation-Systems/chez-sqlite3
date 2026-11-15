@@ -10,7 +10,8 @@ The slice, part A, is `(chez-sqlite3 private statement)`, new: the statement rec
 tracking: the live statements, `track-statement!`, `untrack-statement!`, `tracked-statements`,
 `first-finalize-failure`, `check-database-owner`, and the close that finalizes. The suites are
 `tests/test-statement.sps`, `tests/test-statement-block.sps` (the four `__collect_safe` calls by
-behaviour) and `tests/test-statement-tail.sps` (the tail scan against SQLite's prepare), with the
+behaviour), `tests/test-statement-tail.sps` (the tail scan against SQLite's prepare) and, from the
+review, `tests/test-statement-sections.sps` (decision 10's "change together" under two engines), with the
 leaks plant `tests/memory-plant-statement.sps`, held by `check-memory-gate`'s cases `a` and
 `b statement`. An Opus agent built it test first from the maintainer's brief.
 
@@ -21,7 +22,8 @@ of times (each did), and any that changed nothing. The plant's two mutations ran
 `make check-memory-gate` in whole copies of the worktree, `build/m2s3/gate/`. The counts below
 are read from the suites' own output (`# of expected passes`, `# of unexpected failures`), never
 by eye, and come from one run against the final tree. The driver and the definitions are in
-`build/m2s3/`, not the repository.
+`build/m2s3/`, not the repository. The review's fixes (below) ran from `build/m2s3-fix/`, with the
+same driver pointed at `build/m2s3-fix/mut/`, and the first 80 again from `build/m2s3-fix/oldmut/`.
 
 ## The red runs
 
@@ -31,15 +33,18 @@ by eye, and come from one run against the final tree. The driver and the definit
 | `test-statement` | 30 passed, 30 failed | the real `statement.sls` over M1's `connection.sls`, its new exports stubbed: no tracking, no finalizing close | 60 passed |
 | `test-statement-block` | 5 passed, 1 failed, in each of four copies | each call bound plain, C01 to C04 | 6 passed |
 | `test-statement-tail` | 4 passed, 5 failed; 3 and 6; 3 and 6 | the scan skipped, from 0, from past the tail: TS1 to TS3 | 9 passed |
+| `test-statement-sections` | 3 passed, 1 failed, in each of three copies | the tracking, the state's change and the untracking each made after their section, R01, R03 and R06 | 4 passed |
+| `test-native` | 69 passed, 1 failed | `c-string->string` without the U+FEFF restored, F4 | 70 passed |
 
 The 4 rows that passed against the stub: the load, the counts once loaded, the export list (the
 stub exported the same names), and `first-finalize-failure`, which is `connection.sls`'s. E01, E02,
-E03 and T06 watch them fail. The suite grew to 68 rows after the red runs; each row added was
+E03 and T06 watch them fail. The suite grew to 68 rows after the red runs, and to 75 with the review's fixes; each row added was
 watched failing by the mutations named in its place below. Every row of the three suites has
 failed under at least one mutation or red run.
 
-Final green runs, on Guix's 3.53.1 and on the floor, 3.45.1, alike: `test-statement` 68 passed,
-`test-statement-block` 6, `test-statement-tail` 9.
+Final green runs, on Guix's 3.53.1 and on the floor, 3.45.1, alike: `test-statement` 75 passed,
+`test-statement-block` 6, `test-statement-tail` 9, `test-statement-sections` 4, `test-native` 70;
+`make test` 34 of 34 on both, `check-memory-gate` in all 58 cases.
 
 ## Measured first
 
@@ -76,9 +81,11 @@ differ in the version line and by a millisecond.
 
 ## The mutations
 
-**80 mutations, 77 caught, 3 survived;** each survivor is argued below. Each row names the suites
-that failed and how many of their rows; a suite run and not named passed whole. Baselines:
-`test-statement` 68, `test-statement-tail` 9, `test-statement-block` 6, `test-connection` 63.
+**92 mutations, 88 caught, 4 survived;** each survivor is argued below. The first 80 were rerun
+against the tree as the review's fixes leave it, with the same driver, and the new 12 are in
+"The review's fixes" below. Each row names the suites that failed and how many of their rows; a
+suite run and not named passed whole. Baselines: `test-statement` 75, `test-statement-tail` 9,
+`test-statement-block` 6, `test-statement-sections` 4, `test-native` 70, `test-connection` 63.
 `test-connection` ran beside every mutation of `connection.sls`, and failed only under D02.
 
 ### Decision 3's checks, removed or reordered
@@ -103,7 +110,7 @@ that failed and how many of their rows; a suite run and not named passed whole. 
 | S04 | the column reads allowed in `ready` | statement 2: that table, and a depth row's refusal |
 | S05 | a refused verb's procedure run | statement 7 |
 | S06 | a refusal moves the state to `ready` | statement 4 |
-| S07 | the procedure's new state ignored | statement 21 |
+| S07 | the procedure's new state ignored | statement 23 |
 | S08 | `finalized` taken as a new state | statement 1: the not-a-live-state row (added for it) |
 | S09 | any symbol taken as a new state | statement 1: the same |
 
@@ -166,7 +173,7 @@ the collection before it can set the flag, so only the time tells (a trap, below
 | Mutation | Guards | Failed |
 |---|---|---|
 | TS1 | the scan skipped | statement 4; statement-tail 5 |
-| TS2 | the scan from 0 | statement 58; statement-tail 6 |
+| TS2 | the scan from 0 | statement 64; statement-tail 6 |
 | TS3 | the scan from one past the tail | statement 1; statement-tail 6 |
 
 ### The plants (the M2 plan, §4.8)
@@ -186,31 +193,31 @@ the collection before it can set the flag, so only the time tells (a trap, below
 | Mutation | Guards | Failed |
 |---|---|---|
 | X01 | `statement-sql` hands out the record's string | statement 1 |
-| X02 | prepare keeps the caller's string, uncopied | statement 2 |
-| X03 | finalize leaves the freed handle in the record | statement 31. In the first campaign it failed 29 rows, then hung on a freed statement and was killed |
+| X02 | prepare keeps the caller's string, uncopied | statement 3 |
+| X03 | finalize leaves the freed handle in the record | statement 31 on the first runs. On the review's rerun it hung on a freed statement again, and the 120 s timeout killed it with 8 rows named failed: caught, but its count is not reproducible, since the freed handle is read |
 | X04 | finalize not counted down | statement 38 |
-| X05 | prepare not counted | statement 51 |
+| X05 | prepare not counted | statement 57 |
 | X06 | the refused statement, more than one, never finalized | statement 32 |
-| X07 | the NULL statement checked before the failure | statement 4 |
-| X08 | `reset!` leaves the state | statement 6 |
-| X09 | `step!` leaves the state | statement 20 |
-| X10 | `reset!` raises a failed step's repeat | statement 2 |
+| X07 | the NULL statement checked before the failure | statement 5 |
+| X08 | `reset!` leaves the state | statement 7 |
+| X09 | `step!` leaves the state | statement 22 |
+| X10 | `reset!` raises a failed step's repeat | statement 3 |
 | X11 | `finalize-statement!` raises the repeat | statement 10 |
 | X12 | the finalize failure raised over the close's own | statement 1: the backup row |
 | X13 | untracked statements counted before the tracked are finalized | statement 27 |
 | X14 | the no-op of a finalize on a closed connection dropped | statement 1 |
 | X15 | that no-op given to every verb | statement 2 |
-| X16 | `column-count` reads the parameter count | statement 3 |
+| X16 | `column-count` reads the parameter count | statement 4 |
 | X17 | `parameter-count` reads the column count | statement 3 |
 | X18 | `call-with-statement`'s procedure not checked first | statement 1 |
 | X19 | its finalize failure raised over the procedure's | statement 1 |
 | X20 | its finalize failure never raised | statement 3 |
 | X21 | its statement learnt after the prepare's section, not in it | statement 1: an engine abandoned at its first expiry left a statement at fuels 23, 25 and 26 (added for it) |
 | X22 | the SQL checked before the database | statement 2 |
-| X23 | step's message read before the step | statement 1: the message against `sqlite3_errmsg` read straight after (added for it): "not an error" where SQLite said "UNIQUE constraint failed: t.x". It compares two readings, never a message's words |
+| X23 | step's message read before the step | statement 2: the message against `sqlite3_errmsg` read straight after (added for it): "not an error" where SQLite said "UNIQUE constraint failed: t.x". It compares two readings, never a message's words |
 | E01 | an export more | statement 1: the export list |
 | E02 | `CHEZ_SQLITE3_LIBRARY` naming no file | statement 65: the load row, and every row after it |
-| E03 | the library body counts a statement | statement 39; statement-tail 2 and statement-block 2: the counts at the start and the end |
+| E03 | the library body counts a statement | statement 39; statement-tail 2; statement-block 6, every row now that each asserts the counts |
 | E04 | slice 1's 3-byte literal renamed | statement-tail 2: the literals' count and their oracle row |
 
 ## The survivors
@@ -218,7 +225,8 @@ the collection before it can set the flag, so only the time tells (a trap, below
 | Mutation | Why it is equivalent |
 |---|---|
 | B01 | nByte without the NUL. SQLite reads to nByte or the first NUL, whichever comes first, and `call-with-c-string` writes the NUL after the bytes, so both prepare the same bytes and leave the same tail. Slice 2's B02 is the same equivalence from the other side; slice 2's review measured that without the NUL SQLite copies the SQL at every prepare, a cost no row sees. |
-| N02 | The call to the length check dropped from `checked-sql`. Only SQL longer than 2³¹−2 bytes of UTF-8 reaches it, and Chez holds such a string in 8 GiB or more, so no row makes one. `sql-length-fits?`, the check itself, is held on numbers at the boundary (N03, N04). The call is one `unless` form, held by review. |
+| N02 | **Not equivalent: unexercised for its cost under the gate.** The call to the length check dropped from `checked-sql`. Only SQL longer than 2³¹−2 bytes of UTF-8 reaches it, and a Chez string of 4-byte characters holds 2³¹−1 bytes of UTF-8 in 2 GiB (the review's correction: this log said 8 GiB or more). On 536,870,914 characters, run plainly, the tree refuses it with `(sql-too-long 2147483647)` in 8.5 s, and N02 hands it to SQLite, which answers `toobig`, in 74.8 s (rerun for this log, `build/m2s3-review/probe-long-sql.sps`; the review measured 8.1 s and 73.9 s). The row exists, and the mutant fails it, but a row of 2 GiB, 75 s plainly and several times that under Valgrind, doesn't fit the gate's budget. `sql-length-fits?`, the check itself, is held on numbers at the boundary (N03, N04). The call is one `unless` form, held by that probe, run by hand. |
+| R10 | `(sealed #t)` dropped from the statement record, `(opaque #t)` kept. A sealed type can't be extended, so sealing only matters to code that can name the type to make a child of it. The record is opaque, so `record-rtd` raises on a statement (R09 and its row hold that), and nothing outside the library can reach the type; inside, nothing extends it. While the record is opaque, sealing it changes nothing a caller or a row can see. Held by R09's row: should opacity go, R10's fault is reachable and sealing has no row of its own. `test-libsqlite3-info` argues the same for its record. |
 | I07 | `&sqlite-closed` raised inside the accessor's procedure rather than answered as data. `call-with-open-handle` catches whatever its procedure raises inside the section and raises it again after, the same object (ADR-0012, amended; `test-connection`'s depth rows hold it), so a caller's handler still runs at depth 1. Only a raise outside that procedure, in a section of the statement library's own, can reach a handler with interrupts disabled: I01 to I06, I08 and I09. |
 
 ## Findings
@@ -242,6 +250,90 @@ the collection before it can set the flag, so only the time tells (a trap, below
   14-character alphabet (the ten ASCII bytes the rules name, `A`, U+FEFF, U+0085 and U+00A0),
   every two over 130, and the 590 inputs of slice 1's literals that are strings. Slice 1's
   byte-level oracle holds the scan on every byte.
+
+## The review's fixes
+
+An adversarial review of the slice (PR #18, at `1eff5be`) found nine things. Each was fixed test
+first: the row written, watched failing against a mutant that restores the fault, in a whole copy
+of the tree, run from inside the copy, then made to pass. The mutants are in `build/m2s3-fix/mut/`
+(`build/m2s3-fix/defs.py`, `mut.py`), the probes in `build/m2s3-review/` and `build/m2s3-verify/`.
+Every mutant below ran on Guix's 3.53.1 and on the floor, 3.45.1, with the same counts.
+
+| Mutation | What | Failed |
+|---|---|---|
+| R01 | the prepare's tracking made after its section | `test-statement-sections` 1 (prepare against close, fuels 27 to 30: the close refuses with `untracked-statements`, the connection stays open); `test-statement` 75 passed |
+| R03 | the accessor's state change made after its section | `test-statement-sections` 1 (step against step, fuels 25 and 26: the done insert runs again, 2 rows); `test-statement` 75 passed |
+| R06 | the finalize's untracking made after its section | `test-statement-sections` 1 (finalize against `tracked-statements`, fuels 34 to 39: a finalized statement is listed); `test-statement` 75 passed |
+| R09 | `(opaque #t)` dropped from the statement record | statement 1: the opacity row, `record-rtd` answers instead of raising |
+| R10 | `(sealed #t)` dropped | **none: survived** (above) |
+| F3 | the accessor hands its procedure `""` as the SQL | statement 9: the new row, and every row whose failure carries its SQL, since step and reset now read it from the argument |
+| F4 | `c-string->string` drops a leading U+FEFF again | `test-native` 1 (the block `EF BB BF 61`); statement 1 (the trigger's message) |
+| F8 | a finalize that leaves its statement counted | `test-statement-block` 5 of 6: the four blocking rows and the last. Against the suite as it stood, 1 of 6: only the last, "every count is zero at the end" |
+| D1 | `column-count` answers its first reading for ever | statement 1 (the `alter table` row) |
+| D2 | `step!` answers done whatever SQLite said | statement 26; the new row for the refused commit among them |
+| D3 | `reset!` clears the bindings | statement 1 (the bindings row) |
+| D4 | `call-with-statement`'s failed prepare drops the offset | statement 2: the new row, and the existing row of `call-with-statement`'s checks, which already held it |
+
+**12 mutations, 11 caught, 1 survived.**
+
+1. **Decision 10's "change together" was held by no row.** R01, R03 and R06 each passed
+   `test-statement` whole. `tests/test-statement-sections.sps` has three sweeps, each an engine A
+   that expires once and a second thread of control B that runs at A's first expiry, on the same
+   thread, at every fuel from 1 to 60: prepare against close (the close answers, the connection is
+   closed, A's statement is finalized by it or A's prepare raised `&sqlite-closed`, every count is
+   zero); step against step on one insert (one row, the statement done, the other step refused
+   naming done); finalize against `tracked-statements` (a statement is listed exactly when it is
+   not finalized; afterwards neither listed nor live). **The fuel range:** the windows fall at 25
+   to 39 on both libraries (R01 27 to 30, R03 25 and 26, R06 34 to 39), found by sweeping the
+   mutants; 60 clears the last with 21 to spare and is the range the other engine sweeps use. The
+   suite runs in 0.2 s plainly and 9.3 s under the gate, make's own time included, so it needs no
+   split.
+2. **Nothing held the statement record's opacity.** R09 passed every suite, and through
+   `(chez-sqlite3)` alone a probe read the raw pointer. The row asserts that `record-rtd` of a
+   genuine statement raises from `record-rtd`, and `record?` says no, as `test-libsqlite3-info`'s
+   row does for its record. R10 is argued above.
+3. **The accessor gave its procedure no way to the SQL.** Read after the section, `statement-sql`
+   refuses a statement another engine finalized in between: at fuels 26 to 51 a would-be
+   `&sqlite-error` became `&sqlite-closed` (`probe-accessor-sql.sps`). The accessor now gives its
+   procedure the SQL as a third argument, after the two handles: the copy made at prepare, which
+   never changes. Its signature comment, its contract and every caller (step, reset, finalize,
+   the counts, the suites) follow. The row shows the procedure receives the SQL: equal to the SQL
+   prepared, not the caller's string, ready and in a row alike. F3 fails it.
+4. **An error message dropped a leading U+FEFF.** `c-string->string` decoded with `utf8->string`,
+   which drops one; a trigger's `RAISE(ABORT, '\xFEFF;boom')` reached the `&sqlite-error` as
+   `boom`, on both libraries (`feff-errmsg.sps`). When the bytes read begin `EF BB BF`, the string
+   now begins U+FEFF, as `strict-utf8->string` restores it; invalid bytes are still replaced, never
+   refused. Rows: `test-native` reads `EF BB BF 61` as U+FEFF and `a`, a second U+FEFF kept, one
+   kept before an invalid byte (replaced), a BOM-less block and `EF BB` alone as before;
+   `test-statement` keeps the trigger's text, with one that has no U+FEFF as the control. Both
+   watched failing against the code as it stood (F4).
+5. **The tail oracle re-decoded SQLite's tail.** `sqlite-verdict` decoded the tail's bytes with
+   `utf8->string`, which drops a leading U+FEFF, so for `select 1;` then U+FEFF and `x` it asked
+   SQLite about `x`. It now prepares the tail in place, at the SQL's address plus k, with nByte
+   less k. **No mutant or row can tell the two apart:** U+FEFF is a token of its own to SQLite, an
+   error alone or before any statement, so both ask a question whose answer is refused. The suite
+   passes 9 of 9 before and after, with the same counts of accepted, refused and failed.
+6. **The docs.** Each fact has a row now. `docs/reference.md` says a failed prepare has an
+   offset, `prepare-statement`'s or `call-with-statement`'s (D4; the existing row of
+   `call-with-statement`'s checks held it already, the new row names it); `column-count` is read
+   afresh and moves at the next step after an `alter table`, its own connection's or another's
+   (measured 2, 2, then 3 on both libraries; 1, 1, then 2 for another's; D1); `sqlite-busy?`
+   covers a `commit` refused while the connection's own statement is mid-row, which a reset of that
+   statement lets through (D2); `reset!` keeps its bindings, a value bound through the accessor
+   with `sqlite3_bind_int64` reading back after the reset and a second step (D3).
+7. **The accessor's comment** said the no-op "answers no value"; it answers one unspecified value.
+   Comment only.
+8. **`test-statement-block`'s comments claimed checks its rows didn't make.** Each blocking row now
+   asserts the counts, once everything is closed (F8): 5 of 6 fail against a leak, where one did.
+9. **This log:** the mutants above, N02 relabelled (its table row and its survivor entry), and
+   the first 80 rerun against the tree as it stands. Their failed counts moved up where the new
+   rows also catch them (S07 23, TS2 64, X02 3, X05 57, X07 5, X08 7, X09 22, X10 3, X16 4, X23 2;
+   E03 now fails all 6 rows of the block suite); the rest are unchanged; the same three survived,
+   B01, I07 and N02. D03 and S05 were adapted to pass the SQL as a third argument. X03 hung again
+   and the timeout killed it (above). The red run of M1's `connection.sls` under the real
+   `statement.sls` (R00) is now 42 passed, 33 failed of 75. N02's numbers, rerun here: 536,870,914
+   characters, 2³¹−1 bytes, the tree answers `(sql-too-long 2147483647)` in 8.5 s, N02 answers
+   `toobig` from SQLite in 74.8 s.
 
 ## Part B: the public names and their docs
 

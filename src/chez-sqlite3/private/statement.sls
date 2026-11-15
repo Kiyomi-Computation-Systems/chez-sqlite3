@@ -139,10 +139,10 @@
   ;; --- the one accessor of a statement's handle -------------------------------------
 
   ;; call-with-statement-handle : Symbol Any Symbol
-  ;;   (Positive-Integer Positive-Integer -> (Values (U Live-State #f) A ...)) -> A ...
+  ;;   (Positive-Integer Positive-Integer String -> (Values (U Live-State #f) A ...)) -> A ...
   ;; Live-State = (U 'ready 'row 'done 'failed)
   ;; The answers PROC gives after its first, PROC given the connection's
-  ;; handle and the statement's, once ST is checked for VERB, one of
+  ;; handle, the statement's, and the statement's SQL, once ST is checked for VERB, one of
   ;; statement-verbs, by decision 3, in order:
   ;;   - a statement, else an assertion violation from WHO, not-a-statement;
   ;;   - on its connection's owning thread, else &sqlite-wrong-thread from WHO;
@@ -152,8 +152,8 @@
   ;;     assertion violation from WHO, not-allowed-in-state, naming the state.
   ;; For finalize-statement!, which statement-verb-check allows in every
   ;; state and makes a no-op once finalized, the third check is none: a
-  ;; finalized statement, or one whose connection is closed, answers no
-  ;; value, and PROC never runs. A WHO that is no symbol and a VERB that is
+  ;; finalized statement, or one whose connection is closed, answers one
+  ;; unspecified value, and PROC never runs. A WHO that is no symbol and a VERB that is
   ;; none are assertion violations from call-with-statement-handle, and a
   ;; PROC that is no procedure one from WHO, before anything else.
   ;;
@@ -167,6 +167,10 @@
   ;; the section with ST's state unchanged and PROC's other answers dropped:
   ;; finalized among it, since only a finalize, clearing the handle, makes a
   ;; statement finalized. A refusal before PROC never changes the state.
+  ;;
+  ;; The SQL PROC is given is the copy made at prepare, which never changes:
+  ;; a failure PROC answers carries it, with no read of ST after the section,
+  ;; which a finalize by another engine could refuse (ADR-0013, amended).
   ;;
   ;; PROC runs inside the connection's call-with-open-handle, in its critical
   ;; section, with the third and fourth checks: no engine, interrupt or
@@ -230,7 +234,8 @@
           (lambda (connection)
             (let ((check (statement-verb-check verb (state-of st))))
               (cond ((eq? check 'allowed)
-                     (call-with-values (lambda () (proc connection (unchecked-statement-handle st)))
+                     (call-with-values (lambda () (proc connection (unchecked-statement-handle st)
+                                                      (unchecked-statement-sql st)))
                        (lambda answers (moved st answers))))
                     ((eq? check 'no-op) '(no-op))
                     ((eq? check 'closed) '(finalized))
@@ -288,7 +293,7 @@
   (define (finalized who st)
     (let ((outcome
            (call-with-statement-handle who st 'finalize-statement!
-             (lambda (connection handle)
+             (lambda (connection handle sql)
                (let ((outcome (finalize-handle! st connection)))
                  (untrack-statement! (unchecked-statement-database st) st)
                  (values #f outcome))))))
@@ -475,14 +480,14 @@
   ;; A fresh copy of the SQL ST was prepared from.
   (define (statement-sql st)
     (call-with-statement-handle 'statement-sql st 'statement-sql
-      (lambda (connection handle) (values #f #t)))
+      (lambda (connection handle sql) (values #f #t)))
     (string-copy (unchecked-statement-sql st)))
 
   ;; parameter-count : Statement -> Natural
   ;; ST's largest parameter index, sqlite3_bind_parameter_count's answer.
   (define (parameter-count st)
     (call-with-statement-handle 'parameter-count st 'parameter-count
-      (lambda (connection handle) (values #f (sqlite3-bind-parameter-count handle)))))
+      (lambda (connection handle sql) (values #f (sqlite3-bind-parameter-count handle)))))
 
   ;; column-count : Statement -> Natural
   ;; How many columns ST's rows have now, sqlite3_column_count's answer, read
@@ -490,7 +495,7 @@
   ;; at the next step (ADR-0014, decision 5).
   (define (column-count st)
     (call-with-statement-handle 'column-count st 'column-count
-      (lambda (connection handle) (values #f (sqlite3-column-count handle)))))
+      (lambda (connection handle sql) (values #f (sqlite3-column-count handle)))))
 
   ;; step! : Statement -> Boolean
   ;; #t when sqlite3_step has a row ready, the state row; #f when it has
@@ -500,13 +505,13 @@
   (define (step! st)
     (let ((outcome
            (call-with-statement-handle 'step! st 'step!
-             (lambda (connection handle)
+             (lambda (connection handle sql)
                (let* ((answer (sqlite3-step handle))
                       (state (state-after-step answer)))
                  (values state
                          (if (eq? state 'failed)
                              (list 'failed answer (message-of connection answer)
-                                   (string-copy (unchecked-statement-sql st)))
+                                   (string-copy sql))
                              state)))))))
       (cond ((eq? outcome 'row) #t)
             ((eq? outcome 'done) #f)
@@ -520,13 +525,12 @@
   (define (reset! st)
     (let ((outcome
            (call-with-statement-handle 'reset! st 'reset!
-             (lambda (connection handle)
+             (lambda (connection handle sql)
                (let* ((state (unchecked-statement-state st))
                       (answer (sqlite3-reset handle))
                       (failure (finish-failure state answer))
                       (message (and failure (message-of connection answer))))
                  (values 'ready
                          (and failure
-                              (list 'failed failure message
-                                    (string-copy (unchecked-statement-sql st))))))))))
+                              (list 'failed failure message (string-copy sql)))))))))
       (when outcome (raise-failure 'reset! outcome)))))

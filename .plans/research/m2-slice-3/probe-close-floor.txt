@@ -1,0 +1,5 @@
+libversion: "3.45.1"
+A. a backup reads from the connection, no statement: close, statements found, backup_finish, close again, the other's close: (5 0 0 0 0)
+B. insert ... returning stepped once under a read, and a backup from it: backup made?, finalize, statements found, close, backup_finish, close again, rows after: (backup 5 0 5 0 0 1)
+C. two inserts stepped once under a read, finalized oldest-first: steps, first finalize, second, rows after: (100 100 0 5 1)
+C. two inserts stepped once under a read, finalized newest-first: steps, first finalize, second, rows after: (100 100 0 5 1)

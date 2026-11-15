@@ -147,8 +147,9 @@ floor, 3.45.1, with the same results ([research/m2-plan/](../research/m2-plan/),
   by pragma:
   - a reset or finalize, under the other's read, of an `insert … returning` stepped once
     (measured);
-  - a step, under the other's read, of a plain `insert`, which commits inside its step: expected
-    to block the same way, not yet measured; M2 slice 3 measures it;
+  - a step, under the other's read, of a plain `insert`, which commits inside its step. M2 slice
+    3 measured it blocking the same way: 1502 ms, then BUSY
+    ([research/m2-slice-3/](../research/m2-slice-3/));
   - a prepare, under the other's `begin exclusive`, **on a fresh connection only:** one that had
     read the schema first answered 0 at once, and a fresh one waited 1502 ms and answered 5
     (measured).

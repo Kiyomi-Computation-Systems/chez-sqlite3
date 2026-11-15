@@ -9,6 +9,10 @@
   finalize failure, with the connection left open and counted when the close fails (R1).
   Amended 2026-11-14 in M2 slice 1, by the maintainer's choice to match SQLite: decision 4's
   whitespace ([amendment](#amendment-2026-11-14-the-tail-scans-whitespace-m2-slice-1)).
+  Amended 2026-11-15 in M2 slice 3, and accepted by the maintainer that day: what it measured and
+  built, and the maintainer's choice that
+  a column read's out-of-memory moves a statement to `failed`
+  ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -46,7 +50,7 @@
   - **preparing a PRAGMA changes the connection,** unstepped: `cache_size`, `encoding` and
     `case_sensitive_like` each changed;
   - a statement's column count changes when another connection adds or drops a column, read
-    after its next step;
+    after its next step. So does an `ALTER TABLE` on its own connection (M2 slice 3's amendment);
   - with two statements stepped once under a reader, only the last finalize commits: the first
     answered 0 and the second 5;
   - SQLite's whitespace is exactly space, `\t`, `\n`, `\f` and `\r`, and `/*` as the SQL's last
@@ -221,7 +225,8 @@
   loop without finalizing grows, and its count with it.
 - **A blocking call holds its own thread's interrupts:** while a step, prepare, reset or finalize
   waits, a keyboard interrupt, a timer or an engine's expiry waits too. Other threads run and
-  collect. M3's interrupt is how another thread stops a long one.
+  collect. M3's interrupt is how another thread stops a long computation, but not a wait in the
+  busy handler, which ends only at its timeout (M2 slice 3's amendment).
 - **`call-with-statement` is expected not to survive an engine's preemption,** as ADR-0012's
   amendment measured for `call-with-database`. M2 slice 3 measures it.
 - **A refused SQL's first statement has been prepared,** so its prepare-time effects stand:
@@ -263,3 +268,73 @@ complement, as R2 asked, with no exceptions."
 - **The scan starts on a fresh token:** SQLite's tail begins after the first statement's
   semicolon (measured: 9 for `select 1; select 2`, 15 for `select 1 -- c\n; x`), as SQLite's own
   prepare of the tail, the scan's oracle, would.
+
+## Amendment, 2026-11-15: what M2 slice 3 measured and built
+
+Accepted by the maintainer on 2026-11-15 ("Accept it"), proposed in M2 slice 3, from its build, its
+Opus review and findings of M3's research. Decision 5's new way into `failed` is the maintainer's
+own choice, of the same day. Measured on Guix's 3.53.1 and at the floor, 3.45.1, alike
+([research/m2-slice-3/](../research/m2-slice-3/)).
+
+- **A column read that runs out of memory moves its statement to `failed`** (the maintainer,
+  2026-11-15: "Move it to `failed`"). After a NOMEM column read, SQLite keeps the code on the
+  statement: the column then reads as NULL, and the next reset or finalize answers it again
+  (measured by M2 slice 4's research). So decision 5's table gains a way into `failed`: a step
+  answering an error code, or a column read answering `SQLITE_NOMEM`. The error is raised once.
+  Reads and `step!` are refused until `reset!`, and reset and finalize repeat the code without
+  raising it again, as for a failed step. Slice 4 builds the read.
+  - **Inside a transaction, that reset or finalize rolls the transaction back,** for a statement
+    that reads a table. It answers 7 again, and autocommit becomes 1. A statement that reads no
+    table keeps the transaction. Measured by the M1 session, and reproduced on both libraries
+    ([colnomem-transaction.c](../research/m2-slice-3/colnomem-transaction.c),
+    [colnomem-no-table.c](../research/m2-slice-3/colnomem-no-table.c)). A step that fails with
+    NOMEM ends the transaction at the step instead, unless the statement has a statement journal,
+    which undoes the statement alone. So only `sqlite3_get_autocommit` tells (M3's research).
+  - **Asked again with that, the maintainer kept the choice** (2026-11-15: "Keep it: no second
+    raise"). The read's NOMEM is raised once. `docs/reference.md` says that an out-of-memory error
+    inside a transaction may end it, at the step or, after a read, at the next reset or finalize.
+    M3's transactions read autocommit to tell.
+- **The one accessor of a statement's handle is `call-with-statement-handle`** (decision 2):
+  - it makes decision 3's checks and the state check, then runs its procedure inside the
+    connection's `call-with-open-handle`, so in one critical section;
+  - the procedure gets the connection's handle, the statement's handle and the statement's SQL,
+    and answers data;
+  - **its first answer is the state the call leaves,** `#f` for unchanged, set in the same
+    section. The accessor is the one place a state is set, and the handle alone says a
+    statement is finalized.
+- **The connection's live statements** are a table keyed by the statement record, oldest first.
+  Each entry holds a procedure that finalizes the statement inside the close's section and
+  answers data. `connection.sls` can't name the statement record, since `statement.sls` imports
+  it.
+- **Decision 4's byte length counts the NUL.** nByte is the SQL's UTF-8 length plus one, which
+  SQLite's documentation recommends. Without it, SQLite copies the SQL at every prepare (slice 2's
+  review). SQL whose nByte would pass 2³¹−1 is refused before anything is allocated, since nByte
+  is a C `int` (ADR-0011's slice 2 amendment).
+- **Measured:**
+  - **the step's block,** expected in ADR-0011's amendment: a plain `insert` under another
+    connection's read, with `busy_timeout = 1500`, waited 1502 ms and answered BUSY. So did the
+    other three calls. Bound `__collect_safe`, each let another thread's collection end in 0 to
+    1 ms, against 1402 ms bound plain;
+  - **the close can't fail through M2's own surface once its statements are finalized.** A backup
+    reading from the connection, or a BLOB handle, is what else would make it, and M2 binds
+    neither. So `test-statement` binds `sqlite3_backup_init` itself, as `test-connection` does,
+    and holds the close's own failure on a real library: raised in place of a finalize failure,
+    with the connection left open and counted;
+  - **SQLite's −1 offset** comes for an error at the end of the SQL, and also for a missing table, a
+    missing collation and a busy prepare, mid-statement or not. It still gives `#f`
+    (ADR-0013, amended);
+  - **`call-with-statement` doesn't survive an engine's preemption,** as the consequences
+    expected. An expiry inside its procedure finalizes the statement, and a step after it raises
+    `&sqlite-closed`, at every fuel from 1 to 60. Prepare, step, reset and finalize complete under
+    an engine at every fuel from 1 to 60.
+- **From M3's research,** found by the M1 session on 2026-11-15 and reproduced through this
+  slice's library:
+  - **an `ALTER TABLE` on the statement's own connection** changes its column count at its next
+    step too: a held `select *` read 2, then 2 after the ALTER, then 3 after its step;
+  - **COMMIT answers BUSY while the connection's own statement is mid-row,** "cannot commit
+    transaction - SQL statements in progress", and no wait fixes it. `docs/reference.md` says to
+    reset or finalize it first;
+  - **an interrupt doesn't end a wait in the busy handler.** `begin immediate`, interrupted at
+    100 ms in a 600 ms timeout, waited 601 ms and answered BUSY, where a long computation
+    stopped at 100 ms. So the consequences' "M3's interrupt is how another thread stops a long
+    one" holds for a long computation only.

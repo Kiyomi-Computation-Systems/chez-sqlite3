@@ -1,0 +1,7 @@
+library 3.45.1
+reset case: step 100, autocommit 0
+  column_text16 NULL, extended 7
+  reset 7, autocommit 1, marker rows 0
+finalize case: step 100, autocommit 0
+  column_text16 NULL, extended 7
+  finalize 7, autocommit 1, marker rows 0

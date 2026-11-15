@@ -19,8 +19,8 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2 slice 2, the bindings, is built,** as PR #17 on `m2-slice-2-bindings`. Next is slice
-  3, statements, on a branch stacked on it, then slice 4, values, stacked on slice 3's
+- **Now: M2 slices 2 and 3 are built,** as PR #17 on `m2-slice-2-bindings` and PR #18 on
+  `m2-slice-3-statements`, which is stacked on it. Next is slice 4, values, stacked on slice 3's
   ([the M2 plan](2026-11-14-m2-plan.md), §5). The maintainer asked for that order on 2026-11-14:
   each slice opened as a PR, and the next begun on top of it.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
@@ -52,6 +52,68 @@ newest first.
   split of `test-library-loading` (§7).
 
 ## Close-outs
+
+### 2026-11-15 — M2 slice 3: statements (PR #18, stacked on #17)
+
+- **Built:**
+  - `(chez-sqlite3 private statement)`: a statement is an integer handle in an opaque, sealed
+    record. Its verbs are `prepare-statement`, `finalize-statement!`, `call-with-statement`,
+    `step!`, `reset!`, `statement-sql`, `parameter-count` and `column-count`;
+  - each verb makes decision 3's checks, then the state's, in one critical section, and raises
+    after it;
+  - `call-with-statement-handle`, the one accessor of a statement's handle, for slice 4. Its
+    procedure gets both handles and the SQL, and may move the state;
+  - the connection's live statements, and the close that finalizes them oldest first, then
+    raises the first failure with the connection closed (R1);
+  - the public names, the three subtypes' predicates, and their docs;
+  - `c-string->string` keeps a leading U+FEFF, for a trigger's message.
+- **Measured,** on 3.53.1 and 3.45.1 alike ([research/m2-slice-3/](research/m2-slice-3/)):
+  - the four blocking calls each wait 1502 ms, then answer BUSY. Bound `__collect_safe`, another
+    thread's collection ends in 0 to 1 ms, against 1402 ms;
+  - nothing in M2's own surface can make the close fail once its statements are finalized;
+  - SQLite's −1 offset also comes for a missing table, a missing collation and a busy prepare;
+  - `call-with-statement` doesn't survive an engine's preemption;
+  - the tail scan agrees with SQLite's own prepare on 20,602 inputs.
+- **From M3's research,** found by the M1 session and reproduced here:
+  - an interrupt doesn't end a lock wait;
+  - COMMIT answers BUSY while the connection's own statement is mid-row;
+  - an `ALTER TABLE` on the statement's own connection changes its column count at its next step;
+  - inside a transaction, a NOMEM read rolls the transaction back at the next reset or finalize.
+- **Decided by the maintainer** (2026-11-15):
+  - a column read's NOMEM moves the statement to `failed` ("Move it to `failed`");
+  - asked again with the rollback measured, the choice stands ("Keep it: no second raise");
+  - ADR-0014's slice 3 amendment accepted ("Accept it").
+- **Watched failing:** each suite red first. Part A and the review's fixes: 92 mutations, 88
+  caught, 4 argued. Part B: 37, all caught ([the log](m2-slice-3-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, 3 majors and 5 minors, each reproduced, all fixed.
+  - **The majors:**
+    - decision 10's "change together" was held by no row: with the state set after its section,
+      two engines ran a done insert twice;
+    - nothing held the record's opacity;
+    - the accessor gave its procedure no SQL for slice 4's errors.
+  - **The minors:**
+    - N02's survivor wasn't equivalent;
+    - the tail oracle re-decoded the tail;
+    - a docs fact;
+    - two comments that claimed checks the rows didn't make.
+- **CI:** passed in all five jobs on `1eff5be`, before the review's fixes; `memory` took 20m32s.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Part A: the library and its suites | Opus | about 593k | 174 | 53 min |
+  | Part B: the public names and docs | Sonnet | about 138k | 56 | 14 min |
+  | Adversarial review | Opus | about 308k | 80 | 19 min |
+  | The review's fixes | Sonnet | about 210k | 83 | 28 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A rule two engines can break needs a two-engine row. Every "change together" passed the
+    suites until the sweeps came.
+  - A flag set by a blocked thread can't show that its call returned before a collection.
+  - An error message can be the user's own text.
+  - An interrupt doesn't end a wait in the busy handler.
+  - Another session's research, checked before it was used, found two record gaps and a design
+    question the slice had missed.
 
 ### 2026-11-15 — M2 slice 2: the bindings (PR #17)
 

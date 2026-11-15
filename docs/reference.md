@@ -298,7 +298,7 @@ SQL and no place.
 reset! : Statement -> Void
 ```
 
-Rewinds the statement, ready again, as it was before its first step. A
+Rewinds the statement, ready again, with the values bound to it kept. A
 statement that is done or failed needs this before it steps again. It raises
 a condition that `sqlite-error?` holds when the reset fails on its own, as
 a finalize can. The statement is ready all the same. A step that failed
@@ -311,7 +311,9 @@ column-count : Statement -> Natural
 ```
 
 How many columns the statement's rows have: 0 for a statement that gives
-none, such as a `create table`.
+none, such as a `create table`. It is read afresh at each call. After an
+`alter table` on any connection, its own included, a held `select *` still
+answers the old count until its next `step!`, then the new one.
 
 ## The library
 
@@ -490,7 +492,8 @@ sqlite-error-offset : SqliteError -> (U Natural #f)
 Where in the SQL SQLite found the error, as a character index into
 `sqlite-error-sql`, or `#f` when it gives none. It gives none for an error at
 the end of the SQL, nor for some errors in the middle, such as a missing
-table. Only a failed `prepare-statement` has one.
+table. Only a failed prepare has one, `prepare-statement`'s or
+`call-with-statement`'s; a failed step, reset or finalize has none.
 
 ### `sqlite-library-unavailable?`
 
@@ -592,7 +595,9 @@ sqlite-busy? : Any -> Boolean
 ```
 
 Whether the value is an `sqlite-error?` whose primary code is `busy` or
-`locked`: another connection holds what this one needs.
+`locked`: another connection holds what this one needs. A `commit` refused
+while the connection's own statement is mid-row is `busy` too, and no wait
+fixes it: `reset!` or finalize that statement first.
 
 ### `sqlite-constraint?`
 

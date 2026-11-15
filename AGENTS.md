@@ -139,8 +139,10 @@
   Check that each value fits its C type before the section (ADR-0011,
   amended).
 * Chez's `utf8->string`, and a UTF-8 transcoder, drop one leading U+FEFF.
-  Decode text a user controls with `strict-utf8->string`, which keeps it,
-  never `utf8->string` or `c-string->string` (`.plans/traps.md`).
+  Decode a column's value or name with `strict-utf8->string`, which keeps
+  it. `c-string->string` keeps it too but replaces invalid bytes, so it
+  reads SQLite's own text and messages, never a value or a name. Never
+  `utf8->string` (`.plans/traps.md`).
 
 ## Closing ritual
 

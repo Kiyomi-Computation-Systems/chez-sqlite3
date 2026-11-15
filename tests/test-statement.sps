@@ -32,6 +32,12 @@
 ;;;   call-with-statement
 ;;;                  as call-with-database: return, raise, escape, re-entry,
 ;;;                  a warning, and a finalize that fails after each
+;;;   the docs       what docs/reference.md says of a statement, each by a row: a
+;;;                  call-with-statement's prepare carries an offset; column-count
+;;;                  moves at the next step after an alter table; a commit
+;;;                  refused mid-row is busy; reset! keeps its bindings
+;;;   the accessor   the record opaque; the SQL handed to the procedure; a
+;;;                  message's leading U+FEFF kept
 ;;;   after the section
 ;;;                  every verb's raises, read by a with-exception-handler
 ;;;                  handler at depth 1, against a no-raise sentinel
@@ -41,8 +47,10 @@
 ;;;                  call-with-statement survives an engine's preemption
 ;;;
 ;;; The four __collect_safe calls are held by behaviour in
-;;; tests/test-statement-block.sps, and the tail scan against SQLite's own
-;;; prepare in tests/test-statement-tail.sps.
+;;; tests/test-statement-block.sps, the tail scan against SQLite's own
+;;; prepare in tests/test-statement-tail.sps, and decision 10's "change
+;;; together", an engine's expiry between a verb's section and its tracking or
+;;; state, in tests/test-statement-sections.sps.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-connection.sps reaches them: a refused library fails the rows
@@ -126,6 +134,7 @@
 (define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
 (define call-with-out-pointer (reach '(chez-sqlite3 private native) 'call-with-out-pointer))
 (define sqlite3-column-int64 (reach '(chez-sqlite3 private native) 'sqlite3-column-int64))
+(define sqlite3-bind-int64 (reach '(chez-sqlite3 private native) 'sqlite3-bind-int64))
 (define sqlite3-errmsg (reach '(chez-sqlite3 private native) 'sqlite3-errmsg))
 (define c-string->string (reach '(chez-sqlite3 private native) 'c-string->string))
 (define statement-verbs (guard (e (#t '())) (eval 'statement-verbs (environment '(chez-sqlite3 private statement-state)))))
@@ -293,7 +302,7 @@
 ;; call-with-statement-handle, as slice 4's column-value will.
 (define (column-int st i)
   (call-with-statement-handle 'test-statement st 'column-value
-    (lambda (connection handle) (values #f (sqlite3-column-int64 handle i)))))
+    (lambda (connection handle sql) (values #f (sqlite3-column-int64 handle i)))))
 
 ;; query-int : Database String -> Integer
 ;; The first column of SQL's first row.
@@ -475,6 +484,42 @@
        (append (list live finalized)
                (map (lambda (x) (if (statement? x) 'statement 'not))
                     (list 'x "select 1" 42 db (list st))))))))
+
+;; A record that record-rtd opens can be rebuilt from its type, and one that is
+;; not sealed extended, so a caller could make a statement holding any handle.
+;; Opaque, record-rtd raises instead; sealed cannot be held from here, since an
+;; opaque record's type is out of reach, so nothing can name it as a parent
+;; (the mutation log argues it).
+(test-equal "a statement is opaque: record-rtd refuses it, from record-rtd, and record? says it is no record"
+  '((assertion-violation record-rtd) #f)
+  (with-memory-db
+   (lambda (db)
+     (let* ((st (prepare-statement db "select 1"))
+            (r (guard (e ((and (assertion-violation? e) (who-condition? e))
+                          (list 'assertion-violation (condition-who e)))
+                         (#t (list 'other-raise (describe e))))
+                 (list 'no-raise (record-type-name (record-rtd st)))))
+            (is-record (record? st)))
+       (finalize-statement! st)
+       (list r is-record)))))
+
+(test-equal "call-with-statement-handle gives its procedure the statement's SQL as a third argument: the copy made at prepare, equal to the SQL prepared and not the caller's string, ready and in a row alike"
+  (list "select 1 /* sql */" #f "select 1 /* sql */" #f)
+  (with-memory-db
+   (lambda (db)
+     (let* ((given (string-copy "select 1 /* sql */"))
+            (st (prepare-statement db given))
+            (a (call-with-statement-handle 'test-statement st 'column-count
+                 (lambda (c h sql) (values #f sql))))
+            (b (call-with-statement-handle 'test-statement st 'column-count
+                 (lambda (c h sql) (values #f (eq? sql given)))))
+            (stepped (step! st))
+            (c (call-with-statement-handle 'test-statement st 'column-count
+                 (lambda (c h sql) (values #f sql))))
+            (d (call-with-statement-handle 'test-statement st 'column-count
+                 (lambda (c h sql) (values #f (eq? sql given))))))
+       (finalize-statement! st)
+       (list a b c d)))))
 
 (test-equal "prepare-statement: a statement, ready, tracked by its connection, counted; its SQL, no parameter, one column; finalized, it is untracked and counted down"
   (list 'statement 'ready 'tracked (with-statements 1) "select 1" 0 1
@@ -801,7 +846,7 @@
                      (attempt
                       (lambda ()
                         (call-with-statement-handle 'test-statement st verb
-                          (lambda (connection handle)
+                          (lambda (connection handle sql)
                             (values #f
                                     (if (and (integer? connection) (positive? connection)
                                              (integer? handle) (positive? handle)
@@ -839,7 +884,7 @@
               (list state r after)))))
        states))
 
-(test-equal "call-with-statement-handle, for each of the 12 verbs in each of the 5 states: its procedure runs, given two handles, where decision 5 allows the verb; elsewhere it is refused, naming the state, which stays; finalized is &sqlite-closed, and nothing for finalize-statement!"
+(test-equal "call-with-statement-handle, for each of the 12 verbs in each of the 5 states: its procedure runs, given two handles and the SQL, where decision 5 allows the verb; elsewhere it is refused, naming the state, which stays; finalized is &sqlite-closed, and nothing for finalize-statement!"
   (map (lambda (verb)
          (list verb
                (map (lambda (state)
@@ -862,10 +907,10 @@
         (list 'raised (refused 'call-with-statement-handle 'not-a-statement-verb 'no-such-verb))
         (list 'raised (refused 'test-statement 'not-a-procedure 'x))
         (list 'raised (refused 'test-statement 'not-a-statement 'x)))
-  (list (attempt (lambda () (call-with-statement-handle "who" 'x 'step! (lambda (c h) 'ran))))
-        (attempt (lambda () (call-with-statement-handle 'test-statement 'x 'no-such-verb (lambda (c h) 'ran))))
+  (list (attempt (lambda () (call-with-statement-handle "who" 'x 'step! (lambda (c h sql) 'ran))))
+        (attempt (lambda () (call-with-statement-handle 'test-statement 'x 'no-such-verb (lambda (c h sql) 'ran))))
         (attempt (lambda () (call-with-statement-handle 'test-statement 'x 'step! 'x)))
-        (attempt (lambda () (call-with-statement-handle 'test-statement 'x 'step! (lambda (c h) 'ran))))))
+        (attempt (lambda () (call-with-statement-handle 'test-statement 'x 'step! (lambda (c h sql) 'ran))))))
 
 (test-equal "call-with-statement-handle answers every value its procedure answers after its first, the state, #f to leave it"
   '(1 2 3)
@@ -873,7 +918,7 @@
    (lambda (db)
      (let ((st (prepare-statement db "select 1")))
        (call-with-values
-        (lambda () (call-with-statement-handle 'test-statement st 'step! (lambda (c h) (values #f 1 2 3))))
+        (lambda () (call-with-statement-handle 'test-statement st 'step! (lambda (c h sql) (values #f 1 2 3))))
         (lambda answers (finalize-statement! st) answers))))))
 
 ;; moved-to : Symbol Any -> Any
@@ -885,7 +930,7 @@
      (let* ((st (prepare-statement db "select 1"))
             (r (no-value (attempt (lambda ()
                                     (call-with-statement-handle 'test-statement st verb
-                                      (lambda (c h) (values new 'answer)))))))
+                                      (lambda (c h sql) (values new 'answer)))))))
             (after (statement-state st)))
        (finalize-statement! st)
        (list r after)))))
@@ -907,7 +952,7 @@
           (lambda (db)
             (let* ((st (prepare-statement db "select 1"))
                    (r (attempt (lambda () (call-with-statement-handle 'test-statement st 'column-count
-                                            (lambda (c h) (values))))))
+                                            (lambda (c h sql) (values))))))
                    (after (statement-state st)))
              (finalize-statement! st)
              (list r after))))
@@ -915,7 +960,7 @@
           (lambda (db)
             (let* ((st (prepare-statement db "select 1"))
                    (r (handler-depth (lambda () (call-with-statement-handle 'test-statement st 'column-count
-                                                  (lambda (c h) (values 'bogus 'answer)))))))
+                                                  (lambda (c h sql) (values 'bogus 'answer)))))))
              (finalize-statement! st)
              r))))))
 
@@ -925,7 +970,7 @@
    (lambda (db)
      (let* ((st (prepare-statement db "select 1"))
             (s (step! st))
-            (m (call-with-statement-handle 'test-statement st 'column-value (lambda (c h) (values 'failed 'read))))
+            (m (call-with-statement-handle 'test-statement st 'column-value (lambda (c h sql) (values 'failed 'read))))
             (state (statement-state st))
             (a (attempt (lambda () (step! st))))
             (r (no-value (reset! st)))
@@ -970,6 +1015,31 @@
             (c (attempt (lambda () (step! st)))))
        (finalize-statement! st)
        (list a sa b r sr c (query-int db "select count(*) from t"))))))
+
+;; A trigger's RAISE(ABORT, text) reaches the message as the text, whose own
+;; leading U+FEFF the lenient decoding of Chez's utf8->string would drop
+;; (found by the review, build/m2s3-verify/feff-errmsg.sps; native's
+;; c-string->string keeps it). The text is the SQL's own, so the row asserts
+;; it whole, with a second message that has no U+FEFF as the control.
+(test-equal "a failed step's message keeps a leading U+FEFF of the trigger's own text, and a text without one is unchanged"
+  (list (list 'sqlite-error 'constraint 'constraint-trigger "\xFEFF;boom")
+        (list 'sqlite-error 'constraint 'constraint-trigger "boom"))
+  (with-memory-db
+   (lambda (db)
+     (let* ((made (begin (exec! db "create table t (x)")
+                         (exec! db "create trigger tr before insert on t when new.x = 1 begin select raise(abort, '\xFEFF;boom'); end")
+                         (exec! db "create trigger tq before insert on t when new.x = 2 begin select raise(abort, 'boom'); end")))
+            (message-of-insert
+             (lambda (sql)
+               (guard (e ((sqlite-error? e)
+                          (list 'sqlite-error (sqlite-error-code e) (sqlite-error-extended-code e)
+                                (sqlite-error-message e)))
+                         (#t (list 'other (describe e))))
+                 (call-with-statement db sql (lambda (st) (step! st)))
+                 'no-raise)))
+            (a (message-of-insert "insert into t values (1)"))
+            (b (message-of-insert "insert into t values (2)")))
+       (list a b)))))
 
 ;; Measured (build/m2s3/probe-codes.sps): on a connection opened read-only, an
 ;; insert prepares, and its step answers 8, SQLITE_READONLY, with no extension.
@@ -1535,10 +1605,10 @@
      (let* ((st (prepare-statement db "select 1"))
             (planted (condition (make-assertion-violation) (make-who-condition 'test-proc)
                                 (make-message-condition "planted") (make-irritants-condition '(planted))))
-            (a (handler-depth (lambda () (call-with-statement-handle 'test-statement st 'step! (lambda (c h) (raise planted))))))
+            (a (handler-depth (lambda () (call-with-statement-handle 'test-statement st 'step! (lambda (c h sql) (raise planted))))))
             (b (guard (e (#t (if (eq? e planted) 'the-same-object (list 'another e))))
-                 (call-with-statement-handle 'test-statement st 'step! (lambda (c h) (raise planted)))))
-            (c (handler-depth (lambda () (call-with-statement-handle 'test-statement st 'column-value (lambda (c h) (values #f 'ran)))))))
+                 (call-with-statement-handle 'test-statement st 'step! (lambda (c h sql) (raise planted)))))
+            (c (handler-depth (lambda () (call-with-statement-handle 'test-statement st 'column-value (lambda (c h sql) (values #f 'ran)))))))
        (finalize-statement! st)
        (list a b c)))))
 
@@ -1636,7 +1706,7 @@
                (guard (c (#t (what-raised c)))
                  (if (eq? a-kind 'accessor)
                      (call-with-statement-handle 'test-statement st 'step!
-                       (lambda (connection handle) (values #f (if b-done 'ran-after-b 'ran))))
+                       (lambda (connection handle sql) (values #f (if b-done 'ran-after-b 'ran))))
                      (step! st))))))
          (b (make-engine (lambda ()
                            (if (eq? b-kind 'finalize) (finalize-statement! st) (close-database! db))
@@ -1713,6 +1783,92 @@
    (lambda (db)
      (list (map (lambda (fuel) (list fuel (cadr (abandoned-at-first-expiry db fuel)))) (fuels 400))
            (native-counts)))))
+
+;; --- what docs/reference.md says, each held by a row ------------------------------------
+
+;; Measured on 3.53.1 and 3.45.1 alike (build/m2s3-verify/m3-items.sps and
+;; build/m2s3-fix/probe-docs.sps): a held select * reads its column count
+;; again at each call, and SQLite re-prepares it at its next step.
+(test-equal "column-count changes at the statement's next step after an alter table, on its own connection or another: a held select * reads 2, 2, then #t and 3, the alter made on its own connection; 1, 1, then #t and 2 when another connection made it"
+  (list (list 2 2 #t 3) (list 1 1 #t 2))
+  (list
+   (with-memory-db
+    (lambda (db)
+      (exec! db "create table t (x, y)")
+      (exec! db "insert into t values (1, 2)")
+      (let* ((st (prepare-statement db "select * from t"))
+             (before (column-count st))
+             (altered (exec! db "alter table t add column z"))
+             (after-alter (column-count st))
+             (stepped (step! st))
+             (after-step (column-count st)))
+        (finalize-statement! st)
+        (list before after-alter stepped after-step))))
+   (with-file-db
+    (lambda (path db)
+      (let ((other (open-database path)))
+        (dynamic-wind
+          (lambda () #f)
+          (lambda ()
+            (let* ((st (prepare-statement db "select * from t"))
+                   (before (column-count st))
+                   (altered (exec! other "alter table t add column y"))
+                   (after-alter (column-count st))
+                   (stepped (step! st))
+                   (after-step (column-count st)))
+              (finalize-statement! st)
+              (list before after-alter stepped after-step)))
+          (lambda () (undo! '() (list other)))))))))
+
+;; Measured on both libraries (build/m2s3-verify/m3-items.sps): begin, an
+;; insert ... returning stepped once, then commit answers busy, "cannot commit
+;; transaction - SQL statements in progress": no wait fixes it, and a reset
+;; of the insert lets the commit through.
+(test-equal "a commit refused while the connection's own statement is mid-row raises &sqlite-busy from step!, the statement failed; after a reset! of the insert, the same commit, reset, steps to done, and the table holds the insert's two rows"
+  (list #t (list 'raised (sqlite-failure 'step! 'busy 'busy "commit" #f 'busy))
+        'failed #f 'done 2)
+  (with-memory-db
+   (lambda (db)
+     (exec! db "create table t (x)")
+     (exec! db "begin")
+     (let* ((ins (prepare-statement db "insert into t values (1), (2) returning x"))
+            (row (step! ins))
+            (commit (prepare-statement db "commit"))
+            (refused (attempt (lambda () (step! commit))))
+            (state (statement-state commit))
+            (rewound (begin (reset! ins) (finalize-statement! ins) (reset! commit)))
+            (again (step! commit))
+            (after (statement-state commit)))
+       (finalize-statement! commit)
+       (list row refused state again after (query-int db "select count(*) from t"))))))
+
+;; reset! rewinds the statement and keeps its bindings (docs/reference.md): a
+;; value bound by sqlite3_bind_int64 through the accessor, which slice 4's
+;; bind! will be, reads back after a reset and a second step.
+(test-equal "reset! keeps the bindings: select ?1 bound to 7 reads 7, is reset, and reads 7 again"
+  '(7 7)
+  (with-memory-db
+   (lambda (db)
+     (let* ((st (prepare-statement db "select ?1"))
+            (bound (call-with-statement-handle 'test-statement st 'bind!
+                     (lambda (c h sql) (values #f (sqlite3-bind-int64 h 1 7)))))
+            (stepped (step! st))
+            (first (column-int st 0))
+            (rewound (reset! st))
+            (stepped-again (step! st))
+            (second (column-int st 0)))
+       (finalize-statement! st)
+       (list first second)))))
+
+;; call-with-statement's prepare carries an offset too, a character index
+;; (docs/reference.md): "select 1, nosuchcol" fails at 10.
+(test-equal "call-with-statement's failed prepare carries the SQL and the offset, as prepare-statement's does: 10 for select 1, nosuchcol"
+  (list (list 'raised (sqlite-failure 'call-with-statement 'error 'error "select 1, nosuchcol" 10 'no-subtype))
+        (list 'raised (sqlite-failure 'prepare-statement 'error 'error "select 1, nosuchcol" 10 'no-subtype)))
+  (with-memory-db
+   (lambda (db)
+     (list (attempt (lambda () (call-with-statement db "select 1, nosuchcol" (lambda (st) 'ran))))
+           (attempt (lambda () (prepare-statement db "select 1, nosuchcol")))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

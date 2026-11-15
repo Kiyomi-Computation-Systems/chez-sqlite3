@@ -70,10 +70,14 @@
 
 ;; --- SQLite's answer --------------------------------------------------------------------
 
-;; sqlite-prepare : Database String -> (List Integer Boolean Natural)
-;; SQL prepared alone by SQLite, with its byte length and NUL: the code, whether
-;; a statement came back (finalized at once), and the tail's byte offset.
-(define (sqlite-prepare db sql)
+;; sqlite-prepare : Database String Natural -> (List Integer Boolean Natural)
+;; SQL prepared by SQLite from its byte K, with the bytes after it and the NUL
+;; as nByte: the code, whether a statement came back (finalized at once), and
+;; the tail's byte offset from the start of SQL. K is 0 for the SQL itself,
+;; and a tail's offset for the tail, prepared in place: SQLite reads its own
+;; bytes at their own address, never a decoded and re-encoded copy, which
+;; would drop a leading U+FEFF.
+(define (sqlite-prepare db sql k)
   (call-with-open-handle 'test-statement-tail db
     (lambda (h)
       (call-with-c-string 'test-statement-tail sql
@@ -84,7 +88,8 @@
                             (let-values (((rc statement)
                                           (call-with-out-pointer 'test-statement-tail
                                             (lambda (slot)
-                                              (sqlite3-prepare-v3 h text (+ (bytevector-length (string->utf8 sql)) 1)
+                                              (sqlite3-prepare-v3 h (+ text k)
+                                                                  (- (+ (bytevector-length (string->utf8 sql)) 1) k)
                                                                   0 slot tail-slot)))))
                               (unless (eqv? statement 0) (sqlite3-finalize statement))
                               (cons rc (not (eqv? statement 0))))))))
@@ -95,14 +100,10 @@
 ;; SQL fails; refused when the tail it leaves, prepared alone, gives a
 ;; statement or an error; else accepted.
 (define (sqlite-verdict db sql)
-  (let ((first (sqlite-prepare db sql)))
+  (let ((first (sqlite-prepare db sql 0)))
     (if (not (eqv? (car first) 0))
         'error
-        (let* ((bytes (string->utf8 sql))
-               (n (bytevector-length bytes))
-               (k (caddr first))
-               (tail-bytes (let ((b (make-bytevector (- n k)))) (bytevector-copy! bytes k b 0 (- n k)) b))
-               (tail (sqlite-prepare db (utf8->string tail-bytes))))
+        (let ((tail (sqlite-prepare db sql (caddr first))))
           (if (or (not (eqv? (car tail) 0)) (cadr tail)) 'refused 'accepted)))))
 
 ;; ours : Database String -> (U 'accepted 'refused 'error (List 'other Any))
