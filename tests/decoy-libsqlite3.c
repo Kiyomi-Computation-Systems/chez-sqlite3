@@ -1,6 +1,6 @@
 /* tests/decoy-libsqlite3.c: a stand-in libsqlite3, for
- * tests/test-library-loading.sps only. chez-sqlite3 itself compiles no C
- * (ADR-0001).
+ * tests/test-library-loading-decoys.sps and -real.sps only, through
+ * tests/library-loading.sls. chez-sqlite3 itself compiles no C (ADR-0001).
  *
  * The suite compiles this file at test time, once per build below, as a
  * shared object (-Wall -Werror -shared -fPIC), and points
@@ -61,7 +61,7 @@
 
 #if !defined(DECOY_VERSION_NUMBER) || !defined(DECOY_VERSION) || \
     !defined(DECOY_BELOW_NUMBER) || !defined(DECOY_BELOW)
-#error "tests/test-library-loading.sps passes the floor and the version below it: -DDECOY_VERSION_NUMBER, -DDECOY_VERSION, -DDECOY_BELOW_NUMBER and -DDECOY_BELOW"
+#error "tests/library-loading.sls passes the floor and the version below it: -DDECOY_VERSION_NUMBER, -DDECOY_VERSION, -DDECOY_BELOW_NUMBER and -DDECOY_BELOW"
 #endif
 
 static char calls[4096];

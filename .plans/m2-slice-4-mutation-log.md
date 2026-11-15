@@ -527,3 +527,172 @@ and both accessors, and by the rule that every `sqlite-` code span of the prose 
 
 The `test-never-loads` list is held by its red run alone: no mutation of `src/` makes
 `(chez-sqlite3 private statement-values)` load or not load libsqlite3 without breaking the library.
+
+## The gate split
+
+`test-library-loading` took 520.9 s, 555.1 s and 562.2 s under the gate on M2's CI runs, past
+450 s, three quarters of `MEMORY_TIMEOUT`'s 600 s, where ADR-0005's M2 amendment splits it. The
+maintainer chose (2026-11-15) to split it in #19, and to have the gate fail any suite past that
+line. An Opus agent built both test first from the maintainer's brief.
+
+- **The split.** `tests/test-library-loading.sps` is now `tests/test-library-loading-decoys.sps`
+  and `tests/test-library-loading-real.sps`, and `tests/library-loading.sls`, the library
+  `(library-loading)`, holds what both use: the probe, the expected answers, the floors, the
+  entries and their partition, the decoy builds and the missing-api rows. Each suite keeps its own
+  runner, scratch directory and floors. The 36 entry points alternate between the halves, 18 each,
+  so each holds M1's and M2's: the decoys suite has 8 of M1's 15 and 10 of M2's 21. A suite finds
+  its half by its own file's name, from `(command-line)`, so a suite copied from the other can't
+  run the other's half.
+- **The check.** `make test-memory` prints `  time: Ns under the gate, within|past Ls, three quarters
+  of MEMORY_TIMEOUT's Ts` after each suite's outcome line, and names a suite that would pass but
+  took past three quarters of `MEMORY_TIMEOUT` `SLOW`, counted as `slow` in the count line, which
+  fails the run. The limit is computed from `MEMORY_TIMEOUT` in quarters of a second
+  (`limit4=$$((3 * $(MEMORY_TIMEOUT)))`, compared with `4 * took`), and the printed limit comes from
+  the same number. `check-memory-gate`'s case r holds it.
+
+The mutations ran in copies under the worktree's git-ignored `build/m2s4-split/`: the split's in
+copies of `src/`, `tests/` and `packaging/`, with both suites run from inside the copy, outside the
+gate (`mut/split.py`); the gate's in whole copies of the tree, each running
+`check-memory-gate.sh` trimmed to its setup and case r (`gate.py`, `gate-mutants.py`). Each driver
+refused an edit whose old text didn't occur exactly once, and one that changed nothing. None of it
+is in the repository.
+
+### The rows moved
+
+All 92 rows of the old suite run, each with its name and its expected value unchanged, in one
+suite, but for the five setup rows below, in both. Each suite's runner was made to print every
+test's name, kind and expected value, in copies of the old and the new suites, scratch paths
+masked, and the sorted lists compared. The new suites add 9 rows to the old 92, 101 in all:
+
+- **Held in both, as each suite needs them** (5): CHEZ names the Chez to spawn; mktemp -d made a
+  scratch directory; packaging/floors.sexp gives the decoys their versions; this suite's own
+  process never loaded a libsqlite3, nor a decoy; the scratch directory is removed.
+- **New, in both** (2 each): the two suites' entry lists partition the convention table, merged in
+  its order, each entry once; this suite runs its own half, found by its file's name, and each
+  suite the partition names is a file in tests/.
+
+| Rows | Old suite | Now |
+|---|---|---|
+| CC is cut at whitespace | 1 | decoys |
+| the decoy's entry list is the convention table's names, whole and in order | 1 | decoys |
+| the decoy's behaviours on the control build: the floor, below-floor, not-threadsafe, libversion-null, sourceid-null, sourceid-utf8, initialize-fails, initialize-misuse, and the three values that are no switch | 11 | decoys |
+| `lacks-` rows: libversion_number, sourceid, initialize, compileoption_get, close, errstr, extended_errcode, memory_used, finalize, reset, bind_parameter_count, bind_null, bind_double, bind_blob64, column_name, column_int64, column_text, column_bytes | 18 | decoys |
+| `lacks-` rows: libversion, threadsafe, compileoption_used, open_v2, errmsg, errcode, next_stmt, prepare_v3, step, clear_bindings, bind_parameter_index, bind_int64, bind_text64, column_count, column_type, column_double, column_blob, error_offset | 18 | real |
+| lacks-rest, not-sqlite | 2 | decoys |
+| the load's order: the five rows on lacking builds under an earlier refusal | 5 | decoys |
+| a refusal is kept; the marked build | 2 | decoys |
+| the real libsqlite3: the probe loads one, under Valgrind when asked, the oracle read it, its four fields, through the override; the oracle when a raise comes inside its directory | 9 | real |
+| the refusals no decoy reaches: a bare name, the text file written, a text file, no such file | 4 | real |
+| a raise that is not a refusal | 1 | real |
+| discovery: the world, the empty HOME, and the guix world's five rows | 7 | real |
+| preflight: the control, the real library, below the floor, a bare name, a raise, not-found | 6 | real |
+| every message probe and every oracle run under Valgrind exactly when asked | 2 | real |
+| the five setup rows above | 5 | both |
+
+`decoys` runs 47 rows, `real` 54. The order rows need three lacking builds whatever their half:
+`sqlite3_open_v2` and `sqlite3_threadsafe` are the real suite's, so the decoys suite compiles
+those two too (24 builds), and the real suite compiles the control for preflight (19 builds); the
+old suite compiled 40.
+
+### The red runs
+
+| Check | Red run | Against | Green run |
+|---|---|---|---|
+| the partition row | decoys 46 passed, 1 failed; real 52 and 1 | S01, an entry dropped from a half (and S02 to S04, below) | 47 and 54 |
+| the suite's own half row | decoys 28 and 1, its 18 `lacks-` rows gone; real 53 and 1 | S05, the decoys half named for another file (and S06 to S08) | 47 and 54 |
+| case r | `FAILED r slow`: make exited 0; both plants `pass`; no time line; the plants' times `[]` | the gate as it was, its count line alone given `, slow 0`, so that only what case r holds can fail it | `ok r slow` |
+
+Case r's red run is not run against the old gate as it stood: the new `count_line` adds `, slow N`,
+so every case would fail on the old count line, and such a run proves no row (`traps.md`).
+
+### The mutations
+
+**15 mutations, 15 caught.** The split's are `passed/failed` of each suite, from its own `# of
+expected passes` and `# of unexpected failures`. Baseline B00: decoys 47/0, real 54/0.
+
+| Mutation | What | decoys | real |
+|---|---|---|---|
+| S01 | an entry dropped from one half: `sqlite3_column_blob`, from real's | 46/1: the partition row | 52/1: the partition row; its row for the entry gone |
+| S02 | an entry in both halves: `sqlite3_step`, in decoys' too, in its place | 47/1: the partition row; the extra `lacks-sqlite3_step` row passed | 53/1: the partition row |
+| S03 | two entries of a half out of order: `sqlite3_close`, `sqlite3_errstr` | 46/1: the partition row | 53/1: the partition row |
+| S04 | a half's entry misspelt: `sqlite3_column_byte` | 45/2: the partition row, and `lacks-sqlite3_column_byte`, no such build | 53/1: the partition row |
+| S05 | the decoys half named for another file | 28/1: the own-half row; its 18 rows gone | 53/1: the own-half row, the named file absent |
+| S06 | the real suite deleted | 46/1: the own-half row, `test-library-loading-real.sps` absent | none |
+| S07 | `suite-half` answers the first half, whatever the suite | 47/0 | 53/1: the own-half row, `test-library-loading-decoys.sps` |
+| S08 | the real suite's own-half row expecting the decoys suite's name, a copy left unedited | 47/0 | 53/1: the own-half row |
+
+The gate's are case r's verdict and the problems it named, in a whole copy of the tree each.
+
+| Mutation | What | Case r |
+|---|---|---|
+| G01 | the threshold widened to the whole of `MEMORY_TIMEOUT` | FAILED: make exited 0; the slow plant `pass`; its time line `within` |
+| G02 | the threshold ignored: a suite's pace never `past` | FAILED: make exited 0; the slow plant `pass`; its time line `within` |
+| G03 | the threshold ignored by the outcome: a clean suite passes whatever its pace | FAILED: make exited 0; the slow plant `pass`, its time line `past` |
+| G04 | the time line dropped | FAILED: the outcome and time lines differ; the plants' times `[]` |
+| G05 | the threshold narrowed to half of `MEMORY_TIMEOUT` | FAILED: both plants `SLOW`, past 6s |
+| G06 | a SLOW suite left out of the exit status | FAILED: make exited 0 |
+| G07 | the time not measured: every suite 0 s | FAILED: make exited 0; the slow plant `pass`; the times `[0 0 ]` |
+
+### Case r's plants
+
+Each plant sleeps until its own process is so many seconds old, from `/proc/self/stat`'s start
+time (clock ticks after boot, 100 a second) and `/proc/uptime`. Its process is the one `timeout`
+forks for Valgrind, which execs its tool in place, so its age is what the gate times but for its
+exit. A plant that slept a fixed time would add Valgrind's start, about 2.2 s for an empty program
+in the container and more on a slow runner, to its time, and could not sit just under the line.
+Under a `MEMORY_TIMEOUT` of 12, so past 9 s: the slow plant, to 10 s, was timed at 10 s in every
+run; the near one, to 7.5 s, at 7 s or 8 (six runs: 7, 8, 7, 8, 8, 8). Case r costs about 20 s of
+`check-memory-gate`, in the container.
+
+### Measured
+
+Each suite alone under the gate in the container, one after another, read from its new time line,
+in whole copies of the tree with the old suite restored from `HEAD` beside the two new ones
+(`build/m2s4-split/time-guix.out`, `time-floor.out`):
+
+| Suite | Guix's 3.53.1 | The floor, 3.45.1 | Child logs | Rows |
+|---|---|---|---|---|
+| `test-library-loading`, the old suite | 374 s | 370 s | 76 | 92 |
+| `test-library-loading-decoys` | 196 s | 195 s | 38 | 47 |
+| `test-library-loading-real` | 184 s | 184 s | 38 | 54 |
+| the two together | 380 s | 379 s | 76 | 101 |
+
+The split costs 6 s and 9 s more in all: a second Chez under Valgrind, the five setup rows, and
+three more decoy builds (43 against 40). On CI, #19's head took 562.2 s for the old suite, 1.5 times
+its 374 s here; at that ratio the halves take about 295 s and 277 s, each about 155 s under 450 s.
+The real suite's 38 child logs are 36 Chez children and 2 oracle runs, which cost little, so it is
+the quicker.
+
+A time line counts from before `timeout` starts to after it ends. M2's CI figures were the gaps
+between the job log's lines, which also hold the evidence check of each child log after the run, so
+a time line reads a little below the figure M2 would have read.
+
+What the check adds to the `memory` job: two `date +%s` calls per suite in `test-memory`; and case
+r, about 20 s of `check-memory-gate`, which took 260 s for 59 cases against 241 s for `HEAD`'s 58,
+one after the other in the same container.
+
+Final runs on the worktree: `scripts/guix-env make test` 38 of 38 on Guix's 3.53.1 and on the floor
+(`CHEZ_SQLITE3_LIBRARY=$PWD/build/m2s1-floor/libsqlite3-floor.so`), both new suites named;
+`make check-memory-gate` 59 cases; `make check-test-fails` 13; `make check-seam` 21 libraries;
+`make check-suites` 38 suites; `make check-ci`. `make test-memory` on the two new suites passes:
+on the worktree, on Guix's library, 197 s and 184 s; on the floor, in the timing copy, which
+`diff -r` shows is the final tree but for the old suite beside them, 195 s and 184 s.
+
+### Findings
+
+- **The brief's design could not see a suite run the other's half.** With a written list per suite,
+  a suite copied from the other and left unedited, or a suite deleted, passes every row: 18 entry
+  points lose their rows unseen, the list trap again (`traps.md`). So a suite finds its half by its
+  own file's name, and each suite's own-half row writes that name out and requires each suite the
+  partition names to exist (S05 to S08).
+- **Five rows run in both suites,** each about its own process: CHEZ, the scratch directory made
+  and removed, the floors, nothing loaded. The brief's "nothing doubled" is about the entry points,
+  and none is.
+- **The count line gained `, slow N`.** A SLOW suite is its own outcome and count, as a HUNG one is,
+  so every `check-memory-gate` case's count line changed, through `count_line`. Case r's red run is
+  against the old gate with that line alone changed, since the old gate as it stood fails every case
+  on it.
+- **Times are whole seconds** of `date +%s`, against the tenths M2 read from CI's timestamps. A
+  reading is within a second of the time.
+- **A suite that fails and is slow is named FAIL,** its time line saying past: the run fails either
+  way, and the FAIL is what to fix first.

@@ -106,7 +106,17 @@ newest first.
     statement's NOMEM a healthy empty-BLOB read raised `nomem` and failed its statement. The reader
     now reads the column's type too (ADR-0015, amended).
   - **The major:** no row held that an index is exact, so `1.0` would have reached C.
-- **CI:** passed in all five jobs on `7a8ea47`, before the review's fixes; `memory` took 20m43s.
+- **CI:** passed in all five jobs on `7a8ea47`, before the review's fixes, `memory` taking 20m43s,
+  and on `1a53b13` after them, `memory` taking 28m51s.
+- **The gate split, in this PR** (the maintainer's choice after M2's closing review, "Split in
+  #19, rest after"):
+  - `test-library-loading` took 562.2 s on `1a53b13`'s run, 38 s from the timeout. It is now two
+    suites, 196 s and 184 s in the container.
+  - `make test-memory` fails any suite past three quarters of `MEMORY_TIMEOUT`, as `SLOW`
+    (ADR-0005, amended).
+  - The split's 8 mutants and the check's 7 were all caught.
+  - The builder: Opus, about 403k tokens, 121 calls, 76 min. The closing review: Opus, about 390k
+    tokens, 120 calls, 30 min; its other findings go to M2's closing-review PR.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
@@ -208,9 +218,9 @@ newest first.
   - prepare's error offsets: 10 and 13 bytes for an unknown column, 0 for an unknown keyword, and
     −1 for an error at the end of the SQL;
   - `select :alpha, ?7, $beta` has 8 parameters, at indexes 1, 7 and 8.
-- **The gate:** `test-library-loading` took 409.3 s on CI, against 308 s before, so it isn't split
-  in M2. Every child grew about 0.3 s, since each compiles native under Valgrind (ADR-0005,
-  amended).
+- **The gate:** `test-library-loading` took 409.3 s on CI, against 308 s before, so it wasn't split.
+  That was one fast run: on slower runners it reached 562 s, and slice 4 split it (ADR-0005,
+  amended). Every child grew about 0.3 s, since each compiles native under Valgrind.
 - **Decided by the maintainer:** on 2026-11-14, the stacked order, each slice opened as a PR and
   the next begun on it; on 2026-11-15, ADR-0005's and ADR-0011's amendments accepted
   ("Accept both").
@@ -241,7 +251,7 @@ newest first.
   - A REAL's text differs between SQLite versions.
   - A planted library must sit in a whole copy of the tree.
   - Arithmetic missed the gate both ways: the plan's 430 s and the review's 500 s against CI's
-    409 s. The cost is CI's to say.
+    409 s. The cost is CI's to say, and one run isn't CI: the closing review found 562 s.
 
 ### 2026-11-14 — M2 slice 1: the pure core (PR #16, `e6b2462`)
 

@@ -1,9 +1,9 @@
 #!r6rs
 ;;; tests/refusal-probe.sps: loads libsqlite3 as chez-sqlite3 does, in a
 ;;; process of its own, and prints what happened as data, one datum per
-;;; line, for tests/test-library-loading.sps to read. It is not a suite: its
-;;; name lies outside the tests/test-*.sps glob, so make test never runs it
-;;; directly (ADR-0007).
+;;; line, for tests/test-library-loading-decoys.sps and -real.sps to read. It
+;;; is not a suite: its name lies outside the tests/test-*.sps glob, so make
+;;; test never runs it directly (ADR-0007).
 ;;;
 ;;;   refusal-probe.sps [--then-override PATH] [--marker NAME] [--message yes]
 ;;;
@@ -23,7 +23,7 @@
 ;;;             or #f when it has none. With --message, (message . TEXT)
 ;;;             follows: the condition's &message, which tests/preflight.sps
 ;;;             prints as its remedy. Tests never assert it as text
-;;;             (ADR-0002); test-library-loading compares preflight's remedy
+;;;             (ADR-0002); test-library-loading-real compares preflight's remedy
 ;;;             line with it
 ;;;   anything else raised: (raised WHO TYPES), and the exit status is 2.
 ;;;             WHO is the condition's &who, or #f; TYPES lists, by name, the
@@ -50,10 +50,10 @@
 ;;;
 ;;; Then (valgrind . yes) or (valgrind . no): whether this process runs under
 ;;; Valgrind's memcheck, read from /proc/self/maps, which then maps memcheck's
-;;; preload. Under make test-memory, test-library-loading runs this probe
-;;; through the gate's own Valgrind, and requires yes there and no elsewhere,
-;;; so a child the gate should check that ran outside it fails its row
-;;; (ADR-0005, amended).
+;;; preload. Under make test-memory, the two test-library-loading suites run
+;;; this probe through the gate's own Valgrind, and require yes there and no
+;;; elsewhere, so a child the gate should check that ran outside it fails its
+;;; row (ADR-0005, amended).
 ;;;
 ;;; Last comes (calls . LOG) when the most recently loaded library has the
 ;;; entry point decoy_calls, as tests/decoy-libsqlite3.c does: its call log,

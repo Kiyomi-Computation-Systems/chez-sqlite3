@@ -303,6 +303,12 @@ told in chez-curl's `.plans/traps.md`.
   Homebrew run of M2's Mac run never ran. Commands for the maintainer to paste carry no comments.
   (M2's Mac run, chez-sqlite3)
 
+- **One CI run is one sample.** CI's runners differ about two to one: the same code ran
+  `test-library-loading` in 555.1 s at `5dd3af0` and 284.8 s at `0572267`. M2 slice 2 settled from
+  one 409.3 s run that the suite stays whole, and #19's own run took 562.2 s, 38 s from the
+  timeout. Read a cost from several runs, and let `make test-memory`'s `SLOW` check hold the
+  limit. (M2's closing review, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

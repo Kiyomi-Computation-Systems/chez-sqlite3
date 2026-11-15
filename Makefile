@@ -40,15 +40,18 @@ TEST_TIMEOUT ?= 300
 TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtimeout 2>/dev/null),timeout)
 
 # The memory gate (ADR-0005): Valgrind, and the seconds a suite may run
-# under it before timeout kills it and make test-memory names it HUNG.
+# under it before timeout kills it and make test-memory names it HUNG. Past
+# three quarters of them, 450 s of 600, a suite is named SLOW and fails the
+# run, so that it is split before a slow runner kills it (ADR-0005, amended).
 # Valgrind runs 10 to 50 times slower than Chez alone. Most suites take 7 to
-# 12 s under it in the container (.plans/research/memory-gate/). The exception
-# is tests/test-library-loading.sps, whose 55 children each run under a
-# Valgrind of their own: 230 s in the container, 308 s on CI (run
-# 43609564593), against 6 s without it. 600 s is about twice that, and far
-# below CI's 60-minute job limit, so a hang is named HUNG before the job is
-# killed. make test-memory refuses a MEMORY_TIMEOUT that is
-# not a positive whole number, as make test refuses such a TEST_TIMEOUT.
+# 12 s under it in the container (.plans/research/memory-gate/). The
+# exceptions are tests/test-library-loading-decoys.sps and -real.sps, whose
+# children each run under a Valgrind of their own, 38 apiece. They were one
+# suite, which took 562 s with its 76 children on CI's slowest runner of M2,
+# 38 s short of the limit. 600 s is far below CI's 60-minute job limit, so a
+# hang is named HUNG before the job is killed. make test-memory refuses a
+# MEMORY_TIMEOUT that is not a positive whole number, as make test refuses
+# such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
 MEMORY_TIMEOUT ?= 600
 
@@ -143,7 +146,7 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 # detail, the candidates checked and a remedy, and, when the refusal came
 # after the version was read, that library's own report. Its last line, on
 # either stream, is its counts, all zero (ADR-0005, decision 4);
-# tests/test-library-loading.sps holds the whole output. chez-sqlite3
+# tests/test-library-loading-real.sps holds the whole output. chez-sqlite3
 # compiles nothing (ADR-0001), so this is the question an install asks. It
 # writes nothing: no build output, under src/ or anywhere. build is in
 # .PHONY: the build/ directory exists, and without it make would answer that
@@ -336,7 +339,19 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # where nothing the suite prints can reach. Two suites with one name would
 # share both, so test-memory refuses them. One line names each suite's
 # outcome: pass, FAIL with its exit status (9 is Valgrind's: an error, or a
-# definite leak), or HUNG when timeout killed it (exit 124).
+# definite leak), HUNG when timeout killed it (exit 124), or SLOW, below.
+#
+# The line after it is the suite's time under the gate, in whole seconds of
+# date +%s, from before timeout starts to after it ends:
+#   time: 283s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+# A suite that would pass, but whose time passes three quarters of
+# MEMORY_TIMEOUT, is named SLOW, and fails the run as a FAIL or a HUNG does
+# (ADR-0005, amended). The limit is MEMORY_TIMEOUT's own, kept in quarters of
+# a second so the comparison stays whole, and printed from the same number,
+# so no second number can drift from it. A suite that failed and was slow is
+# named FAIL, and its time line says past. The two date calls are all the
+# check costs. make check-memory-gate's case r plants a suite on each side of
+# the limit.
 #
 # Valgrind runs with -v, and a suite that exits 0 passes only when its
 # Valgrind log, and nothing else, shows what Valgrind checked, else it
@@ -369,7 +384,8 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # was Valgrind's, the suite's FAIL lines with the indented lines after
 # each, its expected and actual values, every one, then its last 10 lines,
 # each line once and no other, so a CI log says why, and names the tests
-# that failed. It fails if any suite failed or hung, or if none was named.
+# that failed. It fails if any suite failed, hung or was slow, or if none
+# was named.
 #
 # Valgrind also takes options and files that its command line does not
 # show, and one of them can hide a leak (measured in chez-curl: a
@@ -398,10 +414,11 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # that runs from another working directory.
 # Not covered (ADR-0005, amended):
 #   - a child started without gated-command runs outside Valgrind, unseen:
-#     the children of tests/test-library-loading.sps and test-blocks.sps each
-#     say whether they ran under memcheck (preflight's, which prints no such
-#     line, by the one new log in the gate's directory), and those suites fail
-#     if one did not; no other suite's children are held so;
+#     the children of tests/test-library-loading-decoys.sps, -real.sps and
+#     test-blocks.sps each say whether they ran under memcheck (preflight's,
+#     which prints no such line, by the one new log in the gate's directory),
+#     and those suites fail if one did not; no other suite's children are
+#     held so;
 #   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
 #     compiled CHEZ that runs Chez as a child passes the leak plant;
 #   - its evidence holds against accident, not against a suite that means
@@ -411,7 +428,7 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 #   - two runs in one tree remove each other's logs, and fail, naming the
 #     wrong reason: run one at a time in a tree, as check-memory-gate runs
 #     each of its cases in a copy of its own.
-test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any error or definite leak, a hang, or no suite
+test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its time; fail on any error or definite leak, a hang, a suite past three quarters of MEMORY_TIMEOUT, or no suite
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@case '$(MEMORY_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
@@ -516,8 +533,11 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	            if (hidden != "") print "  " hidden; \
 	            if (summary != "") print "  " summary; \
 	            else print "  (the log holds no Valgrind ERROR SUMMARY)" }'; \
+	limit4=$$((3 * $(MEMORY_TIMEOUT))); \
+	limit=$$((limit4 / 4)); \
+	case $$((limit4 % 4)) in 1) limit=$$limit.25 ;; 2) limit=$$limit.5 ;; 3) limit=$$limit.75 ;; esac; \
 	mkdir -p $(MEMORY_LOGS); \
-	passed=0; failed=0; hung=0; \
+	passed=0; failed=0; hung=0; slow=0; \
 	for t in $(MEMORY_SUITES); do \
 	  name=$$(basename "$$t" .sps); \
 	  log=$(MEMORY_LOGS)/$$name.log; \
@@ -533,8 +553,10 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    case $$o in --log-file=*) o="--log-file=$(CURDIR)/$$children/%p.valgrind" ;; esac; \
 	    child="$$child$${child:+ }$$o"; \
 	  done; \
+	  start=$$(date +%s); \
 	  CHEZ_SQLITE3_GATE_CHILD="$(VALGRIND) $$child" $(TIMEOUT) --foreground $(MEMORY_TIMEOUT) $(VALGRIND) "$$@" $(CHEZ) --libdirs $(LIBDIRS) --program $$t >"$$log" 2>&1; \
 	  rc=$$?; \
+	  took=$$(($$(date +%s) - start)); \
 	  why=; \
 	  if [ $$rc -eq 0 ] && [ ! -f "$$vlog" ]; then \
 	    why="Valgrind wrote no log, $$vlog"; \
@@ -570,11 +592,18 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    done; \
 	  fi; \
 	  if [ $$rc -eq 0 ] && [ -n "$$childwhy" ]; then why="$$why$${why:+; }$$childwhy"; fi; \
-	  if [ $$rc -eq 0 ] && [ -z "$$why" ]; then \
-	    echo "test-memory: pass $$t"; passed=$$((passed + 1)); \
+	  if [ $$((4 * took)) -gt $$limit4 ]; then pace=past; else pace=within; fi; \
+	  if [ $$rc -eq 0 ] && [ -z "$$why" ] && [ $$pace = within ]; then \
+	    outcome=pass; passed=$$((passed + 1)); \
+	    echo "test-memory: pass $$t"; \
+	  elif [ $$rc -eq 0 ] && [ -z "$$why" ]; then \
+	    outcome=slow; slow=$$((slow + 1)); \
+	    echo "test-memory: SLOW $$t (past $${limit}s under the gate, three quarters of MEMORY_TIMEOUT's $(MEMORY_TIMEOUT)s)"; \
 	  elif [ $$rc -eq 124 ]; then \
-	    echo "test-memory: HUNG $$t (no exit within $(MEMORY_TIMEOUT)s)"; hung=$$((hung + 1)); \
+	    outcome=hung; hung=$$((hung + 1)); \
+	    echo "test-memory: HUNG $$t (no exit within $(MEMORY_TIMEOUT)s)"; \
 	  else \
+	    outcome=fail; failed=$$((failed + 1)); \
 	    if [ $$rc -eq 0 ]; then \
 	      echo "test-memory: FAIL $$t (exit 0, but $$why)"; \
 	    elif [ $$rc -eq 9 ]; then \
@@ -582,7 +611,9 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    else \
 	      echo "test-memory: FAIL $$t (exit $$rc)"; \
 	    fi; \
-	    failed=$$((failed + 1)); \
+	  fi; \
+	  echo "  time: $${took}s under the gate, $$pace $${limit}s, three quarters of MEMORY_TIMEOUT's $(MEMORY_TIMEOUT)s"; \
+	  if [ $$outcome = fail ]; then \
 	    echo "  log: $$log"; \
 	    echo "  Valgrind's log: $$vlog"; \
 	    if [ ! -f "$$vlog" ]; then echo "  (Valgrind wrote no log)"; else \
@@ -602,8 +633,8 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 	    fi; \
 	  fi; \
 	done; \
-	echo "test-memory: ran $$((passed + failed + hung)), passed $$passed, failed $$failed, hung $$hung"; \
-	[ $$failed -eq 0 ] && [ $$hung -eq 0 ]
+	echo "test-memory: ran $$((passed + failed + hung + slow)), passed $$passed, failed $$failed, hung $$hung, slow $$slow"; \
+	[ $$failed -eq 0 ] && [ $$hung -eq 0 ] && [ $$slow -eq 0 ]
 
 # Plants a heap overrun and a definite leak (tests/memory-plant-*.sps) and
 # requires make test-memory to fail on each, by name, with Valgrind's own
@@ -618,7 +649,9 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind; fail on any e
 # them unread; and an awk that fails, or prints no "ok", and requires a
 # clean program to fail, naming the evidence check. It requires a run with
 # no MEMORY_SUITES to run every suite, in order, and one with MEMORY_SUITES
-# in the environment to be refused.
+# in the environment to be refused. Under a MEMORY_TIMEOUT of 12, it requires
+# a suite that takes 10 s named SLOW, and one that takes 7 or 8 to pass, each
+# with its time line.
 # tests/check-memory-gate.sh lists the cases. CI's memory job runs it
 # before test-memory (ADR-0005).
 check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name

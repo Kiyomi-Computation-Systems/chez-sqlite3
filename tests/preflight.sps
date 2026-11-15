@@ -10,7 +10,7 @@
 ;;; candidate checked and a one-line remedy, on stderr, and exits 1. Either
 ;;; way its last line is its counts, (chez-sqlite3 private counters)'
 ;;; native-counts: it is a child that reaches native code when
-;;; tests/test-library-loading.sps runs it, and that suite requires every
+;;; tests/test-library-loading-real.sps runs it, and that suite requires every
 ;;; count zero (ADR-0005, decision 4). The reason is the contract; the rest
 ;;; is for the reader (ADR-0002). Anything
 ;;; else raised is a bug, not a refusal, and is left to Chez's default

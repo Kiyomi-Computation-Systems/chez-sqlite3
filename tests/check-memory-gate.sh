@@ -123,8 +123,21 @@
 #                   (stale). And a child run without gated-command runs
 #                   outside Valgrind, and the gate cannot see it: its leak
 #                   passes (unwrapped). That is the gap ADR-0005 records;
-#                   tests/test-library-loading.sps closes it for its own
-#                   children, each of which must say it ran under memcheck
+#                   tests/test-library-loading-decoys.sps and -real.sps
+#                   close it for their own children, each of which must say
+#                   it ran under memcheck
+#   r  slow         test-memory prints each suite's time under the gate, and
+#                   names a suite SLOW, failing the run, once its time passes
+#                   three quarters of MEMORY_TIMEOUT, as ADR-0005 splits
+#                   test-library-loading past 450 s of 600. Under a
+#                   MEMORY_TIMEOUT of 12, so past 9 s: a plant that sleeps
+#                   until its process is 10 s old is SLOW, and one that
+#                   sleeps until 7.5 s passes, just under; each one's line
+#                   is followed by its time line, the first 10 or 11 s and
+#                   past, the second 7 to 9 s and within. The process is the
+#                   one timeout starts for Valgrind, so its age is what the
+#                   gate times, give or take its exit, whatever Valgrind's
+#                   start costs
 #   o  ci           tests/check-ci.sh passes on .github/workflows, with its
 #                   one line: it holds the whole workflow, and so the memory
 #                   job's two steps, "run: make check-memory-gate" then
@@ -148,7 +161,8 @@
 # share nothing. Nothing in a copy runs git.
 #
 # A case compares the lines starting "test-memory: " as a whole: each
-# suite's outcome and the count. The suite after a plant is
+# suite's outcome and the count. Case r also compares each suite's time
+# line, "  time: ", which follows its outcome. The suite after a plant is
 # build/check-memory-gate/after.sps, an empty program, which loses nothing.
 # Every run writes build/memory/<suite>.log, the suite's own output, and
 # build/memory/<suite>.valgrind, Valgrind's, and the whole directory is
@@ -177,9 +191,11 @@ VALGRIND=${VALGRIND:-valgrind}
 LIBDIRS=${LIBDIRS:-src:tests:build/scheme-libs}
 
 # Each run's per-suite cap, in seconds: a plant ends in a few. The hang
-# case's is shorter, so its plant is killed soon.
+# case's is shorter, so its plant is killed soon. Case r's is 12, so a suite
+# is SLOW past 9 s, three quarters of it.
 suite_timeout=300
 hang_timeout=15
+slow_timeout=12
 
 overrun=tests/memory-plant-overrun.sps
 leak=tests/memory-plant-leak.sps
@@ -189,6 +205,8 @@ scratch=build/check-memory-gate
 after=$scratch/after.sps
 fails=$scratch/fails.sps
 hangs=$scratch/hangs.sps
+slow=$scratch/slow.sps
+nearly=$scratch/nearly.sps
 latrc=$scratch/late-rc.sps
 execs=$scratch/execs.sps
 undef=$scratch/undef.sps
@@ -313,6 +331,48 @@ cat >"$kit/hangs.sps" <<'EOF'
 (import (rnrs) (only (chezscheme) sleep make-time))
 (sleep (make-time 'time-duration 0 3600))
 EOF
+
+# Case r's two plants. Each sleeps until its process is AGE seconds old, then
+# exits 0. Its process is the one timeout starts for Valgrind, which execs
+# its tool in place, so its age is what test-memory times, but for the
+# moments after it wakes. Linux counts a process's start, /proc/self/stat's
+# 22nd field, in clock ticks after boot, 100 a second (USER_HZ, on amd64 and
+# arm64 alike), and /proc/uptime gives the seconds since. The fields are
+# counted after the ")" that ends the second, the command's name, which may
+# hold a space.
+for how in slow nearly; do
+  case $how in
+    slow) age=10 ;;
+    *)    age=15/2 ;;
+  esac
+  cat >"$kit/$how.sps" <<EOF
+#!r6rs
+;;; Written by tests/check-memory-gate.sh: sleeps until its process is $age
+;;; seconds old, then exits 0, losing nothing.
+(import (rnrs) (only (chezscheme) sleep make-time))
+(define (text path)
+  (call-with-port (open-file-input-port path (file-options) (buffer-mode block)
+                                        (make-transcoder (utf-8-codec)))
+    get-string-all))
+(define (data s)
+  (let ((port (open-string-input-port s)))
+    (let loop ((found '()))
+      (let ((datum (read port)))
+        (if (eof-object? datum) (reverse found) (loop (cons datum found)))))))
+(define stat (text "/proc/self/stat"))
+(define started
+  (let loop ((i (- (string-length stat) 1)))
+    (if (char=? (string-ref stat i) #\\))
+        (/ (list-ref (data (substring stat (+ i 1) (string-length stat))) 19) 100)
+        (loop (- i 1)))))
+(define left (- $age (- (car (data (text "/proc/uptime"))) started)))
+(when (> left 0)
+  (let ((ns (exact (round (* left 1000000000)))))
+    (sleep (make-time 'time-duration (mod ns 1000000000) (div ns 1000000000)))))
+(display "$how: slept until its process was $age seconds old")
+(newline)
+EOF
+done
 
 cat >"$kit/late-rc.sps" <<EOF
 #!r6rs
@@ -807,7 +867,7 @@ other_files() { printf 'Valgrind read the suppressions files [%s], and the gate 
 # The suppressions files test-memory allows, as other_files lists them:
 # Valgrind's own, and no other.
 allowed=$vgdefault
-count_line()  { printf 'test-memory: ran %d, passed %d, failed %d, hung %d\n' "$1" "$2" "$3" "$4"; }
+count_line()  { printf 'test-memory: ran %d, passed %d, failed %d, hung %d, slow %d\n' "$1" "$2" "$3" "$4" "${5:-0}"; }
 
 # ---- a: each plant, run plainly ----
 for p in "$overrun" "$leak" "$connection" "$statement"; do
@@ -1426,6 +1486,40 @@ want_lines "test-memory: pass $parent
 $(count_line 1 1 0 0)"
 want_children "$parent" 0
 verdict "q unwrapped: a child run without gated-command runs outside Valgrind, and its leak passes: the gap ADR-0005 records"
+
+# ---- r: a suite past three quarters of MEMORY_TIMEOUT ----
+# Under a MEMORY_TIMEOUT of 12, a suite is SLOW past 9 s. The slow plant's
+# process sleeps until it is 10 s old, so test-memory times it at 10 s or 11;
+# the near one's until 7.5 s, so 7 s or 8, just under, or 9 should its exit
+# be slow. Each outcome line is followed by its time line, whole but for the
+# seconds, which are then held to those bounds: a time line missing, or
+# saying within for past, fails.
+newtree
+per_suite=$slow_timeout
+gate MEMORY_SUITES="$slow $nearly"
+status=$?
+per_suite=$suite_timeout
+want_status nonzero "$status"
+want_lines "test-memory: SLOW $slow (past 9s under the gate, three quarters of MEMORY_TIMEOUT's 12s)
+test-memory: pass $nearly
+$(count_line 2 1 0 0 1)"
+wanted="test-memory: SLOW $slow (past 9s under the gate, three quarters of MEMORY_TIMEOUT's 12s)
+  time: Ns under the gate, past 9s, three quarters of MEMORY_TIMEOUT's 12s
+test-memory: pass $nearly
+  time: Ns under the gate, within 9s, three quarters of MEMORY_TIMEOUT's 12s
+$(count_line 2 1 0 0 1)"
+got=$(grep -E '^(test-memory: |  time: )' "$out" | sed -E 's/^  time: [0-9]+s /  time: Ns /')
+[ "$got" = "$wanted" ] || problem "make test-memory's outcome and time lines differ:
+$(printf '%s\n' "$wanted" | sed 's/^/  wanted: /')
+$(printf '%s\n' "$got" | sed 's/^/  got:    /')"
+times=$(sed -n 's/^  time: \([0-9][0-9]*\)s .*/\1/p' "$out" | tr '\n' ' ')
+case $times in
+  "10 7 " | "10 8 " | "10 9 " | "11 7 " | "11 8 " | "11 9 ") ;;
+  *) problem "the plants' times are [$times], not 10 or 11 seconds, then 7 to 9: a plant did not sleep to its age, or the gate timed something else" ;;
+esac
+want_in "$(log_of "$slow")" "slow: slept until its process was 10 seconds old" "the slow plant's line, so it ran"
+want_in "$(log_of "$nearly")" "nearly: slept until its process was 15/2 seconds old" "the near plant's line, so it ran"
+verdict "r slow: under a MEMORY_TIMEOUT of 12, a suite that takes 10 s is SLOW, past 9 s, three quarters of it, and fails the run, by name; one that takes 7 s or 8 passes; each one's time line follows its outcome"
 
 # ---- o: ci.yml runs the gate, as tests/check-ci.sh holds it ----
 # check-ci holds the whole workflow, the memory job among its jobs: make
