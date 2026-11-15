@@ -11,6 +11,15 @@
 ;;;   &sqlite-wrong-thread          a verb off its connection's thread: the
 ;;;                                 owner's and the caller's ids
 ;;;   &sqlite-closed                a verb on a closed connection
+;;;   &sqlite-busy, &sqlite-constraint, &sqlite-read-only
+;;;                                 the three subtypes of &sqlite-error, no
+;;;                                 fields of their own, made by
+;;;                                 make-sqlite-error from the primary code's
+;;;                                 name (sqlite-error-subtype)
+;;;   &sqlite-invalid-text          a TEXT value or column name that is not
+;;;                                 well-formed UTF-8, under the root: the
+;;;                                 column's index and the byte offset of the
+;;;                                 first ill-formed subpart
 ;;;
 ;;; Then kind-of, shown-value and checked-accessor, which name a caller's
 ;;; value by its kind where a refusal would print it, and the agreement of
@@ -28,9 +37,12 @@
 ;;; accessor that read the wrong field cannot pass.
 (import (rnrs)
         (rnrs mutable-pairs)
+        (rnrs records inspection)
+        (only (chezscheme) library-exports)
         (srfi :64)
         (chez-sqlite3-testing)
         (chez-sqlite3 private libsqlite3-info)
+        (chez-sqlite3 private constants)
         (chez-sqlite3 private conditions))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -95,7 +107,31 @@
 
 (define secret "Pr0xyS3cr3t")
 
+(define (sorted-names names)
+  (list-sort (lambda (a b) (string<? (symbol->string a) (symbol->string b))) names))
+
 (test-begin "conditions")
+
+(test-equal "(chez-sqlite3 private conditions) exports exactly these names, written out"
+  (sorted-names
+   '(&chez-sqlite3-error make-chez-sqlite3-error chez-sqlite3-error?
+     &sqlite-library-unavailable make-sqlite-library-unavailable sqlite-library-unavailable?
+     sqlite-library-unavailable-reason sqlite-library-unavailable-path
+     sqlite-library-unavailable-source sqlite-library-unavailable-detail
+     sqlite-library-unavailable-candidates sqlite-library-unavailable-library
+     sqlite-library-unavailable-reasons raise-library-unavailable
+     &sqlite-error make-sqlite-error sqlite-error? sqlite-error-code sqlite-error-extended-code
+     sqlite-error-message sqlite-error-sql sqlite-error-offset raise-sqlite-error
+     &sqlite-wrong-thread make-sqlite-wrong-thread sqlite-wrong-thread?
+     sqlite-wrong-thread-owner sqlite-wrong-thread-caller raise-wrong-thread
+     &sqlite-closed make-sqlite-closed sqlite-closed? raise-closed
+     kind-of shown-value checked-accessor
+     &sqlite-busy sqlite-busy? &sqlite-constraint sqlite-constraint? &sqlite-read-only
+     sqlite-read-only? sqlite-error-subtype &sqlite-invalid-text make-sqlite-invalid-text
+     sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset
+     raise-invalid-text))
+  (guard (e (#t (list 'raised (describe e))))
+    (sorted-names (library-exports '(chez-sqlite3 private conditions)))))
 
 (test-equal "the report fixture is a libsqlite3-info"
   #t
@@ -623,6 +659,319 @@
        (list (lambda () (raise-sqlite-error 'w 14 "m" #f #f))
              (lambda () (raise-wrong-thread 'w 1 2))
              (lambda () (raise-closed 'w)))))
+
+;; --- M2 slice 1: the subtypes of &sqlite-error, and &sqlite-invalid-text --------------------
+
+;; none-if-false : Any -> Any
+;; An answer of #f as the symbol none: no row here expects #f.
+(define (none-if-false x) (if (eq? x #f) 'none x))
+
+;; subtype-of : Any -> Any
+;; sqlite-error-subtype's answer, #f as none, or (raised TEXT).
+(define (subtype-of x)
+  (guard (e (#t (list 'raised (describe e)))) (none-if-false (sqlite-error-subtype x))))
+
+;; Written out, never read from the code under test: the primary names that class.
+(define busy-names '(busy locked))
+(define constraint-names '(constraint))
+(define read-only-names '(readonly))
+
+;; expected-subtype : Any -> Symbol
+(define (expected-subtype name)
+  (cond ((memq name busy-names) 'busy)
+        ((memq name constraint-names) 'constraint)
+        ((memq name read-only-names) 'read-only)
+        (else 'none)))
+
+(define every-name (map car sqlite-result-codes))
+
+(test-equal "the table holds 108 names, so the rows below cover all of them"
+  108
+  (length every-name))
+
+(test-equal "sqlite-error-subtype over every name in sqlite-result-codes, extended names too, as one list"
+  (map expected-subtype every-name)
+  (map subtype-of every-name))
+
+(test-equal "sqlite-error-subtype classes exactly the names busy, locked, constraint and readonly: the whole answer for the four, and none for each extended name of theirs"
+  '(busy busy constraint read-only none none none none none)
+  (map subtype-of '(busy locked constraint readonly busy-snapshot busy-recovery locked-sharedcache
+                    constraint-unique readonly-recovery)))
+
+(test-equal "sqlite-error-subtype gives none for every integer, the codes of busy, locked, readonly and constraint among them, and for every non-symbol"
+  (append (map (lambda (i) 'none) '(0 5 6 8 19 261 2067 -1 1.5 100000000000000000000))
+          (map (lambda (i) 'none) '(1 2 3 4 5 6 7 8 9 10 11 12)))
+  (append (map subtype-of '(0 5 6 8 19 261 2067 -1 1.5 100000000000000000000))
+          (map subtype-of (list "busy" #f #t '(busy) (vector 'busy) #\b car (make-bytevector 1 0)
+                                '() (make-eq-hashtable) (make-error) (string->symbol "")))))
+
+(test-equal "sqlite-error-subtype reads case: BUSY, Busy and busy-x are none, busy is busy"
+  '(none none none busy)
+  (map subtype-of '(BUSY Busy busy-x busy)))
+
+;; raised-kinds : Any -> (U (List Boolean Boolean Boolean Boolean) (raised ...))
+;; sqlite-error?, then the three subtype predicates, of what THUNK builds.
+(define (subtype-kinds thunk)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((c (thunk)))
+      (list (sqlite-error? c) (sqlite-busy? c) (sqlite-constraint? c) (sqlite-read-only? c)))))
+
+(define (expected-kinds name)
+  (case (expected-subtype name)
+    ((busy) '(#t #t #f #f))
+    ((constraint) '(#t #f #t #f))
+    ((read-only) '(#t #f #f #t))
+    (else '(#t #f #f #f))))
+
+(define primary-names
+  (map car (filter (lambda (row) (< (cdr row) 256)) sqlite-result-codes)))
+
+(test-equal "the table holds 31 primary names, ok through warning, row and done among them"
+  31
+  (length primary-names))
+
+(test-equal "make-sqlite-error builds, for each primary code's name, the subtype sqlite-error-subtype gives, whole"
+  (map expected-kinds primary-names)
+  (map (lambda (name)
+         (subtype-kinds (lambda () (make-sqlite-error name name "m" #f #f))))
+       primary-names))
+
+(test-equal "make-sqlite-error classes by the primary code alone: an extended name or an integer as the code gives a plain &sqlite-error, whatever the extended code is"
+  '((#t #f #f #f) (#t #f #f #f) (#t #f #f #f) (#t #f #f #f) (#t #t #f #f) (#t #f #t #f))
+  (map subtype-kinds
+       (list (lambda () (make-sqlite-error 'busy-snapshot 'busy-snapshot "m" #f #f))
+             (lambda () (make-sqlite-error 517 'busy "m" #f #f))
+             (lambda () (make-sqlite-error 5 5 "m" #f #f))
+             (lambda () (make-sqlite-error 'error 'busy-snapshot "m" #f #f))
+             (lambda () (make-sqlite-error 'busy 'error "m" #f #f))
+             (lambda () (make-sqlite-error 'constraint 'constraint-unique "m" #f #f)))))
+
+(test-equal "a subtype keeps every field of &sqlite-error, read back whole"
+  '((busy busy-snapshot "fixture message" "SELECT fixture" 7)
+    (constraint constraint-unique "other message" #f 0)
+    (readonly readonly-dbmoved "third" "SQL 3" #f))
+  (map (lambda (c)
+         (list (sqlite-error-code c) (sqlite-error-extended-code c) (sqlite-error-message c)
+               (sqlite-error-sql c) (sqlite-error-offset c)))
+       (list (make-sqlite-error 'busy 'busy-snapshot "fixture message" "SELECT fixture" 7)
+             (make-sqlite-error 'constraint 'constraint-unique "other message" #f 0)
+             (make-sqlite-error 'readonly 'readonly-dbmoved "third" "SQL 3" #f))))
+
+(test-equal "make-sqlite-error checks the same fields in the same order for a subtype's code: the code is checked before the message"
+  '((assertion-violation make-sqlite-error (code (kind string)))
+    (assertion-violation make-sqlite-error (message 5))
+    (assertion-violation make-sqlite-error (extended-code #f))
+    (assertion-violation make-sqlite-error (offset -1)))
+  (list (raised (lambda () (make-sqlite-error "busy" 'busy 5 #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy 'busy 5 #f #f)))
+        (raised (lambda () (make-sqlite-error 'busy #f "m" #f #f)))
+        (raised (lambda () (make-sqlite-error 'constraint 'constraint "m" #f -1)))))
+
+(define low-byte-codes
+  (map cdr (filter (lambda (row) (not (memv (bitwise-and (cdr row) 255) '(0 100 101))))
+                   sqlite-result-codes)))
+
+(test-equal "the table holds 103 codes whose low byte is not 0, 100 or 101: 108 less ok, row, done and the extended codes of ok"
+  103
+  (length low-byte-codes))
+
+;; Written out: the low bytes of busy, locked, constraint and readonly.
+(define (expected-kinds-of-code code)
+  (case (bitwise-and code 255)
+    ((5 6) '(#t #t #f #f))
+    ((19) '(#t #f #t #f))
+    ((8) '(#t #f #f #t))
+    (else '(#t #f #f #f))))
+
+(test-equal "raise-sqlite-error over every code of the table with a low byte of an error raises the subtype of its primary code, whole"
+  (map expected-kinds-of-code low-byte-codes)
+  (map (lambda (code)
+         (guard (e ((sqlite-error? e)
+                    (list (sqlite-error? e) (sqlite-busy? e) (sqlite-constraint? e)
+                          (sqlite-read-only? e)))
+                   (#t (list 'other-raise (describe e))))
+           (raise-sqlite-error 'w code "m" #f #f)
+           'no-raise))
+       low-byte-codes))
+
+(test-equal "raise-sqlite-error's subtype is still compounded with its who and message, and its codes by name"
+  '((#t #t #f #f) w "m" busy busy-snapshot)
+  (guard (e ((sqlite-error? e)
+             (list (list (sqlite-error? e) (sqlite-busy? e) (sqlite-constraint? e)
+                         (sqlite-read-only? e))
+                   (condition-who e) (condition-message e)
+                   (sqlite-error-code e) (sqlite-error-extended-code e)))
+            (#t (list 'other-raise (describe e))))
+    (raise-sqlite-error 'w 517 "m" #f #f)
+    'no-raise))
+
+;; invalid-text : -> &sqlite-invalid-text
+(define (an-invalid-text) (make-sqlite-invalid-text 3 5))
+
+;; matrix-kinds : Any -> (Listof Boolean)
+;; error?, assertion-violation?, chez-sqlite3-error?, sqlite-error?, busy?,
+;; constraint?, read-only?, invalid-text?, library-unavailable?,
+;; wrong-thread?, closed?.
+(define (matrix-kinds c)
+  (list (error? c) (assertion-violation? c) (chez-sqlite3-error? c) (sqlite-error? c)
+        (sqlite-busy? c) (sqlite-constraint? c) (sqlite-read-only? c) (sqlite-invalid-text? c)
+        (sqlite-library-unavailable? c) (sqlite-wrong-thread? c) (sqlite-closed? c)))
+
+(test-equal "the matrix, whole: every type against every predicate, so none sits under the wrong parent"
+  '(;; root
+    (#t #f #t #f #f #f #f #f #f #f #f)
+    ;; plain &sqlite-error
+    (#t #f #t #t #f #f #f #f #f #f #f)
+    ;; &sqlite-busy
+    (#t #f #t #t #t #f #f #f #f #f #f)
+    ;; &sqlite-constraint
+    (#t #f #t #t #f #t #f #f #f #f #f)
+    ;; &sqlite-read-only
+    (#t #f #t #t #f #f #t #f #f #f #f)
+    ;; &sqlite-invalid-text: under the root, not under &sqlite-error
+    (#t #f #t #f #f #f #f #t #f #f #f)
+    ;; library-unavailable, wrong-thread, closed
+    (#t #f #t #f #f #f #f #f #t #f #f)
+    (#t #f #t #f #f #f #f #f #f #t #f)
+    (#t #f #t #f #f #f #f #f #f #f #t)
+    ;; an assertion violation, a plain error
+    (#f #t #f #f #f #f #f #f #f #f #f)
+    (#t #f #f #f #f #f #f #f #f #f #f))
+  (map (lambda (thunk) (let ((c (built thunk))) (if (condition? c) (matrix-kinds c) c)))
+       (list make-chez-sqlite3-error
+             (lambda () (make-sqlite-error 'error 'error "m" #f #f))
+             (lambda () (make-sqlite-error 'busy 'busy "m" #f #f))
+             (lambda () (make-sqlite-error 'constraint 'constraint "m" #f #f))
+             (lambda () (make-sqlite-error 'readonly 'readonly "m" #f #f))
+             an-invalid-text
+             a-library-unavailable a-wrong-thread a-closed
+             make-assertion-violation make-error)))
+
+(test-equal "locked is a busy too, and no other type holds more than its own predicates"
+  '(#t #f #f)
+  (let ((c (make-sqlite-error 'locked 'locked-sharedcache "m" #f #f)))
+    (list (sqlite-busy? c) (sqlite-constraint? c) (sqlite-read-only? c))))
+
+(test-equal "the four predicates are false for a symbol, #f, a string, a number and a message"
+  '((#f #f #f #f) (#f #f #f #f) (#f #f #f #f) (#f #f #f #f) (#f #f #f #f))
+  (map (lambda (v)
+         (list (sqlite-busy? v) (sqlite-constraint? v) (sqlite-read-only? v)
+               (sqlite-invalid-text? v)))
+       (list 'busy #f "busy" 5 (make-message-condition "busy"))))
+
+(test-equal "the exported types sit where the matrix says: each subtype's parent is &sqlite-error, &sqlite-invalid-text's is the root"
+  '(#t #t #t #t)
+  (list (eq? (record-type-parent (record-type-descriptor &sqlite-busy)) (record-type-descriptor &sqlite-error))
+        (eq? (record-type-parent (record-type-descriptor &sqlite-constraint)) (record-type-descriptor &sqlite-error))
+        (eq? (record-type-parent (record-type-descriptor &sqlite-read-only)) (record-type-descriptor &sqlite-error))
+        (eq? (record-type-parent (record-type-descriptor &sqlite-invalid-text)) (record-type-descriptor &chez-sqlite3-error))))
+
+(test-equal "the subtypes' own fields: none; &sqlite-invalid-text's are column and offset"
+  '(#() #() #() #(column offset))
+  (list (record-type-field-names (record-type-descriptor &sqlite-busy)) (record-type-field-names (record-type-descriptor &sqlite-constraint))
+        (record-type-field-names (record-type-descriptor &sqlite-read-only)) (record-type-field-names (record-type-descriptor &sqlite-invalid-text))))
+
+;; --- &sqlite-invalid-text ----------------------------------------------------------------
+
+(test-equal "an invalid-text carries its column and its byte offset"
+  '(3 5)
+  (built (lambda ()
+           (let ((c (an-invalid-text)))
+             (list (sqlite-invalid-text-column c) (sqlite-invalid-text-offset c))))))
+
+(test-equal "an invalid-text takes 0 and a number beyond a fixnum, each field alone"
+  '((0 7) (8 0) (100000000000000000000 100000000000000000001))
+  (map (lambda (p)
+         (built (lambda ()
+                  (let ((c (make-sqlite-invalid-text (car p) (cdr p))))
+                    (list (sqlite-invalid-text-column c) (sqlite-invalid-text-offset c))))))
+       '((0 . 7) (8 . 0) (100000000000000000000 . 100000000000000000001))))
+
+(test-equal "make-sqlite-invalid-text refuses a column or an offset that is no exact natural, naming which field and the value by shown-value"
+  '((assertion-violation make-sqlite-invalid-text (column -1))
+    (assertion-violation make-sqlite-invalid-text (column (kind string)))
+    (assertion-violation make-sqlite-invalid-text (column 1.5))
+    (assertion-violation make-sqlite-invalid-text (column #f))
+    (assertion-violation make-sqlite-invalid-text (offset -1))
+    (assertion-violation make-sqlite-invalid-text (offset (kind string)))
+    (assertion-violation make-sqlite-invalid-text (offset 2.0))
+    (assertion-violation make-sqlite-invalid-text (offset x))
+    (assertion-violation make-sqlite-invalid-text (column -1)))
+  (list (raised (lambda () (make-sqlite-invalid-text -1 0)))
+        (raised (lambda () (make-sqlite-invalid-text "3" 0)))
+        (raised (lambda () (make-sqlite-invalid-text 1.5 0)))
+        (raised (lambda () (make-sqlite-invalid-text #f 0)))
+        (raised (lambda () (make-sqlite-invalid-text 0 -1)))
+        (raised (lambda () (make-sqlite-invalid-text 0 secret)))
+        (raised (lambda () (make-sqlite-invalid-text 0 2.0)))
+        (raised (lambda () (make-sqlite-invalid-text 0 'x)))
+        (raised (lambda () (make-sqlite-invalid-text -1 -1)))))
+
+(define invalid-text-accessors
+  (list (cons 'sqlite-invalid-text-column sqlite-invalid-text-column)
+        (cons 'sqlite-invalid-text-offset sqlite-invalid-text-offset)))
+
+(test-equal "each invalid-text accessor refuses another type's condition, a sqlite-error, the root, a string by its kind, a number and a list holding a string, from the accessor"
+  (map (lambda (a)
+         (list (refusal (car a) '(kind other))
+               (refusal (car a) '(kind other))
+               (refusal (car a) '(kind other))
+               (refusal (car a) '(kind string))
+               (refusal (car a) 5)
+               (refusal (car a) '(kind list))))
+       invalid-text-accessors)
+  (map (lambda (a)
+         (map (lambda (v) (raised (lambda () ((cdr a) v))))
+              (list (an-sqlite-error) (a-closed) (make-chez-sqlite3-error) secret 5
+                    (list "u" secret))))
+       invalid-text-accessors))
+
+;; invalid-text-compound : (-> Any) -> Any
+;; What THUNK raised: its kinds, who, whether it has a message and irritants
+;; (never the text), and the column and offset; an assertion violation as
+;; (assertion-violation WHO IRRITANTS); or no-raise.
+(define (invalid-text-compound thunk)
+  (guard (e ((sqlite-invalid-text? e)
+             (list (matrix-kinds e)
+                   (and (who-condition? e) (condition-who e))
+                   (if (message-condition? e) 'message 'no-message)
+                   (if (irritants-condition? e) 'irritants 'no-irritants)
+                   (sqlite-invalid-text-column e) (sqlite-invalid-text-offset e)))
+            ((and (assertion-violation? e) (who-condition? e) (irritants-condition? e))
+             (list 'assertion-violation (condition-who e) (condition-irritants e)))
+            (#t (list 'other-raise (describe e))))
+    (thunk)
+    'no-raise))
+
+(test-equal "raise-invalid-text raises the whole condition: an invalid-text from the who given, with a message, no irritants, its column and offset"
+  '((#t #f #t #f #f #f #f #t #f #f #f) column-value message no-irritants 4 9)
+  (invalid-text-compound (lambda () (raise-invalid-text 'column-value 4 9))))
+
+(test-equal "raise-invalid-text names its who, and takes column 0 and offset 0"
+  '(column-name column-bytevector)
+  (map (lambda (who)
+         (let ((c (invalid-text-compound (lambda () (raise-invalid-text who 0 0)))))
+           (if (and (list? c) (> (length c) 1)) (cadr c) c)))
+       '(column-name column-bytevector)))
+
+(test-equal "raise-invalid-text refuses a who that is no symbol, before it checks the fields, and a field the constructor refuses, from the constructor"
+  '((assertion-violation raise-invalid-text (who (kind string)))
+    (assertion-violation raise-invalid-text (who 5))
+    (assertion-violation raise-invalid-text (who (kind string)))
+    (assertion-violation make-sqlite-invalid-text (column -1))
+    (assertion-violation make-sqlite-invalid-text (offset (kind string))))
+  (list (invalid-text-compound (lambda () (raise-invalid-text "column-value" 1 2)))
+        (invalid-text-compound (lambda () (raise-invalid-text 5 1 2)))
+        (invalid-text-compound (lambda () (raise-invalid-text "w" -1 "x")))
+        (invalid-text-compound (lambda () (raise-invalid-text 'w -1 2)))
+        (invalid-text-compound (lambda () (raise-invalid-text 'w 1 "2")))))
+
+(test-equal "raise-invalid-text never returns: a handler that returns gets the &non-continuable R6RS raises for it"
+  'non-continuable
+  (guard (e ((non-continuable-violation? e) 'non-continuable)
+            (#t (list 'other-raise (describe e))))
+    (with-exception-handler (lambda (c) 'handled) (lambda () (raise-invalid-text 'w 1 2)))
+    'returned-normally))
 
 (test-end "conditions")
 

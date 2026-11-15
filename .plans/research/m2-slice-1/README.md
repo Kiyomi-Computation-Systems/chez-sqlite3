@@ -55,3 +55,59 @@ tokenizer does. ADR-0014 decision 4 and the constraint get an amendment with thi
 The scanner then agrees with prepare over the whole complement, as R2 asked, with no exceptions."
 U+FEFF was found by the same probe afterwards and follows the same choice
 ([ADR-0014, amended](../../decisions/0014-statements-belong-to-their-connection.md)).
+
+## The strict decoder's cost ([utf8-cost.sps](utf8-cost.sps))
+
+Measured 2026-11-14 in the Guix container (Chez 10.4.0), not under Valgrind, on an Intel Core Ultra
+5 125H (x86_64, 18 logical CPUs). The decoder is the byte-by-byte one:
+`utf8-ill-formed-offset`, then `utf8->string`. Each row is the median of 5 runs, each run a
+collection and then 20 calls (10 passes for the values), reported as ms per call:
+
+```
+$ scripts/guix-env sh -c '$CHEZ --libdirs src:tests:build/scheme-libs \
+    --program .plans/research/m2-slice-1/utf8-cost.sps'
+```
+
+| Input | `utf8->string` | `strict-utf8->string` | Ratio |
+|---|---|---|---|
+| 1 MiB of ASCII (1,048,576 bytes) | 2.9 ms | 4.4 ms | 1.52 |
+| about 1 MiB of mixed 2-, 3- and 4-byte text (1,048,572 bytes) | 2.95 ms | 5.2 ms | 1.76 |
+| 100,000 values of 16 bytes (ASCII) | 1.9 ms | 4.4 ms | 2.32 |
+
+Three runs of the script agreed within 5% (ratios 1.52 to 1.79 for the megabyte rows, 2.25 to 2.32
+for the values). So the check adds about 1.5 ms per MiB, and 14 to 25 ns per 16-byte value. No
+wider-read path was built; the decision is the maintainer's.
+
+## The decoder against Python ([utf8-dump.sps](utf8-dump.sps), [utf8-check.py](utf8-check.py))
+
+`utf8-dump.sps` writes `utf8-ill-formed-offset`'s answer for every 1-byte input (256), every 2-byte
+input (65,536) and the range edges of Table 3-7's 3- and 4-byte rows (104), under `build/`, in the
+container, which has no `python3`. On the host, `utf8-check.py` compares each line with
+`bytes.decode('utf-8')`, whose `UnicodeDecodeError.start` is the same offset: 65,896 lines, 65,896
+agreed, none disagreed. The check was watched failing: one answer changed in the dump gave
+`65,895 agreed, 1 disagreed`.
+
+```
+$ scripts/guix-env sh -c '$CHEZ --libdirs src:tests:build/scheme-libs \
+    --program .plans/research/m2-slice-1/utf8-dump.sps build/utf8-dump.txt'
+$ python3 -I .plans/research/m2-slice-1/utf8-check.py build/utf8-dump.txt
+```
+
+## Which 1-, 2- and 3-byte SQL SQLite leaves empty ([tail-accepted.sps](tail-accepted.sps))
+
+On Guix's 3.53.1, 6 NUL-free inputs of 1 byte, 42 of 2 bytes (65,280 tried) and 798 of 3 bytes
+(16,581,375 tried) come out of `sqlite3_prepare_v3` empty: `SQLITE_OK` and a NULL statement. Of the
+798, 1 is `EF BB BF` and 255 are `2F 2A` and a byte (a `/*` with one byte after it). On the floor,
+3.45.1 (`build/m2s1-floor/libsqlite3-floor.so`, through `CHEZ_SQLITE3_LIBRARY`), the lists of all
+three lengths are identical. `tests/test-sql-tail.sps` holds the 1- and 2-byte lists as one
+literal and the 3-byte list as a second, and holds the scanner to them: every listed 3-byte input
+is accepted, and every 3-byte input over the 14 bytes of `tail.sps`' alphabet (2,744) is accepted
+exactly when it is listed.
+
+```
+$ scripts/guix-env sh -c '$CHEZ --script .plans/research/m2-slice-1/tail-accepted.sps'
+$ scripts/guix-env sh -c 'CHEZ_SQLITE3_LIBRARY=$PWD/build/m2s1-floor/libsqlite3-floor.so $CHEZ --script .plans/research/m2-slice-1/tail-accepted.sps'
+```
+
+The pass takes about 5 s. Its output is the 1- and 2-byte lines, a `3-byte` marker line, the
+3-byte lines, and the counts.
