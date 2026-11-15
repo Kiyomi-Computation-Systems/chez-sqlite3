@@ -79,7 +79,7 @@ and its no-raise sentinel is `(no-raise VALUE)`.
 
 | Suite | Red run | Each row's failure | Final |
 |---|---|---|---|
-| `test-connection` | 49 passed, 8 failed | the seven depth rows at `depth-2`; the warning row resumed, `(proc-went-on handled)`; the engine row refused at fuel 1 to 44 and 60 | 57 |
+| `test-connection` | 49 passed, 8 failed | the six depth rows at `depth-2`, one of them holding two sites; the warning row resumed, `(proc-went-on handled)`; the engine row refused at fuel 1 to 44 and 60 | 57 |
 | `test-blocks` | 8 passed, 3 failed | each at `depth-2` | 11 |
 | `test-native` | 44 passed, 2 failed | re-entry at `depth-2`, both helpers; the freed-by-PROC free at `depth-3`, through `call-with-c-string` | 46 |
 | `test-public` | 18 passed, 1 failed | the engine row refused at every fuel, 1 to 40 | 19 |
@@ -271,3 +271,61 @@ the rule at another tree.
   same-object row and the warning row.
 - **The docs' detail list,** checked line by line against `discovery.sls`, `verify.sls` and
   `native.sls`.
+
+## The review of the fixes, and its fixes
+
+The fixes were reviewed by Opus, read-only. It found one major finding and six minor ones, and
+each was reproduced. The caller reran its share probe: `()` on the fixed tree and `(8)` on
+`mut-A-narrow`. The fixes were made by a Sonnet builder, then by the caller.
+
+Evidence that each row added in the worktree `chez-sqlite3-wt-m1close` (branch `m1-closing-review`, base `41068a5`)
+fails through the property it claims to guard. Format of `.plans/m1-slice-4-mutation-log.md`: each mutation was
+applied to the worktree's file in place (a saved copy restored after, checked with `cmp`), shown with `git diff -U0`
+to have landed where meant, run through `scripts/guix-env make test SUITES=<suite>`, and reverted. Counts are the
+suite's own `# of expected passes` and `# of unexpected failures`. Chez 10.4.0, Guix container.
+
+Rows added to tests/test-connection.sps: 63 passes on the fixed tree (60 before this work).
+
+## Reds before the fix
+
+| Run | Passed | Failed | Failing rows |
+|---|---|---|---|
+| test-connection, connection.sls as at 41068a5 (no dynamic-wind), re-entry rows only | 61 | 2 | "refuses a continuation of its procedure re-entered ..." (actual: `not-reentered`); "runs its procedure once when its continuation is re-entered ..." (actual: 2) |
+| test-check-ci, check-ci.sh as at HEAD (no stray rule) | 384 | 11 | every stray row but the existing-rule ones: double-quoted, single-quoted, two spaces, `run: \|`, `run: >-`, `./scripts/ci/`, `scripts/ci//`, `scripts/ci/sub/`, `;true`, `&&true`, `true && ...` |
+
+The engine sweep (fuel 1 to 60) passed before the fix: it guards the fix against an expiry, see M5 and M6.
+
+## Mutations, on the fixed tree (src/chez-sqlite3/private/connection.sls)
+
+| # | Mutation | Passed | Failed | Rows that failed |
+|---|---|---|---|---|
+| M1 | the critical-section of `call-with-open-handle` replaced by `begin` | 62 | 1 | the close-in-another-engine sweep (on the pre-fix tree the failing fuels were 8 to 12: the procedure ran on a closed connection) |
+| M2 | the handle read before the section (`early`), the section's `handle` bound to it | 62 | 1 | the same sweep (on the pre-fix tree: fuel 8) |
+| M3 | the guard in the section narrowed to `((condition? c) ...)` | 61 | 2 | the fresh-symbol row and the fresh-pair row: handler depth 2, not 1 |
+| M4 | the same two, on the pre-fix tree, when the sweep was first written | 59 | 1 each | the same sweep |
+| M5 | `finished` set in the dynamic-wind's after thunk | 61 | 2 | the close-in-another-engine sweep (fuels 9 and 10 refused as re-entered) and the engine sweep of `call-with-open-handle` (fuels 1, 2, 3, 5, ...) |
+| M6 | `finished` set before the section | 61 | 2 | the same two sweeps (fuel 10 refused in the first; 1, 2, 5, 10 ... in the second) |
+
+M3's "depth 2" is the raise from inside the section, a handler running with interrupts disabled: the failure the row guards.
+
+## Reached by hand (check-ci's Makefile recipe)
+
+Copy of the tree under the scratchpad, `chmod a-x scripts/ci/check-chez.sh`, host `sh`:
+
+- fixed Makefile, `CHECK_CI_ROOT=/elsewhere make check-ci`: 5 problems, rc 2, as plain `make check-ci`;
+- old Makefile, `CHECK_CI_ROOT=<an intact tree> make -f Makefile.old check-ci`: "has the one shape check-ci reads", rc 0 (a pass that should be a failure);
+- fixed Makefile, the same variable: "FAILED (problems: 5)", rc 2.
+
+
+### The caller's additions
+
+- **The stray-path rule now reads `scripts/`, not only `scripts/ci/`.** `run: scripts/./ci/extra.sh`
+  passed, since it holds no `scripts/ci/`.
+  - Two rows plant `scripts/./ci/` and `scripts//ci/`, with the message naming `scripts/`. Red, 13
+    rows failed: the 11 old rows on their new message, and the two new spellings.
+  - With the rule widened, `test-check-ci` passed 397, and the real workflow passed `check-ci`.
+    Today's workflow names `scripts/` only in comments, its run lines and its cache keys.
+- **The re-entry flag's residual window:** `call-with-open-handle` under engines, 20 calls a
+  slice, over fuel 1 to 3000. All 60,000 calls ran, and every count was 0.
+- **The re-entry and share probes, rerun:** `reenter-handle.sps` is refused with `re-entered`, and
+  `share.sps 200` gives `()`.

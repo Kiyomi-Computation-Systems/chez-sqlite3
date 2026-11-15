@@ -13,9 +13,10 @@ newest first.
   global constraints carry no provisional rule.
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
-  Force pushes and deletion are refused. Admins can override.
-- **Now: M1's closing review,** on `m1-closing-review`. It runs on Opus, read-only, over the six
-  slices and the M1 plan, and its fixes land on this branch.
+  Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
+  merges. Force pushes and deletion are refused. Admins can override.
+- **Now: M1's closing review is built,** as PR #15 on `m1-closing-review`. M1 is done when it
+  merges. M2 runs in another session: its slice 0, PR #14, is merged, and its slice 1 is under way.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -34,18 +35,66 @@ newest first.
       narrow `PATH` to their shims.
     - The rows now get the Chez by its path, on this branch ([traps.md](traps.md)).
     - `check-dev` passed, and `check-test-fails` held in all 13 cases.
-- **Owed to M1's closing review:** `connection.sls` raises inside two critical sections.
-  - The two places: `call-with-open-handle`'s refusals and its PROC, and `call-with-database`'s
-    open.
-  - The M2 session found this, and the M1 session reproduced it on `2579a0d`. A
-    `with-exception-handler` handler for such a raise runs with interrupts still disabled, at
-    depth 2; a `guard` clause unwinds first, at depth 1.
-  - It breaks the file's own rule, that anything raised is raised after the section.
-  - The closing review fixes it, with an ADR-0012 amendment, and M2 slice 3 drops the change it
-    had planned.
+  - **On `m1-closing-review` at `0c2aad2`,** after the closing review's fixes, 26 of 26 suites
+    passed with Apple's library and with Homebrew's. `test-ci-sqlite` passed 80, its build rows
+    included, and so did the new depth and engine rows.
 - **Open:** brief D3 to D6, for M2 and M3.
 
 ## Close-outs
+
+### 2026-11-14 — M1's closing review and its fixes (PR #15)
+
+- **Reviewed** (Opus, read-only, on `497d45b`): no blocker, 3 major, 6 minor, all reproduced:
+  - **Raises inside critical sections at eight sites,** not the ledger's two. A
+    `with-exception-handler` handler of one runs with interrupts disabled, where an engine never
+    expires and another thread's collection waited more than 11 s.
+  - **`open-database` and `sqlite-compile-option?` refused under engines,** at fuel 20 every time.
+  - **`test-ci-sqlite`'s build rows failing on a bare `CHEZ`,** which the Mac found first.
+- **Built** (decided by the maintainer, 2026-11-14: the scope, all sites, and the procedure's
+  contract):
+  - **The rule:** nothing raises inside `critical-section` or a critical `dynamic-wind` thunk, in
+    `src/` or the testing library. Nine sites now answer data and raise after their sections.
+  - **`call-with-open-handle`** checks the database and its owner before its section. Its
+    procedure answers data, its raise isn't resumable, and a re-entry is refused.
+  - **The open and `sqlite-compile-option?`** hold their C string in one section, and complete
+    under engines.
+  - **`check-ci`** holds the CI scripts' execute bits, and refuses a line naming `scripts/` in any
+    other spelling. `make check-ci` clears `CHECK_CI_ROOT`.
+  - **Stale comments,** and the detail's docs.
+  - **Strict branch protection.**
+- **Reviewed again** (Opus, read-only, the fixes): no blocker, 1 major, 6 minor.
+  - The major: no row held the section's purpose, so two mutants handed the procedure a freed
+    handle.
+  - All were fixed or recorded. Most of the minors were older than the fixes.
+- **Watched failing:** every new row first, the builders' 25 mutations, and the caller's own
+  ([the log](m1-closing-review-mutation-log.md)).
+- **Records:** amendments to ADR-0012, ADR-0011 and ADR-0005, which the maintainer accepted on
+  2026-11-14. Also the acceptance of slice 5's and PR #12's amendments, and the rule in
+  `AGENTS.md` and the constraints, approved by the maintainer that day.
+- **The Mac:** 26 of 26, on both libraries, on `0c2aad2`.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | M1's closing review | Opus | about 452k | 124 | 28 min |
+  | Critical sections and engines | Opus | about 448k | 170 | 60 min |
+  | The minor findings | Sonnet | about 106k | 42 | 16 min |
+  | Review of the fixes | Opus | about 308k | 81 | 26 min |
+  | That review's fixes | Sonnet | about 148k | 86 | 11 min |
+
+  The minor findings were fixed in a worktree of their own, beside the critical-section builder.
+- **Learned** ([traps.md](traps.md)):
+  - A `guard` hides what a `with-exception-handler` handler sees. Every depth row reads the
+    depth in a handler.
+  - A rule's purpose needs a row of its own. The section existed so that no close falls between
+    a check and its use, and nothing held that until the second review.
+  - An engine spends no ticks inside a section.
+
+### M1 is done
+
+M1's slices 0 to 5 (PRs #7 to #11 and #13), its owed fixes (PR #12) and its closing review
+(PR #15) are merged, with CI passing in every job. The maintainer's Mac ran the suites on both
+libraries. Next is M2, whose plan is ADR-0014 and `.plans/2026-11-14-m2-plan.md`.
 
 ### 2026-11-14 — M1 slice 5: the `floor` and `current` lanes (PR #13, `497d45b`)
 

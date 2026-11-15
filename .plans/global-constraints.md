@@ -189,7 +189,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
   five jobs and their keys; each check as a step's whole run line; only the checkout and cache
   actions, each cache restored before its build and saved before its check; every script a step
-  runs by its path there and executable; no `if:` but the
+  runs by its path there and executable, and no other line naming `scripts/`, a comment or a
+  cache key's `hashFiles(` list apart, so no spelling runs a script the rule hasn't read
+  (`make check-ci` clears `CHECK_CI_ROOT`); no `if:` but the
   cache's own;
   no line naming a variable that steers a check; no key spelled so a text check would miss it. It
   holds against a mistaken edit, not a deliberate one: a step can compute any name. A change to

@@ -275,4 +275,27 @@ approved its scope and the procedure's contract that day.
   The rows failed on the code before. Each of 18 mutations moved one raise back inside its section,
   or one string's extent out of it, and each was caught
   ([the log](../m1-closing-review-mutation-log.md)).
+- **The review of these fixes** (Opus, read-only) found one major finding and six minor ones, all
+  reproduced:
+  - **No row held the section's purpose,** that no close falls between the open check and the
+    procedure's use of the handle. Replacing the section with `begin`, or reading the handle
+    before it, passed every suite, and handed the procedure a closed connection's freed handle at
+    fuel 8 to 12.
+    - A row now sweeps two engines that share a connection, over fuel 1 to 60. One runs
+      `call-with-open-handle`, the other closes the connection.
+    - Both mutants fail the row.
+  - **A continuation captured in the procedure, re-entered after the call ended,** ran the
+    procedure again with the freed handle. This was older than these fixes.
+    - `call-with-open-handle` now sits in a plain `dynamic-wind`, as `call-with-block` does. Its
+      before thunk refuses a re-entry from WHO, with irritants `(re-entered)`, outside any section.
+    - Its flag is set once the section's outcome is in hand, never by an after thunk, so an
+      engine's expiry before then still resumes.
+    - A few instructions lie between the flag's set and the wind's exit, where an expiry's resume
+      would be refused. No engine reached them: over fuel 1 to 3000, 60,000 calls all ran.
+  - **A raise of a non-condition from the procedure** comes back as the same object, at depth 1.
+- **Under an engine, `call-with-database`'s close at an expiry may fail.** It did so with an
+  untracked statement left open. Its failure is then raised during the expiry's unwind. The
+  engine is lost, its caller sees "no engine active", and the connection stays open. This was
+  older than these fixes, and M2's close, which raises a finalize's failure, makes it reachable
+  without a defect. A program under engines takes `open-database`, and `docs/reference.md` says so.
 - **The M2-plan amendment's last bullets are met here.** M2 slice 3 builds on this contract.

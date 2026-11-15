@@ -166,6 +166,14 @@ Accepted by the maintainer on 2026-11-14, proposed in M1's closing review, with 
 - **`foreign-block` raises `foreign-alloc`'s refusal after its section.** `foreign-alloc` raises
   an assertion violation on a failed `malloc`, with the string `"foreign-alloc"` as its who. It
   never answers 0.
+- **Its cost:** `call-with-c-string`'s work on the caller's string now runs inside the caller's
+  section: the copy, the U+0000 scan, `string->utf8` and the byte-by-byte fill.
+  - It scales with the string, and nothing loops.
+  - For `sqlite-compile-option?` on 30,000,000 characters, another thread's `collect-rendezvous`
+    waited up to about 1 s, against about 0.1 s before. Under engines, that time isn't preempted.
+  - The open showed at most 99 ms, for reasons not established.
+  - Encoding before the section, keeping only the block's making, use and free inside it, would
+    remove it.
 - **Not refused:** a procedure that frees `call-with-out-pointer`'s slot makes the helper read
   freed memory after the procedure returns. No caller does this. A row that did was seen only by
   the memory gate, as an `Invalid read of size 8`.

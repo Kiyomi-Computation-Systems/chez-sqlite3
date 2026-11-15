@@ -127,8 +127,9 @@ option, are assertion violations, and nothing is opened.
 ```
 
 It does not survive an engine's preemption: an engine that runs out of
-fuel leaves the procedure, and the connection is closed under it. If you
-use engines, use `open-database` and close it yourself.
+fuel leaves the procedure, and the connection is closed under it. If that
+close fails, its error is raised out of the engine, and the engine is
+lost. If you use engines, use `open-database` and close it yourself.
 
 ### `database?`
 
