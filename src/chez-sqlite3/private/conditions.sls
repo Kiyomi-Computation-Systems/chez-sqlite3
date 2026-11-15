@@ -10,6 +10,15 @@
 ;;;                                opened it (ADR-0010)
 ;;;   &sqlite-closed               a connection used once closed (ADR-0012)
 ;;;
+;;; M2 adds three classes of &sqlite-error, told by its primary code (ADR-0013,
+;;; amended), and one more member under the root:
+;;;
+;;;   &sqlite-error
+;;;     &sqlite-busy               busy and locked
+;;;     &sqlite-constraint         constraint
+;;;     &sqlite-read-only          readonly
+;;;   &sqlite-invalid-text         TEXT that is not well-formed UTF-8 (ADR-0015)
+;;;
 ;;; A raise may compound one with &who, &message and &irritants, so that the
 ;;; default handler prints readable text. Tests assert the reason symbol and
 ;;; the fields, never that text.
@@ -37,6 +46,11 @@
 
           &sqlite-closed make-sqlite-closed sqlite-closed?
           raise-closed
+
+          &sqlite-busy sqlite-busy? &sqlite-constraint sqlite-constraint?
+          &sqlite-read-only sqlite-read-only? sqlite-error-subtype
+          &sqlite-invalid-text make-sqlite-invalid-text sqlite-invalid-text?
+          sqlite-invalid-text-column sqlite-invalid-text-offset raise-invalid-text
 
           kind-of shown-value checked-accessor)
   (import (chez-sqlite3 private require-threaded)
@@ -227,6 +241,38 @@
     (checked-accessor 'sqlite-error-offset sqlite-error? "an &sqlite-error"
                       unchecked-sqlite-error-offset))
 
+  ;; --- the classes of &sqlite-error (ADR-0013, amended; ADR-0014 decision 8) -------
+  ;;
+  ;; Each is an &sqlite-error with the same fields and none of its own, so a
+  ;; caller catches a class (&sqlite-busy for busy and locked) or the family.
+  ;; Its constructor is private: make-sqlite-error alone makes an
+  ;; &sqlite-error, and builds the class sqlite-error-subtype names.
+
+  ;; sqlite-busy? : Any -> Boolean
+  (define-condition-type &sqlite-busy &sqlite-error
+    unchecked-make-sqlite-busy sqlite-busy?)
+
+  ;; sqlite-constraint? : Any -> Boolean
+  (define-condition-type &sqlite-constraint &sqlite-error
+    unchecked-make-sqlite-constraint sqlite-constraint?)
+
+  ;; sqlite-read-only? : Any -> Boolean
+  (define-condition-type &sqlite-read-only &sqlite-error
+    unchecked-make-sqlite-read-only sqlite-read-only?)
+
+  ;; sqlite-error-subtype : Any -> (U 'busy 'constraint 'read-only #f)
+  ;; The class of an &sqlite-error whose primary code's name is CODE, its
+  ;; `code` field: busy and locked are 'busy, constraint is 'constraint,
+  ;; readonly is 'read-only. Any other value is #f: another symbol, an
+  ;; extended code's name such as busy-snapshot, an integer, a non-symbol.
+  ;; Total: it raises nothing, for it runs where nothing may raise.
+  (define (sqlite-error-subtype code)
+    (case code
+      ((busy locked) 'busy)
+      ((constraint) 'constraint)
+      ((readonly) 'read-only)
+      (else #f)))
+
   ;; exact-integer? : Any -> Boolean
   (define (exact-integer? x) (and (integer? x) (exact? x)))
 
@@ -242,8 +288,10 @@
 
   ;; make-sqlite-error : (U Symbol Integer) (U Symbol Integer) String (U String #f)
   ;;                     (U Natural #f) -> &sqlite-error
-  ;; Each field checked, in order; a field of the wrong kind is refused by
-  ;; refuse-field.
+  ;; The one procedure that makes an &sqlite-error. Each field checked, in
+  ;; order; a field of the wrong kind is refused by refuse-field. It then
+  ;; builds the class sqlite-error-subtype gives for CODE, or a plain
+  ;; &sqlite-error for #f.
   (define (make-sqlite-error code extended-code message sql offset)
     (unless (or (symbol? code) (exact-integer? code))
       (refuse-field 'make-sqlite-error 'code "a code's name or an exact integer" code))
@@ -256,7 +304,12 @@
       (refuse-field 'make-sqlite-error 'sql "a string or #f" sql))
     (unless (or (not offset) (exact-natural? offset))
       (refuse-field 'make-sqlite-error 'offset "an exact natural or #f" offset))
-    (unchecked-make-sqlite-error code extended-code message sql offset))
+    (let ((make (case (sqlite-error-subtype code)
+                  ((busy) unchecked-make-sqlite-busy)
+                  ((constraint) unchecked-make-sqlite-constraint)
+                  ((read-only) unchecked-make-sqlite-read-only)
+                  (else unchecked-make-sqlite-error))))
+      (make code extended-code message sql offset)))
 
   ;; check-raise-who : Symbol Any -> Void
   ;; HELPER's refusal of a WHO that is no symbol.
@@ -284,6 +337,48 @@
                                  (sqlite-result-code-name extended) message sql offset))
            (compound (condition c (make-who-condition who) (make-message-condition message))))
       (raise compound)))
+
+  ;; --- &sqlite-invalid-text (ADR-0015, decision 6; ADR-0013, amended) -------------
+  ;;
+  ;;   column  the column's index, an exact natural
+  ;;   offset  the byte offset where the first maximal ill-formed subpart of
+  ;;           the TEXT value (or the column's name) starts, an exact natural
+  ;;
+  ;; Under the root, not under &sqlite-error: SQLite answered, and our own
+  ;; strict decoder refused what it said.
+  (define-condition-type &sqlite-invalid-text &chez-sqlite3-error
+    unchecked-make-sqlite-invalid-text sqlite-invalid-text?
+    (column unchecked-sqlite-invalid-text-column)
+    (offset unchecked-sqlite-invalid-text-offset))
+
+  ;; sqlite-invalid-text-column : &sqlite-invalid-text -> Natural
+  (define sqlite-invalid-text-column
+    (checked-accessor 'sqlite-invalid-text-column sqlite-invalid-text?
+                      "an &sqlite-invalid-text" unchecked-sqlite-invalid-text-column))
+  ;; sqlite-invalid-text-offset : &sqlite-invalid-text -> Natural
+  (define sqlite-invalid-text-offset
+    (checked-accessor 'sqlite-invalid-text-offset sqlite-invalid-text?
+                      "an &sqlite-invalid-text" unchecked-sqlite-invalid-text-offset))
+
+  ;; make-sqlite-invalid-text : Natural Natural -> &sqlite-invalid-text
+  ;; COLUMN and OFFSET checked, each an exact natural, by refuse-field.
+  (define (make-sqlite-invalid-text column offset)
+    (unless (exact-natural? column)
+      (refuse-field 'make-sqlite-invalid-text 'column "an exact natural" column))
+    (unless (exact-natural? offset)
+      (refuse-field 'make-sqlite-invalid-text 'offset "an exact natural" offset))
+    (unchecked-make-sqlite-invalid-text column offset))
+
+  ;; raise-invalid-text : Symbol Natural Natural -> Nothing
+  ;; An &sqlite-invalid-text of COLUMN and OFFSET, compounded with &who WHO
+  ;; and a &message. A WHO that is no symbol is an assertion violation from
+  ;; raise-invalid-text; a field the constructor refuses, one from it.
+  (define (raise-invalid-text who column offset)
+    (check-raise-who 'raise-invalid-text who)
+    (let ((c (make-sqlite-invalid-text column offset)))
+      (raise (condition c (make-who-condition who)
+                        (make-message-condition
+                         "a TEXT value or a column name that is not well-formed UTF-8; column-bytevector reads a value's bytes")))))
 
   ;; --- &sqlite-wrong-thread (ADR-0010, decision 1; ADR-0013, decision 6) ---------
   ;;
@@ -337,6 +432,12 @@
     (raise (condition (make-sqlite-closed) (make-who-condition who)
                       (make-message-condition "the connection is closed"))))
 
+  ;; sqlite-busy? : Any -> Boolean
+  ;; sqlite-constraint? : Any -> Boolean
+  ;; sqlite-read-only? : Any -> Boolean
+  ;; sqlite-invalid-text? : Any -> Boolean
+  ;; sqlite-invalid-text-column : &sqlite-invalid-text -> Natural
+  ;; sqlite-invalid-text-offset : &sqlite-invalid-text -> Natural
   ;; sqlite-error? : Any -> Boolean
   ;; sqlite-error-code : &sqlite-error -> (U Symbol Integer)
   ;; sqlite-error-extended-code : &sqlite-error -> (U Symbol Integer)

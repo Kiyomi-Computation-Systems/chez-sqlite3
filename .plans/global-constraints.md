@@ -120,8 +120,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   or failed statement is refused until `reset!`; every index is checked before C against a count
   read in the same critical section (ADR-0014).
 - **SQL holding no statement, or more than one, is refused,** the tail checked by a scan in Scheme,
-  never prepared, against SQLite's own whitespace (space, `\t`, `\n`, `\f`, `\r`) and comments;
-  so is SQL holding U+0000 (ADR-0014, ADR-0011 amended).
+  never prepared, against SQLite's own tokenizer: whitespace runs (one of space, `\t`, `\n`, `\f`,
+  `\r`, then any of those or `\v`), U+FEFF, comments and semicolons, agreeing with SQLite's
+  prepare on every input; so is SQL holding U+0000 (ADR-0014 amended, ADR-0011 amended).
 - **Reset and finalize raise a failure of their own,** and never repeat a failed step's. A finalize
   clears, untracks and counts the statement down whatever SQLite answers, then raises (ADR-0014).
 - **A statement verb raises after its critical section, never inside it,** and reaches a

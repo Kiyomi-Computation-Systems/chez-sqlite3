@@ -7,16 +7,19 @@ newest first.
 ## Now
 
 - **M0 is done:** PRs #1 to #6.
-- **M1 slices 0 to 5 are merged** as PRs #7 to #11 and #13, with M1's owed fixes as PR #12, each
-  squash-merged in order with CI passing in every job.
-- **The maintainer accepted ADR-0010 to ADR-0013 and their amendments** on 2026-11-14, and the
-  global constraints carry no provisional rule.
+- **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
+  closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
+- **M2 slice 0 is merged** as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their
+  amendments to the older records.
+- **The maintainer accepted ADR-0010 to ADR-0015 and their amendments** on 2026-11-14, ADR-0015's
+  M2 slice 1 amendment among them. ADR-0014's slice 1 amendment records the maintainer's own
+  choice, "Match SQLite". The global constraints carry no provisional rule.
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M1's closing review is built,** as PR #15 on `m1-closing-review`. M1 is done when it
-  merges. M2 runs in another session: its slice 0, PR #14, is merged, and its slice 1 is under way.
+- **Now: M2 slice 1, the pure core, is built,** as PR #16 on `m2-slice-1-pure-core`, rebased onto
+  #15. Next is slice 2, the bindings ([the M2 plan](2026-11-14-m2-plan.md), §5).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -42,11 +45,72 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
-- **Open:** brief D3 to D6, for M2 and M3.
+- **Open:** whether `test-library-loading` is split, which slice 2 measures (the M2 plan, §7).
+  Brief D3 to D6 are settled (the M2 plan, §2).
 
 ## Close-outs
 
-### 2026-11-14 — M1's closing review and its fixes (PR #15)
+### 2026-11-14 — M2 slice 1: the pure core (PR #16)
+
+- **Built,** in pure Scheme on synthetic inputs, with no foreign code. Slices 3 and 4 call much of
+  it inside critical sections, so every classifier, reader and scanner answers data, and only the
+  `raise-…` procedures raise.
+  - `(chez-sqlite3 private conditions)`: `&sqlite-busy`, `&sqlite-constraint` and
+    `&sqlite-read-only`, classed by primary code in `make-sqlite-error`, so M1's raises get them
+    unchanged; `&sqlite-invalid-text` and its raiser.
+  - `(chez-sqlite3 private values)`: `sql-null`; `bind-plan`, with its four refusal rules;
+    `raise-bind-refusal`, which names a value by its kind only; the NULL-pointer readers of a
+    column's bytes and name, which take their foreign calls as procedures.
+  - `(chez-sqlite3 private utf8)`: the strict decoder, by Unicode's Table 3-7, with the maximal
+    ill-formed subpart's offset (D6); byte offsets into character indexes (Q6).
+  - `(chez-sqlite3 private statement-state)`: the verb × state table, the state a step leaves, and
+    which reset or finalize answers are failures of their own.
+  - `(chez-sqlite3 private sql-tail)`: the tail scan (R2).
+- **Measured first** ([research/m2-slice-1/](research/m2-slice-1/)):
+  - **the tail:** every SQL of 1 to 3 bytes, and 8.1M of 4 to 6, prepared alone on 3.53.1 and the
+    floor alike. The scan as accepted disagreed with SQLite on 56,425 of them; amended, on none;
+  - **the decoder's cost:** 1.5 to 2.3 times `utf8->string`, about 1.5 ms per MiB, so TEXT is
+    checked byte by byte, as ADR-0015 says;
+  - **the decoder against Python's:** 65,896 of 65,896 inputs agree.
+- **Decided by the maintainer** (2026-11-14): to start slice 1 before #15 merged, on files #15
+  didn't touch ("Start slice 1 now"); and the tail's whitespace, "Match SQLite": `\v` continues a
+  run, and U+FEFF followed under the same choice (ADR-0014, amended); ADR-0015's amendment
+  accepted ("Accept it"); and the merge.
+- **Watched failing:** each suite red against a stub first; 470 mutations, 461 caught, and the 9
+  survivors argued equivalent ([the log](m2-slice-1-mutation-log.md)).
+- **Reviewed** (Opus, read-only): 1 blocker and 9 minor findings, each reproduced before it was
+  fixed.
+  - **The blocker:** Chez's `utf8->string` drops a leading U+FEFF, so a TEXT value starting with
+    one read back changed. The round trips sampled every 257th scalar value and skipped it. The
+    decoder restores it, and a row round-trips every scalar value alone.
+  - **The minor findings:** the NULL-pointer reader reads the message too, keeping the order in
+    tested code; `utf8-offset->index` no longer answers −1; `raise-bind-refusal` checks its who;
+    SQLite's 798 accepted 3-byte tails became a second literal; and comments, a message, a row's
+    name and the log's wording.
+- **Records:** ADR-0014 amended by the maintainer's choice; ADR-0015 amended, and accepted; the
+  plan's §4 and §7; the constraints' tail rule. After the rebase onto #15: this
+  ledger, the traps, and ADR-0012's citation of #15.
+- **CI:** passed in all five jobs on `cd95ac1`, before the rebase; `memory` took 16m23s.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder | Sonnet | about 288k | 94 | 38.5 min |
+  | Adversarial review | Opus | about 314k | 76 | 17.6 min |
+  | The review's fixes | Sonnet | about 177k | 77 | 17.6 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - Chez's `utf8->string` drops a leading U+FEFF, and the brief had called it exact. A round trip
+    over a sample skipped the one value that mattered: where the whole set is small enough, take
+    all of it.
+  - A record's model of SQLite's tokenizer disagreed with prepare on 56,425 short inputs. Measured
+    over the whole complement before the build, it cost an amendment, not a rewrite.
+  - A condition type's name is syntax, not a record type, and Chez shares its empty bytevector.
+  - ADR-0015's amendment gave a false reason, that M1 doesn't bind `sqlite3_errcode`, and the
+    maintainer accepted it so. It was found reading the records for slice 2, and corrected before
+    the merge. A record's claim about the code is checked against the code, like any other.
+
+### 2026-11-14 — M1's closing review and its fixes (PR #15, `1b2f688`)
 
 - **Reviewed** (Opus, read-only, on `497d45b`): no blocker, 3 major, 6 minor, all reproduced:
   - **Raises inside critical sections at eight sites,** not the ledger's two. A
@@ -99,6 +163,51 @@ newest first.
 M1's slices 0 to 5 (PRs #7 to #11 and #13), its owed fixes (PR #12) and its closing review
 (PR #15) are merged, with CI passing in every job. The maintainer's Mac ran the suites on both
 libraries. Next is M2, whose plan is ADR-0014 and `.plans/2026-11-14-m2-plan.md`.
+
+### 2026-11-14 — M2 slice 0: the plan and the records (PR #14, `3d24cce`)
+
+It merged before M1's closing review, while that ran in another session, so its close-out is
+written here, in M2 slice 1's branch, after #15 had rewritten this ledger.
+
+- **Built:** [the M2 plan](2026-11-14-m2-plan.md); ADR-0014, statements, and ADR-0015, values;
+  amendments to ADR-0002, ADR-0005, ADR-0011, ADR-0012 and ADR-0013; brief D3 to D6 settled; the
+  global constraints' "Statements and values"; [research/m2-plan/](research/m2-plan/) and
+  [research/m2-review/](research/m2-review/).
+- **Decided by the maintainer** (2026-11-14): D3 to D6, Q1 to Q8, R1 and R2 (the plan, §2 and §3);
+  the records accepted, and the slicing approved.
+- **Measured,** on 3.53.1 and 3.45.1 alike:
+  - autoreset reruns a finished insert;
+  - prepare drops a second statement;
+  - a once-stepped `insert … returning` loses its rows at a reset or finalize under a reader;
+  - reset and finalize block in the busy handler (1502 ms);
+  - `clear_bindings` while a row is ready is a use-after-free, which Valgrind sees only with values
+    bigger than lookaside;
+  - preparing a PRAGMA has side effects;
+  - `integer-64` wraps at 2⁶³.
+- **Reviewed** twice (Opus, read-only), each finding reproduced before it was fixed:
+  - the records: 2 blockers, 7 majors, 14 minors;
+  - the fixes: no blocker, 2 majors, 8 minors.
+- **Handed to M1:** the two raises inside `connection.sls`'s critical sections, agreed with the M1
+  session. Its closing review fixed them in #15, with seven more sites (ADR-0012, amended).
+- **CI:** passed on every run; `memory` took 14m35s, 18m56s and 14m58s. `main` moved twice under
+  the branch, with #12 and #13, and ADR-0005 conflicted each time, since both sides appended an
+  amendment; M2's went last. The first merge attempt failed DIRTY after CI had passed.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Slice 0's adversarial review | Opus | about 305k | 71 | 24 min |
+  | The review of the fixes | Opus | about 274k | 60 | 19 min |
+
+- **Learned:**
+  - A rule drawn from one measured answer ("reset and finalize only repeat a step's code") doesn't
+    bound what a call can answer: read the call's documented failure paths too.
+  - A test modelled on a block that never ends by itself (the FIFO) passes a binding that blocks
+    until a timeout ends it.
+  - Unsetting `CHEZ_SQLITE3_LIBRARY` inside the container leaves a probe with no library, and its
+    Valgrind log reads clean.
+  - Valgrind logs carry the checkout's absolute path: scrub them before committing.
+  - Status lines overclaimed again, as in M1 slice 0: quote the option the maintainer picked.
 
 ### 2026-11-14 — M1 slice 5: the `floor` and `current` lanes (PR #13, `497d45b`)
 

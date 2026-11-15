@@ -134,6 +134,9 @@
   a `with-exception-handler` handler of the raise runs with interrupts
   disabled, where an engine never expires and another thread's collection
   waits. Answer data there, and raise after the section (ADR-0012, amended).
+* Chez's `utf8->string`, and a UTF-8 transcoder, drop one leading U+FEFF.
+  Decode text a user controls with `strict-utf8->string`, which keeps it,
+  never `utf8->string` or `c-string->string` (`.plans/traps.md`).
 
 ## Closing ritual
 

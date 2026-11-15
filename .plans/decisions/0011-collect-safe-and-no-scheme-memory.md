@@ -126,7 +126,8 @@ floor, 3.45.1, with the same results ([research/m2-plan/](../research/m2-plan/),
 - **Decision 4 for columns:** a TEXT value is read through `sqlite3_column_text` and a BLOB through
   `sqlite3_column_blob`, each followed by `sqlite3_column_bytes`, and copied out by our code. An
   empty BLOB answers a NULL pointer, read as no bytes; any NULL pointer is told from running out
-  of memory by `sqlite3_errcode`, read at once (ADR-0015, decision 7).
+  of memory by `sqlite3_errcode`, read at once (ADR-0015, decision 7; its M2 slice 1 amendment
+  reads `sqlite3_extended_errcode` instead).
 - **Decision 5 in M2: `sqlite3_prepare_v3`, `sqlite3_step`, `sqlite3_reset` and `sqlite3_finalize`
   are `__collect_safe`.** Reset and finalize join because they were measured waiting: with
   `pragma busy_timeout = 1500` and another connection's read, the reset and the finalize of an

@@ -200,8 +200,8 @@ finalize's failure, is the maintainer's own choice (R1, 2026-11-14,
   2026-11-14, in the shape slice 0's review proposed: the record and owner checks before the
   section, the open check inside it returning its refusal as data, the procedure returning data
   and raising nothing, every refusal raised after, and `call-with-open-handle` still the one
-  accessor. It lands with its own amendment to this record, for the maintainer to accept; M2 slice
-  3 builds on the contract it settles, and this amendment cites its PR once merged.
+  accessor. It landed as PR #15, `1b2f688`, with its own amendment to this record, below, which
+  the maintainer accepted on 2026-11-14; M2 slice 3 builds on the contract it settles.
 - **A failed close raises `&sqlite-busy` there,** a `&sqlite-error`: ADR-0013's subtypes, amended
   the same day, class every raise.
 

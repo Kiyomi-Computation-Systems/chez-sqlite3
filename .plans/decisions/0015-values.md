@@ -6,7 +6,8 @@
   condition for TEXT that isn't UTF-8, with the column readable as bytes instead (D6), and its type
   and fields (Q8, in [ADR-0013](0013-errors-are-condition-types.md)'s amendment); and decision 10's
   `sql-null` as one value (Q7). The reasons given here were put to the maintainer, and accepted
-  with the record.
+  with the record. Amended 2026-11-14 in M2 slice 1, from its measurements and its review, and
+  accepted by the maintainer that day ([amendment](#amendment-2026-11-14-what-m2-slice-1-measured)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every bound parameter and every column value
 - **Settles:** brief §3f, D4, D5 and D6
@@ -201,3 +202,33 @@
 - **Three guards of our own are each watched failing against a planted copy,** though they aren't
   defects the assessment lists: integers bound or read through `int`, booleans guessed from a
   declared type, and parameters numbered from 0.
+
+## Amendment, 2026-11-14: what M2 slice 1 measured
+
+Accepted by the maintainer on 2026-11-14 ("Accept it"), proposed in M2 slice 1, from its build and
+its Opus review. None of it changes a choice of the maintainer's; each item corrects what the record says
+the code reads, or adds a measurement.
+
+- **Chez's `utf8->string` drops one leading U+FEFF,** besides replacing invalid bytes with U+FFFD
+  (measured on Chez 10.4.0, M2 slice 1's review). `EF BB BF 69 64` decodes to `"id"`, and
+  `EF BB BF` alone to `""`. A U+FEFF anywhere else survives, and of two leading ones only the first
+  is dropped. Decision 9's strict decoder put a value through `utf8->string` once it was checked,
+  so a TEXT value or a column name starting with U+FEFF read back changed, which decision 9 exists
+  to prevent. The decoder now restores it, and a round trip of every scalar value holds it.
+- **Decision 7's code is read through `sqlite3_extended_errcode`,** not `sqlite3_errcode`. M1
+  binds both (ADR-0002, amended). A connection opens with `SQLITE_OPEN_EXRESCODE`, so both would
+  answer the extended code, but only `sqlite3_extended_errcode` answers it whatever the open's
+  flags. `(nomem CODE MESSAGE)` carries it to `raise-sqlite-error`, which takes an extended code.
+  As first written, this bullet said M1 doesn't bind `sqlite3_errcode`. M1 slice 2 does; the
+  reason was corrected before slice 1 merged, and the decision is unchanged.
+- **The reader reads the message too:** on `SQLITE_NOMEM` it calls `sqlite3_errmsg` straight after
+  the code and answers `(nomem CODE MESSAGE)`, so the order decision 7 asks for lives inside the
+  reader its stand-ins test, not in the slice 4 code around it.
+- **The strict check's cost,** measured against `utf8->string` (median of 5 runs, in the
+  container, not under Valgrind): 1.52 times for 1 MiB of ASCII, 1.76 for 1 MiB of mixed 2-, 3- and
+  4-byte text, and 2.32 for 100,000 values of 16 bytes. That is about 1.5 ms per MiB, and under
+  25 ns per short value, so TEXT stays checked byte by byte, as the Consequences say
+  ([research/m2-slice-1/](../research/m2-slice-1/)).
+- **Chez shares its empty bytevector:** `(eq? (make-bytevector 0 0) (make-bytevector 0 0))` is
+  `#t` on 10.4.0. So "a fresh empty bytevector" can't be told from a shared one, and only
+  non-empty plans and reads are held fresh.

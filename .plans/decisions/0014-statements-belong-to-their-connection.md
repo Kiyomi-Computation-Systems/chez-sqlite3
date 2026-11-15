@@ -7,6 +7,8 @@
   than one (Q3), and its scan of the tail in Scheme (R2); decision 5's refusal of `step!` on a done
   or failed statement until `reset!` (Q4); and decision 8's finalize, close, then raise the first
   finalize failure, with the connection left open and counted when the close fails (R1).
+  Amended 2026-11-14 in M2 slice 1, by the maintainer's choice to match SQLite: decision 4's
+  whitespace ([amendment](#amendment-2026-11-14-the-tail-scans-whitespace-m2-slice-1)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -58,8 +60,8 @@
 - **A `with-exception-handler` handler of a raise inside `critical-section` runs with interrupts
   disabled;** a `guard` clause, which runs after unwinding, doesn't (measured). M1's
   `call-with-open-handle` raises its refusals inside its section, and `call-with-database`'s failed
-  open raises inside one, so their callers' handlers do (measured). M1's closing review fixes both
-  (ADR-0012, amended).
+  open raises inside one, so their callers' handlers do (measured). M1's closing review fixed both,
+  in PR #15 (ADR-0012, amended).
 - **Thunderchez leaked prepare's out-parameter, and its close stopped after finalizing the first
   statement,** joining return codes with `or`, where 0 is true (the assessment).
 
@@ -231,3 +233,33 @@
 - **Valgrind sees a leaked statement only through its connection.** The counters see it alone.
 - **M3's conveniences are built on these verbs,** and its statement cache (brief D3) holds
   statements its connection still tracks.
+
+## Amendment, 2026-11-14: the tail scan's whitespace (M2 slice 1)
+
+The maintainer's choice, 2026-11-14, in M2 slice 1, put with the measurement below: "`\v`
+continues a whitespace run, as SQLite's tokenizer does. ADR-0014 decision 4 and the constraint get
+an amendment with this measurement. The scanner then agrees with prepare over the whole
+complement, as R2 asked, with no exceptions."
+
+- **Measured** on Guix's 3.53.1 and at the floor, 3.45.1, alike
+  ([research/m2-slice-1/](../research/m2-slice-1/)). Every SQL of 1, 2 and 3 bytes, and every one
+  of 4 to 6 bytes over the 14 bytes the rules name, was prepared alone and compared with decision
+  4's scan. As accepted, the scan disagreed with SQLite on 5 inputs of 2 bytes, 66 of 3, and
+  56,354 of 4 to 6; amended, on none. Inputs holding a NUL were set aside: SQL holding U+0000 is
+  refused before it is scanned (ADR-0011, amended).
+- **Why,** by the floor's `sqlite3GetToken`: a whitespace token starts on one of the five bytes
+  (`aiClass`), then runs while `sqlite3Isspace` holds, and `sqlite3CtypeMap` counts `\v` as a
+  space. And `EF BB BF`, U+FEFF, is a whitespace token of its own wherever it stands (`CC_BOM`).
+- **Decision 4's whitespace becomes SQLite's tokenizer's:**
+  - a run that starts with space, `\t`, `\n`, `\f` or `\r`, and continues on any of those or
+    `\v`. So `" \v"` is whitespace, and so is `\v` after a `--` comment's line end; `\v` alone,
+    or straight after a semicolon or a `*/`, is not;
+  - **U+FEFF's three bytes, wherever they stand.** The same probe found them after the choice
+    above, as the one input left that the scan and SQLite disagreed on, and they follow that
+    choice: matching SQLite, with no exceptions.
+- **The rest of decision 4 stands:** `--` to the end of the line or of the SQL; `/*` with at
+  least one byte after it, to the first `*/` whose `*` comes after the `/*`, or to the end;
+  semicolons; and the measured errors, `\v` starting a token, U+0085, U+00A0 and a final `/*`.
+- **The scan starts on a fresh token:** SQLite's tail begins after the first statement's
+  semicolon (measured: 9 for `select 1; select 2`, 15 for `select 1 -- c\n; x`), as SQLite's own
+  prepare of the tail, the scan's oracle, would.
