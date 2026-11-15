@@ -279,9 +279,11 @@
           'finalized
           (let* ((state (unchecked-statement-state st))
                  (answer (sqlite3-finalize handle))
+                 ;; SQLite has freed the statement: clear the handle before
+                 ;; anything that could raise reads the message.
+                 (cleared (set-statement-handle! st #f))
                  (failure (finish-failure state answer))
                  (message (and failure (message-of connection answer))))
-            (set-statement-handle! st #f)
             (let ((double-free (guard (c (#t c)) (count-down! 'statement) #f)))
               (cond (failure (list 'failed failure message (string-copy (unchecked-statement-sql st))))
                     (double-free (list 'raised double-free))

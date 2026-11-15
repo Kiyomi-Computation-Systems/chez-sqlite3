@@ -9,24 +9,28 @@ newest first.
 - **M0 is done:** PRs #1 to #6.
 - **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
   closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
-- **M2 slices 0 to 3 are merged:**
+- **M2 slices 0 to 4 are merged:**
   - slice 0, as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their amendments to the
     older records;
   - slice 1, the pure core, as PR #16, `e6b2462`;
   - slice 2, the bindings, as PR #17, `f2ffa0e`;
-  - slice 3, statements, as PR #18, `0572267`.
-- **The maintainer accepted ADR-0010 to ADR-0015 and their amendments** on 2026-11-14, ADR-0015's
-  M2 slice 1 amendment among them. ADR-0014's slice 1 amendment records the maintainer's own
-  choice, "Match SQLite". The global constraints carry no provisional rule.
+  - slice 3, statements, as PR #18, `0572267`;
+  - slice 4, values, as PR #19, `00ab0c8`.
+- **The maintainer accepted ADR-0010 to ADR-0015 and their amendments:**
+  - on 2026-11-14, all of them to that day;
+  - on 2026-11-15, ADR-0015's slice 1 and slice 4 amendments, ADR-0005's and ADR-0011's slice 2
+    amendments, and ADR-0014's slice 3 amendment.
+
+  ADR-0014's slice 1 amendment and ADR-0005's split record the maintainer's own choices ("Match
+  SQLite"; "Split in #19, rest after").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2 slice 4, values, is built,** as PR #19 on `m2-slice-4-values`, rebased onto `main` once
-  #18 merged. Each slice was opened as a PR, and the next begun on top of it: the maintainer's
-  order of 2026-11-14. The maintainer approved #17 and #18 on 2026-11-15. Next are the
-  maintainer's hand run on the Mac, and M2's closing review ([the M2 plan](2026-11-14-m2-plan.md),
-  §5).
+- **Now: M2's closing review is built,** as PR #20 on `m2-closing-review`. M2 is done when it merges. The
+  slices ran in the maintainer's stacked order of 2026-11-14: each opened as a PR, and the next
+  begun on top of it. The Mac run is done, below. Next is M3, whose plan is drafted on `m3-plan`
+  by another session, with ADR-0016 to ADR-0020.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -72,7 +76,50 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-15 — M2 slice 4: values (PR #19)
+### 2026-11-15 — M2's closing review and its fixes (PR #20)
+
+- **Reviewed** (Opus, read-only, on `1a53b13`, all of M2): no blocker, 2 majors and 7 minors, each
+  reproduced.
+  - **The gate:** `test-library-loading` took 562.2 s on #19's own run, past the 450 s line and
+    38 s from the timeout. Slice 2 had settled from one 409 s run that it stays whole. Split in #19,
+    by the maintainer's choice ("Split in #19, rest after"), with a check that fails any suite past
+    three quarters of `MEMORY_TIMEOUT` (ADR-0005, amended).
+  - **For M3:** a critical section isn't a lock between threads, so M3's interrupt and the close
+    share a mutex. Sent to the M3 session with the minors that bear on M3: big copies, WHO-taking
+    internals, and a prepare that hands back its tail.
+- **Fixed here:**
+  - a row prepares a table-valued function, so "no prepare flags" is held: a `NO_VTAB` mutant had
+    passed every suite;
+  - `check-seam`'s rule (l): only `utf8` and `native` reference `utf8->string`;
+  - `finalize-handle!` clears its handle straight after `sqlite3_finalize`;
+  - comments on `call-with-block`'s re-entry and on `sqlite3_column_name`'s reader;
+  - the docs: a normal return can raise a finalize's own failure; `column-bytevector` refuses by
+    storage class; the wrong-thread condition covers statements; and big copies hold this thread's
+    interrupts. `README.org` says what M2 gives;
+  - records: ADR-0015's copies reworded, and the big-copy cost recorded, accepted by the
+    maintainer ("Accept it"); the CI times of the split; stale lines of this ledger and
+    `traps.md`.
+- **Watched failing:** 8 mutants, all caught ([the log](m2-closing-review-mutation-log.md)).
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | M2's closing review | Opus | about 390k | 120 | 30 min |
+  | The gate split, in #19 | Opus | about 403k | 121 | 76 min |
+  | The minor fixes | Sonnet | about 146k | 85 | 20 min |
+
+- **Learned:**
+  - One CI run is one sample: runners differ about two to one. The check now holds the line.
+  - A review of the whole milestone found what five slice reviews couldn't: a cost read from one
+    run, and a rule two slices shared that no row held.
+
+### M2 is done
+
+M2's slices 0 to 4 (PRs #14, #16 to #19) and its closing review (PR #20) are merged, with CI
+passing in every job. The maintainer's Mac ran the suites on both libraries. Next is M3, whose plan,
+ADR-0016 to ADR-0020, is drafted on `m3-plan`.
+
+### 2026-11-15 — M2 slice 4: values (PR #19, `00ab0c8`)
 
 - **Built:**
   - `(chez-sqlite3 private statement-values)`: `bind!`, `bind-all!`, `clear-bindings!`,

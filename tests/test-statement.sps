@@ -615,6 +615,19 @@
              (list before r after closed (native-counts))))))
       (lambda () (undo! '() (if db (list db) '()))))))
 
+(test-equal "prepare passes no flags (ADR-0014, decision 4): a table-valued function, which SQLITE_PREPARE_NO_VTAB refuses, prepares and steps through prepare-statement: pragma_table_info('t') of a two-column table gives two rows then done, and counts 2; only the connection is counted"
+  (list (list #t #t #f) 2 one-connection)
+  (with-memory-db
+   (lambda (db)
+     (exec! db "create table t (a, b)")
+     (let* ((st (prepare-statement db "select name from pragma_table_info('t')"))
+            (steps (guard (e (#t (finalize-statement! st) (raise e)))
+                     (let* ((one (step! st)) (two (step! st)) (three (step! st)))
+                       (list one two three)))))
+       (finalize-statement! st)
+       (let ((rows (query-int db "select count(*) from pragma_table_info('t')")))
+         (list steps rows (native-counts)))))))
+
 (test-equal "SQL holding U+0000, first, in the middle and last, is refused by its rule, naming it by its kind, before anything is allocated: no block at the raise"
   (map (lambda (i) (refused-row '(sql-holds-nul (kind string)))) '(0 4 8))
   (map (lambda (i) (refusal-row (nul-at "select 1" i))) '(0 4 8)))

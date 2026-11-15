@@ -277,6 +277,19 @@
                  ": it cannot be read as data: Exception in open-file-input-port: failed for "
                  (at case file) ": no such file or directory"))
 
+;; utf8-string-tail : String
+;; Rule (l)'s complaint, after the library's name.
+(define utf8-string-tail
+  (string-append "references utf8->string, but only (chez-sqlite3 private native) and"
+                 " (chez-sqlite3 private utf8) may: Chez's drops a leading U+FEFF, which"
+                 " strict-utf8->string restores"))
+
+;; utf8-string-complaint : String String -> String
+;; Rule (l): the library NAME, in the fixture tree utf8-string, in FILE.sls.
+(define (utf8-string-complaint file name)
+  (string-append (at "utf8-string" (p (string-append file ".sls"))) ": " name " "
+                 utf8-string-tail))
+
 ;; --- the fixture cases ---------------------------------------------------------------
 
 ;; P : String -> String
@@ -481,6 +494,14 @@
                                  (macro-export "call3" '("foreign-procedure" "foreign-ref")))))
    (list "macro-internal: rule (k) passing: an internal macro, a let-syntax, never exported, and a macro exported by a library that imports no library-only name (variant)"
          "macro-internal" 'variant (holds 3 3))
+
+   ;; --- rule (l): utf8->string ---
+   (list "utf8-string: rule (l): a library but native and utf8 that references utf8->string, in a body, an import and a rename export, and a vector literal, each once, in file order; native and utf8 pass, and so do near names, a string and a comment"
+         "utf8-string" 'real
+         (refused 3
+                  (utf8-string-complaint "a-body" "(chez-sqlite3 private a-body)")
+                  (utf8-string-complaint "b-import" "(chez-sqlite3 private b-import)")
+                  (utf8-string-complaint "c-vector" "(chez-sqlite3 private c-vector)")))
 
    ;; --- the import allowlist ---
    (list "unlisted-libraries: a library not on the import allowlist: a third-party one, (chezscheme csv7), ($system), (scheme csv7), the test helpers, a near-family name, an (rnrs ...) name R6RS lacks, the library's own name without its family"
@@ -803,8 +824,10 @@
                 (lambda (dir)
                   (refusals-at dir
                                (list (cons '(chez-sqlite3 private x)
-                                           (map (lambda (id) (not-listed (symbol->string id)))
-                                                complement-names)))))))
+                                           ;; (chezscheme) exports utf8->string: rule (l) names it last.
+                                           (append (map (lambda (id) (not-listed (symbol->string id)))
+                                                        complement-names)
+                                                   (list utf8-string-tail))))))))
 
 ;; The library-only names are held by rule (f)'s rows: in a library of their
 ;; own they are refused there, and that is their row.

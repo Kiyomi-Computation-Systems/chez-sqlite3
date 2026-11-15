@@ -146,7 +146,8 @@
   Decode a column's value or name with `strict-utf8->string`, which keeps
   it. `c-string->string` keeps it too but replaces invalid bytes, so it
   reads SQLite's own text and messages, never a value or a name. Never
-  `utf8->string` (`.plans/traps.md`).
+  `utf8->string` outside `utf8` and `native`: `check-seam` refuses it
+  (`.plans/traps.md`).
 
 ## Closing ritual
 
