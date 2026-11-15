@@ -133,7 +133,19 @@
     (sqlite-wrong-thread? chez-sqlite3 private conditions)
     (sqlite-wrong-thread-owner chez-sqlite3 private conditions)
     (sqlite-wrong-thread-caller chez-sqlite3 private conditions)
-    (sqlite-closed? chez-sqlite3 private conditions)))
+    (sqlite-closed? chez-sqlite3 private conditions)
+    (sqlite-busy? chez-sqlite3 private conditions)
+    (sqlite-constraint? chez-sqlite3 private conditions)
+    (sqlite-read-only? chez-sqlite3 private conditions)
+    (prepare-statement chez-sqlite3 private statement)
+    (finalize-statement! chez-sqlite3 private statement)
+    (call-with-statement chez-sqlite3 private statement)
+    (statement? chez-sqlite3 private statement)
+    (statement-sql chez-sqlite3 private statement)
+    (parameter-count chez-sqlite3 private statement)
+    (step! chez-sqlite3 private statement)
+    (reset! chez-sqlite3 private statement)
+    (column-count chez-sqlite3 private statement)))
 
 (test-begin "public")
 
@@ -141,18 +153,19 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) names 28 exports"
-  28
+(test-equal "(chez-sqlite3) names 40 exports"
+  40
   (length public-names))
 
-(test-equal "(chez-sqlite3) exports exactly the connections, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
+(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures, call-with-open-handle and failure-details"
+(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures and the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!"
   (sorted-names '(open-database close-database! call-with-database database? call-with-open-handle
-                  failure-details))
+                  failure-details check-database-owner first-finalize-failure track-statement!
+                  tracked-statements untrack-statement!))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
 

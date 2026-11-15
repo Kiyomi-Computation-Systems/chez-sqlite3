@@ -9,7 +9,9 @@
 ;;; reference, once per process (ADR-0002).
 ;;;
 ;;; A connection belongs to the thread that opened it, and is closed
-;;; explicitly: no collection closes one (ADR-0010, ADR-0012).
+;;; explicitly: no collection closes one (ADR-0010, ADR-0012). A statement
+;;; belongs to its connection and its thread, and closing the connection
+;;; finalizes it (ADR-0014).
 (library (chez-sqlite3)
   (export
    ;; --- connections (chez-sqlite3 private connection) ---
@@ -22,6 +24,26 @@
    call-with-database
    ;; database? : Any -> Boolean
    database?
+
+   ;; --- statements (chez-sqlite3 private statement) ---
+   ;; prepare-statement : Database String -> Statement
+   prepare-statement
+   ;; finalize-statement! : Statement -> Void
+   finalize-statement!
+   ;; call-with-statement : Database String (Statement -> A ...) -> A ...
+   call-with-statement
+   ;; statement? : Any -> Boolean
+   statement?
+   ;; statement-sql : Statement -> String
+   statement-sql
+   ;; parameter-count : Statement -> Natural
+   parameter-count
+   ;; step! : Statement -> Boolean
+   step!
+   ;; reset! : Statement -> Void
+   reset!
+   ;; column-count : Statement -> Natural
+   column-count
 
    ;; --- the library (chez-sqlite3 private report) ---
    ;; sqlite-version : -> String
@@ -73,10 +95,19 @@
    ;; sqlite-wrong-thread-caller : SqliteWrongThread -> Natural
    sqlite-wrong-thread-caller
    ;; sqlite-closed? : Any -> Boolean
-   sqlite-closed?)
+   sqlite-closed?
+   ;; sqlite-busy? : Any -> Boolean
+   sqlite-busy?
+   ;; sqlite-constraint? : Any -> Boolean
+   sqlite-constraint?
+   ;; sqlite-read-only? : Any -> Boolean
+   sqlite-read-only?)
   (import (chez-sqlite3 private require-threaded)
           (only (chez-sqlite3 private connection)
                 open-database close-database! call-with-database database?)
+          (only (chez-sqlite3 private statement)
+                prepare-statement finalize-statement! call-with-statement statement?
+                statement-sql parameter-count step! reset! column-count)
           (only (chez-sqlite3 private report)
                 sqlite-version sqlite-version-number sqlite-source-id sqlite-library-path
                 sqlite-library-source sqlite-compile-option? sqlite-compile-options)
@@ -88,4 +119,4 @@
                 sqlite-library-unavailable-path sqlite-library-unavailable-source
                 sqlite-library-unavailable-detail sqlite-library-unavailable-candidates
                 sqlite-wrong-thread? sqlite-wrong-thread-owner sqlite-wrong-thread-caller
-                sqlite-closed?)))
+                sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?)))

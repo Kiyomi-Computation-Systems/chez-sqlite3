@@ -430,7 +430,7 @@
   (define (raise-closed who)
     (check-raise-who 'raise-closed who)
     (raise (condition (make-sqlite-closed) (make-who-condition who)
-                      (make-message-condition "the connection is closed"))))
+                      (make-message-condition "the connection or statement is closed"))))
 
   ;; sqlite-busy? : Any -> Boolean
   ;; sqlite-constraint? : Any -> Boolean

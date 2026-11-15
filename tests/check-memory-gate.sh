@@ -15,6 +15,13 @@
 #                   definitely lost, holding others, and allocated within
 #                   libsqlite3, read from the loss record's stack (the M1
 #                   plan, section 3.1)
+#   b  statement    the same for the statement plant, which prepares select 1
+#                   through prepare-statement on a :memory: connection and
+#                   drops both: Valgrind sees the statement only through its
+#                   connection, the same one block definitely lost, holding
+#                   others, allocated within libsqlite3; its plain line, case
+#                   a's, holds the counters seeing the statement (ADR-0005,
+#                   amended for M2)
 #   b  fails        a program that Valgrind finds clean but that exits 1
 #                   is named FAIL with its exit, then its own lines, whole:
 #                   its FAIL line with its expected and actual values, 18
@@ -177,6 +184,7 @@ hang_timeout=15
 overrun=tests/memory-plant-overrun.sps
 leak=tests/memory-plant-leak.sps
 connection=tests/memory-plant-connection.sps
+statement=tests/memory-plant-statement.sps
 scratch=build/check-memory-gate
 after=$scratch/after.sps
 fails=$scratch/fails.sps
@@ -802,12 +810,13 @@ allowed=$vgdefault
 count_line()  { printf 'test-memory: ran %d, passed %d, failed %d, hung %d\n' "$1" "$2" "$3" "$4"; }
 
 # ---- a: each plant, run plainly ----
-for p in "$overrun" "$leak" "$connection"; do
+for p in "$overrun" "$leak" "$connection" "$statement"; do
   newtree
   case "$p" in
-    "$overrun") line="memory-plant-overrun: planted a one-byte write just past a 23-byte foreign block" ;;
-    "$leak")    line="memory-plant-leak: planted a 777-byte foreign block that nothing frees or holds" ;;
-    *)          line="memory-plant-connection: opened :memory: through open-database and dropped the record, never closed" ;;
+    "$overrun")    line="memory-plant-overrun: planted a one-byte write just past a 23-byte foreign block" ;;
+    "$leak")       line="memory-plant-leak: planted a 777-byte foreign block that nothing frees or holds" ;;
+    "$connection") line="memory-plant-connection: opened :memory: through open-database and dropped the record, never closed" ;;
+    *)             line="memory-plant-statement: prepared select 1 on :memory: through prepare-statement and dropped both, never finalized or closed; counts ((block . 0) (connection . 1) (statement . 1))" ;;
   esac
   plain=$("$CHEZ" --libdirs "$LIBDIRS" --program "$p" 2>&1)
   rc=$?
@@ -818,10 +827,11 @@ $(printf '%s\n' "$plain" | sed 's/^/  | /')"
 done
 
 # ---- b: test-memory fails on each plant, by name, with Valgrind's marker ----
-# The connection plant's sizes are SQLite's, and vary by version and build,
-# so its markers are patterns: one block definitely lost, holding others, in
-# the loss record and in the summary, then its stack.
-for p in "$overrun" "$leak" "$connection"; do
+# The connection and statement plants' sizes are SQLite's, and vary by
+# version and build, so their markers are patterns: one block definitely
+# lost, holding others, in the loss record and in the summary, then its
+# stack.
+for p in "$overrun" "$leak" "$connection" "$statement"; do
   newtree
   gate MEMORY_SUITES="$p $after"
   status=$?
@@ -845,7 +855,7 @@ ERROR SUMMARY: 1 errors from 1 contexts"
   done <<EOF
 $markers
 EOF
-  if [ "$p" = "$connection" ]; then
+  if [ "$p" = "$connection" ] || [ "$p" = "$statement" ]; then
     while IFS= read -r m; do
       want_match "$vlog" "$m" "its Valgrind log"
       want_match "$out" "$m" "test-memory's own output"
