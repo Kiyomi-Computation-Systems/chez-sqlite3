@@ -121,9 +121,11 @@ told in chez-curl's `.plans/traps.md`.
   that failed. (The M1 session's research for M2 slice 4, chez-sqlite3)
 
 - **Some BUSY no wait fixes.** COMMIT answers `SQLITE_BUSY`, "cannot commit transaction - SQL
-  statements in progress", while the connection's own statement is mid-row. So `sqlite-busy?` isn't
-  always "retry later": reset or finalize the statement first. (M3's research, reproduced in M2
-  slice 3, chez-sqlite3)
+  statements in progress", while the connection's own write is unfinished, such as an
+  `insert … returning` that has answered a row. A SELECT mid-row doesn't stop it. So
+  `sqlite-busy?` isn't always "retry later": reset or finalize the write first. Slice 3's first
+  wording, "mid-row", overstated it. (M3's research, reproduced in M2 slices 3 and 4,
+  chez-sqlite3)
 
 - **A statement's column count changes at its next step, after an `ALTER TABLE` on its own
   connection too,** not only another's: a held `select *` read 2, then 2 after the ALTER, then 3

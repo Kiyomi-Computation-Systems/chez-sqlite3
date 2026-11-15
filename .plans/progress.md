@@ -133,7 +133,8 @@ newest first.
   - the tail scan agrees with SQLite's own prepare on 20,602 inputs.
 - **From M3's research,** found by the M1 session and reproduced here:
   - an interrupt doesn't end a lock wait;
-  - COMMIT answers BUSY while the connection's own statement is mid-row;
+  - COMMIT answers BUSY while the connection's own write is unfinished. Slice 4 corrected "mid-row":
+    a SELECT mid-row doesn't stop it;
   - an `ALTER TABLE` on the statement's own connection changes its column count at its next step;
   - inside a transaction, a NOMEM read rolls the transaction back at the next reset or finalize.
 - **Decided by the maintainer** (2026-11-15):

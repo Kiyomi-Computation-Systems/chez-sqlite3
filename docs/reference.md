@@ -814,8 +814,10 @@ sqlite-busy? : Any -> Boolean
 
 Whether the value is an `sqlite-error?` whose primary code is `busy` or
 `locked`: another connection holds what this one needs. A `commit` refused
-while the connection's own statement is mid-row is `busy` too, and no wait
-fixes it: `reset!` or finalize that statement first.
+while the connection's own write is unfinished, such as an
+`insert … returning` that has answered a row, is `busy` too, and no wait
+fixes it: `reset!` or finalize that statement first. A `select` mid-row
+doesn't stop a `commit`.
 
 ### `sqlite-constraint?`
 
