@@ -321,58 +321,72 @@
          (answer (guard (e (#t (list 'raised (describe e)))) (make log!))))
     (list (reverse log) answer)))
 
-;; read-bytes : Natural Integer Natural Bytevector -> (List Log Answer)
-;; read-column-bytes with stand-ins answering POINTER, ERRCODE, ERRMSG ("the
-;; message"), BYTES and a copy that answers COPIED, each logging its call.
-(define (read-bytes pointer errcode bytes copied)
+;; read-bytes : Natural Integer Integer Natural Bytevector -> (List Log Answer)
+;; read-column-bytes with stand-ins answering POINTER, ERRCODE, TYPE, ERRMSG
+;; ("the message"), BYTES and a copy that answers COPIED, each logging its
+;; call.
+(define (read-bytes pointer errcode type bytes copied)
   (run-reader
    (lambda (log!)
      (read-column-bytes (lambda () (log! 'pointer) pointer)
                         (lambda () (log! 'errcode) errcode)
+                        (lambda () (log! 'type) type)
                         (lambda () (log! 'errmsg) "the message")
                         (lambda () (log! 'bytes) bytes)
                         (lambda (p n) (log! (list 'copy p n)) copied)))))
 
 (define copied-bytes (bytevector 7 8 9))
 
-(test-equal "a non-zero pointer: POINTER, BYTES, then COPY of the pointer and the length; ERRCODE is never called; the answer is the copy"
+(test-equal "a non-zero pointer: POINTER, BYTES, then COPY of the pointer and the length; ERRCODE, TYPE and ERRMSG are never called; the answer is the copy"
   '((pointer bytes (copy 4096 3)) #vu8(7 8 9))
-  (read-bytes 4096 7 3 copied-bytes))
+  (read-bytes 4096 7 5 3 copied-bytes))
 
-(test-equal "a non-zero pointer with a code that would be NOMEM is still read: the code is never asked"
+(test-equal "a non-zero pointer with a code that would be NOMEM and a type that would be NULL is still read: the code and the type are never asked"
   '((pointer bytes (copy 1 0)) #vu8(7 8 9))
-  (read-bytes 1 7 0 copied-bytes))
+  (read-bytes 1 7 5 0 copied-bytes))
 
 (test-equal "a non-zero pointer: the pointer and the length are passed on as they are, a large pointer among them"
   '((pointer bytes (copy 140737488355327 65536)) #vu8(7 8 9))
-  (read-bytes 140737488355327 5 65536 copied-bytes))
+  (read-bytes 140737488355327 5 5 65536 copied-bytes))
 
-(test-equal "a zero pointer and NOMEM (7): POINTER, ERRCODE at once, then ERRMSG; BYTES and COPY never; the answer is (nomem 7 MESSAGE)"
-  '((pointer errcode errmsg) (nomem 7 "the message"))
-  (read-bytes 0 7 3 copied-bytes))
+(test-equal "a zero pointer, NOMEM (7) and a NULL type (5): POINTER, ERRCODE at once, then TYPE, then ERRMSG; BYTES and COPY never; the answer is (nomem 7 MESSAGE)"
+  '((pointer errcode type errmsg) (nomem 7 "the message"))
+  (read-bytes 0 7 5 3 copied-bytes))
 
-(test-equal "a zero pointer and an extended NOMEM, low byte 7 (263, 519): the answer is (nomem CODE MESSAGE) with the code as given"
-  '(((pointer errcode errmsg) (nomem 263 "the message"))
-    ((pointer errcode errmsg) (nomem 519 "the message")))
-  (list (read-bytes 0 263 3 copied-bytes) (read-bytes 0 519 3 copied-bytes)))
-
-(test-equal "a zero pointer and ioerr-nomem (3082, low byte 10): not NOMEM, so a fresh empty bytevector and ERRMSG never called"
-  '((pointer errcode) #vu8())
-  (read-bytes 0 3082 3 copied-bytes))
-
-(test-equal "a zero pointer and the code after a row (100) or 0 (an empty value): an empty bytevector, ERRCODE asked once, ERRMSG never, nothing else"
-  '(((pointer errcode) #vu8()) ((pointer errcode) #vu8()) ((pointer errcode) #vu8()))
-  (list (read-bytes 0 100 3 copied-bytes) (read-bytes 0 0 3 copied-bytes)
-        (read-bytes 0 101 3 copied-bytes)))
-
-(test-equal "a zero pointer and every code whose low byte is not 7, over 0 to 300: an empty bytevector; and every one whose low byte is 7: nomem"
+(test-equal "a zero pointer, a code of 7 and a type that is not NULL, over every other type (1 to 4, and 0, 6): a stale 7, so an empty bytevector; ERRMSG never called, BYTES and COPY never"
   '(() ())
-  (list (filter (lambda (c) (not (equal? (read-bytes 0 c 3 copied-bytes)
+  (list (filter (lambda (t) (not (equal? (read-bytes 0 7 t 3 copied-bytes)
+                                         '((pointer errcode type) #vu8()))))
+                '(0 1 2 3 4 6))
+        (filter (lambda (t) (not (equal? (read-bytes 0 519 t 3 copied-bytes)
+                                         '((pointer errcode type) #vu8()))))
+                '(1 2 3 4))))
+
+(test-equal "a zero pointer and an extended NOMEM, low byte 7 (263, 519), with a NULL type: the answer is (nomem CODE MESSAGE) with the code as given"
+  '(((pointer errcode type errmsg) (nomem 263 "the message"))
+    ((pointer errcode type errmsg) (nomem 519 "the message")))
+  (list (read-bytes 0 263 5 3 copied-bytes) (read-bytes 0 519 5 3 copied-bytes)))
+
+(test-equal "a zero pointer and ioerr-nomem (3082, low byte 10): not NOMEM, so a fresh empty bytevector, TYPE and ERRMSG never called, even with a NULL type"
+  '((pointer errcode) #vu8())
+  (read-bytes 0 3082 5 3 copied-bytes))
+
+(test-equal "a zero pointer and the code after a row (100) or 0 (an empty value): an empty bytevector, ERRCODE asked once, TYPE and ERRMSG never, nothing else"
+  '(((pointer errcode) #vu8()) ((pointer errcode) #vu8()) ((pointer errcode) #vu8()))
+  (list (read-bytes 0 100 4 3 copied-bytes) (read-bytes 0 0 4 3 copied-bytes)
+        (read-bytes 0 101 4 3 copied-bytes)))
+
+(test-equal "a zero pointer and every code whose low byte is not 7, over 0 to 300: an empty bytevector, TYPE never asked; and every one whose low byte is 7, with a NULL type: nomem; with a BLOB type (4): an empty bytevector"
+  '(() () ())
+  (list (filter (lambda (c) (not (equal? (read-bytes 0 c 5 3 copied-bytes)
                                          '((pointer errcode) #vu8()))))
                 (filter (lambda (c) (not (= (bitwise-and c 255) 7))) (iota 300)))
-        (filter (lambda (c) (not (equal? (read-bytes 0 c 3 copied-bytes)
-                                         (list '(pointer errcode errmsg)
+        (filter (lambda (c) (not (equal? (read-bytes 0 c 5 3 copied-bytes)
+                                         (list '(pointer errcode type errmsg)
                                                (list 'nomem c "the message")))))
+                (filter (lambda (c) (= (bitwise-and c 255) 7)) (iota 300)))
+        (filter (lambda (c) (not (equal? (read-bytes 0 c 4 3 copied-bytes)
+                                         '((pointer errcode type) #vu8()))))
                 (filter (lambda (c) (= (bitwise-and c 255) 7)) (iota 300)))))
 
 ;; read-name : Natural Bytevector -> (List Log Answer)

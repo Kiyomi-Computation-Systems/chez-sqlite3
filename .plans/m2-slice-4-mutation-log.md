@@ -35,12 +35,17 @@ whole copies of the worktree, `build/m2s4/gate/`. None of it is in the repositor
 |---|---|---|---|
 | `test-native` | 69 passed, 13 failed | the 12 new rows and the widened export row, over native as it stood | 82 passed |
 | `test-statement-values` | 4 passed, 43 failed | a stub `statement-values.sls`: every export, none doing its work | 47 passed |
-| `test-statement-values-nomem` | 3 passed, 7 failed | the same stub | 10 passed |
+| `test-statement-values-nomem` | 3 passed, 7 failed | the same stub | 10 passed, then 13 after the review's fixes |
 | `test-statement-values-sections` | 2 passed, 5 failed | the same stub, the suite's first 7 rows | 9 passed |
 
-The rows that passed against the stub: the load, the counts once loaded, the export list (the stub
-exported the same names) and the counts at the end, in each suite that has them; E01 to E03 watch
-them fail, and E04 the load rows. The sections suite grew 2 rows after its red run, each watched
+The rows that passed against the stub, in the suites that have them: the load, the counts once
+loaded and the export list (the stub exported the same names), and the counts at the end; E01 to E03
+watch them fail, and E04 the load rows. The sections suite is the exception, and an earlier version
+of this note was wrong about it: it has no load, counts or export row, and its 2 passes in the red
+run were the end-count row and "bind-all! against a close". The review reran today's suite, 9 rows,
+against the same stub: 1 passed, 8 failed, the one pass the end-count row
+(`build/m2s4-fix/stub`; "bind-all! against a close" fails there now).
+The sections suite grew 2 rows after its red run, each watched
 failing by the mutant named in its place: `column-name` against a dropped column (K03), and a name
 changed by another engine while `bind!` runs (X12). Every row of the three new suites, and every
 new row of `test-native`, has failed under at least one mutation or red run.
@@ -51,7 +56,7 @@ Final green runs, the baseline B00, every row passed:
 |---|---|---|
 | `test-native` | 82 passed | 82 passed |
 | `test-statement-values` | 47 passed | 47 passed |
-| `test-statement-values-nomem` | 10 passed | 10 passed |
+| `test-statement-values-nomem` | 13 passed | 13 passed |
 | `test-statement-values-sections` | 9 passed | 9 passed |
 | `test-statement` | 75 passed | 75 passed |
 | `test-connection` | 63 passed | 63 passed |
@@ -112,13 +117,13 @@ differs, it follows in parentheses. A suite run and not named passed whole. `nat
 | H01 | call-with-bytes writes the caller's bytevector, uncopied | **none: survived** (below) |
 | H02 | call-with-bytes' block exactly n bytes, none for an empty value | native 1; values 2 |
 | H03 | call-with-bytes leaves an empty value's one byte unwritten | native 1 |
-| H04 | call-with-bytes writes one byte too few | native 1; values 11 (the floor 10) |
+| H04 | call-with-bytes writes one byte too few | native 1; values 10 |
 | H05 | call-with-bytes' bytevector check dropped | native 2 |
 | H06 | call-with-bytes' procedure check dropped | native 2 |
 | H07 | call-with-bytes' who check dropped | native 2 |
 | H08 | call-with-bytes makes and frees its block without call-with-block's extent | native 9 |
 | H09 | foreign-bytes reads the address even for none | native 1 |
-| H10 | foreign-bytes reads one byte too few | native 12 (the floor 13); values 30 |
+| H10 | foreign-bytes reads one byte too few | native 11 (the floor 12); values 30 |
 | H11 | foreign-bytes' address check dropped | native 1 |
 | H12 | foreign-bytes' count check dropped | native 1 |
 | H13 | foreign-bytes' NULL check dropped | native 1 |
@@ -162,9 +167,9 @@ C-string rows and `test-statement`'s trigger message too.
 | Mutation | Guards | Failed |
 |---|---|---|
 | D01 | a parameter index from 0 | values 2 |
-| D02 | a parameter index below the count | values 23; nomem 6; sections 1 |
+| D02 | a parameter index below the count | values 23; nomem 8; sections 1 |
 | D03 | a parameter index to the count plus 1 | values 1 |
-| D04 | a column index from 1 | values 35; nomem 7; sections 5 |
+| D04 | a column index from 1 | values 35; nomem 9; sections 5 |
 | D05 | a column index to the count | values 3; sections 2 |
 | D06 | the integer range's top at 2^63 (values.sls, in the copy) | values 1 |
 | D07 | the integer range's bottom above -2^63 | values 1 |
@@ -179,9 +184,9 @@ inside the bind's section (D08), where `call-with-open-handle` catches it.
 
 | Mutation | Guards | Failed |
 |---|---|---|
-| A01 | TEXT read through sqlite3_column_blob | values 1; nomem 6 |
+| A01 | TEXT read through sqlite3_column_blob | values 1; nomem 7 |
 | A02 | BLOB read through sqlite3_column_text | values 2 |
-| A03 | INTEGER read through sqlite3_column_double | values 19; nomem 1; sections 2 |
+| A03 | INTEGER read through sqlite3_column_double | values 19; nomem 3; sections 2 |
 | A04 | FLOAT read through sqlite3_column_int64 | values 6; sections 1 |
 | A05 | column-bytevector's TEXT read through sqlite3_column_blob | values 1; nomem 2 |
 
@@ -193,7 +198,7 @@ since it needs no NUL, so the read under the limit succeeds.
 | Mutation | Guards | Failed |
 |---|---|---|
 | O01 | the bytes counted before the pointer | **none: survived** (below) |
-| O02 | the type read after the value: column_text first | values 8; nomem 6 |
+| O02 | the type read after the value: column_text first | values 8; nomem 8 |
 
 ### The decoder made lenient
 
@@ -207,7 +212,7 @@ since it needs no NUL, so the read under the limit succeeds.
 
 | Mutation | Guards | Failed |
 |---|---|---|
-| N01 | the NOMEM read's move to failed dropped | nomem 6 |
+| N01 | the NOMEM read's move to failed dropped | nomem 7 |
 | N02 | column-name's NOMEM moves the state to failed | nomem 1 |
 | N03 | column-name's NOMEM message sqlite3_errmsg's, not sqlite3_errstr's | nomem 1 |
 
@@ -243,7 +248,7 @@ since it needs no NUL, so the read under the limit succeeds.
 |---|---|---|
 | P01 | clear-bindings! let through while a row is ready | values 3 |
 | P02 | a boolean guessed from a declared type | values 1 |
-| P03 | parameters numbered from 0 | values 23; nomem 6; sections 1 |
+| P03 | parameters numbered from 0 | values 23; nomem 8; sections 1 |
 
 **P01 under the gate.** In a whole copy of the worktree, `make test-memory
 MEMORY_SUITES=tests/test-statement-values.sps` failed the suite, "exit 9, Valgrind's: an error or
@@ -289,11 +294,11 @@ The gate needs no new plant program: P01 is a planted copy of the library, and t
 
 | Mutation | Guards | Failed |
 |---|---|---|
-| X01 | TEXT bound with SQLITE_STATIC, not SQLITE_TRANSIENT | values 7; nomem 1; sections 2 |
+| X01 | TEXT bound with SQLITE_STATIC, not SQLITE_TRANSIENT | values 6 (the floor 7); nomem 2; sections 2 |
 | X02 | BLOB bound with SQLITE_STATIC | values 5 (the floor 6); sections 1 |
 | X03 | TEXT bound one byte long | values 7; nomem 1; sections 2 |
-| X04 | TEXT bound as UTF-16LE | values 9; nomem 6; sections 2 |
-| X05 | a failure's SQL dropped | values 4 |
+| X04 | TEXT bound as UTF-16LE | values 9; nomem 7; sections 2 |
+| X05 | a failure's SQL dropped | values 4; nomem 1 |
 | X06 | a refused bind leaves the statement failed | values 2 |
 | X07 | bind-all! binds from the last parameter to the first | values 1 |
 | X08 | clear-bindings! calls nothing | values 1 |
@@ -310,11 +315,11 @@ X02's count depends on freed memory, as H04's and H10's do (above).
 |---|---|---|
 | E01 | an export more: finish | values 1 |
 | E02 | the library body allocates a counted block it never frees | values 21; nomem 4; sections 3 |
-| E03 | the library body raises at its first reference | values 43; nomem 7; sections 8 |
+| E03 | the library body raises at its first reference | values 43; nomem 9; sections 8 |
 
 E04, run by hand on 3.53.1, is `CHEZ_SQLITE3_LIBRARY` naming no file: `test-statement-values` 3
-passed, 44 failed, its load row among them; the NOMEM suite 1 passed, 2 failed, and its 7 NOMEM
-rows named unavailable and skipped, never passed; the sections suite 1 passed, 8 failed. The load
+passed, 44 failed, its load row among them; the NOMEM suite, rerun after the review's fixes, 1 passed, 12 failed,
+the memory probe's row among them and no row skipped (a probe that raises is a failure by name); the sections suite 1 passed, 8 failed. The load
 rows reach `(chez-sqlite3)`, which imports this library only once part B exports its names, so no
 mutation of the library fails them.
 
@@ -327,6 +332,8 @@ mutation of the library fails them.
 | K01 | `bind!`'s parameter count read in a section of its own, before the bind's. The count is the SQL's: it stayed 2 across a reprepare that added a column and one that dropped one, on both libraries (`param-count-reprepare.sps`), so a count read earlier is the count now. The bind's own section makes decision 3's checks and the state's again, so another engine's finalize or step between the two is refused there: the bind-against-step sweep passes under K01. |
 | K04 | The same for `bind-all!`. |
 | I05 | `bind!`'s parameter refusal raised inside the accessor's procedure, not answered as data. `call-with-open-handle` catches what its procedure raises inside its section and raises it again after, the same object (ADR-0012, amended), so a handler still runs at depth 1. Slice 3's I07 is the same. Only a raise in a section of the library's own reaches a handler with interrupts disabled, and I01 to I04 make one: each is caught. |
+| Y03 | A NOMEM read's message taken from `sqlite3_errstr(7)`, not `sqlite3_errmsg`. The research measured `errmsg` equal to `errstr` after a NOMEM, on both libraries ("out of memory"), and no row can tell them apart, since a real NOMEM sets no custom message. |
+| Y04 | A failure's message, a refused bind's, taken from `sqlite3_errstr(code)`, not `sqlite3_errmsg`. The same measurement for `toobig`: "string or blob too big" either way, on both libraries; SQLite sets a custom message for a code only where its own code does, and no bind does. |
 
 ## Findings
 
@@ -348,6 +355,119 @@ mutation of the library fails them.
 - **A sweep that passes when A always finishes first holds nothing.** Each sweep row asserts the
   three kinds of interleaving its fuels reached, B before A's section, B after it, and A finished
   first, beside every fuel's verdict.
+
+## The review's fixes
+
+An adversarial review of the slice (Opus) found one blocker and six more. Each fix was test first, its
+row watched failing, in a whole copy of the tree run from inside the copy. The mutants are
+`build/m2s4/mut/defs-fix.py`, run on both libraries; their counts are read from the suites' own output.
+The whole set above was rerun against the final tree: the same 5 survivors, none new.
+
+### 1. The stale NOMEM code (the blocker)
+
+An empty BLOB answers a NULL pointer and sets no code, so `sqlite3_extended_errcode` answers the
+connection's last code. After another statement's NOMEM, whether a read's or a bind's, that is 7, and
+a healthy empty-BLOB read raised `nomem` and moved its statement to `failed`.
+
+Measured first, on 3.53.1 and the floor alike (`build/m2s4-fix/measure.sps`):
+
+- a real NOMEM through `sqlite3_column_text`, under the heap limit: the pointer 0, the code 7, then
+  the type 5, then the message, and the code still 7 after: reading the type changes neither;
+- a stale 7, then an empty BLOB on another statement: the pointer 0, the code 7, the type 4;
+- the same empty BLOB on a fresh connection: the pointer 0, the code 100 (the row), not 7;
+- **a NOMEM through `sqlite3_column_blob`:** reached, on both libraries. A `zeroblob` made by
+  `select zeroblob(1000000)` was no NOMEM under the limit: the pointer non-NULL, the code 100, the
+  type 4. But a value bound with `sqlite3_bind_zeroblob64` (the probe's own foreign call; 1,000,000
+  and 100,000,000 bytes), stepped and read through `column_blob` under the limit, answered the
+  pointer 0, the code 7 and the type 5. So a NOMEM through `column_blob` turns its column's type to
+  NULL too, as `column_text`'s does.
+
+The rule: on a NULL pointer, read the code. A low byte other than 7 is an empty value. With 7, read
+`sqlite3_column_type` again: only 5 is NOMEM, with the message read next; any other type is an empty
+value under a stale 7. `read-column-bytes` takes a TYPE procedure between ERRCODE and ERRMSG, and
+`statement-values` passes `sqlite3_column_type`.
+
+Rows: `test-values`'s call-log rows for each path (type asked only after a code of 7; message only
+after a type of 5; a stale 7 over types 0 to 4 and 6; every code 0 to 299 against types 4 and 5),
+and `test-statement-values-nomem`'s two real-library rows, an empty BLOB read after another
+statement's NOMEM read, and after its NOMEM bind, each reading `#vu8()` with the statement still
+`row`. Watched failing against the code as it stood: both real rows, on both libraries (the read
+raised `nomem` from `select x'', 1` and the statement was `failed`); `test-values` against the old
+signature.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| S01 | the stale 7 restored: a NULL pointer and a code of 7 is NOMEM, the type never asked | test-values 4; nomem 2 |
+| S02 | the type asked before the code, on every NULL pointer | test-values 3 |
+| S03 | a NOMEM is any type but BLOB (4) | test-values 1 |
+| S04 | a NOMEM is a NULL type or a TEXT type (5 or 3) | test-values 1 |
+| S05 | the real TYPE always answers 5: statement-values passes a constant | nomem 2 |
+| S06 | the real TYPE always answers 4: a NOMEM is never seen | nomem 7 |
+| S07 | the real TYPE read of another column (column + 1) | nomem 1 |
+| S08 | the message read before the type | test-values 4 |
+
+S02 (the type asked before the code) passes the real-library rows by design: the real answers are
+the same either way, so only `test-values`' call-log rows see the order.
+
+### 2. An index is exact
+
+`1.0` would reach C, where Chez raises inside the section. Y01 and Y02 replaced `exact-integer?` by
+`integer?` in `column-index` and `parameter-form`, and survived every suite. Rows: `1.0` joins the
+refusals of `bind!`'s index (`not-a-parameter`), and `column-value`'s, `column-bytevector`'s and
+`column-name`'s (`not-a-column-index`).
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| Y01 | column-index's exact-integer? replaced by integer? | statement-values 1 |
+| Y02 | parameter-form's exact-integer? replaced by integer? | statement-values 1 |
+
+### 3. The NOMEM suite skipped every NOMEM row when its probe raised
+
+`memory-kept` was an unguarded probe, and T01 (it pointing at a missing name) passed 3, skipped 7
+and exited 0. Against the fixed suite T01 now gives 3 passed, 10 failed. The probe runs under a guard and its answer is `#t`, `#f`, or a raise; only `#f`
+skips, and a new row, "the memory probe answers #t or #f, and does not raise", fails by name on a
+raise.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| T01 | the NOMEM suite's memory probe points at a missing name | nomem 10 |
+
+T02 is a control, not a mutation: the probe answering `#f` (the limit unenforced) makes the suite
+name its 9 NOMEM rows unavailable and skip them, 4 passed, 0 failed, exit 0, the designed answer
+where SQLite keeps no memory count. It is not a survivor.
+
+### 4. The red-run note of the sections suite
+
+Corrected above, in "The red runs".
+
+### 5. `test-public`'s count row counted its own list
+
+"(chez-sqlite3) names 51 exports" counted `public-names`, the suite's list, and could not fail. It
+now counts `(library-exports '(chez-sqlite3))`. Z01 drops `bind!` from the export clause:
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| Z01 | bind! dropped from (chez-sqlite3)'s exports | public 3; reference 4 |
+
+Z01 fails the count row, 50 against 51, among the others named.
+
+### 6. Two unlisted survivors
+
+Y03 and Y04, argued equivalent in "The survivors" above.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| Y03 | a NOMEM read's message taken from sqlite3_errstr | **none: survived** (above) |
+| Y04 | a failure's message (a refused bind's) taken from sqlite3_errstr | **none: survived** (above) |
+
+### 7. Docs
+
+`docs/reference.md`: "The message names the value's kind, never the value" now reads "The condition
+names the value's kind, never the value": the irritants carry the kind. The NOMEM sentence for a
+read (code `nomem`, once, the statement failed) is true with fix 1: only a real NOMEM, which turns
+the column's type to NULL, raises it.
+
+**Totals of the review's fixes: 14 mutations, 12 caught, 2 survived (Y03, Y04, equivalent). With the 83 above: 97 mutations by the driver, 90 caught, 7 survived, each argued, and E04 by hand.**
 
 ## Part B: the public names and their docs
 

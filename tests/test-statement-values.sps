@@ -635,21 +635,22 @@
 (define two-sql "select ?1, ?2")
 (define (two-sentinels st) (bind! st 1 501) (bind! st 2 502))
 
-(test-equal "an index outside 1 to the count is refused by parameter-out-of-range, naming the index and the count: 0, 3 of 2, -1 and 2^64; what is no index nor name by not-a-parameter: 1.5, a symbol, #t, a list by its kind; each leaves the sentinels"
+(test-equal "an index outside 1 to the count is refused by parameter-out-of-range, naming the index and the count: 0, 3 of 2, -1 and 2^64; what is no index nor name by not-a-parameter: 1.5, 1.0, a symbol, #t, a list by its kind; each leaves the sentinels"
   (map (lambda (irritants) (read-row (list 'raised (apply refused 'bind! irritants)) (list 501 502)))
        (list '(parameter-out-of-range 0 2) '(parameter-out-of-range 3 2)
              '(parameter-out-of-range -1 2) (list 'parameter-out-of-range (expt 2 64) 2)
-             '(not-a-parameter 1.5) '(not-a-parameter x) '(not-a-parameter #t)
+             '(not-a-parameter 1.5) '(not-a-parameter 1.0) '(not-a-parameter x) '(not-a-parameter #t)
              '(not-a-parameter (kind list))))
   (let* ((a (read-back two-sql (lambda (st) (two-sentinels st) (bind! st 0 1))))
          (b (read-back two-sql (lambda (st) (two-sentinels st) (bind! st 3 1))))
          (c (read-back two-sql (lambda (st) (two-sentinels st) (bind! st -1 1))))
          (d (read-back two-sql (lambda (st) (two-sentinels st) (bind! st (expt 2 64) 1))))
          (e (read-back two-sql (lambda (st) (two-sentinels st) (bind! st 1.5 1))))
+         (e2 (read-back two-sql (lambda (st) (two-sentinels st) (bind! st 1.0 1))))
          (f (read-back two-sql (lambda (st) (two-sentinels st) (bind! st 'x 1))))
          (g (read-back two-sql (lambda (st) (two-sentinels st) (bind! st #t 1))))
          (h (read-back two-sql (lambda (st) (two-sentinels st) (bind! st '(":a") 1)))))
-    (list a b c d e f g h)))
+    (list a b c d e e2 f g h)))
 
 (test-equal "bind!'s checks come in order: the state before the parameter, the parameter before the value; a value refused by an index in range names it"
   (list (list 'raised (not-allowed 'bind! 'row))
@@ -918,19 +919,21 @@
             (a (attempt (lambda () (read st -1))))
             (b (attempt (lambda () (read st 2))))
             (c (attempt (lambda () (read st 1.5))))
+            (c2 (attempt (lambda () (read st 1.0))))
             (d (attempt (lambda () (read st 'x))))
             (state (statement-state st)))
        (finalize-statement! st)
-       (list a b c d state)))))
+       (list a b c c2 d state)))))
 
 (define (index-row who)
   (list (list 'raised (refused who 'column-out-of-range -1 2))
         (list 'raised (refused who 'column-out-of-range 2 2))
         (list 'raised (refused who 'not-a-column-index 1.5))
+        (list 'raised (refused who 'not-a-column-index 1.0))
         (list 'raised (refused who 'not-a-column-index 'x))
         'row))
 
-(test-equal "a column's index is checked against the column count, read in the read's section: -1 and 2 of 2 by column-out-of-range, naming the index and the count; 1.5 and a symbol by not-a-column-index; for each read, the state left row"
+(test-equal "a column's index is checked against the column count, read in the read's section: -1 and 2 of 2 by column-out-of-range, naming the index and the count; 1.5, the inexact integer 1.0 and a symbol by not-a-column-index; for each read, the state left row"
   (list (index-row 'column-value) (index-row 'column-bytevector) (index-row 'column-name))
   (let* ((a (index-refusals column-value))
          (b (index-refusals column-bytevector))

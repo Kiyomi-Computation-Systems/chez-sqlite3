@@ -164,9 +164,10 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) names 51 exports"
+(test-equal "(chez-sqlite3) exports 51 names, counted from the library itself, not from this suite's list"
   51
-  (length public-names))
+  (guard (e (#t (list 'raised (describe e))))
+    (length (library-exports '(chez-sqlite3)))))
 
 (test-equal "(chez-sqlite3) exports exactly the connections, the statements, the values, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))

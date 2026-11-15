@@ -337,7 +337,7 @@ You bind one to a parameter, and read one from a column.
 
 Anything else is an assertion violation, and nothing is bound: an integer
 outside 64 bits, `+nan.0`, `#t` and `#f` (write 1 and 0), and any other
-object, such as `1/2` or a symbol. The message names the value's kind, never
+object, such as `1/2` or a symbol. The condition names the value's kind, never
 the value.
 
 A parameter is a number from 1, or a name with its sigil exactly as the SQL

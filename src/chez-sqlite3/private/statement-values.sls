@@ -319,11 +319,13 @@
   ;;                -> (U Bytevector (List 'nomem Integer String))
   ;; Column COLUMN's bytes, through POINTER, sqlite3_column_text or _blob, by
   ;; read-column-bytes: the pointer, then sqlite3_column_bytes, then the copy;
-  ;; or, for a NULL pointer, sqlite3_extended_errcode at once, and on NOMEM
-  ;; sqlite3_errmsg straight after.
+  ;; or, for a NULL pointer, sqlite3_extended_errcode at once; on a code of
+  ;; 7, sqlite3_column_type again, which a real NOMEM turned to NULL, an
+  ;; empty value's does not; and on NOMEM, sqlite3_errmsg straight after.
   (define (column-bytes connection handle column pointer)
     (read-column-bytes (lambda () (pointer handle column))
                        (lambda () (sqlite3-extended-errcode connection))
+                       (lambda () (sqlite3-column-type handle column))
                        (lambda () (message-of connection sqlite-nomem))
                        (lambda () (sqlite3-column-bytes handle column))
                        foreign-bytes))

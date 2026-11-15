@@ -85,6 +85,7 @@
 (define column-name (reach values-library 'column-name))
 (define sqlite3-memory-used (reach native-library 'sqlite3-memory-used))
 (define sqlite3-errmsg (reach native-library 'sqlite3-errmsg))
+(define sqlite3-extended-errcode (reach native-library 'sqlite3-extended-errcode))
 (define sqlite3-errstr (reach native-library 'sqlite3-errstr))
 (define c-string->string (reach native-library 'c-string->string))
 
@@ -216,15 +217,19 @@
 
 ;; memory-kept : Any
 ;; #t when SQLite's memory count rises while a connection is open, as the
-;; memory check's control asks; else the limit is not enforced here.
+;; memory check's control asks; #f when it does not, so the limit is not
+;; enforced here; (raised TEXT) when the probe itself raises, which is a
+;; failure by name, never a skip.
 (define memory-kept
-  (with-memory-db (lambda (db) (> (sqlite3-memory-used) 0))))
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory-db (lambda (db) (> (sqlite3-memory-used) 0)))))
 
 ;; available! : String -> Void
-;; Where the count is not kept, says so by NAME and skips the test of that
-;; name that follows: a skip is its own result, never a pass.
+;; Where the count is not kept (memory-kept #f), says so by NAME and skips
+;; the test of that name that follows: a skip is its own result, never a
+;; pass. A probe that raised skips nothing: the probe row below fails.
 (define (available! name)
-  (unless (eq? memory-kept #t)
+  (when (eq? memory-kept #f)
     (display "UNAVAILABLE ")
     (display name)
     (display ": this libsqlite3 keeps no memory count, so a hard heap limit is not enforced")
@@ -240,6 +245,9 @@
 (test-equal "every count is zero once the load has returned"
   zero-counts
   (native-counts))
+
+(test-assert "the memory probe answers #t or #f, and does not raise"
+  (boolean? memory-kept))
 
 (define read-name "a 100,000-byte TEXT read back through select ?1 under a heap limit of the memory used plus 1,000: column-value raises &sqlite-error nomem, nomem, with the SQL, no offset, and sqlite3_errmsg's message straight after; the statement is failed; the limit reads 0 after")
 (available! read-name)
@@ -401,6 +409,51 @@
   (let* ((a (name-under-limit #f))
          (b (name-under-limit #t)))
     (list a b)))
+
+;; stale-then-empty : (Database Statement -> Any) -> Any
+;; A: select x'', 1, stepped, on a connection of its own. Then STALE is
+;; called with the database and a statement B, select ?1, to leave
+;; SQLite's NOMEM on the connection: its raise is kept. Then A's column 0,
+;; an empty BLOB, read by column-value and by column-bytevector, and A's
+;; state. An empty BLOB answers a NULL pointer and sets no code, so the
+;; connection's last code, 7, must not make it a NOMEM.
+(define (stale-then-empty stale)
+  (with-memory-db
+   (lambda (db)
+     (let* ((a (prepare-statement db "select x'', 1"))
+            (as (step! a))
+            (b (prepare-statement db "select ?1"))
+            (r (stale db b))
+            (code (with-handle db (lambda (h) (bitwise-and (sqlite3-extended-errcode h) 255))))
+            (v (attempt (lambda () (column-value a 0))))
+            (bv (attempt (lambda () (column-bytevector a 0))))
+            (state (statement-state a))
+            (other (attempt (lambda () (column-value a 1)))))
+       (finalize-statement! a)
+       (finalize-statement! b)
+       (list (car r) code v bv state other)))))
+
+(define stale-read-name "an empty BLOB read after another statement's NOMEM read on the same connection (the connection's last code is 7): column-value and column-bytevector answer #vu8(), the statement stays row, and its other column reads")
+(available! stale-read-name)
+(test-equal stale-read-name
+  (list (sqlite-failure 'column-value 'nomem 'nomem "select ?1") 7 #vu8() #vu8() 'row 1)
+  (stale-then-empty
+   (lambda (db b)
+     (let* ((bd (bind! b 1 big-text))
+            (s (step! b))
+            (r (read-under-limit db (lambda () (column-value b 0)))))
+       (list (car r))))))
+
+(define stale-bind-name "an empty BLOB read after another statement's NOMEM bind on the same connection: column-value and column-bytevector answer #vu8(), the statement stays row")
+(available! stale-bind-name)
+(test-equal stale-bind-name
+  (list (sqlite-failure 'bind! 'nomem 'nomem "select ?1") 7 #vu8() #vu8() 'row 1)
+  (stale-then-empty
+   (lambda (db b)
+     (let* ((r (guard (e (#t (cons raised-tag e)))
+                 (under-limit (lambda () (bind! b 1 big-text)))
+                 'no-raise)))
+       (list (if (and (pair? r) (eq? (car r) raised-tag)) (what-raised (cdr r)) (list 'no-raise r)))))))
 
 (define depth-name "each NOMEM is raised after its section: column-value's, column-bytevector's and column-name's reach a handler at depth 1")
 (available! depth-name)
