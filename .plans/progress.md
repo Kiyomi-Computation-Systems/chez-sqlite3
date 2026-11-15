@@ -9,9 +9,11 @@ newest first.
 - **M0 is done:** PRs #1 to #6.
 - **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
   closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
-- **M2 slices 0 and 1 are merged:** slice 0 as PR #14, `3d24cce`, the M2 plan, ADR-0014 and
-  ADR-0015, and their amendments to the older records; slice 1, the pure core, as PR #16,
-  `e6b2462`.
+- **M2 slices 0 to 2 are merged:**
+  - slice 0, as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their amendments to the
+    older records;
+  - slice 1, the pure core, as PR #16, `e6b2462`;
+  - slice 2, the bindings, as PR #17, `f2ffa0e`.
 - **The maintainer accepted ADR-0010 to ADR-0015 and their amendments** on 2026-11-14, ADR-0015's
   M2 slice 1 amendment among them. ADR-0014's slice 1 amendment records the maintainer's own
   choice, "Match SQLite". The global constraints carry no provisional rule.
@@ -19,10 +21,11 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2 slices 2 and 3 are built,** as PR #17 on `m2-slice-2-bindings` and PR #18 on
-  `m2-slice-3-statements`, which is stacked on it. Next is slice 4, values, stacked on slice 3's
-  ([the M2 plan](2026-11-14-m2-plan.md), §5). The maintainer asked for that order on 2026-11-14:
-  each slice opened as a PR, and the next begun on top of it.
+- **Now: M2 slices 3 and 4 are built,** as PR #18 on `m2-slice-3-statements`, rebased onto
+  `main` once #17 merged, and PR #19 on `m2-slice-4-values`, stacked on it. The maintainer
+  approved #17 and #18 on 2026-11-15. Next are the Mac hand run and M2's closing review
+  ([the M2 plan](2026-11-14-m2-plan.md), §5). The maintainer asked for the stacked order on
+  2026-11-14: each slice opened as a PR, and the next begun on top of it.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -53,7 +56,7 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-15 — M2 slice 3: statements (PR #18, stacked on #17)
+### 2026-11-15 — M2 slice 3: statements (PR #18)
 
 - **Built:**
   - `(chez-sqlite3 private statement)`: a statement is an integer handle in an opaque, sealed
@@ -115,7 +118,7 @@ newest first.
   - Another session's research, checked before it was used, found two record gaps and a design
     question the slice had missed.
 
-### 2026-11-15 — M2 slice 2: the bindings (PR #17)
+### 2026-11-15 — M2 slice 2: the bindings (PR #17, `f2ffa0e`)
 
 - **Built:**
   - native's 21 new bindings, ADR-0002's M2 amendment in its order, each checked with
