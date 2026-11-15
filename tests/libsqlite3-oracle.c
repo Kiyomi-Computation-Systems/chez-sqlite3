@@ -42,7 +42,9 @@
  *                                             in C, column by column
  *   (valgrind . yes)
  *
- * where each COLUMN is read by these calls, in this order, each once:
+ * where each COLUMN is read by these calls, in this order: sqlite3_column_name,
+ * _type, _int64, _double, _text, _bytes, _blob and _bytes again, so
+ * sqlite3_column_bytes runs twice, once after each pointer, and the rest once:
  *
  *   (NAME TYPE BYTES INT64 BITS TEXT BLOB)
  *     NAME   sqlite3_column_name's bytes, up to its NUL, as #vu8(...)
@@ -50,9 +52,9 @@
  *     INT64  sqlite3_column_int64
  *     BITS   sqlite3_column_double's 64 bits, as an unsigned integer
  *     TEXT   sqlite3_column_text's bytes, BYTES of them, as #vu8(...)
- *     BYTES  sqlite3_column_bytes, read after sqlite3_column_text
- *     BLOB   sqlite3_column_blob's bytes, as many as sqlite3_column_bytes
- *            answers after it
+ *     BYTES  sqlite3_column_bytes, the first call, read after sqlite3_column_text
+ *     BLOB   sqlite3_column_blob's bytes, as many as the second call of
+ *            sqlite3_column_bytes answers, read after sqlite3_column_blob
  *
  * A NULL pointer is #f. --transient prints the header's SQLITE_TRANSIENT, as
  * (uintptr_t) reads it, then the valgrind line:

@@ -9,8 +9,9 @@ newest first.
 - **M0 is done:** PRs #1 to #6.
 - **M1 is done:** its slices 0 to 5 are PRs #7 to #11 and #13, its owed fixes PR #12, and its
   closing review PR #15, `1b2f688`, each squash-merged in order with CI passing in every job.
-- **M2 slice 0 is merged** as PR #14, `3d24cce`: the M2 plan, ADR-0014 and ADR-0015, and their
-  amendments to the older records.
+- **M2 slices 0 and 1 are merged:** slice 0 as PR #14, `3d24cce`, the M2 plan, ADR-0014 and
+  ADR-0015, and their amendments to the older records; slice 1, the pure core, as PR #16,
+  `e6b2462`.
 - **The maintainer accepted ADR-0010 to ADR-0015 and their amendments** on 2026-11-14, ADR-0015's
   M2 slice 1 amendment among them. ADR-0014's slice 1 amendment records the maintainer's own
   choice, "Match SQLite". The global constraints carry no provisional rule.
@@ -18,8 +19,10 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2 slice 1, the pure core, is built,** as PR #16 on `m2-slice-1-pure-core`, rebased onto
-  #15. Next is slice 2, the bindings ([the M2 plan](2026-11-14-m2-plan.md), §5).
+- **Now: M2 slice 2, the bindings, is built,** as PR #17 on `m2-slice-2-bindings`. Next is slice
+  3, statements, on a branch stacked on it, then slice 4, values, stacked on slice 3's
+  ([the M2 plan](2026-11-14-m2-plan.md), §5). The maintainer asked for that order on 2026-11-14:
+  each slice opened as a PR, and the next begun on top of it.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -45,12 +48,67 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
-- **Open:** whether `test-library-loading` is split, which slice 2 measures (the M2 plan, §7).
-  Brief D3 to D6 are settled (the M2 plan, §2).
+- **Open:** nothing. Brief D3 to D6 are settled (the M2 plan, §2), and slice 2 settled the
+  split of `test-library-loading` (§7).
 
 ## Close-outs
 
-### 2026-11-14 — M2 slice 1: the pure core (PR #16)
+### 2026-11-15 — M2 slice 2: the bindings (PR #17)
+
+- **Built:**
+  - native's 21 new bindings, ADR-0002's M2 amendment in its order, each checked with
+    `foreign-entry?` before it is bound. Prepare, step, reset and finalize are `__collect_safe`,
+    and every pointer is a `uptr`;
+  - `sqlite-transient`, all ones at a pointer's width;
+  - the constants `SQLITE_ROW`, `SQLITE_DONE`, the five type codes and `SQLITE_UTF8`;
+  - the convention table's 21 rows, with their prototypes held to `sqlite3.h`;
+  - a decoy switch and a `missing-api` row per entry point, with the list held to the table;
+  - `test-native`'s rows:
+    - prepare and its tail, and failed prepares' offsets;
+    - binds round-tripped through SQLite at the boundaries a narrower type breaks, `SQLITE_TOOBIG`
+      for a length past 32 bits among them;
+    - SQLite's copy of TEXT and BLOB;
+    - every column held whole to a new mode of the C oracle, and to a written literal.
+- **Measured,** on 3.53.1 and 3.45.1 alike:
+  - prepare's error offsets: 10 and 13 bytes for an unknown column, 0 for an unknown keyword, and
+    −1 for an error at the end of the SQL;
+  - `select :alpha, ?7, $beta` has 8 parameters, at indexes 1, 7 and 8.
+- **The gate:** `test-library-loading` took 409.3 s on CI, against 308 s before, so it isn't split
+  in M2. Every child grew about 0.3 s, since each compiles native under Valgrind (ADR-0005,
+  amended).
+- **Decided by the maintainer:** on 2026-11-14, the stacked order, each slice opened as a PR and
+  the next begun on it; on 2026-11-15, ADR-0005's and ADR-0011's amendments accepted
+  ("Accept both").
+- **Watched failing:** each suite red first; 62 mutations, 60 caught, and the 2 survivors argued
+  equivalent ([the log](m2-slice-2-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker, 3 majors and 5 minors, each reproduced.
+  - **The majors:**
+    - the decoy's entry list was held to nothing;
+    - the gate's cost model, which CI's measurement settled;
+    - Chez's `int` range, which slice 3's prepare must check (ADR-0011, amended).
+  - **The minors:**
+    - the columns row's coverage rested on SQL nothing asserted;
+    - two length types were held only by form;
+    - the constraints' wording of `SQLITE_TRANSIENT`;
+    - the oracle's comment.
+- **CI:** passed in all five jobs on `811db14`; `memory` took 19m1s.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder | Opus | about 470k | 131 | 44.6 min |
+  | Adversarial review | Opus | about 330k | 106 | 28 min |
+  | The review's fixes | Sonnet | about 122k | 43 | 12.2 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - Chez's `int` isn't C's, and a raise can come from the call itself, inside its section.
+  - A list that makes rows makes no row for what it drops.
+  - A REAL's text differs between SQLite versions.
+  - A planted library must sit in a whole copy of the tree.
+  - Arithmetic missed the gate both ways: the plan's 430 s and the review's 500 s against CI's
+    409 s. The cost is CI's to say.
+
+### 2026-11-14 — M2 slice 1: the pure core (PR #16, `e6b2462`)
 
 - **Built,** in pure Scheme on synthetic inputs, with no foreign code. Slices 3 and 4 call much of
   it inside critical sections, so every classifier, reader and scanner answers data, and only the

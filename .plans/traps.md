@@ -42,6 +42,15 @@ told in chez-curl's `.plans/traps.md`.
   `#t`, so no row can tell a fresh empty result from a shared one. Assert an empty bytevector by
   its contents only. (M2 slice 1, chez-sqlite3)
 
+- **Chez's `int` isn't C's, and `uptr` takes −1.** `int` takes −2³¹ to 2³²−1, and hands 2³¹ and
+  above to C as negative numbers: `abs` bound `(int) int` answered −2147483648 for 2147483648.
+  Beyond that it raises from the binding, inside whatever critical section made the call.
+  `uptr` takes −1 as all ones, the same as 2⁶⁴−1. So M2 slice 2's brief was wrong to say an `int`
+  binding of `sqlite3_bind_int64` gives a wrong value at the boundaries: at three it raises, and
+  2³¹ reaches a 64-bit callee unchanged. And `SQLITE_TRANSIENT` written as −1 would bind
+  correctly, seen only by a row holding it to the header. Every value a verb passes is checked to
+  fit its C type before the section (ADR-0011, amended). (M2 slice 2's review, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -57,6 +66,10 @@ told in chez-curl's `.plans/traps.md`.
   on 56,425 inputs of 2 to 6 bytes. M2 slice 1 found it by preparing every short SQL on 3.53.1 and
   the floor, before any code was built on the model; the maintainer chose to match SQLite
   (ADR-0014, amended; [research/m2-slice-1/](research/m2-slice-1/)). (M2 slice 1, chez-sqlite3)
+
+- **A REAL's text differs by version.** `cast(4.9406564584124654e-324 as text)` is that on 3.53.1,
+  and `4.94065645841247e-324` on 3.45.1. So a row that reads a REAL as text writes no expected
+  value, and compares two readings of the same library instead. (M2 slice 2, chez-sqlite3)
 
 ## Checks and environment
 
@@ -196,6 +209,16 @@ told in chez-curl's `.plans/traps.md`.
   nothing refused one; `test-memory` now does. A plant for such a path is a real directory:
   `CURDIR` is the physical path, and a symlink's name never reaches it. (M1's owed fixes,
   chez-sqlite3)
+
+- **A planted library must sit in a whole copy of the tree.** `test-library-loading` starts its
+  children with `--libdirs src`, so a planted `native.sls` on a library path ahead of `src/` never
+  reaches them, and a mutant there passes unseen. M2 slice 2's builder and reviewer ran every
+  mutant from inside a copy. (M2 slice 2, chez-sqlite3)
+
+- **A list that makes rows makes no row for what it drops.** `test-library-loading` builds a
+  decoy and a `missing-api` row for each entry point in a written list. With one entry deleted the
+  suite passed 90 of 90, and with four reordered 91 of 91. A row now holds the list to the
+  convention table, which `test-conventions` holds to native. (M2 slice 2's review, chez-sqlite3)
 
 ## Editing the records
 

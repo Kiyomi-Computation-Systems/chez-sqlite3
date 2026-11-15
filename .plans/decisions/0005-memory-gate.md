@@ -18,7 +18,9 @@
   and the `floor` and `current` lanes (M1 slice 5,
   [amendment](#amendment-2026-11-14-the-floor-and-current-lanes-m1-slice-5)). Amended 2026-11-14,
   and accepted by the maintainer that day: the CI scripts' execute bits (M1's closing review,
-  [amendment](#amendment-2026-11-14-the-ci-scripts-execute-bits-m1s-closing-review)).
+  [amendment](#amendment-2026-11-14-the-ci-scripts-execute-bits-m1s-closing-review)). Amended
+  2026-11-15, and accepted by the maintainer that day: the decoy's cost, measured (M2 slice 2,
+  [amendment](#amendment-2026-11-15-the-decoys-cost-measured-m2-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -452,3 +454,23 @@ Accepted by the maintainer on 2026-11-14, proposed in M1's closing review.
 - **The files are read under `CHECK_CI_ROOT`,** the repository root when it is unset, so that
   `test-check-ci`'s rows can point it at a copy. The name joins the words no workflow line may
   hold, since it would point the rule at another tree.
+
+## Amendment, 2026-11-15: the decoy's cost, measured (M2 slice 2)
+
+Accepted by the maintainer on 2026-11-15 ("Accept both"), proposed in M2 slice 2, from its build,
+its Opus review and its CI run. It replaces the M2 plan amendment's estimate with a measurement, and keeps
+its rule.
+
+- **On CI, `test-library-loading` took 409.3 s under the gate,** with 76 child logs, up from 308 s
+  with 55. That is the gap between its line and the next in the `memory` job's timestamped log, on
+  PR #17's run at `811db14`. It was 252 s, then 373 s, alone in the container.
+- **That is below 450 s, three quarters of `MEMORY_TIMEOUT`'s 600,** so the suite stays whole in
+  M2. Slices 3 and 4 add no entry point. The `memory` job took 19 minutes of its 60.
+- **Every child grew, not only the new ones.** A child compiles native from source under Valgrind,
+  so each binding native gains costs every child. One gated control child took 4.53 to 4.58 s on
+  `main` and 4.83 to 4.89 s with the slice. Put back to `main`'s `native.sls`, it took 4.57 to
+  4.58 s. So the cost grows with children times bindings: each new entry point adds a child of
+  about 5 s, and about 15 ms to each of the others. The M2 plan's 5.6 s per new child, at a fixed
+  cost for the rest, missed this.
+- **M3's entry points cross the line.** With 41 s left under it, about seven more children reach
+  450 s, so M3's plan splits the suite in two, each under the limit alone, as the rule above says.

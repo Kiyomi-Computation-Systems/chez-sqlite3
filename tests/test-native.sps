@@ -235,6 +235,7 @@
 (define ioerr (code-of 'ioerr))
 (define error-code (code-of 'error))
 (define range (code-of 'range))
+(define toobig (code-of 'toobig))
 (define readwrite-create (bitwise-ior sqlite-open-readwrite sqlite-open-create))
 
 (define (sorted-names names)
@@ -775,6 +776,29 @@
              (list bound row value typeof done reset cleared row-again type-again typeof-again
                    done-again))))))))
 
+;; --- a length past 32 bits ------------------------------------------------------------------------
+;; sqlite3_bind_text64 and sqlite3_bind_blob64 take a 64-bit length. A 1-byte
+;; block with a length of 2^32+1 is refused by SQLite before it reads or
+;; copies a byte (the length is checked against its limit first), so no
+;; 4 GiB block is needed: SQLITE_TOOBIG, and the parameter stays NULL. Bound
+;; as an unsigned-32 length, Chez refuses the argument and raises instead.
+(define past-32-bits (+ (expt 2 32) 1))
+
+(for-each
+ (lambda (kind bind!)
+   (test-equal (string-append "sqlite3_bind_" kind "64 of a 1-byte block with the length 2^32+1 answers SQLITE_TOOBIG, and the parameter stays NULL, which typeof names null; every count is zero after")
+     (list (list ok (list toobig sqlite-row sqlite-null 0 "null" sqlite-done) ok) ok zero-counts)
+     (guard (e (#t (list 'raised (describe e))))
+       (round-trip (lambda (statement)
+                     (with-bytes (u8-list->bytevector '(65))
+                       (lambda (address n) (bind! statement address past-32-bits))))
+                   (lambda (statement) (sqlite3-column-int64 statement 0))))))
+ '("text" "blob")
+ (list (lambda (statement address n)
+         (sqlite3-bind-text64 statement 1 address n transient sqlite-utf8))
+       (lambda (statement address n)
+         (sqlite3-bind-blob64 statement 1 address n transient))))
+
 ;; --- the copy: SQLite copies a value bound with sqlite-transient -------------------------------
 ;; The bytes go into a counted block and are bound from it; then the block is
 ;; overwritten with other bytes, and freed, before the step reads the value.
@@ -911,6 +935,94 @@
     (with-memory
      (lambda (db)
        (with-statement db columns-sql read-rows)))))
+
+;; What the SQL reads, written out, so that replacing its boundary values with
+;; tame ones fails whatever the oracle reads. Each column: its name's bytes,
+;; type, int64, double bits, and, but for a REAL, its text's bytes and its
+;; blob's. A REAL's text differs between SQLite versions (above), so a REAL
+;; column's text, its byte count and its blob are left out; they are held to
+;; the oracle's by the row above. Read from the oracle on 3.53.1 and 3.45.1,
+;; which agree on all of it.
+(define columns-written
+  '(((#vu8(105 110 116 195 169) 1 -9223372036854775808 14114281232179134464
+      #vu8(45 57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56
+           48 56)
+      #vu8(45 57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56
+           48 56))
+     (#vu8(226 130 172) 1 -2147483649 13970166044105375744
+       #vu8(45 50 49 52 55 52 56 51 54 52 57)
+       #vu8(45 50 49 52 55 52 56 51 54 52 57))
+     (#vu8(240 157 132 158) 1 2147483648 4746794007248502784
+       #vu8(50 49 52 55 52 56 51 54 52 56)
+       #vu8(50 49 52 55 52 56 51 54 52 56))
+     (#vu8(97 226 130 172 240 157 132 158 195 169 122) 1 9223372036854775807 4890909195324358656
+       #vu8(57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56 48
+            55)
+       #vu8(57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56 48
+            55))
+     (#vu8(45 48 46 48) 2 0 9223372036854775808)
+     (#vu8(49 101 51 48 56)
+       2
+       9223372036854775807
+       9214871658872686752)
+     (#vu8(52 46 57 52 48 54 53 54 52 53 56 52 49 50 52 54 53 52
+           101 45 51 50 52)
+       2
+       0
+       1)
+     (#vu8(49 46 53) 2 1 4609434218613702656)
+     (#vu8(39 97 39 32 124 124 32 99 104 97 114 40 48 41 32 124
+           124 32 39 195 169 226 130 172 240 157 132 158 39) 3 0 0 #vu8(97 0 195 169 226 130 172 240 157 132 158)
+       #vu8(97 0 195 169 226 130 172 240 157 132 158))
+     (#vu8(120 39 48 48 102 102 39) 4 0 0 #vu8(0 255)
+       #vu8(0 255))
+     (#vu8(120 39 39) 4 0 0 #vu8() #f)
+     (#vu8(122 101 114 111 98 108 111 98 40 48 41) 4 0 0 #vu8() #f)
+     (#vu8(110 117 108 108) 5 0 0 #f #f))
+    ((#vu8(105 110 116 195 169) 1 1 4607182418800017408 #vu8(49)
+       #vu8(49))
+      (#vu8(226 130 172) 1 2 4611686018427387904 #vu8(50)
+        #vu8(50))
+      (#vu8(240 157 132 158) 1 3 4613937818241073152 #vu8(51)
+        #vu8(51))
+      (#vu8(97 226 130 172 240 157 132 158 195 169 122) 1 4 4616189618054758400 #vu8(52) #vu8(52))
+      (#vu8(45 48 46 48) 2 5 4617315517961601024)
+      (#vu8(49 101 51 48 56) 3 0 0 #vu8() #f)
+      (#vu8(52 46 57 52 48 54 53 54 52 53 56 52 49 50 52 54 53 52
+            101 45 51 50 52) 4 0 0 #vu8(255 0) #vu8(255 0))
+      (#vu8(49 46 53) 3 0 0 #vu8(120) #vu8(120))
+      (#vu8(39 97 39 32 124 124 32 99 104 97 114 40 48 41 32 124
+            124 32 39 195 169 226 130 172 240 157 132 158 39) 1 10 4621819117588971520 #vu8(49 48) #vu8(49 48))
+      (#vu8(120 39 48 48 102 102 39) 2 11 4622663542519103488)
+      (#vu8(120 39 39) 5 0 0 #f #f)
+      (#vu8(122 101 114 111 98 108 111 98 40 48 41) 4 0 0 #vu8(1)
+        #vu8(1))
+      (#vu8(110 117 108 108) 3 0 0 #vu8(0) #vu8(0)))))
+
+;; written-fields : Column -> List
+;; A column as columns-written has it: the version-dependent fields of a REAL
+;; (type 2) dropped.
+(define (written-fields column)
+  (let ((name (car column)) (type (cadr column)) (int64 (cadddr column))
+        (bits (car (cddddr column))) (text (cadr (cddddr column)))
+        (blob (caddr (cddddr column))))
+    (if (eqv? type sqlite-float)
+        (list name type int64 bits)
+        (list name type int64 bits text blob))))
+
+(test-equal "every row and column, read through native's bindings, has the written-out names, types, int64s and double bits, and the written-out text and blob bytes of each column that is no REAL; two rows of 13"
+  (list (list ok columns-written ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((answer (with-memory
+                   (lambda (db)
+                     (with-statement db columns-sql read-rows)))))
+      (list (list (car (car answer))
+                  (let ((rows (cadr (car answer))))
+                    (if (and (list? rows) (for-all list? rows))
+                        (map (lambda (row) (map written-fields row)) rows)
+                        rows))
+                  (caddr (car answer)))
+            (cadr answer) (caddr answer)))))
 
 (test-equal "the oracle's datum is two rows of 13 columns, so the comparison above reads something"
   '(2 13 13)

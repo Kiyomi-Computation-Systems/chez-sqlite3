@@ -56,6 +56,7 @@
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
+        (foreign-conventions)
         (libsqlite3-oracle)
         (floors)
         (only (chezscheme) getenv putenv format format-condition? load-shared-object
@@ -338,6 +339,14 @@
     "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
     "sqlite3_column_bytes" "sqlite3_error_offset"))
 (define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
+
+;; The lists above are written out, and an entry dropped from them takes its
+;; build and its missing-api row with it. The convention table holds the
+;; bindings to native, in ADR-0002's order (test-conventions), so the list
+;; is held to the table's names, whole and in order.
+(test-equal "the decoy's entry list is the convention table's names, whole and in order"
+  (map row-name conventions-table)
+  every-entry)
 
 (define (lacks entry) (string-append "-DDECOY_LACKS_" entry))
 
