@@ -27,7 +27,7 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M2's closing review is built,** on `m2-closing-review`. M2 is done when it merges. The
+- **Now: M2's closing review is built,** as PR #20 on `m2-closing-review`. M2 is done when it merges. The
   slices ran in the maintainer's stacked order of 2026-11-14: each opened as a PR, and the next
   begun on top of it. The Mac run is done, below. Next is M3, whose plan is drafted on `m3-plan`
   by another session, with ADR-0016 to ADR-0020.
@@ -76,7 +76,7 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-15 — M2's closing review and its fixes (this PR)
+### 2026-11-15 — M2's closing review and its fixes (PR #20)
 
 - **Reviewed** (Opus, read-only, on `1a53b13`, all of M2): no blocker, 2 majors and 7 minors, each
   reproduced.
@@ -115,7 +115,7 @@ newest first.
 
 ### M2 is done
 
-M2's slices 0 to 4 (PRs #14, #16 to #19) and its closing review (this PR) are merged, with CI
+M2's slices 0 to 4 (PRs #14, #16 to #19) and its closing review (PR #20) are merged, with CI
 passing in every job. The maintainer's Mac ran the suites on both libraries. Next is M3, whose plan,
 ADR-0016 to ADR-0020, is drafted on `m3-plan`.
 
