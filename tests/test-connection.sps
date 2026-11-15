@@ -1105,6 +1105,44 @@
              (list a b closed (native-counts))))))
       (lambda () (undo! '() (if db (list db) '()))))))
 
+;; A raise that is no condition (the guard in call-with-open-handle takes
+;; every object): a fresh symbol and a fresh pair, each a depth-1 handler's
+;; object and a guard's very object, never wrapped, and never a condition.
+(define (non-condition-raised-again make-object)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((object (make-object))
+                  (seen 'handler-not-run)
+                  (depth 'handler-not-run)
+                  (a (call/cc
+                      (lambda (k)
+                        (with-exception-handler
+                         (lambda (c)
+                           (set! depth (string->symbol (string-append "depth-" (number->string (interrupt-depth)))))
+                           (set! seen (if (eq? c object) 'the-same-object (list 'another (what-raised c))))
+                           (k 'escaped))
+                         (lambda () (with-handle db (lambda (h) (raise object))))))))
+                  (b (guard (e ((eq? e object) 'the-same-object)
+                               (#t (list 'another (what-raised e))))
+                       (with-handle db (lambda (h) (raise object)))
+                       'no-raise))
+                  (closed (attempt (lambda () (close-database! db) 'closed))))
+             (list a depth seen b closed (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+(test-equal "call-with-open-handle raises its procedure's raise of a fresh symbol again after its critical section: a handler runs at depth 1, and gets, and a guard gets, that very object"
+  (list 'escaped 'depth-1 'the-same-object 'the-same-object 'closed zero-counts)
+  (non-condition-raised-again (lambda () (string->symbol (string-append "planted-" "symbol")))))
+
+(test-equal "call-with-open-handle raises its procedure's raise of a fresh pair again after its critical section: a handler runs at depth 1, and gets, and a guard gets, that very object"
+  (list 'escaped 'depth-1 'the-same-object 'the-same-object 'closed zero-counts)
+  (non-condition-raised-again (lambda () (list 'planted 'pair))))
+
 ;; The procedure answers data (ADR-0012, amended): what it raises is raised
 ;; again with raise, so a raise-continuable from it cannot be resumed (the
 ;; maintainer, 2026-11-14). A handler that returns from that raise gets the
@@ -1260,6 +1298,120 @@
                     (list 'at-fuel-1 at-one))
                 (native-counts)))
         (let ((run (open-close-under-engine (car rest))))
+          (loop (cdr rest)
+                (cons (if (eq? (car run) 'unfinished)
+                          (list (car rest) run)
+                          (list (car rest) (car run)))
+                      found))))))
+
+;; --- a close between the open check and the procedure's use ---------------------------------------
+;; Two engines on one thread share a connection. A runs call-with-open-handle
+;; for FUEL ticks; B then closes the connection; A finishes. Inside the
+;; section A cannot expire, so B's close can only come before the check
+;; (&sqlite-closed) or after the procedure (the answer): never between.
+
+;; interleaved-close : Positive-Integer -> Symbol
+;; ok when A's answer is the procedure's, run with the connection open, or
+;; &sqlite-closed from its who; else what went wrong.
+(define (interleaved-close fuel)
+  (let* ((db (open-database ":memory:"))
+         (closed #f)
+         (a (make-engine
+             (lambda ()
+               (guard (c (#t (what-raised c)))
+                 (with-handle db (lambda (h) (if closed 'ran-on-a-closed-connection 'ran-open)))))))
+         (b (make-engine (lambda () (close-database! db) (set! closed #t))))
+         (answer 'a-not-finished))
+    (let ((a2 (a fuel (lambda (left . v) (set! answer (car v)) #f) (lambda (next) next))))
+      (b 1000000 (lambda (left . v) #f) (lambda (next) (set! closed 'b-expired) #f))
+      (let loop ((e a2) (n 0))
+        (when (and e (< n 100000))
+          (loop (e 1000000 (lambda (left . v) (set! answer (car v)) #f) (lambda (next) next))
+                (+ n 1)))))
+    (unless (eq? closed #t) (guard (e (#t #f)) (close-database! db)))
+    (cond ((eq? answer 'ran-open) 'ok)
+          ((equal? answer '(closed test-connection message)) 'ok)
+          (else (list 'wrong answer)))))
+
+(test-equal "call-with-open-handle: a close in another engine, at every fuel from 1 to 60 ticks of the first slice, never lets the procedure run on a closed connection: each answer is the procedure's or &sqlite-closed, and every count is zero after"
+  (list (map (lambda (fuel) (list fuel 'ok)) (fuels 60)) zero-counts)
+  (list (map (lambda (fuel) (list fuel (attempt (lambda () (interleaved-close fuel))))) (fuels 60))
+        (native-counts)))
+
+;; --- re-entering the procedure after the call finished ------------------------------------------
+;; A continuation captured inside PROC, re-entered once the call has
+;; answered and the connection is closed, would run PROC again with a freed
+;; handle. It is refused from the call's who, before PROC, as call-with-block
+;; refuses the same (a plain dynamic-wind's before thunk, outside any section).
+
+;; reenter-after-close : -> (List Any Natural Any Any)
+;; The refusal of the re-entry, how many times PROC ran, the close, the counts.
+(define (reenter-after-close)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let ((k #f) (runs 0) (phase 'first) (refusal 'not-reentered))
+             ;; The handler stands around the first call, and the continuation
+             ;; k is captured under it: a raise at the re-entry reaches it.
+             (call/cc
+              (lambda (out)
+                (with-exception-handler
+                 (lambda (c)
+                   (set! refusal
+                         (list 'raised-at-depth
+                               (string->symbol (string-append "depth-" (number->string (interrupt-depth))))
+                               (what-raised c)))
+                   (out 'escaped))
+                 (lambda ()
+                   (with-handle db
+                     (lambda (h)
+                       (call/cc (lambda (c) (set! k c)))
+                       (set! runs (+ runs 1))
+                       'answered))
+                   (when (eq? phase 'first)
+                     (set! phase 'reentering)
+                     (close-database! db)
+                     (k 'again))))))
+             (list refusal runs (attempt (lambda () (close-database! db) 'closed-again))
+                   (native-counts))))))
+      (lambda () (undo! '() (if db (list db) '()))))))
+
+(test-equal "call-with-open-handle refuses a continuation of its procedure re-entered after the call finished: from its who, with the rule re-entered, and its handler runs at depth 1"
+  (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'test-connection '(re-entered)))
+        'closed-again zero-counts)
+  (let ((r (reenter-after-close)))
+    (list (car r) (caddr r) (cadddr r))))
+
+(test-equal "call-with-open-handle runs its procedure once when its continuation is re-entered after the call finished and the connection is closed"
+  1
+  (cadr (reenter-after-close)))
+
+;; run-with-handle-under-engine : Positive-Integer -> (U (List Any Natural) (List 'unfinished Natural))
+;; A call-with-open-handle of an open database, in an engine of FUEL ticks a slice.
+(define (with-handle-under-engine fuel)
+  (let ((db (open-database ":memory:")))
+    (let ((run (run-engine (lambda ()
+                             (guard (e (#t (list 'raised (what-raised e))))
+                               (with-handle db (lambda (h) 'answered))))
+                           fuel 100000)))
+      (close-database! db)
+      run)))
+
+(test-equal "call-with-open-handle under an engine of every fuel from 1 to 60 ticks a slice: each call completes with its answer, the engine of 1 tick expired, and every count is zero after"
+  (list (map (lambda (fuel) (list fuel 'answered)) (fuels 60)) 'expired zero-counts)
+  (let loop ((rest (fuels 60)) (found '()))
+    (if (null? rest)
+        (let ((at-one (with-handle-under-engine 1)))
+          (list (reverse found)
+                (if (and (pair? (cdr at-one)) (integer? (cadr at-one)) (> (cadr at-one) 0))
+                    'expired
+                    (list 'at-fuel-1 at-one))
+                (native-counts)))
+        (let ((run (with-handle-under-engine (car rest))))
           (loop (cdr rest)
                 (cons (if (eq? (car run) 'unfinished)
                           (list (car rest) run)

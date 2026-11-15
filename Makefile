@@ -297,9 +297,11 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 # spelled so that a text check would miss it. make test runs it, so every
 # make test, the container's self-test and CI's main job among them, holds
 # the workflow. tests/test-check-ci.sps plants each fault in a copy of the
-# real file. It reads text with sh and awk, and needs no deps.
+# real file. It reads text with sh and awk, and needs no deps. The recipe
+# sets CHECK_CI_ROOT empty, which check-ci reads as unset, so a host's own
+# value never points the execute-bit rule at another tree.
 check-ci: ## Fail unless .github/workflows/ci.yml has the one shape tests/check-ci.sh reads
-	@sh tests/check-ci.sh .github/workflows
+	@CHECK_CI_ROOT= sh tests/check-ci.sh .github/workflows
 
 # Imports every library under src/, private ones too, and requires each
 # import to be refused, by name, as (chez-sqlite3 private require-threaded)

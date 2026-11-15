@@ -52,6 +52,8 @@
 #   - every step whose whole run line begins scripts/ci/NAME: that file exists
 #     and is executable, under CHECK_CI_ROOT (the repository root if unset);
 #     floor.sh is run with sh by the others, so it needs no bit and is not held;
+#   - no other line names scripts/, a comment apart: it is a step's whole run
+#     line in that form, or a cache key's hashFiles( list;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
 #     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...), the
 #     compiler's and the loader's among them (CC, C_INCLUDE_PATH, CPATH,
@@ -684,6 +686,23 @@ AWKPROGRAM
         note "$file:$lineno: runs $name, which is missing or not executable: a step runs it by its path, so it must be there and carry the execute bit"
       fi
     done <"$tmp/runs"
+
+    # The rule above reads one spelling of a step that runs a script of
+    # scripts/ci/. A line that names scripts/ci/ in any other spelling (a
+    # quoted path, a block scalar, ./scripts/ci/, scripts/ci//, a path with a
+    # slash after the directory, a command after the name, or a path to the
+    # directory that holds no scripts/ci/, such as scripts/./ci/) would run a
+    # script the rule never held, so it is a problem itself: bar a comment, a
+    # line of the workflow that names scripts/ is a step's whole run line, in
+    # the form the rule reads, or a cache key's hashFiles( list.
+    grep -n 'scripts/' "$file" |
+      grep -v -E '^[0-9]+: *#' |
+      grep -v -E '^[0-9]+:( {8}| {6}- )run: scripts/ci/[A-Za-z0-9._-]+( |$)' |
+      grep -v -E '^[0-9]+: +key: .*hashFiles\(' >"$tmp/stray" || :
+    while IFS= read -r entry; do
+      lineno=${entry%%:*}
+      note "$file:$lineno: names scripts/ other than as a step's whole run line of scripts/ci/ or a cache key's hashed files"
+    done <"$tmp/stray"
   fi
 fi
 

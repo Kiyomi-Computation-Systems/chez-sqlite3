@@ -982,8 +982,59 @@
               (list (A "nothreads" "      - name: Every library must be refused, by name" (env-ln "C_INCLUDE_PATH" (sql-inc "floor")))
                     (env-key "C_INCLUDE_PATH"))))))
 
+;; --- a script named other than as the rule that holds its execute bit reads it -------------
+;; Each row adds one step after the runner's SQLite report, whose run line
+;; names a script of scripts/ci/ in one spelling the execute-bit rule does not
+;; read. The step's other keys are free, so the planted line is its one problem.
+;; (The spellings the rule does read, run: scripts/ci/NAME and run:
+;; scripts/ci/NAME ARGS, are the rows of the execute bits, below.)
+
+(define stray-msg "names scripts/ other than as a step's whole run line of scripts/ci/ or a cache key's hashed files")
+
+(define report-run "        run: scripts/ci/report-sqlite.sh\n")
+
+;; stray-row : String (Listof String) -> Row
+;; An extra step of LINES, the first the row's anchor, and the problem on it.
+(define (stray-row name . step-lines)
+  (row name
+       (list (insert-after report-run
+                           (string-append "\n      - name: Extra\n" (apply lines step-lines))))
+       (list (list (car step-lines) stray-msg))))
+
+(define stray-rows
+  (list
+   (stray-row "a stray scripts/ci/ line: a double-quoted path"
+              "        run: \"scripts/ci/extra.sh\"")
+   (stray-row "a stray scripts/ci/ line: a single-quoted path"
+              "        run: 'scripts/ci/extra.sh'")
+   (stray-row "a stray scripts/ci/ line: two spaces after run:"
+              "        run:  scripts/ci/extra.sh")
+   (row "a stray scripts/ci/ line: a block scalar, run: |"
+        (list (insert-after report-run "\n      - name: Extra\n        run: |\n          scripts/ci/extra.sh\n"))
+        (list (list "          scripts/ci/extra.sh" stray-msg)))
+   (row "a stray scripts/ci/ line: a block scalar, run: >-"
+        (list (insert-after report-run "\n      - name: Extra\n        run: >-\n          scripts/ci/extra.sh\n"))
+        (list (list "          scripts/ci/extra.sh" stray-msg)))
+   (stray-row "a stray scripts/ci/ line: ./scripts/ci/NAME"
+              "        run: ./scripts/ci/extra.sh")
+   (stray-row "a stray scripts/ci/ line: scripts/ci//NAME"
+              "        run: scripts/ci//extra.sh")
+   (stray-row "a stray scripts/ci/ line: scripts/ci/sub/NAME"
+              "        run: scripts/ci/sub/extra.sh")
+   (stray-row "a stray scripts/ci/ line: NAME;true"
+              "        run: scripts/ci/extra.sh;true")
+   (stray-row "a stray scripts/ci/ line: NAME&&true"
+              "        run: scripts/ci/extra.sh&&true")
+   (stray-row "a stray scripts/ci/ line: after another command, true && scripts/ci/NAME"
+              "        run: true && scripts/ci/extra.sh")
+   (stray-row "a stray scripts/ line: scripts/./ci/NAME, which holds no scripts/ci/"
+              "        run: scripts/./ci/extra.sh")
+   (stray-row "a stray scripts/ line: scripts//ci/NAME, which holds no scripts/ci/"
+              "        run: scripts//ci/extra.sh")))
+
 (define rows
   (append
+   stray-rows
    (list
     (row "the unedited file passes" '() '())
 

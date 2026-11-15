@@ -108,19 +108,41 @@
   ;; data: what it raises is caught in the section and raised again after it,
   ;; the same object, with raise. So a raise-continuable from PROC cannot be
   ;; resumed (the maintainer, 2026-11-14).
+  ;;
+  ;; The section sits in a plain dynamic-wind, as call-with-block's extent
+  ;; does: a continuation captured in PROC and re-entered once the call has
+  ;; its outcome would run PROC again with a handle that may be freed, so the
+  ;; before thunk refuses a re-entry, from WHO, outside any section. FINISHED
+  ;; is set once the section is over and its outcome in hand, never by an
+  ;; after thunk: an engine's expiry before that unwinds the wind and its
+  ;; resume enters it again, and must go on.
+  ;; A few instructions lie between FINISHED's set! and the wind's exit, where
+  ;; an expiry would make its resume refused; no engine reached them over
+  ;; fuel 1 to 3000, 20 calls each (M1's closing review), as call-with-block's
+  ;; like window is unreached.
   (define (call-with-open-handle who db proc)
     (check-who 'call-with-open-handle who)
     (unless (procedure? proc)
       (assertion-violation who "not a procedure" 'not-a-procedure (shown-value proc)))
     (check-owned who db)
-    (let ((outcome
-           (critical-section
-            (let ((handle (unchecked-database-handle db)))
-              (if (not handle)
-                  '(closed)
-                  (guard (c (#t (list 'raised c)))
-                    (call-with-values (lambda () (proc handle))
-                      (lambda answers (cons 'answered answers)))))))))
+    (let* ((finished #f)
+           (outcome
+            (dynamic-wind
+              (lambda ()
+                (when finished
+                  (assertion-violation who "re-entered after it finished" 're-entered)))
+              (lambda ()
+                (let ((outcome
+                       (critical-section
+                        (let ((handle (unchecked-database-handle db)))
+                          (if (not handle)
+                              '(closed)
+                              (guard (c (#t (list 'raised c)))
+                                (call-with-values (lambda () (proc handle))
+                                  (lambda answers (cons 'answered answers)))))))))
+                  (set! finished #t)
+                  outcome))
+              (lambda () #f))))
       (case (car outcome)
         ((answered) (apply values (cdr outcome)))
         ((closed) (raise-closed who))
