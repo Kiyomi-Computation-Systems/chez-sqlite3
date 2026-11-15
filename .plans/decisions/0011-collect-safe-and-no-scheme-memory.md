@@ -8,6 +8,8 @@
   Amended 2026-11-14, and accepted by the maintainer that day: the helpers raise after their
   sections (M1's closing review,
   [amendment](#amendment-2026-11-14-the-helpers-raise-after-their-sections-m1s-closing-review)).
+  Amended 2026-11-15, and accepted by the maintainer that day: Chez's foreign ranges (M2 slice 2,
+  [amendment](#amendment-2026-11-15-chezs-foreign-ranges-m2-slice-2)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -178,3 +180,34 @@ Accepted by the maintainer on 2026-11-14, proposed in M1's closing review, with 
 - **Not refused:** a procedure that frees `call-with-out-pointer`'s slot makes the helper read
   freed memory after the procedure returns. No caller does this. A row that did was seen only by
   the memory gate, as an `Invalid read of size 8`.
+
+## Amendment, 2026-11-15: Chez's foreign ranges (M2 slice 2)
+
+Accepted by the maintainer on 2026-11-15 ("Accept both"), proposed in M2 slice 2, from its review.
+Measured on Chez 10.4.0, amd64.
+
+- **Chez's `int` isn't C's.** It takes −2³¹ to 2³²−1, and hands 2³¹ to 2³²−1 to C as negative
+  numbers: `abs` bound with `(int) int` answered −2147483648 for 2147483648, and 1 for 4294967295.
+  Beyond that range it raises "invalid foreign-procedure argument", with the binding's name as its
+  who.
+- **The others:**
+  - `uptr` takes −1 to 2⁶⁴−1, and −1 is all ones: −1 and 2⁶⁴−1 reached `labs` as the same value,
+    and 2⁶⁴ raised;
+  - `unsigned-8` takes −128 to 255;
+  - `double` refuses an exact number.
+- **So a raise can come from the call itself,** and from inside whatever critical section makes
+  it, where a `with-exception-handler` handler then runs with interrupts disabled. The review
+  measured it: `sqlite3-prepare-v3` given an nByte of 2³² in a section reached its handler at
+  depth 2.
+- **So every value a verb passes to C is checked to fit its C type before its section,** by a pure
+  check, and refused there:
+  - a parameter's and a column's index are checked against their counts already (ADR-0014);
+  - **prepare's nByte is an `int`,** so M2 slice 3 refuses SQL whose UTF-8 is longer than
+    2³¹−1 bytes, before anything is allocated. It is an assertion violation, a caller's mistake,
+    since SQLite's own limit is lower;
+  - TEXT and BLOB lengths are `sqlite3_uint64`, so they fit. SQLite answers `SQLITE_TOOBIG` to
+    one over its limit before it reads a byte, and slice 2's rows bind a length of 2³²+1 to hold
+    the type.
+- **The allowlist grows** to `int`, `uptr`, `integer-64`, `unsigned-int`, `double`, `unsigned-64`
+  and `unsigned-8` for arguments, and `int`, `uptr`, `integer-64`, `double` and `void` for
+  results. `test-conventions` holds it against the other 50 of the 54 type forms Chez accepts.

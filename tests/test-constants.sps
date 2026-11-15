@@ -32,8 +32,10 @@
 ;;;   prototypes   each row of the convention table (tests/foreign-conventions.sls)
 ;;;                holds its C prototype to sqlite3.h: the C program asks
 ;;;                _Generic whether the function's type is exactly the row's.
-;;;                A map written here, int to int, sqlite3_int64 to
-;;;                integer-64 and any pointer to uptr, holds the row's Chez
+;;;                A map written here, from each C type the rows write to
+;;;                its one Chez type (int, unsigned int, sqlite3_int64,
+;;;                sqlite3_uint64, double, unsigned char, and any pointer, a
+;;;                destructor among them, to uptr), holds the row's Chez
 ;;;                types to its C types. A wrong row fails by name, and each
 ;;;                kind of wrong row is planted in the suite.
 ;;;
@@ -90,6 +92,14 @@
     (sqlite-open-fullmutex . "SQLITE_OPEN_FULLMUTEX")
     (sqlite-open-nofollow . "SQLITE_OPEN_NOFOLLOW")
     (sqlite-open-exrescode . "SQLITE_OPEN_EXRESCODE")
+    (sqlite-row . "SQLITE_ROW")
+    (sqlite-done . "SQLITE_DONE")
+    (sqlite-integer . "SQLITE_INTEGER")
+    (sqlite-float . "SQLITE_FLOAT")
+    (sqlite-text . "SQLITE_TEXT")
+    (sqlite-blob . "SQLITE_BLOB")
+    (sqlite-null . "SQLITE_NULL")
+    (sqlite-utf8 . "SQLITE_UTF8")
     (sqlite-result-codes . (each "SQLITE_"))
     (sqlite-result-code-name . procedure)
     (sqlite-primary-code-name . procedure)))
@@ -504,13 +514,21 @@
                  suffix)))
 
 ;; chez-type : String -> (U Symbol #f)
-;; The Chez type a C type is bound as: int is int, sqlite3_int64 is integer-64,
-;; and any pointer, const char * and sqlite3 ** among them, is the address
-;; itself, uptr (ADR-0011, decisions 1 and 4). Any other C type has no
-;; mapping, and a row that writes one fails until a record decides it.
+;; The Chez type a C type is bound as: int is int, unsigned int is
+;; unsigned-int, sqlite3_int64 is integer-64, sqlite3_uint64 is unsigned-64,
+;; double is double, unsigned char is unsigned-8; and any pointer, const char
+;; * and sqlite3 ** among them, is the address itself, uptr (ADR-0011,
+;; decisions 1 and 4), as is a destructor, void(*)(void*), the type of
+;; SQLITE_TRANSIENT, a pointer-width integer (ADR-0001). Any other C type has
+;; no mapping, and a row that writes one fails until a record decides it.
 (define (chez-type c-type)
   (cond ((string=? c-type "int") 'int)
+        ((string=? c-type "unsigned int") 'unsigned-int)
         ((string=? c-type "sqlite3_int64") 'integer-64)
+        ((string=? c-type "sqlite3_uint64") 'unsigned-64)
+        ((string=? c-type "double") 'double)
+        ((string=? c-type "unsigned char") 'unsigned-8)
+        ((string=? c-type "void(*)(void*)") 'uptr)
         ((ends-with? c-type "*") 'uptr)
         (else #f)))
 
@@ -627,8 +645,8 @@
 (test-equal "values: every question got an answer"
   '() (filter (lambda (c) (eq? (answer-for c) 'no-answer)) asked-names))
 
-(test-equal "values: the table asks 108 codes, and the checks ask 117 names"
-  '(108 117) (list (length table) (length asked-names)))
+(test-equal "values: the table asks 108 codes, and the checks ask 123 names: those, the 9 open flags, the 5 type codes and SQLITE_UTF8; SQLITE_ROW and SQLITE_DONE are the table's own"
+  '(108 123) (list (length table) (length asked-names)))
 
 ;; --- the table's own shape ------------------------------------------------------------
 
@@ -817,8 +835,8 @@
                rows)
           f))))
 
-(test-equal "prototypes: the table has a row for each of M1's 15 entry points"
-  15 (length conventions-table))
+(test-equal "prototypes: the table has a row for each of M1's 15 entry points and M2's 21"
+  36 (length conventions-table))
 
 (test-equal "prototypes: the header declares each row's prototype exactly: the rows it does not, each by name"
   '()
@@ -834,12 +852,21 @@
   '()
   (map-problems conventions-table))
 
-;; The map, written out: int, sqlite3_int64 and every pointer; nothing else.
-(test-equal "map: int is int, sqlite3_int64 is integer-64, any pointer is uptr, and nothing else is mapped"
-  '(int integer-64 uptr uptr uptr uptr #f #f #f #f #f #f #f #f)
-  (map chez-type '("int" "sqlite3_int64" "const char *" "sqlite3 **" "sqlite3 *" "sqlite3_stmt *"
-                   "unsigned int" "long" "long long" "sqlite3_uint64" "double" "size_t"
-                   "void" "const char")))
+;; The map, written out: each C type the table's rows write, and its near
+;; misses, which map to nothing. A destructor is a pointer, SQLITE_TRANSIENT's
+;; bits (ADR-0001); any other function pointer is unmapped.
+(test-equal "map: int, unsigned int, sqlite3_int64, sqlite3_uint64, double and unsigned char are int, unsigned-int, integer-64, unsigned-64, double and unsigned-8; any pointer and void(*)(void*) are uptr; and nothing else is mapped"
+  '(int unsigned-int integer-64 unsigned-64 double unsigned-8
+    uptr uptr uptr uptr uptr uptr uptr uptr uptr uptr uptr
+    #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f)
+  (map chez-type '("int" "unsigned int" "sqlite3_int64" "sqlite3_uint64" "double" "unsigned char"
+                   "const char *" "sqlite3 **" "sqlite3 *" "sqlite3_stmt *" "sqlite3_stmt*"
+                   "sqlite3_stmt **" "const char **" "const char*" "const void*"
+                   "const unsigned char *" "void(*)(void*)"
+                   "long" "long long" "size_t" "void" "const char" "char" "signed char"
+                   "unsigned" "unsigned long" "unsigned long long" "float" "long double"
+                   "short" "unsigned short" "sqlite_int64" "sqlite_uint64" "void(*)(int)"
+                   "void (*)(void*)" "int64_t")))
 
 ;; The C side's control: a row written as the header does not declare it must
 ;; be answered 0, by name, and written right 1. Each pair differs in the one
@@ -864,6 +891,43 @@
   (verdicts-of (list (list "sqlite3_close" '("int" ("sqlite3 *" "int")) '(uptr int) 'int 'collect-safe '())
                      (list "sqlite3_threadsafe" '("int" ("int")) '(int) 'int 'plain '()))))
 
+(test-equal "the prototype check refuses each of M2's C types written as its near miss: unsigned int as int, sqlite3_int64 as int, double as float, sqlite3_uint64 as sqlite3_int64, unsigned char as unsigned int, a destructor as void *, a result written int where the header has sqlite3_int64 or double, each by name; and answers 1 for each written right"
+  '((("sqlite3_prepare_v3" . 0) ("sqlite3_bind_int64" . 0) ("sqlite3_bind_double" . 0)
+     ("sqlite3_bind_blob64" . 0) ("sqlite3_bind_text64" . 0) ("sqlite3_column_int64" . 0)
+     ("sqlite3_column_double" . 0))
+    (("sqlite3_prepare_v3" . 1) ("sqlite3_bind_int64" . 1) ("sqlite3_bind_double" . 1)
+     ("sqlite3_bind_blob64" . 1) ("sqlite3_bind_text64" . 1) ("sqlite3_column_int64" . 1)
+     ("sqlite3_column_double" . 1)))
+  (list
+   (verdicts-of
+    (list (list "sqlite3_prepare_v3"
+                '("int" ("sqlite3 *" "const char *" "int" "int" "sqlite3_stmt **" "const char **"))
+                '(uptr uptr int int uptr uptr) 'int 'collect-safe '())
+          (list "sqlite3_bind_int64" '("int" ("sqlite3_stmt*" "int" "int")) '(uptr int int) 'int 'plain '())
+          (list "sqlite3_bind_double" '("int" ("sqlite3_stmt*" "int" "float")) '(uptr int double) 'int 'plain '())
+          (list "sqlite3_bind_blob64"
+                '("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_int64" "void(*)(void*)"))
+                '(uptr int uptr unsigned-64 uptr) 'int 'plain '())
+          (list "sqlite3_bind_text64"
+                '("int" ("sqlite3_stmt*" "int" "const char*" "sqlite3_uint64" "void *" "unsigned int"))
+                '(uptr int uptr unsigned-64 uptr unsigned-8) 'int 'plain '())
+          (list "sqlite3_column_int64" '("int" ("sqlite3_stmt*" "int")) '(uptr int) 'integer-64 'plain '())
+          (list "sqlite3_column_double" '("float" ("sqlite3_stmt*" "int")) '(uptr int) 'double 'plain '())))
+   (verdicts-of
+    (list (list "sqlite3_prepare_v3"
+                '("int" ("sqlite3 *" "const char *" "int" "unsigned int" "sqlite3_stmt **" "const char **"))
+                '(uptr uptr int unsigned-int uptr uptr) 'int 'collect-safe '())
+          (list "sqlite3_bind_int64" '("int" ("sqlite3_stmt*" "int" "sqlite3_int64")) '(uptr int integer-64) 'int 'plain '())
+          (list "sqlite3_bind_double" '("int" ("sqlite3_stmt*" "int" "double")) '(uptr int double) 'int 'plain '())
+          (list "sqlite3_bind_blob64"
+                '("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_uint64" "void(*)(void*)"))
+                '(uptr int uptr unsigned-64 uptr) 'int 'plain '())
+          (list "sqlite3_bind_text64"
+                '("int" ("sqlite3_stmt*" "int" "const char*" "sqlite3_uint64" "void(*)(void*)" "unsigned char"))
+                '(uptr int uptr unsigned-64 uptr unsigned-8) 'int 'plain '())
+          (list "sqlite3_column_int64" '("sqlite3_int64" ("sqlite3_stmt*" "int")) '(uptr int) 'integer-64 'plain '())
+          (list "sqlite3_column_double" '("double" ("sqlite3_stmt*" "int")) '(uptr int) 'double 'plain '())))))
+
 (test-equal "the map check names a row whose Chez types differ from its C types: sqlite3_close taking int, sqlite3_errstr returning int, sqlite3_memory_used returning int, and a C type the map lacks"
   '(("sqlite3_close" (uptr) int (int) int)
     ("sqlite3_errstr" (int) uptr (int) int)
@@ -873,7 +937,35 @@
    (list (list "sqlite3_close" '("int" ("sqlite3 *")) '(int) 'int 'collect-safe '())
          (list "sqlite3_errstr" '("const char *" ("int")) '(int) 'int 'plain '())
          (list "sqlite3_memory_used" '("sqlite3_int64" ()) '() 'int 'plain '())
-         (list "sqlite3_sourceid" '("double" ()) '() 'uptr 'plain '()))))
+         (list "sqlite3_sourceid" '("float" ()) '() 'uptr 'plain '()))))
+
+(test-equal "the map check names each of M2's plants: sqlite3_bind_int64 and sqlite3_column_int64 bound as int, double as float, unsigned-64 and unsigned-8 as unsigned-32, unsigned int as int, and a destructor as int"
+  '(("sqlite3_bind_int64" (uptr int integer-64) int (uptr int int) int)
+    ("sqlite3_column_int64" (uptr int) integer-64 (uptr int) int)
+    ("sqlite3_bind_double" (uptr int double) int (uptr int float) int)
+    ("sqlite3_column_double" (uptr int) double (uptr int) float)
+    ("sqlite3_bind_blob64" (uptr int uptr unsigned-64 uptr) int (uptr int uptr unsigned-32 uptr) int)
+    ("sqlite3_bind_text64" (uptr int uptr unsigned-64 uptr unsigned-8) int
+     (uptr int uptr unsigned-64 uptr unsigned-32) int)
+    ("sqlite3_prepare_v3" (uptr uptr int unsigned-int uptr uptr) int (uptr uptr int int uptr uptr) int)
+    ("sqlite3_bind_blob64" (uptr int uptr unsigned-64 uptr) int (uptr int uptr unsigned-64 int) int))
+  (map-problems
+   (list (list "sqlite3_bind_int64" '("int" ("sqlite3_stmt*" "int" "sqlite3_int64")) '(uptr int int) 'int 'plain '())
+         (list "sqlite3_column_int64" '("sqlite3_int64" ("sqlite3_stmt*" "int")) '(uptr int) 'int 'plain '())
+         (list "sqlite3_bind_double" '("int" ("sqlite3_stmt*" "int" "double")) '(uptr int float) 'int 'plain '())
+         (list "sqlite3_column_double" '("double" ("sqlite3_stmt*" "int")) '(uptr int) 'float 'plain '())
+         (list "sqlite3_bind_blob64"
+               '("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_uint64" "void(*)(void*)"))
+               '(uptr int uptr unsigned-32 uptr) 'int 'plain '())
+         (list "sqlite3_bind_text64"
+               '("int" ("sqlite3_stmt*" "int" "const char*" "sqlite3_uint64" "void(*)(void*)" "unsigned char"))
+               '(uptr int uptr unsigned-64 uptr unsigned-32) 'int 'plain '())
+         (list "sqlite3_prepare_v3"
+               '("int" ("sqlite3 *" "const char *" "int" "unsigned int" "sqlite3_stmt **" "const char **"))
+               '(uptr uptr int int uptr uptr) 'int 'collect-safe '())
+         (list "sqlite3_bind_blob64"
+               '("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_uint64" "void(*)(void*)"))
+               '(uptr int uptr unsigned-64 int) 'int 'plain '()))))
 
 (test-end "constants")
 

@@ -5,6 +5,11 @@
 ;;;
 ;;;   libsqlite3-oracle  the fields, read from the library at a path
 ;;;   oracle-fields      their names, in the order the program prints them
+;;;   libsqlite3-oracle-rows
+;;;                      every row and column of SQL run on :memory: there,
+;;;                      each column read in C (the program's --rows mode)
+;;;   libsqlite3-oracle-transient
+;;;                      the header's SQLITE_TRANSIENT (its --transient mode)
 ;;;   c-compiler         $CC as a command's words, for every compile
 ;;;   split-words        a string cut at whitespace
 ;;;
@@ -19,7 +24,8 @@
 ;;; Test-only: it lives in tests/, which make test puts on Chez's library
 ;;; path, not in src/.
 (library (libsqlite3-oracle)
-  (export libsqlite3-oracle oracle-fields c-compiler split-words)
+  (export libsqlite3-oracle oracle-fields libsqlite3-oracle-rows libsqlite3-oracle-transient
+          c-compiler split-words)
   (import (rnrs)
           (chez-sqlite3-testing))
 
@@ -63,30 +69,72 @@
   ;; mktemp's answer being refused. It never raises. The directory is removed,
   ;; a raise included.
   (define (libsqlite3-oracle getenv path codes)
+    (oracle-answer getenv (cons path (map number->string codes)) oracle-fields))
+
+  ;; libsqlite3-oracle-rows : (String -> (U String #f)) String String
+  ;;                          -> (U (List (Pairof 'rows (Listof Row)) (Pairof 'valgrind Symbol))
+  ;;                                (List 'no-oracle Symbol Any))
+  ;; Row = (Listof Column)
+  ;; Column = (List (U Bytevector #f) Integer Integer Integer Natural
+  ;;                (U Bytevector #f) (U Bytevector #f))
+  ;; What the program's --rows mode reads from the library at PATH, running
+  ;; SQL on a fresh :memory: database, as libsqlite3-oracle reads its fields:
+  ;; (rows ROW ...), each column (NAME TYPE BYTES INT64 BITS TEXT BLOB) as the
+  ;; program's header gives them, then the valgrind line; or (no-oracle STEP
+  ;; EVIDENCE). The SQL goes as hex of its UTF-8 bytes, so a shell changes
+  ;; none of them. It never raises.
+  (define (libsqlite3-oracle-rows getenv path sql)
+    (oracle-answer getenv (list "--rows" path (utf8-hex sql)) '(rows)))
+
+  ;; libsqlite3-oracle-transient : (String -> (U String #f))
+  ;;                               -> (U (List (Pairof 'transient Natural) (Pairof 'valgrind Symbol))
+  ;;                                     (List 'no-oracle Symbol Any))
+  ;; The header's (uintptr_t)SQLITE_TRANSIENT, as the program compiled here
+  ;; prints it, then the valgrind line; or (no-oracle STEP EVIDENCE). It
+  ;; loads no library. It never raises.
+  (define (libsqlite3-oracle-transient getenv)
+    (oracle-answer getenv '("--transient") '(transient)))
+
+  ;; oracle-answer : (String -> (U String #f)) (Listof String) (Listof Symbol)
+  ;;                 -> (U (Listof (Pairof Symbol Any)) (List 'no-oracle Symbol Any))
+  ;; The program, compiled into a fresh directory and run with ARGUMENTS
+  ;; through gated-command: what it printed, when that is (FIELD . VALUE)
+  ;; for each of FIELDS in order and then the valgrind line.
+  (define (oracle-answer getenv arguments fields)
     (guard (e (#t (list 'no-oracle 'raised (describe e))))
       (call-with-temp-directory
        (lambda (dir)
-         (run-oracle getenv (string-append dir "/libsqlite3-oracle") path codes)))))
+         (run-oracle getenv (string-append dir "/libsqlite3-oracle") arguments fields)))))
 
-  (define (run-oracle getenv program path codes)
+  (define (run-oracle getenv program arguments fields)
     (let ((compiled (capture-command
                      (append (c-compiler getenv)
                              (list "-Wall" "-Werror" "-o" program "tests/libsqlite3-oracle.c"
                                    "-ldl")))))
       (if (not (= (car compiled) 0))
           (list 'no-oracle 'compile compiled)
-          (let ((ran (capture-command
-                      (gated-command getenv (cons program (cons path (map number->string codes)))))))
+          (let ((ran (capture-command (gated-command getenv (cons program arguments)))))
             (if (not (= (car ran) 0))
                 (list 'no-oracle 'run ran)
                 (let ((data (read-all (cadr ran))))
                   (if (and (list? data)
-                           (= (length data) (+ (length oracle-fields) 1))
+                           (= (length data) (+ (length fields) 1))
                            (for-all (lambda (datum field)
                                       (and (pair? datum) (eq? (car datum) field)))
-                                    data (append oracle-fields '(valgrind))))
+                                    data (append fields '(valgrind))))
                       data
                       (list 'no-oracle 'output (cadr ran)))))))))
+
+  ;; utf8-hex : String -> String
+  ;; TEXT's UTF-8 bytes, two lowercase hex digits each.
+  (define (utf8-hex text)
+    (let ((digits "0123456789abcdef"))
+      (call-with-string-output-port
+       (lambda (port)
+         (for-each (lambda (b)
+                     (put-char port (string-ref digits (div b 16)))
+                     (put-char port (string-ref digits (mod b 16))))
+                   (bytevector->u8-list (string->utf8 text)))))))
 
   ;; read-all : String -> (U (Listof Any) #f)
   ;; TEXT read as a sequence of data, or #f when it does not read.

@@ -19,8 +19,9 @@
  * when it is linked and no switch read at run time can hide an entry point
  * from dlsym:
  *
- *   (none)                   the control: the 15 entry points
- *                            (chez-sqlite3 private native) binds
+ *   (none)                   the control: the 36 entry points
+ *                            (chez-sqlite3 private native) binds, M1's 15
+ *                            and M2's 21
  *   DECOY_LACKS_<entry>      that one entry point left out
  *   DECOY_NOT_SQLITE         no sqlite3_* function at all
  *   DECOY_MARKER             also defines decoy_marker, which no other
@@ -199,7 +200,7 @@ int sqlite3_initialize(void)
 /* --- the rest: bound by the load and never called there ----------------
    Each logs its call, so a call during the load shows in a log the suite
    expects without it, and each answers as a library that can do nothing
-   would. */
+   would: M2's 21, below M1's, as a library that holds no statement. */
 
 #ifndef DECOY_LACKS_sqlite3_compileoption_used
 int sqlite3_compileoption_used(const char *zOptName)
@@ -281,6 +282,210 @@ sqlite3_int64 sqlite3_memory_used(void)
 {
   called("sqlite3_memory_used()");
   return 0;
+}
+#endif
+
+/* --- M2's 21 ------------------------------------------------------------
+   Each answers as if no statement could be made: a pointer's slot written
+   NULL, a count of 0, a code that says nothing was done. */
+
+#ifndef DECOY_LACKS_sqlite3_prepare_v3
+/* SQLITE_ERROR, with no statement and the tail at the SQL's start. */
+int sqlite3_prepare_v3(sqlite3 *db, const char *zSql, int nByte, unsigned int prepFlags,
+                       sqlite3_stmt **ppStmt, const char **pzTail)
+{
+  called("sqlite3_prepare_v3(%s,%s,%d,%u,%s,%s)", db ? "db" : "NULL", zSql ? "sql" : "NULL",
+         nByte, prepFlags, ppStmt ? "ppStmt" : "NULL", pzTail ? "pzTail" : "NULL");
+  if (ppStmt)
+    *ppStmt = NULL;
+  if (pzTail)
+    *pzTail = zSql;
+  return SQLITE_ERROR;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_finalize
+/* SQLITE_OK, as SQLite answers for a NULL statement. */
+int sqlite3_finalize(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_finalize(%s)", pStmt ? "stmt" : "NULL");
+  return SQLITE_OK;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_step
+/* SQLITE_MISUSE: there is no statement to step. */
+int sqlite3_step(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_step(%s)", pStmt ? "stmt" : "NULL");
+  return SQLITE_MISUSE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_reset
+/* SQLITE_OK, as SQLite answers for a NULL statement. */
+int sqlite3_reset(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_reset(%s)", pStmt ? "stmt" : "NULL");
+  return SQLITE_OK;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_clear_bindings
+/* SQLITE_OK: nothing was bound. */
+int sqlite3_clear_bindings(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_clear_bindings(%s)", pStmt ? "stmt" : "NULL");
+  return SQLITE_OK;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_parameter_count
+/* 0: no parameter. */
+int sqlite3_bind_parameter_count(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_bind_parameter_count(%s)", pStmt ? "stmt" : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_parameter_index
+/* 0: no parameter has the name. */
+int sqlite3_bind_parameter_index(sqlite3_stmt *pStmt, const char *zName)
+{
+  called("sqlite3_bind_parameter_index(%s,%s)", pStmt ? "stmt" : "NULL", zName ? zName : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_null
+/* SQLITE_RANGE: no parameter has the index. */
+int sqlite3_bind_null(sqlite3_stmt *pStmt, int i)
+{
+  called("sqlite3_bind_null(%s,%d)", pStmt ? "stmt" : "NULL", i);
+  return SQLITE_RANGE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_int64
+/* SQLITE_RANGE: no parameter has the index. */
+int sqlite3_bind_int64(sqlite3_stmt *pStmt, int i, sqlite3_int64 value)
+{
+  called("sqlite3_bind_int64(%s,%d,%lld)", pStmt ? "stmt" : "NULL", i, (long long)value);
+  return SQLITE_RANGE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_double
+/* SQLITE_RANGE: no parameter has the index. */
+int sqlite3_bind_double(sqlite3_stmt *pStmt, int i, double value)
+{
+  called("sqlite3_bind_double(%s,%d,%g)", pStmt ? "stmt" : "NULL", i, value);
+  return SQLITE_RANGE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_text64
+/* SQLITE_RANGE: no parameter has the index. */
+int sqlite3_bind_text64(sqlite3_stmt *pStmt, int i, const char *text, sqlite3_uint64 n,
+                        void (*destructor)(void *), unsigned char encoding)
+{
+  called("sqlite3_bind_text64(%s,%d,%s,%llu,%s,%d)", pStmt ? "stmt" : "NULL", i,
+         text ? "text" : "NULL", (unsigned long long)n, destructor ? "destructor" : "NULL",
+         (int)encoding);
+  return SQLITE_RANGE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_bind_blob64
+/* SQLITE_RANGE: no parameter has the index. */
+int sqlite3_bind_blob64(sqlite3_stmt *pStmt, int i, const void *bytes, sqlite3_uint64 n,
+                        void (*destructor)(void *))
+{
+  called("sqlite3_bind_blob64(%s,%d,%s,%llu,%s)", pStmt ? "stmt" : "NULL", i,
+         bytes ? "bytes" : "NULL", (unsigned long long)n, destructor ? "destructor" : "NULL");
+  return SQLITE_RANGE;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_count
+/* 0: no column. */
+int sqlite3_column_count(sqlite3_stmt *pStmt)
+{
+  called("sqlite3_column_count(%s)", pStmt ? "stmt" : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_name
+/* NULL: no column has a name. */
+const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N)
+{
+  called("sqlite3_column_name(%s,%d)", pStmt ? "stmt" : "NULL", N);
+  return NULL;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_type
+/* SQLITE_NULL, as SQLite answers for a column out of range. */
+int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_type(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return SQLITE_NULL;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_int64
+/* 0, a NULL's integer. */
+sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_int64(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_double
+/* 0.0, a NULL's real. */
+double sqlite3_column_double(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_double(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return 0.0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_text
+/* NULL, a NULL's text. */
+const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_text(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return NULL;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_blob
+/* NULL, a NULL's blob. */
+const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_blob(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return NULL;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_column_bytes
+/* 0, a NULL's byte count. */
+int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol)
+{
+  called("sqlite3_column_bytes(%s,%d)", pStmt ? "stmt" : "NULL", iCol);
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_error_offset
+/* -1: no error has an offset. */
+int sqlite3_error_offset(sqlite3 *db)
+{
+  called("sqlite3_error_offset(%s)", db ? "db" : "NULL");
+  return -1;
 }
 #endif
 

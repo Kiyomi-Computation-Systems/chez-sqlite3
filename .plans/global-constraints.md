@@ -31,7 +31,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
   oracle, never an install dependency (ADR-0001).
 - **`sqlite3_db_config` is bound with `(__varargs_after 2)`; `sqlite3_config` is never bound**
   (ADR-0001, brief §2.8).
-- **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are pointer-width integers,** −1 and 0 (ADR-0001).
+- **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are pointer-width integers,** −1 and 0 as C writes
+  them. As a `uptr`, −1 is all ones, and native computes it from the pointer's size (ADR-0001).
+- **Every value a verb passes to C is checked to fit its C type before the critical section that
+  makes the call,** by a pure check. Chez's `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
+  negative numbers, and raises beyond, from inside the section. So prepare refuses SQL longer than
+  2³¹−1 bytes, and indexes are checked against their counts (ADR-0011, amended).
 - **v1 binds only entry points that exist at the floor.** A newer one is optional: checked with
   `foreign-entry?`, its absence reported where it is used (ADR-0003, ADR-0002).
   `sqlite3_load_extension` is optional too, since a build can omit it, as Apple's does, and

@@ -8,7 +8,7 @@
 ;;;                  with the binding it holds still fails; each row's shape;
 ;;;                  every cited record exists; the allowlists, written out,
 ;;;                  are the types the table uses and void as a result
-;;;   src/           no violation, and the 15 forms are all native's
+;;;   src/           no violation, and the 36 forms are all native's
 ;;;   fixtures       tests/fixtures/conventions/<case>/, each the one fault it
 ;;;                  names, and the whole list of violations asserted: a form
 ;;;                  outside native, an entry that is no string literal, type
@@ -22,8 +22,9 @@
 ;;;                  held against the real src/; each row removed in turn
 ;;;   the allowlist  against its whole complement: every type Chez 10.4
 ;;;                  accepts that the table does not use, each in a fixture
-;;;                  binding as an argument and as a result, and the suite
-;;;                  asks Chez itself that each is accepted
+;;;                  binding as an argument and as a result, and each type the
+;;;                  table uses as an argument alone, bound as a result; the
+;;;                  suite asks Chez itself that each is accepted
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of
 ;;; its own: SRFI-64 makes #f of a raise in an actual expression, and catches
@@ -58,31 +59,47 @@
 
 ;; expected-names : (Listof String)
 ;; ADR-0002's amended order: the report's three, the threadsafe answer,
-;; sqlite3_initialize, then the rest of M1's required list.
+;; sqlite3_initialize, then the rest of M1's required list, then M2's 21
+;; (ADR-0002's M2 amendment).
 (define expected-names
   '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"
     "sqlite3_threadsafe" "sqlite3_initialize"
     "sqlite3_compileoption_used" "sqlite3_compileoption_get"
     "sqlite3_open_v2" "sqlite3_close" "sqlite3_errmsg" "sqlite3_errstr"
     "sqlite3_errcode" "sqlite3_extended_errcode" "sqlite3_next_stmt"
-    "sqlite3_memory_used"))
+    "sqlite3_memory_used"
+    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"
+    "sqlite3_clear_bindings" "sqlite3_bind_parameter_count" "sqlite3_bind_parameter_index"
+    "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
+    "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
+    "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
+    "sqlite3_column_bytes" "sqlite3_error_offset"))
 
 ;; collect-safe-names : (Listof String)
-;; The calls that can block (ADR-0011, decision 5); every other is plain.
-(define collect-safe-names '("sqlite3_open_v2" "sqlite3_close"))
+;; The calls that can block (ADR-0011, decision 5): open and close from M1,
+;; and M2's four, prepare, step, reset and finalize (ADR-0011, amended).
+;; Every other is plain.
+(define collect-safe-names
+  '("sqlite3_open_v2" "sqlite3_close"
+    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"))
 
 ;; accepted-types : (Listof Any)
 ;; Every foreign type Chez 10.4 accepts (CSUG 4.2) that the table does not
 ;; use. The allowlist must refuse each, as an argument and as a result.
 (define accepted-types
-  '(integer-8 unsigned-8 integer-16 unsigned-16 integer-24 unsigned-24
+  '(integer-8 integer-16 unsigned-16 integer-24 unsigned-24
     integer-32 unsigned-32 integer-40 unsigned-40 integer-48 unsigned-48
-    integer-56 unsigned-56 unsigned-64 double-float single-float short
-    unsigned-short unsigned-int unsigned long unsigned-long long-long
-    unsigned-long-long float double char wchar fixnum boolean iptr void*
+    integer-56 unsigned-56 double-float single-float short
+    unsigned-short unsigned long unsigned-long long-long
+    unsigned-long-long float char wchar fixnum boolean iptr void*
     u8* u16* u32* utf-8 utf-16le utf-16be utf-32le utf-32be string wstring
     scheme-object ptr size_t ssize_t ptrdiff_t wchar_t
     (* int) (& int) (* unsigned-8) (* uptr) (& uptr)))
+
+;; argument-only-types : (Listof Symbol)
+;; The types the table writes as an argument and never as a result: the
+;; result allowlist must refuse each.
+(define argument-only-types '(unsigned-int unsigned-64 unsigned-8))
 
 ;; refused-by-chez-types : (Listof Any)
 ;; Types Chez itself refuses, and an ftype's bare name: the allowlist refuses
@@ -175,7 +192,7 @@
 
 ;; --- the table ---------------------------------------------------------------------------
 
-(test-equal "table: it has a row for each of M1's 15 entry points, in ADR-0002's order, and no other"
+(test-equal "table: it has a row for each of M1's 15 entry points and M2's 21, in ADR-0002's order, and no other"
   expected-names
   (map row-name table))
 
@@ -194,18 +211,26 @@
                       (pair? (row-records row)) (for-all string? (row-records row)))))
           table))
 
-(test-equal "table: sqlite3_open_v2 and sqlite3_close are collect-safe, and every other row is plain (ADR-0011, decision 5)"
+(test-equal "table: sqlite3_open_v2, sqlite3_close, sqlite3_prepare_v3, sqlite3_finalize, sqlite3_step and sqlite3_reset are collect-safe, and every other row is plain (ADR-0011, decision 5, amended)"
   (map (lambda (name) (if (member name collect-safe-names) 'collect-safe 'plain)) expected-names)
   (map row-convention table))
 
-(test-equal "table: the allowlists are int, uptr and integer-64, and void as a result only"
-  '((int uptr integer-64) (int uptr integer-64 void))
+(test-equal "table: the allowlists are int, uptr, integer-64, unsigned-int, double, unsigned-64 and unsigned-8 as arguments, and int, uptr, integer-64, double and void as results"
+  '((int uptr integer-64 unsigned-int double unsigned-64 unsigned-8)
+    (int uptr integer-64 double void))
   (list allowed-argument-types allowed-result-types))
 
-(test-equal "table: the types its rows use are exactly the allowlist's, void aside: no type is allowed that no row uses"
-  (sorted-symbols allowed-argument-types)
-  (sorted-symbols (unique (append (apply append (map row-arguments table))
-                                  (map row-result table)))))
+(test-equal "table: the types its rows use are exactly the allowlists': every type an argument or a result is the argument allowlist, and every result, and void, the result allowlist; no type is allowed that no row uses"
+  (list (sorted-symbols allowed-argument-types) (sorted-symbols allowed-result-types))
+  (list (sorted-symbols (unique (append (apply append (map row-arguments table))
+                                        (map row-result table))))
+        (sorted-symbols (unique (cons 'void (map row-result table))))))
+
+(test-equal "table: the types only an argument uses are unsigned-int, unsigned-64 and unsigned-8, which the result allowlist refuses"
+  (list (sorted-symbols argument-only-types) '())
+  (list (sorted-symbols (filter (lambda (t) (not (memq t (map row-result table))))
+                                (unique (apply append (map row-arguments table)))))
+        (filter (lambda (t) (memq t allowed-result-types)) argument-only-types)))
 
 (test-equal "table: no row writes a type its allowlist refuses"
   '()
@@ -245,7 +270,7 @@
   (let ((r (reverse (cdr form))))
     (if (>= (length r) 3) (caddr r) 'no-entry)))
 
-(test-equal "src: every foreign-procedure form under src/ is one of the 15 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
+(test-equal "src: every foreign-procedure form under src/ is one of the 36 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
   (list (list native-file) '((chez-sqlite3 private native)) (sorted-strings expected-names))
   (if (and (list? src-items) (for-all (lambda (i) (eq? (car i) 'binding)) src-items))
       (list (unique (map cadr src-items))
@@ -364,7 +389,7 @@
 
 ;; --- rows against the real src/, changed in turn ---------------------------------------------
 
-(test-equal "sweep: a row removed fails, by name, for each of the 15 rows"
+(test-equal "sweep: a row removed fails, by name, for each of the 36 rows"
   (map (lambda (name) (list (list 'no-row name))) expected-names)
   (map (lambda (name)
          (checked (lambda ()
@@ -377,7 +402,7 @@
   (checked (lambda ()
              (violations "src" (append table (list (synthetic "sqlite3_extra" '() 'int)))))))
 
-(test-equal "sweep: a row's convention flipped fails, by name, for each of the 15 rows"
+(test-equal "sweep: a row's convention flipped fails, by name, for each of the 36 rows"
   (map (lambda (row)
          (let ((flipped (if (eq? (row-convention row) 'plain) 'collect-safe 'plain)))
            (list (list 'mismatch (row-name row) 'convention flipped (row-convention row)))))
@@ -389,22 +414,34 @@
                                                      (with-field row 'convention flipped)))))))
        table))
 
-(test-equal "sweep: a row's result type changed fails, by name, for each of the 15 rows"
-  (map (lambda (row)
-         (list (list 'mismatch (row-name row) 'result (other-type (row-result row)) (row-result row))))
-       (filter (lambda (row) (memq (row-result row) '(int uptr))) table))
-  (map (lambda (row)
-         (checked (lambda ()
-                    (violations "src" (replace-row table (row-name row)
-                                                   (with-field row 'result (other-type (row-result row))))))))
-       (filter (lambda (row) (memq (row-result row) '(int uptr))) table)))
+(test-equal "sweep: a row's result type changed fails, by name, for each of the 36 rows: int to uptr, and uptr, integer-64 and double to int"
+  (list 36
+        (map (lambda (row)
+               (list (list 'mismatch (row-name row) 'result (other-type (row-result row)) (row-result row))))
+             table))
+  (list (length table)
+        (map (lambda (row)
+               (checked (lambda ()
+                          (violations "src" (replace-row table (row-name row)
+                                                         (with-field row 'result (other-type (row-result row))))))))
+             table)))
 
-(test-equal "sweep: sqlite3_memory_used's result, integer-64, changed to int fails, by name"
-  '((mismatch "sqlite3_memory_used" result int integer-64))
-  (checked (lambda ()
-             (violations "src" (replace-row table "sqlite3_memory_used"
-                                            (with-field (car (rows-named '("sqlite3_memory_used")))
-                                                        'result 'int))))))
+(test-equal "sweep: sqlite3_memory_used's and sqlite3_column_int64's results, integer-64, and sqlite3_bind_int64's third argument, changed to int, each fail, by name (the M2 plan, section 4.8)"
+  '(((mismatch "sqlite3_memory_used" result int integer-64))
+    ((mismatch "sqlite3_column_int64" result int integer-64))
+    ((mismatch "sqlite3_bind_int64" arguments (uptr int int) (uptr int integer-64))))
+  (list (checked (lambda ()
+                   (violations "src" (replace-row table "sqlite3_memory_used"
+                                                  (with-field (car (rows-named '("sqlite3_memory_used")))
+                                                              'result 'int)))))
+        (checked (lambda ()
+                   (violations "src" (replace-row table "sqlite3_column_int64"
+                                                  (with-field (car (rows-named '("sqlite3_column_int64")))
+                                                              'result 'int)))))
+        (checked (lambda ()
+                   (violations "src" (replace-row table "sqlite3_bind_int64"
+                                                  (with-field (car (rows-named '("sqlite3_bind_int64")))
+                                                              'arguments '(uptr int int))))))))
 
 ;; every argument of every row, changed at its own position
 (define argument-cases
@@ -422,8 +459,8 @@
                                   found)))))
               table)))
 
-(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 13 arguments"
-  (list 13
+(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 61 arguments"
+  (list 61
         (map (lambda (c)
                (list (list 'mismatch (row-name (car c)) 'arguments (caddr c) (row-arguments (car c)))))
              argument-cases))
@@ -462,9 +499,10 @@
   (list (filter (lambda (t) (not (eq? (chez-takes? t 'argument) 'accepted))) accepted-types)
         (chez-takes? 'not-a-type 'argument)))
 
-(test-equal "complement: Chez accepts each type as a result, and refuses the control"
+(test-equal "complement: Chez accepts each type as a result, and each type the table uses as an argument alone, and refuses the control"
   '(() refused)
-  (list (filter (lambda (t) (not (eq? (chez-takes? t 'result) 'accepted))) accepted-types)
+  (list (filter (lambda (t) (not (eq? (chez-takes? t 'result) 'accepted)))
+                (append accepted-types argument-only-types))
         (chez-takes? 'not-a-type 'result)))
 
 (test-equal "complement: Chez refuses the types the list adds, so the two lists are apart"
@@ -477,13 +515,25 @@
           (append accepted-types refused-by-chez-types)))
 
 ;; The fixture binds each type, as the one argument of fx_argument_N and as
-;; the result of fx_result_N, and void as an argument of fx_void_argument.
+;; the result of fx_result_N; then each type of argument-only-types as the
+;; result of fx_result_only_K; and void as an argument of fx_void_argument.
 (define complement (append accepted-types refused-by-chez-types))
+
+;; result-only : (Listof (Pairof String Symbol))
+;; fx_result_only_K and its type, for each of argument-only-types.
+(define result-only
+  (let loop ((rest argument-only-types) (k 0) (found '()))
+    (if (null? rest)
+        (reverse found)
+        (loop (cdr rest) (+ k 1)
+              (cons (cons (string-append "fx_result_only_" (number->string k)) (car rest)) found)))))
 
 (define complement-rows
   (let loop ((rest complement) (i 0) (rows '()))
     (if (null? rest)
-        (reverse (cons (synthetic "fx_void_argument" '(void) 'int) rows))
+        (append (reverse rows)
+                (map (lambda (entry) (synthetic (car entry) '() (cdr entry))) result-only)
+                (list (synthetic "fx_void_argument" '(void) 'int)))
         (loop (cdr rest) (+ i 1)
               (cons (synthetic (string-append "fx_result_" (number->string i)) '() (car rest))
                     (cons (synthetic (string-append "fx_argument_" (number->string i))
@@ -493,16 +543,18 @@
 (define complement-refusals
   (let loop ((rest complement) (i 0) (found '()))
     (if (null? rest)
-        (reverse (cons '(type-refused "fx_void_argument" argument 0 void) found))
+        (append (reverse found)
+                (map (lambda (entry) (list 'type-refused (car entry) 'result (cdr entry))) result-only)
+                (list '(type-refused "fx_void_argument" argument 0 void)))
         (loop (cdr rest) (+ i 1)
               (cons (list 'type-refused (string-append "fx_result_" (number->string i)) 'result (car rest))
                     (cons (list 'type-refused (string-append "fx_argument_" (number->string i))
                                 'argument 0 (car rest))
                           found))))))
 
-(test-equal "complement: the fixture binds every type, each row says exactly what its binding says, and the allowlist refuses every one, as an argument and as a result, and void as an argument"
-  complement-refusals
-  (found-in "types" complement-rows))
+(test-equal "complement: the fixture binds every type, each row says exactly what its binding says, and the allowlist refuses every one, as an argument and as a result, each type the table uses as an argument alone as a result, and void as an argument"
+  (list 116 complement-refusals)
+  (list (length complement-refusals) (found-in "types" complement-rows)))
 
 (test-end "conventions")
 

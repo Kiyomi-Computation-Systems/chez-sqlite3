@@ -4,6 +4,8 @@
  * (ADR-0001).
  *
  *   libsqlite3-oracle PATH CODE ...
+ *   libsqlite3-oracle --rows PATH HEX
+ *   libsqlite3-oracle --transient
  *
  * It dlopens PATH, exactly as given, and finds each function it calls with
  * dlsym on that handle alone, never RTLD_DEFAULT: it links no libsqlite3, so
@@ -29,12 +31,44 @@
  *                                             test-memory the suites require
  *                                             yes (ADR-0005, amended).
  *
- * A NULL string is #f. It exits 0, or 1 with a message on stderr when PATH
- * will not load, lacks a function, or a CODE is no integer. A missing header
- * or compiler fails the compile, and the suite with it: never a skip
- * (ADR-0001).
+ * A NULL string is #f.
+ *
+ * --rows takes SQL as HEX, its UTF-8 bytes two lowercase or uppercase hex
+ * digits each, so no byte is lost on the way through a shell: it opens
+ * :memory: on PATH, prepares the SQL with sqlite3_prepare_v3, its byte
+ * length as nByte and prepFlags 0, steps it to SQLITE_DONE, and prints
+ *
+ *   (rows (COLUMN ...) ...)                   one list per row, each read
+ *                                             in C, column by column
+ *   (valgrind . yes)
+ *
+ * where each COLUMN is read by these calls, in this order: sqlite3_column_name,
+ * _type, _int64, _double, _text, _bytes, _blob and _bytes again, so
+ * sqlite3_column_bytes runs twice, once after each pointer, and the rest once:
+ *
+ *   (NAME TYPE BYTES INT64 BITS TEXT BLOB)
+ *     NAME   sqlite3_column_name's bytes, up to its NUL, as #vu8(...)
+ *     TYPE   sqlite3_column_type
+ *     INT64  sqlite3_column_int64
+ *     BITS   sqlite3_column_double's 64 bits, as an unsigned integer
+ *     TEXT   sqlite3_column_text's bytes, BYTES of them, as #vu8(...)
+ *     BYTES  sqlite3_column_bytes, the first call, read after sqlite3_column_text
+ *     BLOB   sqlite3_column_blob's bytes, as many as the second call of
+ *            sqlite3_column_bytes answers, read after sqlite3_column_blob
+ *
+ * A NULL pointer is #f. --transient prints the header's SQLITE_TRANSIENT, as
+ * (uintptr_t) reads it, then the valgrind line:
+ *
+ *   (transient . 18446744073709551615)
+ *
+ * It exits 0, or 1 with a message on stderr when PATH will not load, lacks a
+ * function, a CODE is no integer, the HEX is no hex, or a call of the --rows
+ * mode answers other than it must. A missing header or compiler fails the
+ * compile, and the suite with it: never a skip (ADR-0001).
  */
 #include <dlfcn.h>
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +116,152 @@ static void *find(void *library, const char *path, const char *name)
   return address;
 }
 
+/* put_bytes: #vu8(B ...) for N bytes at P, or #f for NULL. */
+static void put_bytes(const void *p, size_t n)
+{
+  const unsigned char *b = p;
+  size_t i;
+  if (!p) {
+    printf("#f");
+    return;
+  }
+  printf("#vu8(");
+  for (i = 0; i < n; i++)
+    printf(i ? " %u" : "%u", (unsigned)b[i]);
+  putchar(')');
+}
+
+/* hex_digit: the value of hex digit C, or -1. */
+static int hex_digit(int c)
+{
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return -1;
+}
+
+/* fail: a message on stderr, and exit 1. */
+static void fail(const char *what, int code)
+{
+  fprintf(stderr, "libsqlite3-oracle: %s answered %d\n", what, code);
+  exit(1);
+}
+
+/* rows: the --rows mode. */
+static int rows(const char *path, const char *hex)
+{
+  void *library;
+  __typeof__(sqlite3_open_v2) *open_v2;
+  __typeof__(sqlite3_close) *close_db;
+  __typeof__(sqlite3_prepare_v3) *prepare_v3;
+  __typeof__(sqlite3_step) *step;
+  __typeof__(sqlite3_finalize) *finalize;
+  __typeof__(sqlite3_column_count) *column_count;
+  __typeof__(sqlite3_column_name) *column_name;
+  __typeof__(sqlite3_column_type) *column_type;
+  __typeof__(sqlite3_column_int64) *column_int64;
+  __typeof__(sqlite3_column_double) *column_double;
+  __typeof__(sqlite3_column_text) *column_text;
+  __typeof__(sqlite3_column_blob) *column_blob;
+  __typeof__(sqlite3_column_bytes) *column_bytes;
+  sqlite3 *db = NULL;
+  sqlite3_stmt *stmt = NULL;
+  char *sql;
+  size_t n = strlen(hex), i;
+  int rc, columns, c;
+
+  if (n % 2 != 0) {
+    fprintf(stderr, "libsqlite3-oracle: odd hex\n");
+    return 1;
+  }
+  sql = malloc(n / 2 + 1);
+  if (!sql) {
+    fprintf(stderr, "libsqlite3-oracle: out of memory\n");
+    return 1;
+  }
+  for (i = 0; i < n / 2; i++) {
+    int hi = hex_digit(hex[2 * i]), lo = hex_digit(hex[2 * i + 1]);
+    if (hi < 0 || lo < 0) {
+      fprintf(stderr, "libsqlite3-oracle: not hex: %s\n", hex);
+      free(sql);
+      return 1;
+    }
+    sql[i] = (char)(hi * 16 + lo);
+  }
+  sql[n / 2] = '\0';
+
+  library = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+  if (!library) {
+    fprintf(stderr, "libsqlite3-oracle: %s\n", dlerror());
+    free(sql);
+    return 1;
+  }
+  *(void **)(&open_v2) = find(library, path, "sqlite3_open_v2");
+  *(void **)(&close_db) = find(library, path, "sqlite3_close");
+  *(void **)(&prepare_v3) = find(library, path, "sqlite3_prepare_v3");
+  *(void **)(&step) = find(library, path, "sqlite3_step");
+  *(void **)(&finalize) = find(library, path, "sqlite3_finalize");
+  *(void **)(&column_count) = find(library, path, "sqlite3_column_count");
+  *(void **)(&column_name) = find(library, path, "sqlite3_column_name");
+  *(void **)(&column_type) = find(library, path, "sqlite3_column_type");
+  *(void **)(&column_int64) = find(library, path, "sqlite3_column_int64");
+  *(void **)(&column_double) = find(library, path, "sqlite3_column_double");
+  *(void **)(&column_text) = find(library, path, "sqlite3_column_text");
+  *(void **)(&column_blob) = find(library, path, "sqlite3_column_blob");
+  *(void **)(&column_bytes) = find(library, path, "sqlite3_column_bytes");
+
+  rc = open_v2(":memory:", &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+  if (rc != SQLITE_OK)
+    fail("sqlite3_open_v2", rc);
+  rc = prepare_v3(db, sql, (int)(n / 2), 0, &stmt, NULL);
+  if (rc != SQLITE_OK || !stmt)
+    fail("sqlite3_prepare_v3", rc);
+  columns = column_count(stmt);
+  printf("(rows");
+  while ((rc = step(stmt)) == SQLITE_ROW) {
+    printf(" (");
+    for (c = 0; c < columns; c++) {
+      const char *name = column_name(stmt, c);
+      int type = column_type(stmt, c);
+      sqlite3_int64 int64 = column_int64(stmt, c);
+      double real = column_double(stmt, c);
+      uint64_t bits;
+      const unsigned char *text;
+      const void *blob;
+      int text_bytes, blob_bytes;
+      memcpy(&bits, &real, sizeof bits);
+      printf(c ? " (" : "(");
+      put_bytes(name, name ? strlen(name) : 0);
+      printf(" %d", type);
+      text = column_text(stmt, c);
+      text_bytes = column_bytes(stmt, c);
+      printf(" %d %lld %" PRIu64 " ", text_bytes, (long long)int64, bits);
+      put_bytes(text, (size_t)text_bytes);
+      blob = column_blob(stmt, c);
+      blob_bytes = column_bytes(stmt, c);
+      putchar(' ');
+      put_bytes(blob, (size_t)blob_bytes);
+      putchar(')');
+    }
+    putchar(')');
+  }
+  printf(")\n");
+  if (rc != SQLITE_DONE)
+    fail("sqlite3_step", rc);
+  rc = finalize(stmt);
+  if (rc != SQLITE_OK)
+    fail("sqlite3_finalize", rc);
+  rc = close_db(db);
+  if (rc != SQLITE_OK)
+    fail("sqlite3_close", rc);
+  free(sql);
+  printf("(valgrind . %s)\n", under_valgrind() ? "yes" : "no");
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   void *library;
@@ -94,6 +274,13 @@ int main(int argc, char **argv)
   const char *option;
   int i;
 
+  if (argc == 2 && strcmp(argv[1], "--transient") == 0) {
+    printf("(transient . %" PRIuPTR ")\n", (uintptr_t)SQLITE_TRANSIENT);
+    printf("(valgrind . %s)\n", under_valgrind() ? "yes" : "no");
+    return 0;
+  }
+  if (argc == 4 && strcmp(argv[1], "--rows") == 0)
+    return rows(argv[2], argv[3]);
   if (argc < 2) {
     fprintf(stderr, "usage: libsqlite3-oracle PATH CODE ...\n");
     return 1;

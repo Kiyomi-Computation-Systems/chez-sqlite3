@@ -134,6 +134,10 @@
   a `with-exception-handler` handler of the raise runs with interrupts
   disabled, where an engine never expires and another thread's collection
   waits. Answer data there, and raise after the section (ADR-0012, amended).
+* Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
+  negatives, and raises beyond, inside the section that makes the call.
+  Check that each value fits its C type before the section (ADR-0011,
+  amended).
 * Chez's `utf8->string`, and a UTF-8 transcoder, drop one leading U+FEFF.
   Decode text a user controls with `strict-utf8->string`, which keeps it,
   never `utf8->string` or `c-string->string` (`.plans/traps.md`).

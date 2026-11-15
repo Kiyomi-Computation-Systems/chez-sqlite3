@@ -9,6 +9,11 @@
 ;;; compiler finds, with a C program compiled at test time (ADR-0001).
 ;;;
 ;;;   sqlite-open-*             the open flags v1 uses (ADR-0012, decision 3)
+;;;   sqlite-row, sqlite-done   what sqlite3_step answers for a row, and at
+;;;                             the end (M2)
+;;;   sqlite-integer ... sqlite-null
+;;;                             sqlite3_column_type's five type codes (M2)
+;;;   sqlite-utf8               the text encoding bound text is given (M2)
 ;;;   sqlite-result-codes       every primary and extended result code in
 ;;;                             3.45.1's sqlite3.h, in the header's order
 ;;;   sqlite-result-code-name   a code's name, or the integer
@@ -20,6 +25,9 @@
   (export sqlite-open-readonly sqlite-open-readwrite sqlite-open-create
           sqlite-open-uri sqlite-open-memory sqlite-open-nomutex
           sqlite-open-fullmutex sqlite-open-nofollow sqlite-open-exrescode
+          sqlite-row sqlite-done
+          sqlite-integer sqlite-float sqlite-text sqlite-blob sqlite-null
+          sqlite-utf8
           sqlite-result-codes sqlite-result-code-name sqlite-primary-code-name)
   (import (chez-sqlite3 private require-threaded)
           (rnrs))
@@ -42,6 +50,29 @@
   (define sqlite-open-nofollow #x01000000)
   ;; sqlite-open-exrescode : Natural    SQLITE_OPEN_EXRESCODE
   (define sqlite-open-exrescode #x02000000)
+
+  ;; sqlite-row : Natural               SQLITE_ROW: sqlite3_step has a row ready
+  (define sqlite-row 100)
+  ;; sqlite-done : Natural              SQLITE_DONE: sqlite3_step has finished
+  (define sqlite-done 101)
+
+  ;; The type codes sqlite3_column_type answers (ADR-0015, decision 7).
+  ;; sqlite-integer : Natural           SQLITE_INTEGER
+  (define sqlite-integer 1)
+  ;; sqlite-float : Natural             SQLITE_FLOAT
+  (define sqlite-float 2)
+  ;; sqlite-text : Natural              SQLITE_TEXT
+  (define sqlite-text 3)
+  ;; sqlite-blob : Natural              SQLITE_BLOB
+  (define sqlite-blob 4)
+  ;; sqlite-null : Natural              SQLITE_NULL: the type code of a NULL
+  ;; value, an integer. It is not sql-null, the value a NULL column reads back
+  ;; as, which (chez-sqlite3 private values) defines.
+  (define sqlite-null 5)
+
+  ;; sqlite-utf8 : Natural              SQLITE_UTF8: sqlite3_bind_text64's
+  ;; encoding (ADR-0015, decision 5)
+  (define sqlite-utf8 1)
 
   ;; sqlite-result-codes : (Listof (Pairof Symbol Natural))
   ;; Every primary and extended result code of 3.45.1's sqlite3.h (108), in

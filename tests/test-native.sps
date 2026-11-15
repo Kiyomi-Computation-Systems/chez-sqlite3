@@ -20,6 +20,15 @@
 ;;;   the bindings   each one answers: an open and close of :memory:, and an
 ;;;                  open that fails and is closed, every return code
 ;;;                  asserted, the counts back at zero
+;;;   M2's bindings  each of the 21 answers, on :memory:: a prepare and its
+;;;                  tail, prepares that fail and their offsets (measured on
+;;;                  3.53.1 and the floor, 3.45.1, alike), step, reset and
+;;;                  finalize, the parameters; each bind held by SQLite, read
+;;;                  back through select ?1, typeof(?1), at the values where a
+;;;                  narrower type differs; SQLite's copy of a value bound with
+;;;                  sqlite-transient; and every column read, held whole to
+;;;                  what the C oracle reads of the same SQL. sqlite-transient
+;;;                  is the header's SQLITE_TRANSIENT, through the oracle
 ;;;   C strings      call-with-c-string: UTF-8 on bytes where encodings
 ;;;                  differ, the NUL written, U+0000 refused at every position
 ;;;                  before anything is allocated, by kind, from the WHO it is
@@ -36,7 +45,8 @@
 ;;;                  the free of a block PROC freed itself
 ;;;   the body       native.sls read as data: its load steps in order, and
 ;;;                  every foreign-procedure form bound eagerly, as the value
-;;;                  of a top-level load-step definition. With one good library
+;;;                  of a top-level load-step definition; and sqlite-transient
+;;;                  computed from the pointer's size, never a literal. With one good library
 ;;;                  in one process neither can be seen by behaviour: the load
 ;;;                  runs once, and every check passes. M1 slice 3's decoy sees
 ;;;                  them
@@ -125,6 +135,31 @@
 (define call-with-c-string (native-procedure 'call-with-c-string))
 (define c-string->string (native-procedure 'c-string->string))
 (define call-with-out-pointer (native-procedure 'call-with-out-pointer))
+(define sqlite3-prepare-v3 (native-procedure 'sqlite3-prepare-v3))
+(define sqlite3-finalize (native-procedure 'sqlite3-finalize))
+(define sqlite3-step (native-procedure 'sqlite3-step))
+(define sqlite3-reset (native-procedure 'sqlite3-reset))
+(define sqlite3-clear-bindings (native-procedure 'sqlite3-clear-bindings))
+(define sqlite3-bind-parameter-count (native-procedure 'sqlite3-bind-parameter-count))
+(define sqlite3-bind-parameter-index (native-procedure 'sqlite3-bind-parameter-index))
+(define sqlite3-bind-null (native-procedure 'sqlite3-bind-null))
+(define sqlite3-bind-int64 (native-procedure 'sqlite3-bind-int64))
+(define sqlite3-bind-double (native-procedure 'sqlite3-bind-double))
+(define sqlite3-bind-text64 (native-procedure 'sqlite3-bind-text64))
+(define sqlite3-bind-blob64 (native-procedure 'sqlite3-bind-blob64))
+(define sqlite3-column-count (native-procedure 'sqlite3-column-count))
+(define sqlite3-column-name (native-procedure 'sqlite3-column-name))
+(define sqlite3-column-type (native-procedure 'sqlite3-column-type))
+(define sqlite3-column-int64 (native-procedure 'sqlite3-column-int64))
+(define sqlite3-column-double (native-procedure 'sqlite3-column-double))
+(define sqlite3-column-text (native-procedure 'sqlite3-column-text))
+(define sqlite3-column-blob (native-procedure 'sqlite3-column-blob))
+(define sqlite3-column-bytes (native-procedure 'sqlite3-column-bytes))
+(define sqlite3-error-offset (native-procedure 'sqlite3-error-offset))
+;; sqlite-transient is a value, not a procedure: when native cannot be
+;; reached it is the raising procedure, which no row's expected value is,
+;; and which no binding takes as a uptr.
+(define transient (native-procedure 'sqlite-transient))
 
 ;; info : Any
 ;; The report, or (raised TEXT).
@@ -198,6 +233,9 @@
 (define ok (code-of 'ok))
 (define cantopen (code-of 'cantopen))
 (define ioerr (code-of 'ioerr))
+(define error-code (code-of 'error))
+(define range (code-of 'range))
+(define toobig (code-of 'toobig))
 (define readwrite-create (bitwise-ior sqlite-open-readwrite sqlite-open-create))
 
 (define (sorted-names names)
@@ -306,11 +344,17 @@
   counts-after-load)
 
 ;; No back door: the exports, written out whole.
-(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, the ten raw bindings, and the C-string and out-pointer helpers"
+(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings and M2's 21, sqlite-transient, and the C-string and out-pointer helpers"
   (sorted-names '(loaded-libsqlite3 loaded-threadsafe
                   sqlite3-open-v2 sqlite3-close sqlite3-errmsg sqlite3-errstr sqlite3-errcode
                   sqlite3-extended-errcode sqlite3-next-stmt sqlite3-memory-used
                   sqlite3-compileoption-used sqlite3-compileoption-get
+                  sqlite3-prepare-v3 sqlite3-finalize sqlite3-step sqlite3-reset
+                  sqlite3-clear-bindings sqlite3-bind-parameter-count sqlite3-bind-parameter-index
+                  sqlite3-bind-null sqlite3-bind-int64 sqlite3-bind-double sqlite3-bind-text64
+                  sqlite3-bind-blob64 sqlite3-column-count sqlite3-column-name sqlite3-column-type
+                  sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
+                  sqlite3-column-bytes sqlite3-error-offset sqlite-transient
                   call-with-c-string c-string->string call-with-out-pointer))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private native)))))
@@ -413,6 +457,579 @@
                          'errstr-of-cantopen
                          (list message errstr-cantopen))
                      closed (native-counts)))))))))
+
+;; --- M2's bindings answer ----------------------------------------------------------------------
+;; Each row opens :memory: through the raw open, runs its calls in order
+;; through let*, asserts every code, closes, and requires every count zero
+;; after. The expected values were measured first, on Guix's 3.53.1 and on
+;; the floor, 3.45.1, which answered the same (build/m2s2's probe).
+
+;; with-memory : (Natural -> Any) -> (List Any Integer (Listof Pair))
+;; PROC's answer, given the handle of a fresh :memory: database; then
+;; sqlite3_close's code; then the counts after. A failed open is the answer
+;; (open-failed CODE), with the handle closed.
+(define (with-memory proc)
+  (let-values (((rc db) (open-with ":memory:" readwrite-create)))
+    (if (or (not (eqv? rc ok)) (eqv? db 0))
+        (let ((closed (if (eqv? db 0) 'no-handle (sqlite3-close db))))
+          (list (list 'open-failed rc) closed (native-counts)))
+        (let* ((answer (guard (e (#t (list 'raised (describe e)))) (proc db)))
+               (closed (sqlite3-close db)))
+          (list answer closed (native-counts))))))
+
+;; sql-length : String -> Natural
+;; SQL's byte length in UTF-8: prepare's nByte.
+(define (sql-length sql) (bytevector-length (string->utf8 sql)))
+
+;; prepare : Natural String -> (List Integer Natural (U Natural 'null))
+;; sqlite3_prepare_v3 of SQL on DB, nByte its byte length, prepFlags 0: the
+;; code, the statement (0 for none) and where the tail points, as a byte
+;; offset from the SQL's start, or null.
+(define (prepare db sql)
+  (call-with-c-string 'test-native sql
+    (lambda (address)
+      (let-values (((inner tail)
+                    (call-with-out-pointer 'test-native
+                      (lambda (tail-slot)
+                        (call-with-values
+                         (lambda ()
+                           (call-with-out-pointer 'test-native
+                             (lambda (statement-slot)
+                               (sqlite3-prepare-v3 db address (sql-length sql) 0
+                                                   statement-slot tail-slot))))
+                         list)))))
+        (list (car inner) (cadr inner) (if (eqv? tail 0) 'null (- tail address)))))))
+
+;; with-statement : Natural String (Natural -> Any) -> (List Integer Any Integer)
+;; SQL prepared on DB, PROC given the statement, then sqlite3_finalize: the
+;; prepare's code, PROC's answer and the finalize's code. A prepare that
+;; makes no statement answers (no-statement CODE).
+(define (with-statement db sql proc)
+  (let* ((prepared (prepare db sql))
+         (statement (cadr prepared)))
+    (if (eqv? statement 0)
+        (list 'no-statement (car prepared))
+        (let* ((answer (guard (e (#t (list 'raised (describe e)))) (proc statement)))
+               (finalized (sqlite3-finalize statement)))
+          (list (car prepared) answer finalized)))))
+
+;; read-bytes : Natural Natural -> (U Bytevector #f)
+;; The N bytes at ADDRESS, read by our own code; #f for NULL.
+(define (read-bytes address n)
+  (and (not (eqv? address 0))
+       (let ((bytes (make-bytevector n)))
+         (let loop ((i 0))
+           (when (< i n)
+             (bytevector-u8-set! bytes i (foreign-ref 'unsigned-8 address i))
+             (loop (+ i 1))))
+         bytes)))
+
+;; column-text-bytes : Natural Natural -> (U Bytevector #f)
+;; Column I's text, read through sqlite3_column_text, then
+;; sqlite3_column_bytes, in the order SQLite's documentation gives.
+(define (column-text-bytes statement i)
+  (let* ((address (sqlite3-column-text statement i))
+         (n (sqlite3-column-bytes statement i)))
+    (read-bytes address n)))
+
+;; column-blob-bytes : Natural Natural -> (U Bytevector #f)
+(define (column-blob-bytes statement i)
+  (let* ((address (sqlite3-column-blob statement i))
+         (n (sqlite3-column-bytes statement i)))
+    (read-bytes address n)))
+
+;; flonum-bits : Flonum -> Natural
+;; X's 64 bits, as an unsigned integer.
+(define (flonum-bits x)
+  (let ((bytes (make-bytevector 8)))
+    (bytevector-ieee-double-native-set! bytes 0 x)
+    (bytevector-u64-native-ref bytes 0)))
+
+;; with-bytes : Bytevector (Natural Natural -> Any) -> Any
+;; PROC's answer, given a counted block holding BYTES and their count. The
+;; block holds at least one byte, so an empty value's address is never NULL
+;; (ADR-0011, amended); it is freed after.
+(define (with-bytes bytes proc)
+  (let ((n (bytevector-length bytes)))
+    (with-block (max n 1)
+      (lambda (block)
+        (poke! block (bytevector->u8-list bytes))
+        (proc block n)))))
+
+;; text-of : Natural Natural -> (U String Bytevector #f)
+;; Column I's text, decoded when it is ASCII: typeof's answer.
+(define (text-of statement i)
+  (let ((bytes (column-text-bytes statement i)))
+    (if (and bytes (for-all (lambda (b) (< 0 b 128)) (bytevector->u8-list bytes)))
+        (utf8->string bytes)
+        bytes)))
+
+(test-equal "sqlite3_prepare_v3 of \"select 1; select 2\", nByte its byte length and prepFlags 0, answers SQLITE_OK, a statement and the tail 9 bytes on; sqlite3_error_offset is then -1; sqlite3_finalize and sqlite3_close answer SQLITE_OK; every count is zero after"
+  (list (list ok 'statement 9 -1 ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((prepared (prepare db "select 1; select 2"))
+              (offset (sqlite3-error-offset db))
+              (finalized (sqlite3-finalize (cadr prepared))))
+         (list (car prepared) (if (eqv? (cadr prepared) 0) 'no-statement 'statement)
+               (caddr prepared) offset finalized))))))
+
+;; Measured on 3.53.1 and 3.45.1 alike: the offset counts bytes, and is -1
+;; for an error at the end of the SQL (the M2 plan, section 4.6), 0 for one
+;; at its first byte.
+(test-equal "a prepare that fails answers SQLITE_ERROR and no statement, and sqlite3_error_offset the error's byte: 10 for nosuchcol after \"select 1, \", 13 after \"select '\xE9;', \", whose \xE9; is two bytes, 0 for selectx, and -1 for an error at the end of the SQL, \"select 1 +\"; every count is zero after"
+  (list (list (list error-code 'no-statement 10)
+              (list error-code 'no-statement 13)
+              (list error-code 'no-statement 0)
+              (list error-code 'no-statement -1))
+        ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (in-order (lambda (sql)
+                   (let* ((prepared (prepare db sql))
+                          (offset (sqlite3-error-offset db)))
+                     (unless (eqv? (cadr prepared) 0) (sqlite3-finalize (cadr prepared)))
+                     (list (car prepared) (if (eqv? (cadr prepared) 0) 'no-statement 'statement)
+                           offset)))
+                 '("select 1, nosuchcol" "select '\xE9;', nosuchcol" "selectx 1" "select 1 +"))))))
+
+(test-equal "sqlite3_step of \"select 12\" answers SQLITE_ROW, with one column whose int64 is 12, then SQLITE_DONE; sqlite3_reset answers SQLITE_OK, and a step after it SQLITE_ROW again; sqlite3_finalize answers SQLITE_OK; every count is zero after"
+  (list (list ok (list sqlite-row 1 12 sqlite-done ok sqlite-row 12) ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (with-statement db "select 12"
+         (lambda (statement)
+           (let* ((first (sqlite3-step statement))
+                  (columns (sqlite3-column-count statement))
+                  (value (sqlite3-column-int64 statement 0))
+                  (second (sqlite3-step statement))
+                  (reset (sqlite3-reset statement))
+                  (again (sqlite3-step statement))
+                  (value-again (sqlite3-column-int64 statement 0)))
+             (list first columns value second reset again value-again))))))))
+
+;; :alpha is 1, ?7 is 7, and $beta the next after the largest, 8.
+(test-equal "sqlite3_bind_parameter_count of \"select :alpha, ?7, $beta\" is 8; sqlite3_bind_parameter_index finds :alpha at 1, ?7 at 7 and $beta at 8, and answers 0 for :nosuch, a name no parameter has, and for alpha without its sigil; every count is zero after"
+  (list (list ok (list 8 1 7 8 0 0) ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (with-statement db "select :alpha, ?7, $beta"
+         (lambda (statement)
+           (let* ((count (sqlite3-bind-parameter-count statement))
+                  (indexes (in-order (lambda (name)
+                                       (call-with-c-string 'test-native name
+                                         (lambda (address)
+                                           (sqlite3-bind-parameter-index statement address))))
+                                     '(":alpha" "?7" "$beta" ":nosuch" "alpha"))))
+             (cons count indexes))))))))
+
+;; bind-each : Natural Natural -> (Listof Integer)
+;; Each of the five binds at INDEX, one after another: null, int64 5,
+;; double 2.5, text "t" and blob 01.
+(define (bind-each statement index)
+  (let* ((null (sqlite3-bind-null statement index))
+         (int64 (sqlite3-bind-int64 statement index 5))
+         (double (sqlite3-bind-double statement index 2.5))
+         (text (with-bytes (string->utf8 "t")
+                 (lambda (address n)
+                   (sqlite3-bind-text64 statement index address n transient sqlite-utf8))))
+         (blob (with-bytes (u8-list->bytevector '(1))
+                 (lambda (address n)
+                   (sqlite3-bind-blob64 statement index address n transient)))))
+    (list null int64 double text blob)))
+
+(test-equal "each bind at index 0, and at one past the count, answers SQLITE_RANGE, and at the count SQLITE_OK: null, int64, double, text64 and blob64; every count is zero after"
+  (list (list ok
+              (list (list range range range range range)
+                    (list range range range range range)
+                    (list ok ok ok ok ok))
+              ok)
+        ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (with-statement db "select ?1, ?2"
+         (lambda (statement)
+           (let* ((zero (bind-each statement 0))
+                  (past (bind-each statement 3))
+                  (at (bind-each statement 2)))
+             (list zero past at))))))))
+
+;; --- the binds, held by SQLite: select ?1, typeof(?1) ---------------------------------------------
+
+;; round-trip : (Natural -> Integer) (Natural -> Any) -> Any
+;; A fresh "select ?1, typeof(?1)": BIND! given the statement, then a step,
+;; then column 0's type, READ of the statement and column 1's text, then a
+;; step to the end. Each round trip has its own statement, so a bind that
+;; did nothing reads NULL, never an earlier value.
+(define (round-trip bind! read)
+  (with-memory
+   (lambda (db)
+     (with-statement db "select ?1, typeof(?1)"
+       (lambda (statement)
+         (let* ((bound (bind! statement))
+                (row (sqlite3-step statement))
+                (type (sqlite3-column-type statement 0))
+                (value (read statement))
+                (typeof (text-of statement 1))
+                (done (sqlite3-step statement)))
+           (list bound row type value typeof done)))))))
+
+;; trip : Integer Integer Any String -> Expected
+;; What round-trip answers when the bind answers SQLITE_OK and SQLite reads
+;; back VALUE of TYPE, which typeof names TYPEOF.
+(define (trip type value typeof)
+  (list (list ok (list ok sqlite-row type value typeof sqlite-done) ok) ok zero-counts))
+
+;; An int binding wraps or refuses each of these: -2^63 and 2^63-1 need 64
+;; bits, and -2^31-1 and 2^31 are each one past an int's range.
+(test-equal "sqlite3_bind_int64 binds -2^63, -2^31-1, 2^31 and 2^63-1 as INTEGER, read back the same by sqlite3_column_int64; every count is zero after each"
+  (map (lambda (v) (trip sqlite-integer v "integer"))
+       '(-9223372036854775808 -2147483649 2147483648 9223372036854775807))
+  (in-order (lambda (v)
+              (guard (e (#t (list 'raised (describe e))))
+                (round-trip (lambda (statement) (sqlite3-bind-int64 statement 1 v))
+                            (lambda (statement) (sqlite3-column-int64 statement 0)))))
+            '(-9223372036854775808 -2147483649 2147483648 9223372036854775807)))
+
+;; Compared by their 64 bits, written out: -0.0 is its sign bit alone, which
+;; = cannot tell from 0.0; +inf.0 the exponent's; the smallest subnormal, 1;
+;; 1.5, 3FF8 and zeros. A float binding loses the subnormal, and reads
+;; another double's bits.
+(test-equal "sqlite3_bind_double binds -0.0, +inf.0, the smallest subnormal and 1.5 as REAL, read back by sqlite3_column_double with the same 64 bits; every count is zero after each"
+  (map (lambda (bits) (trip sqlite-float bits "real"))
+       '(#x8000000000000000 #x7FF0000000000000 1 #x3FF8000000000000))
+  (in-order (lambda (x)
+              (guard (e (#t (list 'raised (describe e))))
+                (round-trip (lambda (statement) (sqlite3-bind-double statement 1 x))
+                            (lambda (statement) (flonum-bits (sqlite3-column-double statement 0))))))
+            (list -0.0 +inf.0 4.9406564584124654e-324 1.5)))
+
+;; The text's bytes, written out: a, é (two bytes), U+0000, € (three) and
+;; U+1D11E (four), 11 bytes in 5 characters. A length counted in characters
+;; would stop at €'s first byte.
+(define text-bytes '(97 195 169 0 226 130 172 240 157 132 158))
+
+(test-equal "sqlite3_bind_text64 binds a\xE9;, U+0000, \x20AC; and U+1D11E as TEXT, its 11 bytes counted, with sqlite-utf8 and sqlite-transient, read back the same by sqlite3_column_text and sqlite3_column_bytes; every count is zero after"
+  (trip sqlite-text (u8-list->bytevector text-bytes) "text")
+  (guard (e (#t (list 'raised (describe e))))
+    (round-trip (lambda (statement)
+                  (with-bytes (string->utf8 "a\xE9;\x0;\x20AC;\x1D11E;")
+                    (lambda (address n)
+                      (sqlite3-bind-text64 statement 1 address n transient sqlite-utf8))))
+                (lambda (statement) (column-text-bytes statement 0)))))
+
+;; An empty BLOB reads back as a NULL pointer with 0 bytes (measured, the M2
+;; plan, section 4.4), read here as #f; bound from a NULL pointer it would
+;; be NULL, which typeof names null.
+(test-equal "sqlite3_bind_blob64 binds 00 FF 7F 80 00 as a BLOB, read back the same by sqlite3_column_blob and sqlite3_column_bytes; and an empty value, from a block of one byte, never NULL, as an empty BLOB, which reads back as no pointer and 0 bytes; every count is zero after each"
+  (list (trip sqlite-blob (u8-list->bytevector '(0 255 127 128 0)) "blob")
+        (trip sqlite-blob '(#f 0) "blob"))
+  (in-order (lambda (bytes)
+              (guard (e (#t (list 'raised (describe e))))
+                (round-trip (lambda (statement)
+                              (with-bytes bytes
+                                (lambda (address n)
+                                  (sqlite3-bind-blob64 statement 1 address n transient))))
+                            (lambda (statement)
+                              (if (= (bytevector-length bytes) 0)
+                                  (let* ((address (sqlite3-column-blob statement 0))
+                                         (n (sqlite3-column-bytes statement 0)))
+                                    (list (if (eqv? address 0) #f address) n))
+                                  (column-blob-bytes statement 0))))))
+            (list (u8-list->bytevector '(0 255 127 128 0)) (u8-list->bytevector '()))))
+
+(test-equal "sqlite3_bind_null makes a parameter bound to 5 NULL, which typeof names null; both binds answer SQLITE_OK; every count is zero after"
+  (list (list ok (list (list ok ok) sqlite-row sqlite-null 0 "null" sqlite-done) ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (round-trip (lambda (statement)
+                  (let* ((five (sqlite3-bind-int64 statement 1 5))
+                         (null (sqlite3-bind-null statement 1)))
+                    (list five null)))
+                (lambda (statement) (sqlite3-column-int64 statement 0)))))
+
+(test-equal "sqlite3_clear_bindings, after a reset, turns a parameter bound to 7 back to NULL: 7 and integer, then 0 and null; every code is asserted; every count is zero after"
+  (list (list ok
+              (list ok sqlite-row 7 "integer" sqlite-done ok ok sqlite-row sqlite-null "null" sqlite-done)
+              ok)
+        ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (with-statement db "select ?1, typeof(?1)"
+         (lambda (statement)
+           (let* ((bound (sqlite3-bind-int64 statement 1 7))
+                  (row (sqlite3-step statement))
+                  (value (sqlite3-column-int64 statement 0))
+                  (typeof (text-of statement 1))
+                  (done (sqlite3-step statement))
+                  (reset (sqlite3-reset statement))
+                  (cleared (sqlite3-clear-bindings statement))
+                  (row-again (sqlite3-step statement))
+                  (type-again (sqlite3-column-type statement 0))
+                  (typeof-again (text-of statement 1))
+                  (done-again (sqlite3-step statement)))
+             (list bound row value typeof done reset cleared row-again type-again typeof-again
+                   done-again))))))))
+
+;; --- a length past 32 bits ------------------------------------------------------------------------
+;; sqlite3_bind_text64 and sqlite3_bind_blob64 take a 64-bit length. A 1-byte
+;; block with a length of 2^32+1 is refused by SQLite before it reads or
+;; copies a byte (the length is checked against its limit first), so no
+;; 4 GiB block is needed: SQLITE_TOOBIG, and the parameter stays NULL. Bound
+;; as an unsigned-32 length, Chez refuses the argument and raises instead.
+(define past-32-bits (+ (expt 2 32) 1))
+
+(for-each
+ (lambda (kind bind!)
+   (test-equal (string-append "sqlite3_bind_" kind "64 of a 1-byte block with the length 2^32+1 answers SQLITE_TOOBIG, and the parameter stays NULL, which typeof names null; every count is zero after")
+     (list (list ok (list toobig sqlite-row sqlite-null 0 "null" sqlite-done) ok) ok zero-counts)
+     (guard (e (#t (list 'raised (describe e))))
+       (round-trip (lambda (statement)
+                     (with-bytes (u8-list->bytevector '(65))
+                       (lambda (address n) (bind! statement address past-32-bits))))
+                   (lambda (statement) (sqlite3-column-int64 statement 0))))))
+ '("text" "blob")
+ (list (lambda (statement address n)
+         (sqlite3-bind-text64 statement 1 address n transient sqlite-utf8))
+       (lambda (statement address n)
+         (sqlite3-bind-blob64 statement 1 address n transient))))
+
+;; --- the copy: SQLite copies a value bound with sqlite-transient -------------------------------
+;; The bytes go into a counted block and are bound from it; then the block is
+;; overwritten with other bytes, and freed, before the step reads the value.
+;; Bound with 0, SQLITE_STATIC, SQLite would keep the address and read the
+;; block's new bytes, or what the allocator left there, outside Valgrind too.
+
+;; copied : (Natural Natural Natural -> Integer) (Natural -> Any) -> Any
+(define (copied bind! read)
+  (let ((first (bytevector->u8-list (string->utf8 "first-\xE9;-bytes")))
+        (other (bytevector->u8-list (string->utf8 "OTHER-\x20AC;BYTE"))))
+    (with-memory
+     (lambda (db)
+       (with-statement db "select ?1"
+         (lambda (statement)
+           (let* ((block (foreign-block (length first)))
+                  (written (poke! block first))
+                  (bound (bind! statement block (length first)))
+                  (overwritten (poke! block other))
+                  (freed (free-foreign-block! block))
+                  (row (sqlite3-step statement))
+                  (value (read statement))
+                  (done (sqlite3-step statement)))
+             (list bound row value done))))))))
+
+(test-equal "SQLite copies TEXT bound with sqlite-transient: the block overwritten and freed before the step, the value reads back as first written; every count is zero after"
+  (list (list ok (list ok sqlite-row (string->utf8 "first-\xE9;-bytes") sqlite-done) ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (copied (lambda (statement block n)
+              (sqlite3-bind-text64 statement 1 block n transient sqlite-utf8))
+            (lambda (statement) (column-text-bytes statement 0)))))
+
+(test-equal "SQLite copies a BLOB bound with sqlite-transient: the block overwritten and freed before the step, the value reads back as first written; every count is zero after"
+  (list (list ok (list ok sqlite-row (string->utf8 "first-\xE9;-bytes") sqlite-done) ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (copied (lambda (statement block n)
+              (sqlite3-bind-blob64 statement 1 block n transient))
+            (lambda (statement) (column-blob-bytes statement 0)))))
+
+;; --- sqlite-transient, against the header ------------------------------------------------------
+
+(define transient-oracle (libsqlite3-oracle-transient getenv))
+
+(test-equal "sqlite-transient is the header's (uintptr_t)SQLITE_TRANSIENT, as the C oracle compiled here prints it"
+  (if (and (list? transient-oracle) (pair? transient-oracle) (pair? (car transient-oracle))
+           (eq? (caar transient-oracle) 'transient))
+      (cdar transient-oracle)
+      transient-oracle)
+  transient)
+
+(test-equal "the transient oracle ran under Valgrind exactly when the gate asked"
+  (cons 'valgrind (if (getenv "CHEZ_SQLITE3_GATE_CHILD") 'yes 'no))
+  (or (and (list? transient-oracle) (for-all pair? transient-oracle) (assq 'valgrind transient-oracle))
+      (list 'valgrind 'no-oracle transient-oracle)))
+
+;; --- every column read, against the oracle ---------------------------------------------------
+;; The SQL: integers at the binds' boundaries; -0.0, 1e308, the smallest
+;; subnormal and 1.5; text with two-, three- and four-byte sequences and
+;; char(0) inside; x'00ff', x'' and zeroblob(0); NULL; and column names with
+;; multibyte sequences. Its second row puts other types in the same columns.
+;; Each column is read in the oracle's order: name, type, int64, double, text
+;; then bytes, blob then bytes. No value is written out: the text of a REAL
+;; differs between versions (the smallest subnormal is 23 bytes on 3.53.1, 21
+;; on 3.45.1, measured), so both sides read the one library.
+(define columns-sql
+  (string-append
+   "select -9223372036854775808 as \"int\xE9;\", -2147483649 as \"\x20AC;\", "
+   "2147483648 as \"\x1D11E;\", 9223372036854775807 as \"a\x20AC;\x1D11E;\xE9;z\", "
+   "-0.0, 1e308, 4.9406564584124654e-324, 1.5, "
+   "'a' || char(0) || '\xE9;\x20AC;\x1D11E;', x'00ff', x'', zeroblob(0), null "
+   "union all select 1, 2, 3, 4, 5.0, '', x'ff00', 'x', 10, 11.5, null, x'01', char(0)"))
+
+(define columns-oracle
+  (if expected-path
+      (libsqlite3-oracle-rows getenv expected-path columns-sql)
+      (list 'no-oracle 'no-path expected-choice)))
+
+;; read-column : Natural Natural -> Column
+;; Column I of the row STATEMENT holds, in the oracle's order and shape.
+(define (read-column statement i)
+  (let* ((name (let ((address (sqlite3-column-name statement i)))
+                 (and (not (eqv? address 0))
+                      (let scan ((n 0))
+                        (if (eqv? (foreign-ref 'unsigned-8 address n) 0)
+                            (read-bytes address n)
+                            (scan (+ n 1)))))))
+         (type (sqlite3-column-type statement i))
+         (int64 (sqlite3-column-int64 statement i))
+         (bits (flonum-bits (sqlite3-column-double statement i)))
+         (text-address (sqlite3-column-text statement i))
+         (text-n (sqlite3-column-bytes statement i))
+         (text (read-bytes text-address text-n))
+         (blob-address (sqlite3-column-blob statement i))
+         (blob-n (sqlite3-column-bytes statement i))
+         (blob (read-bytes blob-address blob-n)))
+    (list name type text-n int64 bits text blob)))
+
+;; read-rows : Natural -> (Listof Row)
+;; Every row, stepped to SQLITE_DONE, each column read by read-column; a step
+;; that answers anything else ends the list with (step CODE).
+(define (read-rows statement)
+  (let ((columns (sqlite3-column-count statement)))
+    (let loop ((found '()))
+      (let ((code (sqlite3-step statement)))
+        (cond ((eqv? code sqlite-row)
+               (loop (cons (let row ((i 0) (cells '()))
+                             (if (= i columns)
+                                 (reverse cells)
+                                 (row (+ i 1) (cons (read-column statement i) cells))))
+                           found)))
+              ((eqv? code sqlite-done) (reverse found))
+              (else (reverse (cons (list 'step code) found))))))))
+
+(test-equal "the C oracle read every row and column of the SQL"
+  'read
+  (if (and (list? columns-oracle) (pair? columns-oracle) (pair? (car columns-oracle))
+           (eq? (caar columns-oracle) 'rows))
+      'read
+      columns-oracle))
+
+(test-equal "the oracle's columns ran under Valgrind exactly when the gate asked"
+  (cons 'valgrind (if (getenv "CHEZ_SQLITE3_GATE_CHILD") 'yes 'no))
+  (or (and (list? columns-oracle) (for-all pair? columns-oracle) (assq 'valgrind columns-oracle))
+      (list 'valgrind 'no-oracle)))
+
+(test-equal "every row and column, read through native's bindings, is the C oracle's, whole: each name's bytes, its type, its bytes, its int64, its double's 64 bits, its text and its blob, two rows of 13; the prepare, the finalize and the close answer SQLITE_OK, and every count is zero after"
+  (list (list ok
+              (if (and (list? columns-oracle) (pair? columns-oracle) (pair? (car columns-oracle))
+                       (eq? (caar columns-oracle) 'rows))
+                  (cdar columns-oracle)
+                  'no-oracle)
+              ok)
+        ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (with-statement db columns-sql read-rows)))))
+
+;; What the SQL reads, written out, so that replacing its boundary values with
+;; tame ones fails whatever the oracle reads. Each column: its name's bytes,
+;; type, int64, double bits, and, but for a REAL, its text's bytes and its
+;; blob's. A REAL's text differs between SQLite versions (above), so a REAL
+;; column's text, its byte count and its blob are left out; they are held to
+;; the oracle's by the row above. Read from the oracle on 3.53.1 and 3.45.1,
+;; which agree on all of it.
+(define columns-written
+  '(((#vu8(105 110 116 195 169) 1 -9223372036854775808 14114281232179134464
+      #vu8(45 57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56
+           48 56)
+      #vu8(45 57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56
+           48 56))
+     (#vu8(226 130 172) 1 -2147483649 13970166044105375744
+       #vu8(45 50 49 52 55 52 56 51 54 52 57)
+       #vu8(45 50 49 52 55 52 56 51 54 52 57))
+     (#vu8(240 157 132 158) 1 2147483648 4746794007248502784
+       #vu8(50 49 52 55 52 56 51 54 52 56)
+       #vu8(50 49 52 55 52 56 51 54 52 56))
+     (#vu8(97 226 130 172 240 157 132 158 195 169 122) 1 9223372036854775807 4890909195324358656
+       #vu8(57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56 48
+            55)
+       #vu8(57 50 50 51 51 55 50 48 51 54 56 53 52 55 55 53 56 48
+            55))
+     (#vu8(45 48 46 48) 2 0 9223372036854775808)
+     (#vu8(49 101 51 48 56)
+       2
+       9223372036854775807
+       9214871658872686752)
+     (#vu8(52 46 57 52 48 54 53 54 52 53 56 52 49 50 52 54 53 52
+           101 45 51 50 52)
+       2
+       0
+       1)
+     (#vu8(49 46 53) 2 1 4609434218613702656)
+     (#vu8(39 97 39 32 124 124 32 99 104 97 114 40 48 41 32 124
+           124 32 39 195 169 226 130 172 240 157 132 158 39) 3 0 0 #vu8(97 0 195 169 226 130 172 240 157 132 158)
+       #vu8(97 0 195 169 226 130 172 240 157 132 158))
+     (#vu8(120 39 48 48 102 102 39) 4 0 0 #vu8(0 255)
+       #vu8(0 255))
+     (#vu8(120 39 39) 4 0 0 #vu8() #f)
+     (#vu8(122 101 114 111 98 108 111 98 40 48 41) 4 0 0 #vu8() #f)
+     (#vu8(110 117 108 108) 5 0 0 #f #f))
+    ((#vu8(105 110 116 195 169) 1 1 4607182418800017408 #vu8(49)
+       #vu8(49))
+      (#vu8(226 130 172) 1 2 4611686018427387904 #vu8(50)
+        #vu8(50))
+      (#vu8(240 157 132 158) 1 3 4613937818241073152 #vu8(51)
+        #vu8(51))
+      (#vu8(97 226 130 172 240 157 132 158 195 169 122) 1 4 4616189618054758400 #vu8(52) #vu8(52))
+      (#vu8(45 48 46 48) 2 5 4617315517961601024)
+      (#vu8(49 101 51 48 56) 3 0 0 #vu8() #f)
+      (#vu8(52 46 57 52 48 54 53 54 52 53 56 52 49 50 52 54 53 52
+            101 45 51 50 52) 4 0 0 #vu8(255 0) #vu8(255 0))
+      (#vu8(49 46 53) 3 0 0 #vu8(120) #vu8(120))
+      (#vu8(39 97 39 32 124 124 32 99 104 97 114 40 48 41 32 124
+            124 32 39 195 169 226 130 172 240 157 132 158 39) 1 10 4621819117588971520 #vu8(49 48) #vu8(49 48))
+      (#vu8(120 39 48 48 102 102 39) 2 11 4622663542519103488)
+      (#vu8(120 39 39) 5 0 0 #f #f)
+      (#vu8(122 101 114 111 98 108 111 98 40 48 41) 4 0 0 #vu8(1)
+        #vu8(1))
+      (#vu8(110 117 108 108) 3 0 0 #vu8(0) #vu8(0)))))
+
+;; written-fields : Column -> List
+;; A column as columns-written has it: the version-dependent fields of a REAL
+;; (type 2) dropped.
+(define (written-fields column)
+  (let ((name (car column)) (type (cadr column)) (int64 (cadddr column))
+        (bits (car (cddddr column))) (text (cadr (cddddr column)))
+        (blob (caddr (cddddr column))))
+    (if (eqv? type sqlite-float)
+        (list name type int64 bits)
+        (list name type int64 bits text blob))))
+
+(test-equal "every row and column, read through native's bindings, has the written-out names, types, int64s and double bits, and the written-out text and blob bytes of each column that is no REAL; two rows of 13"
+  (list (list ok columns-written ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((answer (with-memory
+                   (lambda (db)
+                     (with-statement db columns-sql read-rows)))))
+      (list (list (car (car answer))
+                  (let ((rows (cadr (car answer))))
+                    (if (and (list? rows) (for-all list? rows))
+                        (map (lambda (row) (map written-fields row)) rows)
+                        rows))
+                  (caddr (car answer)))
+            (cadr answer) (caddr answer)))))
+
+(test-equal "the oracle's datum is two rows of 13 columns, so the comparison above reads something"
+  '(2 13 13)
+  (if (and (list? columns-oracle) (pair? columns-oracle) (pair? (car columns-oracle))
+           (eq? (caar columns-oracle) 'rows) (list? (cdar columns-oracle)))
+      (cons (length (cdar columns-oracle)) (map length (cdar columns-oracle)))
+      columns-oracle))
 
 ;; --- call-with-c-string and c-string->string ----------------------------------------------------
 
@@ -766,6 +1383,16 @@
         ((pair? x) (or (occurs? name (car x)) (occurs? name (cdr x))))
         (else #f)))
 
+;; has-subform? : Any Any -> Boolean
+;; Whether FORM is X, or an element of X, or of an element of it: never a
+;; tail.
+(define (has-subform? form x)
+  (or (equal? x form)
+      (and (pair? x)
+           (let loop ((rest x))
+             (and (pair? rest)
+                  (or (has-subform? form (car rest)) (loop (cdr rest))))))))
+
 ;; foreign-forms : Any -> (Listof Any)
 ;; Every list headed by foreign-procedure anywhere in X, in reading order. It
 ;; looks at the elements of each list, never at a tail: the tail of
@@ -809,7 +1436,7 @@
 ;; head of what it runs, and which of step-names that uses, so a step whose
 ;; body was swapped for another's, or that stopped calling its binding or
 ;; checking its answer, changes the list too.
-(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list, in ADR-0002's order; each with the head of what it runs and the load's names it uses"
+(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list and M2's 21, in ADR-0002's order; each with the head of what it runs and the load's names it uses"
   '((chosen call-with-values)
     (libsqlite3-loaded guard)
     (raw-libversion-number bind-required)
@@ -831,7 +1458,28 @@
     (sqlite3-errcode bind-required report)
     (sqlite3-extended-errcode bind-required report)
     (sqlite3-next-stmt bind-required report)
-    (sqlite3-memory-used bind-required report))
+    (sqlite3-memory-used bind-required report)
+    (sqlite3-prepare-v3 bind-required report)
+    (sqlite3-finalize bind-required report)
+    (sqlite3-step bind-required report)
+    (sqlite3-reset bind-required report)
+    (sqlite3-clear-bindings bind-required report)
+    (sqlite3-bind-parameter-count bind-required report)
+    (sqlite3-bind-parameter-index bind-required report)
+    (sqlite3-bind-null bind-required report)
+    (sqlite3-bind-int64 bind-required report)
+    (sqlite3-bind-double bind-required report)
+    (sqlite3-bind-text64 bind-required report)
+    (sqlite3-bind-blob64 bind-required report)
+    (sqlite3-column-count bind-required report)
+    (sqlite3-column-name bind-required report)
+    (sqlite3-column-type bind-required report)
+    (sqlite3-column-int64 bind-required report)
+    (sqlite3-column-double bind-required report)
+    (sqlite3-column-text bind-required report)
+    (sqlite3-column-blob bind-required report)
+    (sqlite3-column-bytes bind-required report)
+    (sqlite3-error-offset bind-required report))
   (if body-read?
       (let loop ((forms native-body) (found '()))
         (if (null? forms)
@@ -898,8 +1546,29 @@
           (sqlite3-errcode report "sqlite3_errcode")
           (sqlite3-extended-errcode report "sqlite3_extended_errcode")
           (sqlite3-next-stmt report "sqlite3_next_stmt")
-          (sqlite3-memory-used report "sqlite3_memory_used"))
-        15)
+          (sqlite3-memory-used report "sqlite3_memory_used")
+          (sqlite3-prepare-v3 report "sqlite3_prepare_v3")
+          (sqlite3-finalize report "sqlite3_finalize")
+          (sqlite3-step report "sqlite3_step")
+          (sqlite3-reset report "sqlite3_reset")
+          (sqlite3-clear-bindings report "sqlite3_clear_bindings")
+          (sqlite3-bind-parameter-count report "sqlite3_bind_parameter_count")
+          (sqlite3-bind-parameter-index report "sqlite3_bind_parameter_index")
+          (sqlite3-bind-null report "sqlite3_bind_null")
+          (sqlite3-bind-int64 report "sqlite3_bind_int64")
+          (sqlite3-bind-double report "sqlite3_bind_double")
+          (sqlite3-bind-text64 report "sqlite3_bind_text64")
+          (sqlite3-bind-blob64 report "sqlite3_bind_blob64")
+          (sqlite3-column-count report "sqlite3_column_count")
+          (sqlite3-column-name report "sqlite3_column_name")
+          (sqlite3-column-type report "sqlite3_column_type")
+          (sqlite3-column-int64 report "sqlite3_column_int64")
+          (sqlite3-column-double report "sqlite3_column_double")
+          (sqlite3-column-text report "sqlite3_column_text")
+          (sqlite3-column-blob report "sqlite3_column_blob")
+          (sqlite3-column-bytes report "sqlite3_column_bytes")
+          (sqlite3-error-offset report "sqlite3_error_offset"))
+        36)
   (if body-read?
       (list (let loop ((forms native-body) (found '()))
               (if (null? forms)
@@ -907,6 +1576,34 @@
                   (let ((placed (placed-binding (car forms))))
                     (loop (cdr forms) (if placed (cons placed found) found)))))
             (length (foreign-forms native-body)))
+      native-body))
+
+;; definition-of : Symbol -> Any
+;; The expression of native's top-level (define NAME EXPR), or no-definition.
+(define (definition-of name)
+  (let loop ((forms native-body))
+    (cond ((null? forms) 'no-definition)
+          ((let ((form (car forms)))
+             (and (list? form) (= (length form) 3) (eq? (car form) 'define) (eq? (cadr form) name)))
+           (caddr (car forms)))
+          (else (loop (cdr forms))))))
+
+;; numbers-in : Any -> (Listof Number)
+(define (numbers-in x)
+  (cond ((number? x) (list x))
+        ((pair? x) (append (numbers-in (car x)) (numbers-in (cdr x))))
+        (else '())))
+
+;; On a 64-bit machine the header's value is 2^64-1, so a literal of it
+;; passes the oracle row there and fails on any other width: only the form
+;; can show it. sqlite-transient's expression must ask for the pointer's
+;; size, and write no number as big as a byte's values.
+(test-equal "sqlite-transient is computed from (foreign-sizeof 'uptr), and writes no number above 255: never a literal for one pointer width"
+  '(asks-the-size ())
+  (if body-read?
+      (let ((expr (definition-of 'sqlite-transient)))
+        (list (if (has-subform? '(foreign-sizeof 'uptr) expr) 'asks-the-size (list 'no-size expr))
+              (filter (lambda (n) (not (and (integer? n) (exact? n) (<= 0 n 255)))) (numbers-in expr))))
       native-body))
 
 ;; --- __collect_safe, by behaviour: sqlite3_open_v2 blocked on a FIFO (ADR-0011) ----------------
