@@ -1,0 +1,236 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+P1. A PRAGMA statement reset and stepped again, with no re-prepare
+  foreign_keys, S "PRAGMA foreign_keys = 1", T "PRAGMA foreign_keys = 0", flags 0
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 1        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 1        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 1        S's reprepares 0
+    T: rc 0
+    after T                            reads 0        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 1        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  foreign_keys, S "PRAGMA foreign_keys = 1", T "PRAGMA foreign_keys = 0", flags PERSISTENT
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 1        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 1        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 1        S's reprepares 0
+    T: rc 0
+    after T                            reads 0        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 1        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  busy_timeout, S "PRAGMA busy_timeout = 250", T "PRAGMA busy_timeout = 100", flags 0
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 250      S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 250      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 250      S's reprepares 0
+    T: rc 0
+    after T                            reads 100      S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 250      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  busy_timeout, S "PRAGMA busy_timeout = 250", T "PRAGMA busy_timeout = 100", flags PERSISTENT
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 250      S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 250      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 250      S's reprepares 0
+    T: rc 0
+    after T                            reads 100      S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 250      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  synchronous, S "PRAGMA synchronous = 0", T "PRAGMA synchronous = 2", flags 0
+    before S is prepared               reads 2
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 0        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 0        S's reprepares 0
+    T: rc 0
+    after T                            reads 2        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 0        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  synchronous, S "PRAGMA synchronous = 0", T "PRAGMA synchronous = 2", flags PERSISTENT
+    before S is prepared               reads 2
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 0        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 0        S's reprepares 0
+    T: rc 0
+    after T                            reads 2        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 0        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  temp_store, S "PRAGMA temp_store = 2", T "PRAGMA temp_store = 1", flags 0
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 2        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 2        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 2        S's reprepares 0
+    T: rc 0
+    after T                            reads 1        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 2        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  temp_store, S "PRAGMA temp_store = 2", T "PRAGMA temp_store = 1", flags PERSISTENT
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 2        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 2        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 2        S's reprepares 0
+    T: rc 0
+    after T                            reads 1        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 2        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  trusted_schema, S "PRAGMA trusted_schema = 0", T "PRAGMA trusted_schema = 1", flags 0
+    before S is prepared               reads 1
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 0        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 0        S's reprepares 0
+    T: rc 0
+    after T                            reads 1        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 0        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  trusted_schema, S "PRAGMA trusted_schema = 0", T "PRAGMA trusted_schema = 1", flags PERSISTENT
+    before S is prepared               reads 1
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 0        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 0        S's reprepares 0
+    T: rc 0
+    after T                            reads 1        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 0        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  journal_mode, S "PRAGMA journal_mode = wal", T "PRAGMA journal_mode = delete", flags 0
+    before S is prepared               reads delete
+    S prepared, unstepped              reads delete   S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads wal      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads wal      S's reprepares 0
+    T: rc 0
+    after T                            reads delete   S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads wal      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  journal_mode, S "PRAGMA journal_mode = wal", T "PRAGMA journal_mode = delete", flags PERSISTENT
+    before S is prepared               reads delete
+    S prepared, unstepped              reads delete   S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads wal      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads wal      S's reprepares 0
+    T: rc 0
+    after T                            reads delete   S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads wal      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  cache_size, S "PRAGMA cache_size = 123", T "PRAGMA cache_size = 456", flags 0
+    before S is prepared               reads -2000
+    S prepared, unstepped              reads 123      S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 123      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 123      S's reprepares 0
+    T: rc 0
+    after T                            reads 456      S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 123      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  cache_size, S "PRAGMA cache_size = 123", T "PRAGMA cache_size = 456", flags PERSISTENT
+    before S is prepared               reads -2000
+    S prepared, unstepped              reads 123      S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 123      S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 123      S's reprepares 0
+    T: rc 0
+    after T                            reads 456      S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 123      S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  user_version, S "PRAGMA user_version = 7", T "PRAGMA user_version = 8", flags 0
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 7        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 7        S's reprepares 0
+    T: rc 0
+    after T                            reads 8        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 7        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+  user_version, S "PRAGMA user_version = 7", T "PRAGMA user_version = 8", flags PERSISTENT
+    before S is prepared               reads 0
+    S prepared, unstepped              reads 0        S's reprepares 0
+    S's first step: rc 101
+    after S's first step               reads 7        S's reprepares 0
+    S's reset: rc 0
+    after S's reset                    reads 7        S's reprepares 0
+    T: rc 0
+    after T                            reads 8        S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 7        S's reprepares 1
+    S's second reset: rc 0
+    S's finalize: rc 0
+
+P1b. S stepped twice with nothing between, flags PERSISTENT
+  "PRAGMA foreign_keys = 1": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA busy_timeout = 250": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA synchronous = 0": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA temp_store = 2": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA trusted_schema = 0": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA journal_mode = wal": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA cache_size = 123": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+  "PRAGMA user_version = 7": first step 101, reprepares 0; reset 0; second step 101, reprepares 1; reset 0
+
+P1c. busy_timeout changed by the C call between S's steps
+  S "PRAGMA busy_timeout = 250", T the C call sqlite3_busy_timeout(db, 100), flags PERSISTENT
+    S's first step: rc 101
+    after S's first step               reads 250      S's reprepares 0
+    S's reset: rc 0
+    T: rc 0
+    after T                            reads 100      S's reprepares 0
+    S's second step, no prepare: rc 101
+    after S's second step              reads 250      S's reprepares 1
+
+P1d. The control: a SELECT stepped twice with nothing between
+  "SELECT x FROM t", flags 0: first step 101, reprepares 0; reset 0; second step 101, reprepares 0; reset 0
+  "SELECT x FROM t", flags PERSISTENT: first step 101, reprepares 0; reset 0; second step 101, reprepares 0; reset 0

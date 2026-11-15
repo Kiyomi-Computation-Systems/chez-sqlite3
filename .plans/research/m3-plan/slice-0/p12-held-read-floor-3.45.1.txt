@@ -1,0 +1,30 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+P12. A write beside the connection's own held read; c1's busy timeout 1500 ms;
+     c2 holds BEGIN IMMEDIATE and an INSERT unless c1 is locked; codes extended,
+     -1 for what the case didn't run
+  wal    none   BEGIN IMMEDIATE:
+    c1's BEGIN IMMEDIATE first -1; H's step -1; autocommit 1; the call 5 (waited), autocommit 1; H's next step -1, finalize -1; c1's COMMIT -1 (5 of 5)
+  wal    held   BEGIN IMMEDIATE:
+    c1's BEGIN IMMEDIATE first -1; H's step 100; autocommit 1; the call 5 (at once), autocommit 1; H's next step 100, finalize 0; c1's COMMIT -1 (5 of 5)
+  wal    none   INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first -1; H's step -1; autocommit 1; the call 5 (waited), autocommit 1; H's next step -1, finalize -1; c1's COMMIT -1 (5 of 5)
+  wal    held   INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first -1; H's step 100; autocommit 1; the call 5 (at once), autocommit 1; H's next step 100, finalize 0; c1's COMMIT -1 (5 of 5)
+  wal    locked INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first 0; H's step 100; autocommit 0; the call 0 (at once), autocommit 0; H's next step 100, finalize 0; c1's COMMIT 0 (5 of 5)
+  wal    locked SAVEPOINT s; INSERT INTO t VALUES (101); RELEASE s:
+    c1's BEGIN IMMEDIATE first 0; H's step 100; autocommit 0; the call 0 (at once), autocommit 0; H's next step 100, finalize 0; c1's COMMIT 0 (5 of 5)
+  delete none   BEGIN IMMEDIATE:
+    c1's BEGIN IMMEDIATE first -1; H's step -1; autocommit 1; the call 5 (waited), autocommit 1; H's next step -1, finalize -1; c1's COMMIT -1 (5 of 5)
+  delete held   BEGIN IMMEDIATE:
+    c1's BEGIN IMMEDIATE first -1; H's step 100; autocommit 1; the call 5 (at once), autocommit 1; H's next step 100, finalize 0; c1's COMMIT -1 (5 of 5)
+  delete none   INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first -1; H's step -1; autocommit 1; the call 5 (waited), autocommit 1; H's next step -1, finalize -1; c1's COMMIT -1 (5 of 5)
+  delete held   INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first -1; H's step 100; autocommit 1; the call 5 (at once), autocommit 1; H's next step 100, finalize 0; c1's COMMIT -1 (5 of 5)
+  delete locked INSERT INTO t VALUES (100):
+    c1's BEGIN IMMEDIATE first 0; H's step 100; autocommit 0; the call 0 (at once), autocommit 0; H's next step 100, finalize 0; c1's COMMIT 0 (5 of 5)
+  delete locked SAVEPOINT s; INSERT INTO t VALUES (101); RELEASE s:
+    c1's BEGIN IMMEDIATE first 0; H's step 100; autocommit 0; the call 0 (at once), autocommit 0; H's next step 100, finalize 0; c1's COMMIT 0 (5 of 5)

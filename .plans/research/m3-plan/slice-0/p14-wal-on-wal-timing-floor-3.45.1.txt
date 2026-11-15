@@ -1,0 +1,10 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+c1 holding none: the set: n 7, min 0.034, median 0.039, max 0.092 ms
+c1 holding none: the read-back: n 7, min 0.001, median 0.001, max 0.002 ms
+c1 holding read: the set: n 7, min 0.022, median 0.031, max 0.039 ms
+c1 holding read: the read-back: n 7, min 0.001, median 0.001, max 0.002 ms
+c1 holding BEGIN IMMEDIATE: the set: n 7, min 0.028, median 0.030, max 0.034 ms
+c1 holding BEGIN IMMEDIATE: the read-back: n 7, min 0.001, median 0.001, max 0.001 ms
+c1 holding BEGIN EXCLUSIVE: the set: n 7, min 0.027, median 0.032, max 0.037 ms
+c1 holding BEGIN EXCLUSIVE: the read-back: n 7, min 0.001, median 0.001, max 0.001 ms

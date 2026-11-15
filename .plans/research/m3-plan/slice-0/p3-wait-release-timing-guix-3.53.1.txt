@@ -1,0 +1,6 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+P3.1 wal: the release to the call's return: n 21, min 28.631, median 28.700, max 29.123 ms
+P3.1 delete: the release to the call's return: n 21, min 28.556, median 28.785, max 29.315 ms
+P3.2 delete: the release to the call's return: n 21, min 33.481, median 35.046, max 36.491 ms
+P3.3 delete: the release to the call's return: n 21, min 28.728, median 28.822, max 28.938 ms

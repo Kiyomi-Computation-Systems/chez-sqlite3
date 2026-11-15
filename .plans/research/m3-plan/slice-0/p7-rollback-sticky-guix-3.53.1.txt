@@ -1,0 +1,66 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+P7. Ending a transaction while an interrupt sticks behind a held row
+
+P7.1 BEGIN, then ROLLBACK
+    H stepped once: rc 100
+      after the interrupt                autocommit 0, is_interrupted 1, another connection counts 3
+   with H held at its row:
+    ROLLBACK: prepare rc 9 (extended 9), NULL
+      after ROLLBACK                     autocommit 0, is_interrupted 1, another connection counts 3
+   H reset: rc 0
+      after H's reset                    autocommit 0, is_interrupted 1, another connection counts 3
+   with H reset:
+    ROLLBACK: prepare rc 0 (extended 0), a statement
+      step rc 101 (extended 101) "no more rows available"
+      finalize rc 0
+      after ROLLBACK                     autocommit 1, is_interrupted 0, another connection counts 3
+   H finalized: rc 0
+
+P7.2 BEGIN, then COMMIT
+    H stepped once: rc 100
+      after the interrupt                autocommit 0, is_interrupted 1, another connection counts 3
+   with H held at its row:
+    COMMIT: prepare rc 9 (extended 9), NULL
+      after COMMIT                       autocommit 0, is_interrupted 1, another connection counts 3
+   H reset: rc 0
+      after H's reset                    autocommit 0, is_interrupted 1, another connection counts 3
+   with H reset:
+    COMMIT: prepare rc 0 (extended 0), a statement
+      step rc 101 (extended 101) "no more rows available"
+      finalize rc 0
+      after COMMIT                       autocommit 1, is_interrupted 0, another connection counts 4
+   H finalized: rc 0
+
+P7.3 BEGIN and SAVEPOINT s, then ROLLBACK TO s and RELEASE s
+    H stepped once: rc 100
+      after the interrupt                autocommit 0, is_interrupted 1, another connection counts 3
+   with H held at its row:
+    ROLLBACK TO s: prepare rc 9 (extended 9), NULL
+      after ROLLBACK TO s                autocommit 0, is_interrupted 1, another connection counts 3
+    RELEASE s: prepare rc 9 (extended 9), NULL
+      after RELEASE s                    autocommit 0, is_interrupted 1, another connection counts 3
+   H reset: rc 0
+      after H's reset                    autocommit 0, is_interrupted 1, another connection counts 3
+   with H reset:
+    ROLLBACK TO s: prepare rc 0 (extended 0), a statement
+      step rc 101 (extended 101) "no more rows available"
+      finalize rc 0
+      after ROLLBACK TO s                autocommit 0, is_interrupted 0, another connection counts 3
+    RELEASE s: prepare rc 0 (extended 0), a statement
+      step rc 101 (extended 101) "no more rows available"
+      finalize rc 0
+      after RELEASE s                    autocommit 0, is_interrupted 0, another connection counts 3
+   H finalized: rc 0
+
+P7.4 ROLLBACK prepared before the interrupt, stepped after
+    ROLLBACK prepared before H and the interrupt: rc 0
+    H stepped once: rc 100
+      after the interrupt                autocommit 0, is_interrupted 1, another connection counts 3
+    the held ROLLBACK stepped: rc 9 (extended 9) "interrupted"
+      after its step                     autocommit 0, is_interrupted 1, another connection counts 3
+    its reset: rc 9
+    H reset: rc 0
+    the held ROLLBACK stepped again: rc 101 (extended 101) "no more rows available"
+      after its second step              autocommit 1, is_interrupted 0, another connection counts 3
