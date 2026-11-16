@@ -93,6 +93,110 @@ newest first.
 
 ## Close-outs
 
+### 2026-11-16 — M3 slice 4: transactions (PR PR_PENDING)
+
+- **Built** by the M2 session, stacked on slice 3's `9deda02`, from the M3 session's brief once
+  slice 3 was final (the maintainer's order of 2026-11-15):
+  - **groundwork first,** read-only, while slice 3 was being built (the maintainer's choice in the
+    M2 session's pane, "Slice 4 groundwork"): every case the slice cites, measured on both
+    libraries, its gaps closed by probes, the NOMEM rig tried, and the builder's brief drafted.
+    Its findings went to slice 3's records, and the heap limit's trap here;
+  - **`(chez-sqlite3 private transaction)`:** `with-transaction` over slice 1's plan. Each of its
+    own statements goes through slice 3's cache, taken, stepped and given back in one critical
+    section, with `ended` as the check-out's check. The connection record gains its depth;
+  - **`with-transaction` and `sqlite-transaction-ended?`,** exported (62 names), and a
+    Transactions section in `docs/reference.md`;
+  - **four suites:** `test-transaction` (48 rows), `-nomem` (25), `-engine` (15) and
+    `-interrupt` (8); and the heap limit lifted hard then soft in `test-statement-values-nomem`,
+    with a second connection's read to hold it.
+- **Decided by the maintainer** (2026-11-16, in the M2 session's pane):
+  - the builder's three choices confirmed, and the refusal naming the held statement's SQL
+    ("Confirm, and name the SQL");
+  - a handler that runs before the unwind counts as part of the body ("Document it");
+  - each statement used in one critical section ("One section per statement").
+
+  "Once" and "Reuse N", from the groundwork, were decided in the M3 session's pane and are in
+  slice 3's records.
+- **Watched failing:**
+  - each new suite red against a stub that calls the body plainly;
+  - 50 plants in [the log](m3-slice-4-mutation-log.md): §4.8's, the builder's, both reviews' and
+    the fixes'. Every one is caught. Two more are argued equivalent there: `begun-on-failure` at
+    the outer level, and `pending-begun-on-ended`.
+- **Reviewed** (Opus, read-only), every finding reproduced before it was fixed. No blocker; nine
+  majors and seven minors:
+  - **four rules no row held,** each mutant passing every suite: an escape past a failed rollback,
+    the same after a resumed raise, a failed `BEGIN`, and the level a return had already ended;
+  - **"Once" broken under an engine:** an expiry between `ROLLBACK TO` and `RELEASE` let the after
+    thunk issue the `ROLLBACK TO` again. Fixed by running the failed commit's rollback with its
+    plan in one section; recording progress step by step failed the same row;
+  - **a handler's transaction rolled back by the exit,** kept as documented behaviour;
+  - **an engine taken outside the call, resumed inside it,** leaves the call: documented, with a
+    row;
+  - **the interrupt suite's time,** Valgrind's one thread at a time: the watchdog bounded by a
+    deadline that never fails a row;
+  - **records:** the log's stale counts, and the docs overclaiming a second resume;
+  - **minors:** the run-count sensor's reach, two NOMEM headers, a `[B]` row's false premise, a
+    missing NOMEM refusal row, a comment, and a docs sentence on a lost engine.
+
+  The fixes found one more: an engine lost between a failed `RELEASE`'s step and its return left
+  it tracked as `failed`, so every later `with-transaction` on that connection was refused. Fixed
+  by "One section per statement".
+
+  **The closing review** (Opus, read-only) of the fixes and the records found no blocker, and two
+  majors:
+  - the second-resume row could no longer fail the design it settled, since one section a
+    statement hid the stray `COMMIT` from its snapshot. It now asserts the second answers too;
+  - the records called the step-by-step rollback equivalent, where a timer's handler re-entering
+    the body still ran `ROLLBACK TO` twice under it. That's now a row.
+
+  Its minors were:
+  - three docs sentences;
+  - the once row's allowance for a lost engine;
+  - a stale comment and stale figures;
+  - a nested `SAVEPOINT` failure no row made, now made by a timer;
+  - a watchdog whose raise hung the suite.
+- **Slice 5's schedule,** a remainder resumed again while an earlier resume of it is pending (the
+  M3 session, from its own review): `with-transaction` stays whole under it, the depth restored,
+  none of its statements left behind, and a later call committing, in a row of about 2,090
+  trials a level. The same sweep found slice 3's conveniences leaving a statement outside the
+  cache; the maintainer chose to fix that in slice 5.
+- **Measured** ([research/m3-slice-4/](research/m3-slice-4/README.md)), alike on 3.53.1 and
+  3.45.1:
+  - the engine sweep completes at fuel 112, and slice 1's plant fails at fuels 106 to 109,
+    against the model's 138 to 174;
+  - a remainder resumed a second time once `ended` was set touched no statement;
+  - the NOMEM rig, a step and a column read each under the limit alone;
+  - the interrupt suite, 11 to 109 s under the gate: Valgrind's scheduling, not the code.
+- **Records,** proposed in this PR for the maintainer's acceptance:
+  - ADR-0017's amendment, "`with-transaction` as built";
+  - four traps: the hard heap limit lifted alone; a run count blind to a step that failed at
+    entry; a lost engine; and a watchdog under Valgrind.
+- **CI:** CI_PENDING
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Groundwork, read-only | Opus | about 475k | 114 | 32 min |
+  | Builder | Opus | about 602k | 153 | 57 min |
+  | Adversarial review | Opus | about 356k | 84 | 25 min |
+  | The review's fixes | Opus | about 431k | 137 | 40 min |
+  | One section per statement | Sonnet | about 120k | 46 | 15 min |
+  | Closing review | Opus | about 282k | 73 | 22 min |
+  | The closing review's fixes | Sonnet | about 200k | 80 | 25 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A brief's assertion can be false on green code. "No statement of its own tracked" forgot that
+    the cache tracks what it keeps. Read what the green code leaves before writing the row.
+  - A plant worded after the brief can be masked. "The after thunk without its `ended` check"
+    passed every row, since each step reads `ended` itself; the plant that acts twice must also
+    clear it.
+  - Tracked statements can't see a cached statement stepped twice; only a run count can, and a
+    run count can't see a step that failed at entry. A row that counts needs both.
+  - A fuel is the suite's as well as the code's: rows added to the engine suite moved every sweep.
+    Cite a window with the text it was read at.
+  - Groundwork run while the base was being built meant the maintainer's decisions were settled
+    before the builder started.
+
 ### 2026-11-16 — M3 slice 3: the conveniences, the counters and the cache (PR #24)
 
 - **Built** on slices 1 and 2, stacked on slice 2's `0913468`, by three builders in turn:
