@@ -14,7 +14,8 @@ files, and each kept its own part of this log, merged here unchanged but for its
   `test-conditions`, `test-script` and `test-interrupt`. 100 mutations, 95 caught, 5 survivors
   argued equivalent.
 
-In all, 259 mutations, 250 caught, and 9 survivors, each argued below.
+In all, 259 mutations, 250 caught, and 9 survivors, each argued below. *Changed by the review's
+fixes (the last section): 249 caught and 10 survivors, S79 now equivalent.*
 
 
 ## Part A: the settings, the transaction plan and the cache
@@ -61,12 +62,14 @@ The rows that passed against a stub are rows a stub can satisfy:
 
 ### The mutations
 
-Baselines, from the green runs: settings 56, transaction-plan 36, statement-cache 28. Each row
+Baselines, from the green runs: settings 56, transaction-plan 36, statement-cache 28. *(Changed by
+the review's fixes: 59, 37 and 32.)* Each row
 names the suites that failed and how many rows failed in each. A mutation counts as caught when
 at least one row failed, or its suite hung.
 
 **159 mutations: 155 caught, one of them by a hang, and 4 survived;** each survivor is argued
-below. The whole set was run twice, the second time after the last edit to the libraries, which
+below. *(Changed by the review's fixes: 154 caught and 5 survived, S79 added; see the last
+section.)* The whole set was run twice, the second time after the last edit to the libraries, which
 was to their comments alone. Both runs gave the same answer for every mutation. In both, every
 suite a mutation left passing ran at its green count, and every failing run counted all its rows.
 
@@ -653,7 +656,9 @@ type allows, or unobservable from a test.
   failed". The two agree once "the token SQLite points at" is read as "if it points at one", but
   for single script X6's missing table and X8's incomplete input the error then carries the whole
   script and no offset. `script-step-offset` would give the failing statement's first token
-  there instead: a choice for slice 3's loop, and the records', not this library's.
+  there instead: a choice for slice 3's loop, and the records', not this library's. *(Decided
+  afterwards, the maintainer, 2026-11-15, "Point at the statement": -1 answers it. See the last
+  section.)*
 - **Chez 10.4.0 has `thread-join`, and it answers no value.** A thread's answer is posted to a
   slot under a mutex instead, and the thread joined only once it has answered, so no join waits
   without a bound.
@@ -661,3 +666,185 @@ type allows, or unobservable from a test.
   two-thread row's stand-in waits so, holding the latch's mutex, as no real `sqlite3_interrupt`
   would; Chez deactivates a thread blocked in `condition-wait` or on a contended mutex, so no
   collection waits on it beyond its bound.
+
+
+## The review's fixes
+
+Evidence for the six fixes the slice's review asked for, made in the same worktree on the same
+files and given the same treatment: each new or changed row watched failing, against a copy of the
+library as it was before the fix (a red run) or against a mutant that undoes the fix. Every run was
+in its own copy of the tree under `build/fixes/` (git-ignored), made without `.git` or `build/`,
+through the copy's own `scripts/guix-env` after `make deps` in it. Counts are read from the
+suites' own output. The driver and the mutation definitions are in the session scratchpad, not the
+repository. Suites now: settings 59 rows, transaction-plan 37, statement-cache 32, script 22,
+interrupt 19, all green, and `make test` passes (43 suites).
+
+### The red runs
+
+Each is the final suite against the library as the slice's first commit left it, in a copy.
+
+| Fix | Suite | Red run | The rows that failed |
+|---|---|---|---|
+| 1, `failed-commit-plan` takes `ended` | `test-transaction-plan` | 30 passed, 7 failed | the failed-commit rows (the new three-argument call), the new "ended set" row, the cross-check with the raise's rollback, the walks of a failed commit and of a release, every-statement, totality |
+| 3, the read-back's `(row V)` or `none`, journal-mode's symbol | `test-settings` | 48 passed, 11 failed | the table's read-back, outsiders, busy-timeout's and statement-cache's, journal-mode's TEXT and its integers and BLOBs, the new no-row rows (the reader and the comparison), the comparison's sweep, the Q9 mismatches, each step's own expected value |
+| 4, string keys, the `eq?` return | `test-statement-cache` | 30 passed, 2 failed | the very statement returned again; a key that is no string raises |
+| 5, -1 points at the statement | `test-script` | 20 passed, 2 failed | -1 at every START, 0 to 44; X5, X6 and X8 |
+
+Fix 2 (the exit row's model as an explicit table) changes a test's oracle, not a library: its
+evidence is the T1 to T8 mutants below. Fix 6 (the interrupt row) is the I-mutants' table, which
+also holds the row's own red run.
+
+Rows that passed in a red run, though new: in `test-statement-cache`, "a different statement
+returned under a held key" and "a statement equal? and not eq? to the held one". The library
+already answered `(S)` there, and the rows hold that it still does (K7, K8, K5 fail them).
+
+### Fix 1 to 5: the mutants
+
+Each row names the suites that failed and how many rows failed in each.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| F1a | `failed-commit-plan` ignores `ended` | transaction-plan 1 |
+| F1b | `failed-commit-plan` ignores autocommit | transaction-plan 2 |
+| F1c | `failed-commit-plan` rolls back only when ended | transaction-plan 5 |
+| T1 | the table: a raise after the end rolls back | transaction-plan 1 |
+| T2 | the table: a return after the transaction ended answers nothing | transaction-plan 1 |
+| T3 | the table: a return never begun commits | transaction-plan 1 |
+| T4 | the table: an escape at autocommit 0 does nothing | transaction-plan 1 |
+| T5 | the table: a first return rolls back | transaction-plan 1 |
+| T6 | `exit-plan`: never begun treated as begun | transaction-plan 2 |
+| T7 | `exit-plan`: a return after the end answers nothing | transaction-plan 7 |
+| T8 | `exit-plan`: a raise rolls back at any autocommit | transaction-plan 5 |
+| R1 | `none` read as a match, when expected is `()` | settings 1 |
+| R2 | none's actual is `none`, not `()` | settings 2 |
+| R3 | journal-mode text left a string | settings 4 |
+| R4 | every setting's text read as a symbol | settings 4 |
+| R5 | journal-mode text folded to lower case | settings 3 |
+| R6 | any pair read as `(row V)` | settings 2 |
+| R7 | `(row V W)` read as a row | settings 1 |
+| R8 | only `()` read as no row | settings 3 |
+| K1 | `equal?` keys | statement-cache 1 |
+| K2 | keys folded by case | statement-cache 1 |
+| K3 | the `eq?` return finalized | statement-cache 1 |
+| K4 | the `eq?` test inverted | statement-cache 9 |
+| K5 | `equal?` for `eq?` in the held test | statement-cache 1 |
+| K6 | the `eq?` return moves the held one to newest | statement-cache 1 |
+| K7 | a different statement under a held key removes the held one | statement-cache 7 |
+| K8 | the `eq?` return answers the held statement to finalize | statement-cache 1 |
+| P1 | -1 answers `#f` | script 2 |
+| P2 | -1 points at START, not the first token | script 4 |
+| P3 | every negative offset points at the statement | script 1 |
+| P4 | -1 scans from byte 0, not START | script 2 |
+| P5 | -1 with no first token answers 0 | script 3 |
+| P6 | no START check | script 1 |
+
+**33 mutations, 33 caught, none survived.** T1 to T5 mutate the table in the suite and fail it
+against the unchanged `exit-plan`: the table is an oracle that can be wrong, and is checked. T6 to
+T8 mutate `exit-plan` and fail against the table.
+
+- **K6 survived the first draft of the `eq?` row,** which returned the held statement again with
+  nothing filed after it; moving it to newest changed no answer. The row now files a second
+  statement first and returns the first again, then checks that the next eviction is still the
+  first. K6 fails it.
+- **K1, `equal?` keys, is equivalent over strings,** so the suite's string rows cannot tell it. What
+  tells it is the row that a key that is no string raises, from `string-hash`: the table's domain,
+  which the header now says in so many words. It is a behaviour the header states and no caller
+  reaches (the caller passes a string it has copied and checked), and a reviewer may prefer the
+  row dropped and K1 left as a survivor.
+
+### Fix 6: the interrupt row, the four ways it was run
+
+The six I-mutants that the row catches by the stand-in's wait. "old" is the row as the slice's
+first commit left it, "new" the fixed row; "delay" adds a 1 s `sleep` to the closer, before it says
+it is calling close (the old row: before it calls close), as `test-interrupt-delayed.sps` did.
+Each cell is the number of rows that failed, or SURVIVED when the suite passed.
+
+| Mutation | Guards | old | old, delay | new | new, delay |
+|---|---|---|---|---|---|
+| I01 | the interrupt without the mutex | 1 | SURVIVED | 1 | 1 |
+| I03 | the close's clear without the mutex | 1 | SURVIVED | 1 | 1 |
+| I07 | the flag's set without the mutex | 1 | SURVIVED | 1 | 1 |
+| I10 | the interrupt reads the flag under the mutex, then calls with it released | 1 | SURVIVED | 1 | 1 |
+| I31 | the flag's set under a mutex of its own | 1 | SURVIVED | 1 | 1 |
+| I32 | the interrupt under a mutex of its own | 1 | SURVIVED | 1 | 1 |
+| correct code | | passes | passes | passes | passes |
+
+The "old, delay" column is the review's finding, six survivors, and the red run of the fix. The
+new row fails every one, plain and delayed, and the correct code passes all four. The suite's run
+on the correct code, wall time with the container's start and the library's load: 372 ms old and
+372 ms new; with the delay, 1377 ms. The row's own cost is the stand-in's 200 ms wait when the
+latch is right, unchanged. A mutant failing the new row alone takes 170 ms: it fails without waiting
+the 200 ms out.
+
+**What the fix does not cover.** The closer's note comes just before its call. A closer descheduled
+between the two, for longer than the stand-in's 200 ms wait, would still let a mutant through. That
+window is two calls wide and holds no lock; the delay the review measured, before the closer's
+wait, is covered.
+
+### The earlier mutations, rerun
+
+The 214 mutations of part A (159) and part B's script (19) and interrupt (36) libraries, against
+the changed libraries and suites; part B's 45 `conditions` mutations were not rerun, for
+`conditions.sls` and its suite are unchanged. Each ran its library's suites: part A's three, or
+`test-script`, or `test-interrupt`. In every run, each suite a mutation left passing ran at its
+new green count.
+
+**214 mutations: 204 caught and 10 survived.** 194 ran as defined, 186 caught (S09 by a hang, as
+before) and 8 survived. 20 no longer applied to the text, and are restated below.
+
+- **Survivors as before, 7:** S17, S62, C23 (part A), S11, I06, I34 and I36 (part B). Each is argued
+  in its part's survivors.
+- **S79 is new, and equivalent.** "A read-back matched by `eqv?`, so TEXT never": the table's TEXT
+  words are lower-case journal-mode names, and the new reader turns any other TEXT into
+  `string->symbol` of it, so "wal" read as the symbol `wal` either way. No answer differs. It was
+  caught before the fix, by the string staying a string.
+- **S82 no longer compiles** (`raw` is no variable now) and is restated as S82b.
+
+The 20 that no longer applied, restated for the new text, each the same change in the new code:
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| S78b | an outsider read as `#f` (S78) | settings 8 |
+| S80b | a name no setting has read through foreign-keys' table (S80) | settings 5 |
+| S81b | the comparison by `equal?` (S81) | SURVIVED |
+| S82b | the mismatch's actual raw (S82) | settings 3 |
+| S84b | always a match (S84) | settings 3 |
+| T34b | a failed commit rolls back a level gone (T34) | transaction-plan 3 |
+| T35b | a failed commit rolls nothing back (T35) | transaction-plan 4 |
+| T36b | a failed commit committed again (T36) | transaction-plan 4 |
+| C01b | capacity 0 not special: it keeps one (C01) | statement-cache 6 |
+| C02b | a held key filed again (C02) | statement-cache 9 |
+| C03b | a duplicate return answers the held one (C03) | statement-cache 9 |
+| C12b | a duplicate return touches the held one (C12) | statement-cache 5 |
+| C30b | keys matched by `eqv?` (C30) | statement-cache 17 |
+| script S01b | the prepare's START ignored | script 3 |
+| script S02b | the prepare's byte offset answered, not the character | script 2 |
+| script S03b | -1 answers the byte before START (it answered it before the fix) | script 3 |
+| script S04b | no lower bound on OFFSET | script 1 |
+| script S05b | the prepare one byte late | script 4 |
+| script S06b | no upper bound on START + OFFSET | SURVIVED |
+| script S08b | the prepare answers START's character | script 3 |
+
+S81b survives as S81 did: the expected value is an exact integer, a boolean or a symbol, and
+`equal?` agrees with `eqv?` whenever one side is one. S06b survives as S06 did: `utf8-offset->index`
+answers `#f` for an offset past the length. Script S07, which ran unchanged, still fails 1 row.
+
+### The totals, as they stand
+
+- **Part A: 159 mutations, 154 caught, 5 survivors:** S17, S62, S79, S81 (as S81b), C23.
+- **Part B's script and interrupt: 55 mutations, 50 caught, 5 survivors,** the same five as before:
+  S06 (as S06b), S11, I06, I34, I36. Its 45 conditions mutations: unchanged, 45 run, all caught.
+- **All: 259 mutations, 249 caught, 10 survivors.** The fixes' own 33 mutations and the 28 runs of the
+  interrupt row, above, are not among the 259.
+
+### Findings
+
+- **The `none` read-back needed a rule of its own.** With the read-back's input a raw value, a
+  statement that answered no row had no spelling: `()` would have matched an expected `()`, and
+  nothing in the domain is `()`, but "never a match" is stronger than "no setting expects `()`".
+  The comparison checks the row first. R1 shows the check is load-bearing.
+- **`journal-mode` as a symbol makes the table's TEXT rows redundant for the words in the table,**
+  S79's equivalence. They stay: the table is the contract, and the symbol rule is the fallback.
+- **The old exit-row model was the code.** T1 to T5, mutants of the table itself, fail the suite, which
+  the copied `cond` could not have shown: a wrong line in both would have agreed with itself.
+

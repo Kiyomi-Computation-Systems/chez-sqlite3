@@ -10,7 +10,8 @@
 ;;;                              and autocommit read after the body, what to
 ;;;                              issue or raise
 ;;;   failed-commit-plan         a COMMIT or RELEASE that failed: the level
-;;;                              rolled back while it is still there
+;;;                              rolled back while it is still there and has
+;;;                              not ended
 ;;;   raise-transaction-refusal  an unknown mode as an assertion violation
 ;;;
 ;;; A level is outer, a transaction this level began with BEGIN, or
@@ -126,13 +127,15 @@
           ((eqv? autocommit 0) (rollback-of level))
           (else (list 'nothing))))
 
-  ;; failed-commit-plan : Any Level -> (U Rollback (List 'nothing))
+  ;; failed-commit-plan : Any Any Level -> (U Rollback (List 'nothing))
   ;; After the COMMIT or RELEASE exit-plan answered for LEVEL failed, from
-  ;; AUTOCOMMIT read after it: at 0, the level still open, (rollback S ...),
-  ;; as a raise's (Q6); otherwise (nothing). The commit's failure is raised
+  ;; ENDED, the flag, set when not #f, and AUTOCOMMIT read after it: with
+  ;; ENDED set, the level already ended, (nothing), never a second rollback;
+  ;; otherwise at 0, the level still open, (rollback S ...), as a raise's
+  ;; (Q6), and at any other value (nothing). The commit's failure is raised
   ;; after either. Total for every LEVEL begin-plan answers.
-  (define (failed-commit-plan autocommit level)
-    (if (eqv? autocommit 0) (rollback-of level) (list 'nothing)))
+  (define (failed-commit-plan ended autocommit level)
+    (if (and (not ended) (eqv? autocommit 0)) (rollback-of level) (list 'nothing)))
 
   ;; raise-transaction-refusal : Symbol Mode-Refusal -> Nothing
   ;; An assertion violation from WHO for REFUSAL, as transaction-mode or

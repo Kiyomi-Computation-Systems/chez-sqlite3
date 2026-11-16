@@ -10,7 +10,8 @@
 ;;;   return         the statement filed as the most recent, answering what
 ;;;                  to finalize: the least recently used, evicted when the
 ;;;                  table is full; the statement itself at capacity 0 or
-;;;                  when its key is held
+;;;                  when a different one is held under its key, and none
+;;;                  for the very one held
 ;;;   clear          every statement held, least recently used first
 ;;;   the model      a list in this suite, most recent first: every order of
 ;;;                  the six moves of three keys at capacities 0 to 3, and
@@ -102,11 +103,16 @@
 
 ;; --- the model ---------------------------------------------------------------------------
 
+;; assoc-string : String (Listof (Pairof String Any)) -> (U (Pairof String Any) #f)
+;; The first entry whose key is string=? to K: keys are the SQL's exact text.
+(define (assoc-string k entries)
+  (find (lambda (e) (string=? (car e) k)) entries))
+
 ;; A model table is (capacity . entries), entries a list of (key . statement),
 ;; most recent first. Each move answers the model's next table and its answer.
 
 (define (model-out m k)
-  (let ((hit (assoc k (cdr m))))
+  (let ((hit (assoc-string k (cdr m))))
     (if hit
         (values (cons (car m) (remp (lambda (e) (eq? e hit)) (cdr m))) (list 'hit (cdr hit)))
         (values m '(miss)))))
@@ -114,7 +120,8 @@
 (define (model-ret m k s)
   (let ((cap (car m)) (entries (cdr m)))
     (cond ((= cap 0) (values m (list s)))
-          ((assoc k entries) (values m (list s)))
+          ((assoc-string k entries)
+           => (lambda (held) (values m (if (eq? (cdr held) s) '() (list s)))))
           ((< (length entries) cap) (values (cons cap (cons (cons k s) entries)) '()))
           (else
            (let ((kept (list-head* entries (- cap 1)))
@@ -258,6 +265,44 @@
       (list (if (and (pair? evicted) (eq? (car evicted) s1)) 'same (list 'differs evicted))
             (if (and (pair? dup) (eq? (car dup) s3)) 'same (list 'differs dup))))))
 
+;; --- the very statement returned twice ---------------------------------------------------------
+
+(test-equal "the very statement already held under its key, returned again (eq?), answers () and the table keeps it where it stood: filed first and returned again after a second, it is still the oldest and the next evicted, and the count never grew"
+  (list '() '() '() 2 'same 'same 1)
+  (let ((c (make 2)) (s (list 'held)) (t (list 'other)))
+    (let* ((r1 (ret! c "a" s))
+           (r2 (ret! c "b" t))
+           (again (ret! c "a" s))
+           (n (count c))
+           (r4 (ret! c "c" (list 'newest)))
+           (h (out! c "b")))
+      (list r1 r2 again n
+            (if (and (pair? r4) (null? (cdr r4)) (eq? (car r4) s)) 'same (list 'differs r4))
+            (if (and (pair? h) (eq? (cadr h) t)) 'same (list 'differs h))
+            (count c)))))
+
+(test-equal "a different statement returned under a held key answers itself, to finalize, and the held one stays, still its entry's statement: it is the one a check-out hands back"
+  '(same same 1)
+  (let ((c (make 2)) (held (list 'held)) (other (list 'other)))
+    (ret! c "k" held)
+    (let* ((r (ret! c "k" other))
+           (n (count c))
+           (o (out! c "k")))
+      (list (if (and (pair? r) (null? (cdr r)) (eq? (car r) other)) 'same (list 'differs r))
+            (if (and (pair? o) (eq? (cadr o) held)) 'same (list 'differs o))
+            n))))
+
+;; Two statements that are equal? and not eq? are two statements: the held one is the one
+;; the table holds by its identity.
+(test-equal "a statement equal? to the held one and not eq? is a different statement: returned under the held key it answers itself, to finalize, and the held one stays"
+  '(same same)
+  (let* ((c (make 2)) (held (list 'stmt)) (copy (list 'stmt)))
+    (ret! c "k" held)
+    (let* ((r (ret! c "k" copy))
+           (o (out! c "k")))
+      (list (if (and (pair? r) (null? (cdr r)) (eq? (car r) copy)) 'same (list 'differs r))
+            (if (and (pair? o) (eq? (cadr o) held)) 'same (list 'differs o))))))
+
 ;; --- the order out ------------------------------------------------------------------------
 
 (test-equal "at capacity 3, the least recently used out first: a, b, c filed; a out and back makes b the oldest; d evicts b, then e evicts c"
@@ -345,11 +390,20 @@
            (f (out! c "")))
       (list a b d e f))))
 
-(test-equal "keys of other kinds: the empty string, numbers told by exactness, symbols, and lists by their contents"
-  '((hit "e") (hit "one") (miss) (hit "sym") (hit "list") (miss))
-  (let ((c (make 8)))
-    (ret! c "" "e") (ret! c 1 "one") (ret! c 'sym "sym") (ret! c (list 1 2) "list")
-    (list (out! c "") (out! c 1) (out! c 1.0) (out! c 'sym) (out! c (list 1 2)) (out! c (list 2 1)))))
+(test-equal "string keys of other shapes: the empty string, one with a NUL, a long one and non-ASCII text, each its own key, told apart from its near spellings"
+  '((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))
+  (let* ((c (make 8)) (long (make-string 5000 #\a)))
+    (ret! c "" "e") (ret! c "a\x0;b" "nul") (ret! c long "long") (ret! c "caf\xe9;" "uni")
+    (list (out! c "") (out! c (string-copy "a\x0;b")) (out! c (string-copy long))
+          (out! c (string-copy "caf\xe9;"))
+          (out! c "a") (out! c "cafe") (out! c (string-append (make-string 4999 #\a) "b")))))
+
+(test-equal "a key that is no string is outside the table's domain and raises, whatever it is, at a check-out and at a return: the table's keys are the SQL's text"
+  '(raised raised raised raised raised raised)
+  (let ((c (make 2)))
+    (map (lambda (r) (if (and (pair? r) (eq? (car r) 'raised)) 'raised r))
+         (list (out! c 1) (out! c 'sym) (out! c (list "a")) (ret! c 1 "s") (ret! c 'sym "s")
+               (ret! c (list "a") "s")))))
 
 (test-equal "any value is a statement, #f, () and a procedure among them; the table never calls one"
   '((hit #f) (hit ()) (hit called-never) never (proc))

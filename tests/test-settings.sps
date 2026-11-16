@@ -70,12 +70,24 @@
   (guard (e (#t (list 'raised (describe e)))) (settings-plan settings)))
 
 ;; read-back : Any Any -> Any
-(define (read-back name raw)
-  (guard (e (#t (list 'raised (describe e)))) (read-back-value name raw)))
+;; The reader's answer for a read-back that answered a row, VALUE its first column.
+(define (read-back name value)
+  (guard (e (#t (list 'raised (describe e)))) (read-back-value name (list 'row value))))
+
+;; read-back-raw : Any Any -> Any
+;; The reader's answer for ANSWER as given: (row V), none or anything else.
+(define (read-back-raw name answer)
+  (guard (e (#t (list 'raised (describe e)))) (read-back-value name answer)))
 
 ;; compared : Any Any Any -> Any
-(define (compared name expected raw)
-  (guard (e (#t (list 'raised (describe e)))) (read-back-comparison name expected raw)))
+;; The comparison for a read-back that answered a row, VALUE its first column.
+(define (compared name expected value)
+  (guard (e (#t (list 'raised (describe e)))) (read-back-comparison name expected (list 'row value))))
+
+;; compared-raw : Any Any Any -> Any
+;; The comparison for ANSWER as given: (row V), none or anything else.
+(define (compared-raw name expected answer)
+  (guard (e (#t (list 'raised (describe e)))) (read-back-comparison name expected answer)))
 
 ;; raised : (-> Any) -> Any
 ;; What THUNK raised: (assertion-violation WHO IRRITANTS) for an assertion
@@ -694,7 +706,7 @@
 ;; --- the read-back ---------------------------------------------------------------------
 
 ;; Each setting's table, read back as SQLite answers it: INTEGER as an exact
-;; integer, journal_mode as lower-case TEXT.
+;; integer, journal_mode as lower-case TEXT, here as its row's first column.
 (define read-back-table
   '((busy-timeout (0 . 0) (5000 . 5000) (2147483647 . 2147483647))
     (foreign-keys (1 . #t) (0 . #f))
@@ -717,7 +729,13 @@
   (list -1 2 3 4 7 -2147483648 2147483648 1.0 0.0 2.0 "1" "0" "" "memory" "off" "WAL" "Wal"
         "wal " "delete\x0;" "normal" a-blob a-record))
 
-(test-equal "a read-back outside its setting's table reads as itself, eq?, as SQLite answered it: other integers, REALs, other TEXT, a BLOB and a NULL's stand-in"
+;; expected-actual : Symbol Any -> Any
+;; What a read-back outside its table reads as, written out: journal-mode's TEXT as a
+;; symbol, all else as itself.
+(define (expected-actual name raw)
+  (if (and (eq? name 'journal-mode) (string? raw)) (string->symbol raw) raw))
+
+(test-equal "a read-back outside its setting's table reads as itself, eq?, as SQLite answered it, journal-mode's TEXT as a symbol: other integers, REALs, other TEXT, a BLOB and a NULL's stand-in"
   '()
   (apply append
          (map (lambda (row)
@@ -726,7 +744,7 @@
                           (map (lambda (raw)
                                  (and (not (assoc raw (cdr row)))
                                       (let ((got (read-back name raw)))
-                                        (and (not (eq? got raw)) (list name raw got)))))
+                                        (and (not (eq? got (expected-actual name raw))) (list name raw got)))))
                                outsiders))))
               read-back-table)))
 
@@ -734,14 +752,35 @@
   (list -1 two31 (expt 2 64) 1.5)
   (map (lambda (v) (read-back 'busy-timeout v)) (list -1 two31 (expt 2 64) 1.5)))
 
-(test-equal "journal-mode's TEXT is matched whole and by case: memory, off, WAL, and wal with a space, as themselves"
-  '("memory" "off" "WAL" "wal " "wa" "wall")
+(test-equal "journal-mode's TEXT is matched whole and by case, and any other TEXT reads as a symbol of the text as read: memory, off, WAL, and wal with a space, wa and wall"
+  (list 'memory 'off 'WAL (string->symbol "wal ") 'wa 'wall)
   (map (lambda (v) (read-back 'journal-mode v)) '("memory" "off" "WAL" "wal " "wa" "wall")))
 
 (test-equal "statement-cache and a name no setting has read every value as itself"
   (list 1 "wal" a-blob 1 "1")
   (list (read-back 'statement-cache 1) (read-back 'statement-cache "wal")
         (read-back 'nosuch a-blob) (read-back "foreign-keys" 1) (read-back 5 "1")))
+
+;; An integer outside journal-mode's table, and any other setting's TEXT, stay as read.
+(test-equal "journal-mode's integers, REALs and BLOBs stay as read, and another setting's TEXT stays a string"
+  (list 1 2.0 a-blob "memory" "wal")
+  (list (read-back 'journal-mode 1) (read-back 'journal-mode 2.0) (read-back 'journal-mode a-blob)
+        (read-back 'temp-store "memory") (read-back 'statement-cache "wal")))
+
+(test-equal "a read-back that answered no row, none, reads as () for every setting, and anything else that is no (row V) too"
+  '(() () () () () () () () () ())
+  (append (map (lambda (n) (read-back-raw n 'none)) setting-names)
+          (list (read-back-raw 'foreign-keys '(row)) (read-back-raw 'foreign-keys '(row 1 2))
+                (read-back-raw 'foreign-keys 1))))
+
+(test-equal "a read-back that answered no row is always a mismatch whose actual is (), whatever was expected, () and #f among them"
+  (list '(mismatch foreign-keys #f ()) '(mismatch foreign-keys #t ()) '(mismatch foreign-keys () ())
+        '(mismatch journal-mode wal ()) '(mismatch busy-timeout 0 ()) '(mismatch statement-cache () ())
+        '(mismatch nosuch #f ()))
+  (list (compared-raw 'foreign-keys #f 'none) (compared-raw 'foreign-keys #t 'none)
+        (compared-raw 'foreign-keys '() 'none) (compared-raw 'journal-mode 'wal 'none)
+        (compared-raw 'busy-timeout 0 'none) (compared-raw 'statement-cache '() 'none)
+        (compared-raw 'nosuch #f 'none)))
 
 ;; Every expected value of each domain, against every read-back of its table
 ;; and every outsider: match only against its own row.
@@ -758,13 +797,13 @@
                                                  (if (and hit (eqv? (cdr hit) expected))
                                                      'match
                                                      (list 'mismatch name expected
-                                                           (if hit (cdr hit) raw)))))
+                                                           (if hit (cdr hit) (expected-actual name raw))))))
                                              (lambda (raw) (compared name expected raw))))
                               (map cdr (cdr row))))))
               read-back-table)))
 
 (test-equal "the mismatches Q9 and SQLite's coercions give, written out"
-  '((mismatch journal-mode wal "memory") (mismatch foreign-keys #t #f)
+  '((mismatch journal-mode wal memory) (mismatch foreign-keys #t #f)
     (mismatch busy-timeout 5000 0) (mismatch synchronous extra 4) (mismatch temp-store file default)
     (mismatch trusted-schema #f #t) match)
   (list (compared 'journal-mode 'wal "memory") (compared 'foreign-keys #t 0)
@@ -794,7 +833,7 @@
           (apply append
                  (map (lambda (v)
                         (list (split (list v)) (plan v) (plan (list v)) (plan (list (cons v v)))
-                              (read-back v v) (compared v v v)
+                              (read-back v v) (compared v v v) (read-back-raw v v) (compared-raw v v v)
                               (compared 'foreign-keys v v) (compared 'journal-mode v v)))
                       (append universe (list cyclic))))))
 

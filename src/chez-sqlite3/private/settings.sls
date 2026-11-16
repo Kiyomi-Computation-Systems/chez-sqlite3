@@ -13,7 +13,8 @@
 ;;;                         the rule that refuses it
 ;;;   raise-setting-refusal a refusal as an assertion violation, its
 ;;;                         irritants led by the rule's symbol
-;;;   read-back-value       a read-back's value as the Scheme value compared
+;;;   read-back-value       a read-back's answer, (row V) or none, as the
+;;;                         Scheme value compared
 ;;;   read-back-comparison  a match, or the mismatch's setting, expected and
 ;;;                         actual, for slice 5 to raise
 ;;;
@@ -24,7 +25,7 @@
 ;;;   setting          Scheme value                 written   read back
 ;;;   busy-timeout     exact integer, 0 to 2^31-1   decimal   INTEGER
 ;;;   foreign-keys     #t or #f                     1 or 0    INTEGER
-;;;   journal-mode     delete truncate persist wal  the word  lower-case TEXT
+;;;   journal-mode     delete truncate persist wal  the word  lower-case TEXT, read as a symbol
 ;;;   synchronous      off normal full extra        0 to 3    INTEGER
 ;;;   temp-store       default file memory          0 to 2    INTEGER
 ;;;   trusted-schema   #t or #f                     1 or 0    INTEGER
@@ -93,7 +94,8 @@
   ;; before M3. So a string, a number or a boolean is still an unknown option,
   ;; and an improper pair is a settings list for settings-plan to refuse. The
   ;; settings list is the caller's own, not a copy; with none, (). A second
-  ;; list is refused. ARGS is never changed.
+  ;; list is refused. ARGS is never changed, and is read more than once: it is
+  ;; called before any critical section, on a list no other thread changes.
   (define (split-open-arguments args)
     (let loop ((rest args) (options '()) (settings #f))
       (cond ((not (pair? rest)) (list 'split (reverse options) (if settings (car settings) '())))
@@ -149,7 +151,8 @@
   ;; settings given, busy-timeout's first, then the rest in the list's order.
   ;; A step is the setting's name, the SQL that sets it, the SQL that reads it
   ;; back, PRAGMA and its name, and the Scheme value expected back, the value
-  ;; given. SETTINGS is never changed.
+  ;; given. SETTINGS is never changed, and is read more than once: it is
+  ;; called before any critical section, on a list no other thread changes.
   (define (settings-plan settings)
     (let ((bad-shape (shape-refusal settings)))
       (if bad-shape
@@ -216,29 +219,45 @@
 
   ;; --- the read-back --------------------------------------------------------------------------
 
+  ;; row-answer? : Any -> Boolean
+  ;; Whether X is (row V).
+  (define (row-answer? x)
+    (and (list? x) (= (length x) 2) (eq? (car x) 'row)))
+
   ;; read-back-value : Any Any -> Any
-  ;; RAW, a setting's value as its read-back statement answered it, as the
-  ;; Scheme value compared with the one asked for. For an enumerated setting
-  ;; a read-back its table holds reads as the table's Scheme value, 1 as #t,
-  ;; "wal" as wal, 2 as full, matched by equal?, so whole and by case. Any
-  ;; other RAW reads as itself, unchanged: an integer outside the table, a
-  ;; REAL, TEXT of another spelling, such as "memory" from an in-memory
-  ;; database (Q9), a BLOB or sql-null. It is the mismatch's actual, and
-  ;; equals no table's value, for SQLite answers no symbol or boolean.
-  ;; busy-timeout's every value reads as itself, as do statement-cache's and
-  ;; a NAME no setting has. Total.
-  (define (read-back-value name raw)
-    (let* ((setting (assq name enumerated-settings))
-           (row (and setting (find (lambda (r) (equal? (caddr r) raw)) (caddr setting)))))
-      (if row (car row) raw)))
+  ;; ANSWER, what a setting's read-back statement answered, as the Scheme
+  ;; value compared with the one asked for: (row V), V the first column of
+  ;; the first row, as M2's column-value answers it, or none, the statement
+  ;; answered no row. none, and anything that is neither, reads as (), the
+  ;; mismatch's actual, meaning nothing was read. For an enumerated setting
+  ;; a V its table holds reads as the table's Scheme value, 1 as #t, "wal" as
+  ;; wal, 2 as full, matched by equal?, so whole and by case. journal-mode's
+  ;; other TEXT reads as a symbol, string->symbol of the text as read, so
+  ;; "memory" from an in-memory database (Q9) reads as memory, and "WAL" as
+  ;; WAL. Any other V reads as itself, unchanged: an integer outside a
+  ;; table, a REAL, TEXT of any other setting, a BLOB or sql-null. It equals no
+  ;; table's value, for SQLite answers no boolean or other symbol than
+  ;; journal-mode's. busy-timeout's every value reads as itself, as do
+  ;; statement-cache's and a NAME no setting has's. Total.
+  (define (read-back-value name answer)
+    (if (not (row-answer? answer))
+        '()
+        (let* ((raw (cadr answer))
+               (setting (assq name enumerated-settings))
+               (row (and setting (find (lambda (r) (equal? (caddr r) raw)) (caddr setting)))))
+          (cond (row (car row))
+                ((and (eq? name 'journal-mode) (string? raw)) (string->symbol raw))
+                (else raw)))))
 
   ;; read-back-comparison : Any Any Any -> (U 'match (List 'mismatch Any Any Any))
-  ;; Whether RAW, NAME's read-back, reads as EXPECTED, the step's expected
-  ;; value: match when read-back-value's answer is eqv? to it, else
+  ;; Whether ANSWER, NAME's read-back as read-back-value takes it, (row V) or
+  ;; none, reads as EXPECTED, the step's expected value: match when
+  ;; read-back-value's answer is eqv? to it and a row was read, else
   ;; (mismatch NAME EXPECTED ACTUAL), ACTUAL that answer, the fields of
-  ;; &sqlite-setting-mismatch for slice 5 to raise. Total.
-  (define (read-back-comparison name expected raw)
-    (let ((actual (read-back-value name raw)))
-      (if (eqv? actual expected)
+  ;; &sqlite-setting-mismatch for slice 5 to raise. No row is always a
+  ;; mismatch, its ACTUAL (), whatever EXPECTED is. Total.
+  (define (read-back-comparison name expected answer)
+    (let ((actual (read-back-value name answer)))
+      (if (and (row-answer? answer) (eqv? actual expected))
           'match
           (list 'mismatch name expected actual)))))

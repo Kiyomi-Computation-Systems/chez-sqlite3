@@ -68,9 +68,9 @@
 (define (exit* how begun ended autocommit level)
   (guard (e (#t (list 'raised (describe e)))) (exit-plan how begun ended autocommit level)))
 
-;; failed* : Any Any -> Any
-(define (failed* autocommit level)
-  (guard (e (#t (list 'raised (describe e)))) (failed-commit-plan autocommit level)))
+;; failed* : Any Any Any -> Any
+(define (failed* ended autocommit level)
+  (guard (e (#t (list 'raised (describe e)))) (failed-commit-plan ended autocommit level)))
 
 ;; raised : (-> Any) -> Any
 (define (raised thunk)
@@ -115,18 +115,45 @@
             (string-append "ROLLBACK TO " (savepoint-name (cadr level)))
             (string-append "RELEASE " (savepoint-name (cadr level))))))
 
+;; exit-table : (Listof (List Symbol Boolean Boolean Integer Symbol))
+;; ADR-0017's decisions 5 to 7 and the plan's §4.2, one row per case: HOW,
+;; BEGUN, ENDED, AUTOCOMMIT after the body, and the plan, as a kind. A kind
+;; commit is COMMIT or RELEASE for the level, rollback its rollback; the
+;; others are the plans themselves.
+;;   - ended, a later exit (decision 7): a return is told the transaction
+;;     ended, issuing nothing; a raise or an escape does nothing more;
+;;   - never begun (decision 5): nothing to roll back, whatever autocommit
+;;     says; a return, which the shape never makes, is told it ended;
+;;   - begun, not ended, the first exit: a return commits while autocommit is
+;;     0 (decision 6), and is told it ended otherwise; a raise or an escape
+;;     rolls back while it is 0 (decision 5), and does nothing otherwise.
+(define exit-table
+  '((return  #t #t 0 transaction-ended) (return  #t #t 1 transaction-ended)
+    (raise   #t #t 0 nothing)           (raise   #t #t 1 nothing)
+    (escape  #t #t 0 nothing)           (escape  #t #t 1 nothing)
+    (return  #f #t 0 transaction-ended) (return  #f #t 1 transaction-ended)
+    (raise   #f #t 0 nothing)           (raise   #f #t 1 nothing)
+    (escape  #f #t 0 nothing)           (escape  #f #t 1 nothing)
+    (return  #f #f 0 transaction-ended) (return  #f #f 1 transaction-ended)
+    (raise   #f #f 0 nothing)           (raise   #f #f 1 nothing)
+    (escape  #f #f 0 nothing)           (escape  #f #f 1 nothing)
+    (return  #t #f 0 commit)            (return  #t #f 1 transaction-ended)
+    (raise   #t #f 0 rollback)          (raise   #t #f 1 nothing)
+    (escape  #t #f 0 rollback)          (escape  #t #f 1 nothing)))
+
 ;; model-exit : Symbol Boolean Boolean Integer Level -> Plan
-;; ADR-0017's decisions 5 to 7. A later exit, ended set, does nothing more,
-;; but a return raises &sqlite-transaction-ended. A level never begun is
-;; nothing to roll back, and a body that returns with none begun is told so
-;; as an ended one, never answered as committed. Begun and not ended: a
-;; return commits while autocommit is 0, the level still there, and is told
-;; the transaction ended otherwise; a raise or an escape rolls back while it
-;; is 0, and does nothing otherwise.
+;; The exit-table's row for the case, its kind made a plan for LEVEL.
 (define (model-exit how begun ended autocommit level)
-  (cond ((or ended (not begun)) (if (eq? how 'return) '(transaction-ended) '(nothing)))
-        ((eq? how 'return) (if (eqv? autocommit 0) (commit-of level) '(transaction-ended)))
-        (else (if (eqv? autocommit 0) (rollback-of level) '(nothing)))))
+  (let ((row (filter (lambda (r) (equal? (list (car r) (cadr r) (caddr r) (cadddr r))
+                                         (list how begun ended autocommit)))
+                     exit-table)))
+    (if (= (length row) 1)
+        (let ((kind (car (cddddr (car row)))))
+          (case kind
+            ((commit) (commit-of level))
+            ((rollback) (rollback-of level))
+            (else (list kind))))
+        (list 'no-row how begun ended autocommit))))
 
 (test-begin "transaction-plan")
 
@@ -308,16 +335,21 @@
     (rollback "ROLLBACK TO chez_sqlite3_0" "RELEASE chez_sqlite3_0") (nothing)
     (rollback "ROLLBACK TO chez_sqlite3_1" "RELEASE chez_sqlite3_1") (nothing)
     (rollback "ROLLBACK TO chez_sqlite3_12" "RELEASE chez_sqlite3_12") (nothing))
-  (list (failed* 0 'outer) (failed* 1 'outer) (failed* 2 'outer)
-        (failed* 0 '(savepoint 0)) (failed* 1 '(savepoint 0))
-        (failed* 0 '(savepoint 1)) (failed* 1 '(savepoint 1))
-        (failed* 0 '(savepoint 12)) (failed* 1 '(savepoint 12))))
+  (list (failed* #f 0 'outer) (failed* #f 1 'outer) (failed* #f 2 'outer)
+        (failed* #f 0 '(savepoint 0)) (failed* #f 1 '(savepoint 0))
+        (failed* #f 0 '(savepoint 1)) (failed* #f 1 '(savepoint 1))
+        (failed* #f 0 '(savepoint 12)) (failed* #f 1 '(savepoint 12))))
+
+(test-equal "a failed commit whose level already ended, ended set, issues nothing at either level and any autocommit, 0 included: never a second rollback"
+  '((nothing) (nothing) (nothing) (nothing) (nothing) (nothing) (nothing) (nothing))
+  (append (map (lambda (l) (failed* #t 0 l)) '(outer (savepoint 0) (savepoint 1) (savepoint 12)))
+          (map (lambda (l) (failed* #t 1 l)) '(outer (savepoint 0) (savepoint 1) (savepoint 12)))))
 
 (test-equal "a failed commit's rollback is the raise's rollback at the same level, for every begin"
   '()
   (differences begins
                (lambda (b) (exit* 'raise #t #f 0 (level-of b)))
-               (lambda (b) (failed* 0 (level-of b)))))
+               (lambda (b) (failed* #f 0 (level-of b)))))
 
 ;; --- the walks ---------------------------------------------------------------------------
 
@@ -350,7 +382,7 @@
                              (else ended))
                        (cons p out))))
               ((commit-fails)
-               (loop (cdr events) begun #t (cons (failed* (cadr ev) level) out)))
+               (loop (cdr events) begun #t (cons (failed* ended (cadr ev) level) out)))
               (else (reverse (cons (list 'bad-event ev) out)))))))))
 
 (test-equal "a body that returns: BEGIN IMMEDIATE, then COMMIT"
@@ -412,7 +444,7 @@
                             (append (map cdr begins)
                                     (map (lambda (x) (apply exit* (append (cdr x) (list (car x)))))
                                          exits)
-                                    (map (lambda (b) (failed* 0 (level-of b))) begins))))))
+                                    (map (lambda (b) (failed* #f 0 (level-of b))) begins))))))
     (list (filter (lambda (s) (not (member s every-statement))) issued)
           (length (filter (lambda (s) (member s issued)) every-statement)))))
 
@@ -477,7 +509,7 @@
                                        (map (lambda (l)
                                               (list (exit* j j j j l) (exit* 'return #t #f j l)
                                                     (exit* 'raise #t #f j l) (exit* j #t #f 0 l)
-                                                    (failed* j l)))
+                                                    (failed* j j l) (failed* #f j l)))
                                             '(outer (savepoint 0) (savepoint 7)))))
                               junk)))))
 

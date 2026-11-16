@@ -10,7 +10,9 @@
 ;;;
 ;;;   script-prepare-offset  a prepare's error: the character SQLite points
 ;;;                          at, START + OFFSET as bytes; SQLite's -1 points
-;;;                          at none and answers #f (ADR-0016, decision 7)
+;;;                          at none, so it answers the failing statement's
+;;;                          first token, as script-step-offset does from
+;;;                          START (ADR-0016, decision 7, amended)
 ;;;   script-step-offset     a step's error, which SQLite gives no offset:
 ;;;                          the failing statement's first token, past the
 ;;;                          whitespace, U+FEFF, comments and semicolons
@@ -46,18 +48,22 @@
   ;; START, and SQLite answered OFFSET, a byte offset from START, or -1. A
   ;; byte at a character's start, or the end, is that character's index, and
   ;; a continuation byte the index of the character it continues
-  ;; (utf8-offset->index). #f for -1, which points at no token: SQLite
-  ;; answers it for an error at the end of the SQL, and for a missing table,
-  ;; a missing collation and a busy prepare (ADR-0013, amended for M2; single
-  ;; script X6, X8). #f too for anything else outside the script: a START
+  ;; (utf8-offset->index). For -1, which points at no token, SQLite answers
+  ;; it for an error at the end of the SQL, and for a missing table, a
+  ;; missing collation and a busy prepare (ADR-0013, amended for M2; single
+  ;; script X6, X8): the failing statement's first token, exactly what
+  ;; (script-step-offset BYTES START) answers (ADR-0016, decision 7,
+  ;; amended: the maintainer, 2026-11-15, "Point at the statement"), #f when
+  ;; the statement has none. #f for anything else outside the script: a START
   ;; below 0 or past the end, an OFFSET below -1 or past the end, or an
   ;; argument of another type.
   (define (script-prepare-offset bytes start offset)
     (and (start-within? bytes start)
          (exact-integer? offset)
-         (>= offset 0)
-         (<= (+ start offset) (bytevector-length bytes))
-         (utf8-offset->index bytes (+ start offset))))
+         (cond ((= offset -1) (script-step-offset bytes start))
+               ((and (>= offset 0) (<= (+ start offset) (bytevector-length bytes)))
+                (utf8-offset->index bytes (+ start offset)))
+               (else #f))))
 
   ;; script-step-offset : Bytevector Natural -> (U Natural #f)
   ;; A failed step's offset into the script whose UTF-8 is BYTES, as a

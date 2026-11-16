@@ -1,10 +1,14 @@
 #!r6rs
 ;;; (chez-sqlite3 private statement-cache): the statement cache's table
 ;;; (ADR-0020). Pure Scheme: no foreign code, and nothing here loads
-;;; libsqlite3. A table of opaque keys, matched by equal?, so a string key by
-;;; its text as string=? matches it, and opaque statements, with a capacity
-;;; fixed when it is made. It finalizes nothing: each change answers what its
-;;; caller must finalize, and the caller does, after its critical section.
+;;; libsqlite3. A table of string keys, the SQL's exact text (ADR-0020,
+;;; decision 1), matched by string=? and hashed by string-hash, and opaque
+;;; statements, with a capacity fixed when it is made. The caller passes a
+;;; string it has copied and checked: a key that is no string is outside the
+;;; table's domain, and string-hash raises on it; a string changed after it
+;;; is filed is the caller's to avoid. It finalizes nothing: each change
+;;; answers what its caller must finalize, and the caller does, after its
+;;; critical section.
 ;;;
 ;;;   make-statement-cache         a table of capacity N, 0 to 1024
 ;;;   statement-cache-check-out!   the statement filed under a key, removed,
@@ -12,13 +16,14 @@
 ;;;   statement-cache-return!      a statement filed as the most recent, and
 ;;;                                what to finalize: the least recently used
 ;;;                                one, evicted from a full table, or the
-;;;                                statement itself at capacity 0 or when its
-;;;                                key is held
+;;;                                statement itself at capacity 0 or when a
+;;;                                different one is held under its key; none
+;;;                                for the very one held
 ;;;   statement-cache-clear!       every statement held, for the close
 ;;;
 ;;; The table only reads and changes itself: it calls nothing of its caller's,
-;;; neither a key nor a statement, and it raises nothing for a table and any
-;;; key and statement, so slice 3 calls it inside a critical section. It holds
+;;; neither a key nor a statement, and it raises nothing for a table, a string
+;;; key and any statement, so slice 3 calls it inside a critical section. It holds
 ;;; no state of a statement's: a finalized statement is a miss by slice 3's
 ;;; check of the statement's own state, made after a check-out answers it and
 ;;; before a return, in the same section (ADR-0020, decision 5), never here.
@@ -53,7 +58,7 @@
   ;; settings' plan has checked, fixed for the table's life (ADR-0020,
   ;; decision 1). Raises nothing for such a CAPACITY.
   (define (make-statement-cache capacity)
-    (new-statement-cache capacity (make-hashtable equal-hash equal?) #f #f))
+    (new-statement-cache capacity (make-hashtable string-hash string=?) #f #f))
 
   ;; statement-cache-count : Statement-Cache -> Natural
   ;; How many statements CACHE holds.
@@ -76,7 +81,7 @@
       (if newest (entry-newer-set! newest e) (set-cache-oldest! cache e))
       (set-cache-newest! cache e)))
 
-  ;; statement-cache-check-out! : Statement-Cache Any -> (U (List 'hit Any) (List 'miss))
+  ;; statement-cache-check-out! : Statement-Cache String -> (U (List 'hit Any) (List 'miss))
   ;; The statement CACHE holds under KEY, removed from the table, as (hit S),
   ;; or (miss) when it holds none. Raises nothing.
   (define (statement-cache-check-out! cache key)
@@ -88,17 +93,20 @@
             (list 'hit (entry-statement e)))
           (list 'miss))))
 
-  ;; statement-cache-return! : Statement-Cache Any Any -> (Listof Any)
+  ;; statement-cache-return! : Statement-Cache String Any -> (Listof Any)
   ;; STATEMENT, filed under KEY, the statement's own SQL copy, as CACHE's most
   ;; recent; the answer is what the caller must finalize (ADR-0020, decision
   ;; 5): at capacity 0, (STATEMENT), the table unchanged; when CACHE holds
-  ;; KEY already, returned meanwhile, (STATEMENT), the held one kept where it
-  ;; stood; when CACHE is full, the least recently used one, evicted, as (S);
+  ;; KEY already, returned meanwhile, the held one kept where it stood, and
+  ;; (STATEMENT) to finalize, or () when STATEMENT is the very one held
+  ;; (eq?), the same statement returned twice, finalized by neither; when CACHE is full, the least recently used one, evicted, as (S);
   ;; else (). Raises nothing.
   (define (statement-cache-return! cache key statement)
     (let ((table (cache-table cache)) (capacity (statement-cache-capacity cache)))
       (cond ((= capacity 0) (list statement))
-            ((hashtable-contains? table key) (list statement))
+            ((hashtable-ref table key #f)
+             => (lambda (held)
+                  (if (eq? (entry-statement held) statement) '() (list statement))))
             (else
              (let ((evicted (and (>= (hashtable-size table) capacity) (cache-oldest cache)))
                    (e (make-entry key statement #f #f)))

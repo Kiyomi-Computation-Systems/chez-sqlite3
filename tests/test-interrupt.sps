@@ -436,12 +436,14 @@
 ;; race : -> (List (Listof Symbol) Any Any Any Symbol)
 ;; Three threads on an opened latch, with one board of notes:
 ;;   - the interrupter calls interrupt-latch-interrupt!, whose stand-in notes
-;;     its start, says it is in flight, waits up to in-flight-ms for the
-;;     close's work to start, then notes its end;
-;;   - the closer waits for the stand-in to be in flight, then closes, its
-;;     work noting its start, asking the late interrupter to try now, and
-;;     waiting for that try to end before it notes its own end; its
-;;     predicate says closed;
+;;     its start, says it is in flight, waits up to long-ms for the closer to
+;;     say it is calling close, and only then up to in-flight-ms for the
+;;     close's work to start, then notes its end, so how long the closer
+;;     takes to get to its close changes nothing;
+;;   - the closer waits for the stand-in to be in flight, says it is calling
+;;     close, just before it does, and closes, its work noting its start,
+;;     asking the late interrupter to try now, and waiting for that try to
+;;     end before it notes its own end; its predicate says closed;
 ;;   - the late interrupter waits to be asked, then calls
 ;;     interrupt-latch-interrupt!, whose stand-in notes late-interrupt, and
 ;;     says its try has ended.
@@ -453,6 +455,7 @@
          (c (make-condition))
          (notes '())
          (in-flight #f)
+         (calling-close #f)
          (work-started #f)
          (try-now #f)
          (try-ended #f)
@@ -467,12 +470,16 @@
                   (note! 'interrupt-start)
                   (set! in-flight #t)
                   (condition-broadcast c)
+                  (await m c (lambda () calling-close) long-ms)
                   (await m c (lambda () work-started) in-flight-ms)
                   (note! 'interrupt-end)))))))
          (closer
           (start-thread
            (lambda ()
              (with-mutex m (await m c (lambda () in-flight) long-ms))
+             (with-mutex m
+               (set! calling-close #t)
+               (condition-broadcast c))
              (interrupt-latch-close!
               latch
               (lambda ()

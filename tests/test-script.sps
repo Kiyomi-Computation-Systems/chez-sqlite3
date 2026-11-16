@@ -7,7 +7,8 @@
 ;;;   script-prepare-offset  a prepare that started at byte START of the
 ;;;                          script's UTF-8 and failed with SQLite's byte
 ;;;                          OFFSET from START: the character it points at;
-;;;                          #f for -1, which points at none
+;;;                          for -1, which points at none, the statement's
+;;;                          first token, as script-step-offset answers it
 ;;;   script-step-offset     a step that failed, of the statement whose
 ;;;                          prepare started at START: its first token, past
 ;;;                          the whitespace, U+FEFF, comments and semicolons
@@ -140,9 +141,21 @@
      (iota 45))
     (list (reverse bad) count)))
 
-(test-equal "SQLite's -1 points at no token, so it answers none at every START, 0 to 44"
-  (map (lambda (s) 'none) (iota 45))
+(test-equal "SQLite's -1 points at no token, so it answers the statement's first token, what a step's offset answers from the same START, at every START 0 to 44: the table written out by hand"
+  first-token-at
   (map (lambda (start) (prepare-at script-bytes start -1)) (iota 45)))
+
+(test-equal "-1 answers the first token only for a START in the script: a START below 0, past the end or no exact integer, and BYTES that are no bytevector answer none"
+  '(none none none none none none)
+  (list (prepare-at script-bytes -1 -1) (prepare-at script-bytes 45 -1)
+        (prepare-at script-bytes 1.0 -1) (prepare-at script-bytes 'start -1)
+        (prepare-at script -1 -1) (prepare-at #f 0 -1)))
+
+(test-equal "-1 answers none when the statement has no first token, whatever its START: a script of nothing but whitespace, comments and semicolons, and the empty one"
+  '(none none none none)
+  (let ((b (string->utf8 " ;-- c\n/* d */;; \t")))
+    (list (prepare-at b 0 -1) (prepare-at b (bytevector-length b) -1)
+          (prepare-at #vu8() 0 -1) (prepare-at (string->utf8 "  ") 1 -1))))
 
 (test-equal "an OFFSET past the script's end, or below -1, answers none at every START: the end plus one, the end plus 100, -2 and -100"
   (map (lambda (s) '(none none none none)) (iota 45))
@@ -172,12 +185,12 @@
 (define x6 "INSERT INTO s VALUES (50);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO s VALUES (51);")
 (define x8 "INSERT INTO s VALUES (70); INSERT INTO s VALUES (")
 
-(test-equal "single script X5: from byte 26, SQLite's 1 points at SELEKT, character 27 of the script; X6's and X8's -1 from byte 26 answer none"
-  '(27 none none)
+(test-equal "single script X5: from byte 26, SQLite's 1 points at SELEKT, character 27 of the script; X6's and X8's -1 from byte 26 point at the statement, INSERT, character 27 of each"
+  '(27 27 27)
   (list (prepare-at (string->utf8 x5) 26 1) (prepare-at (string->utf8 x6) 26 -1)
         (prepare-at (string->utf8 x8) 26 -1)))
 
-(test-equal "a prepare from byte 0 of an empty script, offset 0, points at the end, character 0; any other offset answers none"
+(test-equal "a prepare from byte 0 of an empty script, offset 0, points at the end, character 0; offset 1 answers none, and -1, with no statement, none"
   '(0 none none)
   (list (prepare-at #vu8() 0 0) (prepare-at #vu8() 0 1) (prepare-at #vu8() 0 -1)))
 
