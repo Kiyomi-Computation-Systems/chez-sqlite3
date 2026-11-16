@@ -147,7 +147,9 @@ newest first.
   - the `failed` evidence and a column read's NOMEM narrowed;
   - the T-numbered citations;
   - the heap limits lifted hard then soft, a trap slice 4 records.
-- **CI:** CI_PENDING
+- **CI:** passed in all five jobs on `9deda02` (run 43903012495); `memory` took 27m01s, its
+  slowest suite `test-library-loading-decoys` at 175 s of 450, on a runner where `test-check-ci`
+  took 84 s.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
