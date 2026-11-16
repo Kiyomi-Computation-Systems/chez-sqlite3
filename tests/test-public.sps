@@ -165,7 +165,9 @@
     (changes chez-sqlite3 private connection)
     (total-changes chez-sqlite3 private connection)
     (last-insert-rowid chez-sqlite3 private connection)
-    (in-transaction? chez-sqlite3 private connection)))
+    (in-transaction? chez-sqlite3 private connection)
+    (with-transaction chez-sqlite3 private transaction)
+    (sqlite-transaction-ended? chez-sqlite3 private conditions)))
 
 (test-begin "public")
 
@@ -173,8 +175,8 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 60 names, counted from the library itself, not from this suite's list"
-  60
+(test-equal "(chez-sqlite3) exports 62 names, counted from the library itself, not from this suite's list"
+  62
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
@@ -183,13 +185,14 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; M3's four counters; the cache's four procedures; and the suites' opener of a given capacity"
+(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; M3's four counters; the cache's four procedures; the suites' opener of a given capacity; and the transaction depth's two, with-transaction's"
   (sorted-names '(open-database close-database! call-with-database database? call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
                   tracked-statements untrack-statement!
                   changes total-changes last-insert-rowid in-transaction?
                   database-cache-check-out! database-cache-return! database-cache-capacity
-                  database-cache-count open-database-with-cache-capacity))
+                  database-cache-count open-database-with-cache-capacity
+                  database-depth set-database-depth!))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
 
@@ -197,6 +200,11 @@
   (sorted-names '(execute! execute-script! query query-row query-fold code-number))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private conveniences)))))
+
+(test-equal "(chez-sqlite3 private transaction) exports exactly with-transaction, which (chez-sqlite3) exports"
+  '(with-transaction)
+  (guard (e (#t (list 'raised (describe e))))
+    (sorted-names (library-exports '(chez-sqlite3 private transaction)))))
 
 (test-equal "(chez-sqlite3 private report) exports exactly the seven report procedures"
   (sorted-names '(sqlite-version sqlite-version-number sqlite-source-id sqlite-library-path

@@ -216,7 +216,8 @@
             (chez-sqlite3 private native)
             (chez-sqlite3 private report)
             (chez-sqlite3 private statement)
-            (chez-sqlite3 private statement-values)))
+            (chez-sqlite3 private statement-values)
+            (chez-sqlite3 private transaction)))
   (if src-read? loaders src-imports))
 
 ;; What the testing library imports, read from its file, not its allowlist.

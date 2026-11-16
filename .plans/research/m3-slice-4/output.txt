@@ -1,0 +1,77 @@
+The engine suite, as built (ended passed as checked-out's check), on Guix's 3.53.1:
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the outer level: first slices that expired before begun: 28
+  nested: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 373; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  nested: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 373; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  the outer level: every first remainder, fuels 1 to 41, resumed twice; resumes that tracked other SQL or left a code: 0
+  nested: every first remainder, fuels 1 to 41, resumed twice; resumes that tracked other SQL or left a code: 0
+# of expected passes      9
+
+The same at the floor, 3.45.1:
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the outer level: first slices that expired before begun: 28
+  nested: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 373; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  nested: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 373; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  the outer level: every first remainder, fuels 1 to 41, resumed twice; resumes that tracked other SQL or left a code: 0
+  nested: every first remainder, fuels 1 to 41, resumed twice; resumes that tracked other SQL or left a code: 0
+# of expected passes      9
+
+The plant Da (build/m3s4-mut/Da), its lines and its failing rows, cut at 600 characters:
+# of expected passes      41
+# of expected passes      24
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the outer level: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 381; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 6
+FAIL a remainder captured once ENDED is set, resumed a second time once its call has ended, checks out, steps and returns none of with-transaction's statements: at every fuel until the call completes unexpired whose first slice began the level, each remainder from that expiry on, resumed again one tick a slice, leaves the cache's count unchanged between every slice, and each statement's state and runs, and the extended code, at its end; at the outer level and nested
+  actual:   (((34 0 (cache-count-between-slices ((3 5) (4 5)) before (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("COMMIT" ready 29) ("ROLLBACK" ready 6))) after (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("COMMIT" ready 29) ("ROLLBACK" ready 6))) extended 0 0 answer (raised (transaction-ended with-transaction)))) (34 1 (cache-count-between-slices ((2 5) (3 5)) before (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("CO
+# of expected passes      7
+# of unexpected failures  1
+# of expected passes      8
+
+The plant Da-floor (build/m3s4-mut/Da-floor), its lines and its failing rows, cut at 600 characters:
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (115 committed))
+  the outer level: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 381; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 6
+FAIL a remainder captured once ENDED is set, resumed a second time once its call has ended, checks out, steps and returns none of with-transaction's statements: at every fuel until the call completes unexpired whose first slice began the level, each remainder from that expiry on, resumed again one tick a slice, leaves the cache's count unchanged between every slice, and each statement's state and runs, and the extended code, at its end; at the outer level and nested
+  actual:   (((34 0 (cache-count-between-slices ((3 5) (4 5)) before (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("COMMIT" ready 29) ("ROLLBACK" ready 6))) after (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("COMMIT" ready 29) ("ROLLBACK" ready 6))) extended 0 0 answer (raised (transaction-ended with-transaction)))) (34 1 (cache-count-between-slices ((2 5) (3 5)) before (6 (("BEGIN DEFERRED" ready 35) ("SAVEPOINT chez_sqlite3_1" ready 1) ("RELEASE chez_sqlite3_1" ready 1) ("CO
+# of expected passes      7
+# of unexpected failures  1
+
+The plant slice1 (build/m3s4-mut/slice1), its lines and its failing rows, cut at 600 characters:
+# of expected passes      41
+# of expected passes      24
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (110 no-kind) (115 committed))
+FAIL the outer sweep: an engine around with-transaction, deferred, whose body inserts the fuel and answers 42, at every fuel from 1 until it completes without expiring, resumed after each expiry: it commits once, its row seen once by db2, BEGIN, then COMMIT, run once each; or raises &sqlite-transaction-ended, BEGIN and ROLLBACK run once each and COMMIT never, the row absent, or present when the rollback fell before the insert, which autocommitted; never another outcome; with-transaction's statements all ready, in-transaction? #f and the extended code 0 after every fuel
+  actual:   ((110 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (111 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (112 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (113 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (114 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (110 no-kind) (115 committed))
+FAIL the nested sweep: inside an outer with-transaction, an engine around a nested one whose body inserts the fuel and answers 42: at every fuel it commits once, SAVEPOINT and RELEASE run once each and ROLLBACK TO never; or raises &sqlite-transaction-ended, SAVEPOINT, ROLLBACK TO and RELEASE run once each; never another outcome; the outer level stays open throughout and commits, so db2 then sees the row once, or not, by the same rule
+  actual:   ((110 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (111 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (112 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (113 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (114 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 1 1) () #t #f 0))))
+  the outer level: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 516; their second answers: (42 (raised (sqlite-error with-transaction error error)) (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+# of expected passes      6
+# of unexpected failures  2
+# of expected passes      8
+
+The plant slice1-floor (build/m3s4-mut/slice1-floor), its lines and its failing rows, cut at 600 characters:
+  the outer sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (110 no-kind) (115 committed))
+FAIL the outer sweep: an engine around with-transaction, deferred, whose body inserts the fuel and answers 42, at every fuel from 1 until it completes without expiring, resumed after each expiry: it commits once, its row seen once by db2, BEGIN, then COMMIT, run once each; or raises &sqlite-transaction-ended, BEGIN and ROLLBACK run once each and COMMIT never, the row absent, or present when the rollback fell before the insert, which autocommitted; never another outcome; with-transaction's statements all ready, in-transaction? #f and the extended code 0 after every fuel
+  actual:   ((110 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (111 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (112 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (113 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))) (114 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #f 1))))
+  the nested sweep: completed without expiring at fuel 118; each outcome from the fuel ((1 ended-after-a-later-write) (102 rolled-back) (110 no-kind) (115 committed))
+FAIL the nested sweep: inside an outer with-transaction, an engine around a nested one whose body inserts the fuel and answers 42: at every fuel it commits once, SAVEPOINT and RELEASE run once each and ROLLBACK TO never; or raises &sqlite-transaction-ended, SAVEPOINT, ROLLBACK TO and RELEASE run once each; never another outcome; the outer level stays open throughout and commits, so db2 then sees the row once, or not, by the same rule
+  actual:   ((110 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (111 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (112 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (113 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 0 1) () #t #f 0))) (114 ((raised (sqlite-error with-transaction error error)) 0 (no-kind (1 1 1) () #t #f 0))))
+  the outer level: first slices that expired before begun: 28
+  the outer level: fuels 1 to 42; first slices that began the level: 13; remainders resumed twice: 516; their second answers: (42 (raised (sqlite-error with-transaction error error)) (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+# of expected passes      6
+# of unexpected failures  2
+
+The plant names-outside, its no-cut-SQL lines, cut at 600 characters:
+  the outer level: every first remainder, fuels 1 to 41, resumed twice; resumes that tracked other SQL or left a code: 0
+  nested: every first remainder, fuels 1 to 112, resumed twice; resumes that tracked other SQL or left a code: 155
+FAIL no cut or wrong SQL reaches SQLite: at every fuel until the call completes unexpired, its first remainder resumed to its end and then a second time, at the outer level and nested, a whole new call among them where the remainder was taken before the call began, the connection tracks no SQL but with-transaction's own, its savepoints named in full, and the extended code is 0 after each
+  actual:   (() ((35 second ("SAVEPOINT chez_sqlite3_") 1) (36 first ("SAVEPOINT chez_sqlite3_") 0) (36 second ("SAVEPOINT chez_sqlite3_") 1) (37 first ("SAVEPOINT chez_sqlite3_") 0) (37 second ("SAVEPOINT chez_sqlite3_") 0) (38 first ("SAVEPOINT chez_sqlite3_") 0) (38 second ("SAVEPOINT chez_sqlite3_") 0) (39 first ("SAVEPOINT chez_sqlite3_") 0) (39 second ("SAVEPOINT chez_sqlite3_") 0) (40 first ("SAVEPOINT chez_sqlite3_") 0) (40 second ("SAVEPOINT chez_sqlite3_") 0) (41 first ("SAVEPOINT chez_sqlite3_") 0) (41 second ("SAVEPOINT chez_sqlite3_") 0) (42 first ("SAVEPOINT chez_sqlite3_") 0) (4

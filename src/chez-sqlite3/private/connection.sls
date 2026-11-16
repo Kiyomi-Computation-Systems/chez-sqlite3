@@ -84,7 +84,8 @@
           track-statement! untrack-statement! tracked-statements first-finalize-failure
           open-database-with-cache-capacity database-cache-capacity database-cache-count
           database-cache-check-out! database-cache-return!
-          changes total-changes last-insert-rowid in-transaction?)
+          changes total-changes last-insert-rowid in-transaction?
+          database-depth set-database-depth!)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind get-thread-id)
@@ -110,16 +111,19 @@
   ;; LIVE is the statements it tracks, an eq-hashtable from each statement to
   ;; its entry; SERIAL the number the next one tracked takes, so the close
   ;; can finalize them oldest first. CACHE is its statement cache, of the
-  ;; capacity the record is made with, which never changes (ADR-0020).
+  ;; capacity the record is made with, which never changes (ADR-0020). DEPTH
+  ;; is how many with-transaction levels are open on it, from 0 (ADR-0017,
+  ;; decision 3).
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
             (immutable owner unchecked-database-owner)
             (immutable live unchecked-database-live)
             (mutable serial unchecked-database-serial set-database-serial!)
-            (immutable cache unchecked-database-cache))
+            (immutable cache unchecked-database-cache)
+            (mutable depth unchecked-database-depth set-unchecked-database-depth!))
     (protocol (lambda (new)
                 (lambda (handle owner capacity)
-                  (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity)))))
+                  (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity) 0))))
     (sealed #t)
     (opaque #t))
 
@@ -338,6 +342,24 @@
   (define (database-cache-count db)
     (check-owned 'database-cache-count db)
     (critical-section (statement-cache-count (unchecked-database-cache db))))
+
+  ;; --- the transaction depth (ADR-0017, decision 3) ------------------------------------
+  ;;
+  ;; (chez-sqlite3 private transaction) reads and changes it inside its own
+  ;; critical sections, on the owner's thread: neither procedure raises.
+
+  ;; database-depth : Any -> Natural
+  ;; How many with-transaction levels are open on DB, which names the next
+  ;; savepoint; 0 when DB is no database.
+  (define (database-depth db)
+    (if (database? db) (unchecked-database-depth db) 0))
+
+  ;; set-database-depth! : Any Natural -> Boolean
+  ;; DB's depth made N: #t; #f, changing nothing, for a DB that is no
+  ;; database.
+  (define (set-database-depth! db n)
+    (and (database? db)
+         (begin (set-unchecked-database-depth! db n) #t)))
 
   ;; raise-finalize-failure : Symbol Finalize-Outcome -> Nothing
   ;; OUTCOME, a failure, raised from WHO: (failed CODE MESSAGE SQL) as an

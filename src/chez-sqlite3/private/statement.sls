@@ -789,7 +789,8 @@
   ;; that section touches nothing, and &sqlite-closed is raised from WHO
   ;; after it. So a convenience's call resumed, or re-entered, after its
   ;; statement has gone back to the cache checks out nothing again.
-  ;; with-transaction's own statements pass #f. The checks, in order:
+  ;; with-transaction's own statements pass a check of their own: the
+  ;; level's ENDED. The checks, in order:
   ;; ON-MADE and LEFT?, from WHO; DB a database on its owning thread; SQL by
   ;; checked-sql; DB open, in the section. Each refusal, and the miss's
   ;; prepare failing, holding no statement or more than one, raised after

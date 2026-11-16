@@ -5,6 +5,7 @@ Every name `(chez-sqlite3)` exports, one entry each. Import it with
 
 - [Connections](#connections)
 - [Conveniences and counters](#conveniences-and-counters)
+- [Transactions](#transactions)
 - [Statements](#statements)
 - [Values](#values)
 - [The library](#the-library)
@@ -23,6 +24,7 @@ Natural                an exact integer, 0 or more
 Positive-Integer       an exact integer, 1 or more
 Value                  an exact integer, a flonum, a string, a bytevector or sql-null
 Row                    a vector of a row's values, in column order
+Mode                   one of 'deferred, 'immediate and 'exclusive
 SqlNull                the one value sql-null
 Bytevector             a bytevector
 SqliteError            a condition that sqlite-error? holds
@@ -388,6 +390,135 @@ outside a transaction is reading, but that is no transaction: `#f`.
            (after (begin (execute! db "commit") (in-transaction? db))))
       (list before inside after))))
 ;; => (#f #t #f)
+```
+
+## Transactions
+
+`with-transaction` runs your procedure inside a transaction. It commits when
+the procedure returns, and rolls back when it raises or leaves another way.
+
+### `with-transaction`
+
+```text
+with-transaction : (case-> (Database (-> A ...) -> A ...) (Database Mode (-> A ...) -> A ...))
+```
+
+Runs the procedure, which takes no arguments, and gives back what it gives
+back, once the transaction has committed. `Mode` is `'deferred`,
+`'immediate` or `'exclusive`, as SQLite's `begin` takes it, and
+`'immediate` when you give none: it takes the write lock first, so its
+writes don't fail as busy part way. A `'deferred` one takes the lock at its
+first write, which fails at once as busy if another connection holds it,
+without waiting.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x)")
+    (list (with-transaction db
+            (lambda () (execute! db "insert into t values (1)") 'done))
+          (query db "select x from t"))))
+;; => (done (#(1)))
+```
+
+Inside a transaction already open, its own or one you began with `begin`, it
+makes a savepoint instead, named `chez_sqlite3_` and a number, and the mode
+does nothing. Rolling back undoes that level only; committing it commits
+nothing until the outer transaction commits. Tables made inside roll back
+with the rest.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x)")
+    (with-transaction db 'deferred
+      (lambda ()
+        (execute! db "insert into t values ('kept')")
+        (guard (e ((symbol? e) e))
+          (with-transaction db
+            (lambda () (execute! db "insert into t values ('undone')") (raise 'oops))))))
+    (query db "select x from t")))
+;; => (#("kept"))
+```
+
+When the procedure raises, what it raised reaches you unchanged. Some
+failures end the whole transaction by themselves, such as `insert or
+rollback`, a full disk, or an interrupted write; `with-transaction` notices,
+and rolls back only what is still there.
+
+When it can't commit, as when a deferred foreign key is missing, it rolls
+back and raises the commit's error.
+
+If the procedure catches an error that ended the transaction, and returns,
+there is nothing left to commit: it raises a condition that
+`sqlite-transaction-ended?` holds. Writes the procedure made after the end
+were not part of a transaction: each was saved at once, and stays.
+
+It refuses to begin, with an assertion violation, while a statement of the
+connection is on a row or has failed: `reset!` or finalize it first. Its
+irritants name the statement: `statement-not-finished`, its state, `row` or
+`failed`, and its SQL. A statement left on its row by a handler or an engine
+that never came back can't be reset, and makes every later
+`with-transaction` refuse; close the connection. To write from inside
+`query-fold`, run the fold inside `with-transaction`.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (let ((st (prepare-statement db "select 1")))
+      (step! st)
+      (guard (e ((assertion-violation? e) (condition-irritants e)))
+        (with-transaction db (lambda () 'ran))))))
+;; => (statement-not-finished row "select 1")
+```
+
+Rolling back works beside a statement on its row, which goes on answering
+rows. But if the connection is interrupted while such a statement is on its
+row, the rollback fails and the transaction stays open; `in-transaction?`
+says so. Reset the statement, then roll back with `execute!`.
+
+A `with-exception-handler` handler runs before the call unwinds, so it is
+part of the procedure: a transaction it begins and leaves open is committed
+or rolled back with the rest, since SQLite can't tell the two apart. Once the call has
+ended its level itself, as when it raises the ended condition, there is
+nothing left to roll back, and the handler's transaction stays. A `guard`
+clause runs after the unwind, and is not affected.
+
+Each call runs once. Going back into a finished call, through a
+continuation or a handler that resumes it, commits nothing again: a return
+raises the ended condition. An engine resumed a second time commits nothing
+again either: it may answer as the first resume did, raise the ended
+condition, or refuse the re-entry with an assertion violation.
+
+It does not survive an engine's preemption: an engine that runs out of fuel
+inside it rolls the transaction back. If that rollback fails, as a nested
+level's `RELEASE` does beside the body's own `insert ... returning` held on
+its row, the engine is lost: its caller gets Chez's
+own error, "no engine active". Resuming an engine, or calling any
+continuation, taken outside the call from inside it leaves the call too: it
+rolls back, and its return raises the ended condition. If you use engines,
+issue `begin` and `commit` with `execute!` yourself.
+
+### `sqlite-transaction-ended?`
+
+```text
+sqlite-transaction-ended? : Any -> Boolean
+```
+
+Whether the value says `with-transaction`'s procedure returned after its
+transaction had already ended. Nothing was committed by that call.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x unique)")
+    (execute! db "insert into t values (1)")
+    (guard (e ((sqlite-transaction-ended? e) 'ended))
+      (with-transaction db
+        (lambda ()
+          (guard (e ((sqlite-error? e) 'caught))
+            (execute! db "insert or rollback into t values (1)")))))))
+;; => ended
 ```
 
 ## Statements
@@ -860,7 +991,7 @@ gives a fresh list.
 
 ## Conditions
 
-Everything this library raises on purpose is one of five conditions, and
+Everything this library raises on purpose is one of six conditions, and
 each is a `chez-sqlite3-error?`. An `sqlite-error?` can also be a busy, a
 constraint or a read-only one. Catch the family with it, or one kind with
 its own predicate:
@@ -872,6 +1003,7 @@ its own predicate:
 | `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?` | An `sqlite-error?` of one kind: see below. |
 | `sqlite-wrong-thread?` | A connection, or a statement of one, is used by a thread that did not open it. |
 | `sqlite-closed?` | A connection, or a statement, is used after it was closed or finalized. |
+| `sqlite-transaction-ended?` | `with-transaction`'s procedure returned after its transaction had already ended. |
 | `sqlite-invalid-text?` | TEXT, or a column's name, that is not well-formed UTF-8. |
 
 A caller's mistake is not one of these. A name that is not a string, a bad
