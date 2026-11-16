@@ -68,8 +68,21 @@
 ;;;                            value: the column, then integer or float
 ;;;
 ;;; and a value bind-plan refuses, by raise-bind-refusal's rule.
+;;;
+;;; M3's internals (ADR-0013, decision 2; ADR-0016, decisions 3 and 9; the
+;;; M3 plan, finding F11): each verb's work for a WHO, which everything it
+;;; raises names, the verb itself a thin wrapper passing its own name:
+;;; bind!/who, bind-all!/who, clear-bindings!/who, column-value/who,
+;;; column-bytevector/who and column-name/who. And bind-each!/who, which the
+;;; conveniences bind through: bind-all!'s rule, every value checked before
+;;; any is bound, with each value bound in a critical section of its own
+;;; (the maintainer's answer to the M3 plan's Q15, "One value each"), each
+;;; of its sections reading the convenience's call's flag first, through
+;;; (chez-sqlite3 private statement)'s while-held.
 (library (chez-sqlite3 private statement-values)
-  (export bind! bind-all! clear-bindings! column-value column-bytevector column-name)
+  (export bind! bind-all! clear-bindings! column-value column-bytevector column-name
+          bind!/who bind-all!/who bind-each!/who clear-bindings!/who
+          column-value/who column-bytevector/who column-name/who)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
           (only (chez-sqlite3 private native)
@@ -86,7 +99,7 @@
                 sqlite-result-codes)
           (only (chez-sqlite3 private conditions)
                 raise-sqlite-error raise-invalid-text shown-value)
-          (only (chez-sqlite3 private statement) call-with-statement-handle)
+          (only (chez-sqlite3 private statement) call-with-statement-handle while-held)
           (chez-sqlite3 private values)
           (only (chez-sqlite3 private utf8) strict-utf8->string))
 
@@ -221,6 +234,31 @@
              (sqlite3-bind-blob64 handle index block (bytevector-length bytes)
                                   sqlite-transient)))))))
 
+  ;; bound-outcome : Symbol Statement Parameter-Form Bind-Plan Any Any -> Outcome
+  ;; One bind's outcome, through the accessor, for WHO, in bind!'s section:
+  ;; FORM's index found and checked against the count read there, then PLAN
+  ;; bound to it; PARAMETER and VALUE, the caller's, name a refused value.
+  (define (bound-outcome who st form plan parameter value)
+    (call-with-statement-handle who st 'bind!
+      (lambda (connection handle sql)
+        (values #f
+                (let ((found (parameter-index who handle form)))
+                  (cond ((eq? (car found) 'refused) found)
+                        ((eq? (car plan) 'refused)
+                         (list 'refused-value parameter value (cadr plan)))
+                        (else
+                         (let ((code (bind-code who handle (cadr found) plan)))
+                           (if (eqv? code sqlite-ok)
+                               '(done)
+                               (failure connection code sql))))))))))
+
+  ;; bind!/who : Symbol Statement (U Positive-Integer String) Value -> Void
+  ;; bind!'s work for WHO, which everything it raises names.
+  (define (bind!/who who st parameter value)
+    (let ((form (parameter-form parameter))
+          (plan (bind-plan value)))
+      (finish who (bound-outcome who st form plan parameter value))))
+
   ;; bind! : Statement (U Positive-Integer String) Value -> Void
   ;; VALUE bound to ST's PARAMETER: an index from 1 to (parameter-count ST),
   ;; or a name with its sigil, ":name", as the SQL writes it. Allowed in
@@ -230,22 +268,7 @@
   ;; the parameter then NULL and the state ready (ADR-0015, decisions 2 and
   ;; 6).
   (define (bind! st parameter value)
-    (let ((who 'bind!)
-          (form (parameter-form parameter))
-          (plan (bind-plan value)))
-      (finish who
-        (call-with-statement-handle who st 'bind!
-          (lambda (connection handle sql)
-            (values #f
-                    (let ((found (parameter-index who handle form)))
-                      (cond ((eq? (car found) 'refused) found)
-                            ((eq? (car plan) 'refused)
-                             (list 'refused-value parameter value (cadr plan)))
-                            (else
-                             (let ((code (bind-code who handle (cadr found) plan)))
-                               (if (eqv? code sqlite-ok)
-                                   '(done)
-                                   (failure connection code sql))))))))))))
+    (bind!/who 'bind! st parameter value))
 
   ;; first-refused : (Listof Bind-Plan) (Listof Any)
   ;;                 -> (U (List 'refused-value Positive-Integer Any Symbol) #f)
@@ -258,19 +281,20 @@
              (list 'refused-value index (car given) (cadr (car plans))))
             (else (loop (cdr plans) (cdr given) (+ index 1))))))
 
-  ;; bind-all! : Statement Value ... -> Void
-  ;; Every parameter of ST bound, 1 to n, from GIVEN, n values. Allowed in
-  ;; ready only. A count other than (parameter-count ST), read in the
-  ;; section, is value-count-mismatch, and every value is checked, before
-  ;; anything is bound: a refusal of ours binds nothing. A bind SQLite
-  ;; refuses midway raises &sqlite-error, and leaves the parameters before it
-  ;; bound (ADR-0015, decision 6).
-  (define (bind-all! st . given)
-    (let ((who 'bind-all!)
-          (plans (let loop ((rest given) (found '()))
-                   (if (null? rest)
-                       (reverse found)
-                       (loop (cdr rest) (cons (bind-plan (car rest)) found))))))
+  ;; plans-of : (Listof Any) -> (Listof Bind-Plan)
+  ;; GIVEN's bind plans, in order, by a named let: never map, whose order of
+  ;; calls is not fixed (AGENTS.md). Pure.
+  (define (plans-of given)
+    (let loop ((rest given) (found '()))
+      (if (null? rest)
+          (reverse found)
+          (loop (cdr rest) (cons (bind-plan (car rest)) found)))))
+
+  ;; bind-all!/who : Symbol Statement (Listof Value) -> Void
+  ;; bind-all!'s work for WHO, which everything it raises names, GIVEN the
+  ;; values: every parameter bound in one section.
+  (define (bind-all!/who who st given)
+    (let ((plans (plans-of given)))
       (finish who
         (call-with-statement-handle who st 'bind-all!
           (lambda (connection handle sql)
@@ -289,17 +313,69 @@
                                          (loop (cdr plans) (+ index 1))
                                          (failure connection code sql))))))))))))))
 
+  ;; bind-all! : Statement Value ... -> Void
+  ;; Every parameter of ST bound, 1 to n, from GIVEN, n values. Allowed in
+  ;; ready only. A count other than (parameter-count ST), read in the
+  ;; section, is value-count-mismatch, and every value is checked, before
+  ;; anything is bound: a refusal of ours binds nothing. A bind SQLite
+  ;; refuses midway raises &sqlite-error, and leaves the parameters before it
+  ;; bound (ADR-0015, decision 6).
+  (define (bind-all! st . given)
+    (bind-all!/who 'bind-all! st given))
+
+  ;; bind-each!/who : Symbol Statement (Listof Value) (U (-> Any) #f) -> Void
+  ;; Every parameter of ST bound, 1 to n, from GIVEN, n values, for WHO, by
+  ;; bind-all!'s rule, each value in a critical section of its own (the M3
+  ;; plan's Q15). GIVEN is planned first, outside any section, so a string
+  ;; is encoded once. Then, in order:
+  ;;   - the count, read in a section of its own by the accessor for
+  ;;     bind-all!, so its checks come first: a statement, on its
+  ;;     connection's owning thread, not finalized, ready;
+  ;;   - a count other than n is value-count-mismatch, and the first value
+  ;;     refused is raise-bind-refusal's, each before anything is bound;
+  ;;   - each value bound to its index in a section of its own, by bind!'s,
+  ;;     the index checked against the count read there and the state
+  ;;     against ready, so this thread is held off for one value's copy at
+  ;;     most. A bind SQLite refuses raises &sqlite-error, the parameters
+  ;;     before it bound.
+  ;; LEFT?, a convenience's call's check, or #f for none, is read first in
+  ;; each of those sections, the count's and each value's, by while-held:
+  ;; when it answers true, the section binds nothing, and &sqlite-closed is
+  ;; raised from WHO after it.
+  (define (bind-each!/who who st given left?)
+    (let* ((plans (plans-of given))
+           (count (while-held who left?
+                    (lambda ()
+                      (call-with-statement-handle who st 'bind-all!
+                        (lambda (connection handle sql)
+                          (values #f (sqlite3-bind-parameter-count handle)))))))
+           (n (length plans)))
+      (cond ((not (= n count))
+             (finish who (list 'refused 'value-count-mismatch n count)))
+            ((first-refused plans given) => (lambda (refused) (finish who refused)))
+            (else
+             (let loop ((plans plans) (rest given) (index 1))
+               (unless (null? plans)
+                 (finish who (while-held who left?
+                               (lambda ()
+                                 (bound-outcome who st (list 'index index) (car plans) index (car rest)))))
+                 (loop (cdr plans) (cdr rest) (+ index 1))))))))
+
+  ;; clear-bindings!/who : Symbol Statement -> Void
+  ;; clear-bindings!'s work for WHO, which everything it raises names.
+  (define (clear-bindings!/who who st)
+    (finish who
+      (call-with-statement-handle who st 'clear-bindings!
+        (lambda (connection handle sql)
+          (let ((code (sqlite3-clear-bindings handle)))
+            (values #f (if (eqv? code sqlite-ok) '(done) (failure connection code sql))))))))
+
   ;; clear-bindings! : Statement -> Void
   ;; Every parameter of ST NULL again, by sqlite3_clear_bindings. Allowed in
   ;; ready only: SQLite allows it while a row is ready, and then frees what
   ;; the row still reads (ADR-0014, decision 5).
   (define (clear-bindings! st)
-    (let ((who 'clear-bindings!))
-      (finish who
-        (call-with-statement-handle who st 'clear-bindings!
-          (lambda (connection handle sql)
-            (let ((code (sqlite3-clear-bindings handle)))
-              (values #f (if (eqv? code sqlite-ok) '(done) (failure connection code sql)))))))))
+    (clear-bindings!/who 'clear-bindings! st))
 
   ;; --- reading -----------------------------------------------------------------------
 
@@ -373,11 +449,16 @@
   ;; read SQLite answers with NOMEM leaves ST failed and raises
   ;; &sqlite-error nomem, once (ADR-0015, decision 7; ADR-0014, amended).
   (define (column-value st column)
-    (let ((who 'column-value))
-      (finish who
-        (call-with-statement-handle who st 'column-value
-          (lambda (connection handle sql)
-            (read-outcome 'value connection handle sql column))))))
+    (column-value/who 'column-value st column))
+
+  ;; column-value/who : Symbol Statement Natural -> Value
+  ;; column-value's work for WHO, which everything it raises names: the
+  ;; conveniences read a row one column a section through it (Q15).
+  (define (column-value/who who st column)
+    (finish who
+      (call-with-statement-handle who st 'column-value
+        (lambda (connection handle sql)
+          (read-outcome 'value connection handle sql column)))))
 
   ;; column-bytevector : Statement Natural -> (U Bytevector SqlNull)
   ;; Column COLUMN of ST's row as bytes, undecoded: TEXT through
@@ -386,11 +467,15 @@
   ;; INTEGER or FLOAT value is not-text-or-blob. Allowed in row only. NOMEM
   ;; as column-value (ADR-0015, decision 8).
   (define (column-bytevector st column)
-    (let ((who 'column-bytevector))
-      (finish who
-        (call-with-statement-handle who st 'column-bytevector
-          (lambda (connection handle sql)
-            (read-outcome 'bytes connection handle sql column))))))
+    (column-bytevector/who 'column-bytevector st column))
+
+  ;; column-bytevector/who : Symbol Statement Natural -> (U Bytevector SqlNull)
+  ;; column-bytevector's work for WHO, which everything it raises names.
+  (define (column-bytevector/who who st column)
+    (finish who
+      (call-with-statement-handle who st 'column-bytevector
+        (lambda (connection handle sql)
+          (read-outcome 'bytes connection handle sql column)))))
 
   ;; column-name : Statement Natural -> String
   ;; Column COLUMN's name, counted from 0, decoded strictly: one that is not
@@ -402,18 +487,22 @@
   ;; statement does fails for it, unlike a value's NOMEM (ADR-0015, decision
   ;; 9).
   (define (column-name st column)
-    (let ((who 'column-name))
-      (finish who
-        (call-with-statement-handle who st 'column-name
-          (lambda (connection handle sql)
-            (values #f
-                    (let ((found (column-index handle column)))
-                      (if (eq? (car found) 'refused)
-                          found
-                          (let ((read (read-column-name (lambda () (sqlite3-column-name handle column))
-                                                        c-string->bytevector)))
-                            (if (bytevector? read)
-                                (list 'name column read)
-                                (list 'failed sqlite-nomem
-                                      (or (c-string->string (sqlite3-errstr sqlite-nomem)) "")
-                                      (string-copy sql)))))))))))))
+    (column-name/who 'column-name st column))
+
+  ;; column-name/who : Symbol Statement Natural -> String
+  ;; column-name's work for WHO, which everything it raises names.
+  (define (column-name/who who st column)
+    (finish who
+      (call-with-statement-handle who st 'column-name
+        (lambda (connection handle sql)
+          (values #f
+                  (let ((found (column-index handle column)))
+                    (if (eq? (car found) 'refused)
+                        found
+                        (let ((read (read-column-name (lambda () (sqlite3-column-name handle column))
+                                                      c-string->bytevector)))
+                          (if (bytevector? read)
+                              (list 'name column read)
+                              (list 'failed sqlite-nomem
+                                    (or (c-string->string (sqlite3-errstr sqlite-nomem)) "")
+                                    (string-copy sql))))))))))))

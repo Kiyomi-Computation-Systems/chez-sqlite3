@@ -8,7 +8,9 @@
   decisions 5, 7 and 9, for a return into a full cache, a reset's failure, the section, and a close
   that fails. Amended 2026-11-15 in M3 slice 1, and accepted by the maintainer that day: the table
   keyed by `string=?`, a statement returned twice, and the engine row's bound
-  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)). Amended 2026-11-16 in M3 slice 3,
+  and accepted by the maintainer that day: the cache as built, decision 7's section, and the
+  call's flag ([amendment](#amendment-2026-11-16-what-m3-slice-3-built)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
 - **Settles:** brief D3 (the maintainer, 2026-11-14: in M3), and its leaning, "bounded and cleared
@@ -183,3 +185,37 @@ adversarial review (`(chez-sqlite3 private statement-cache)`).
   expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
   and found its one window at fuels 138 to 174, past 60, and two engines' conveniences through the
   cache can lie past 60 too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).
+
+## Amendment, 2026-11-16: what M3 slice 3 built
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 3, from its builders'
+reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-3/README.md)).
+
+- **The record holds its table,** its capacity fixed at open.
+  - `open-database-with-cache-capacity` is the suites' opener until slice 5's setting. It checks
+    the capacity by the settings' own rule, `setting-out-of-domain statement-cache`.
+  - The default, 32, is read from slice 1's settings plan, so it is written once.
+  - `database-cache-check-out!`, `database-cache-return!`, `database-cache-capacity` and
+    `database-cache-count` reach the table, the first two only inside a verb's section.
+- **Decision 7's section, as built,** does more than read and change the table, and still raises
+  nothing:
+  - the return's section also resets the statement, clears its bindings and files it;
+  - it finalizes there a statement whose step failed, or whose reset or clear failed;
+  - what the table answers, an evicted statement or the returned one, is finalized after.
+- **The check-out's and the return's sections read the call's flag first** (ADR-0016, amended
+  in M3 slice 3, "Guard every call"). So a second resume of a convenience's remainder can't hand
+  a statement out twice, nor file it twice. `checked-out` takes the check, `#f` for none.
+- **A cached statement that is live but not ready,** moved privately through
+  `tracked-statements`, is a miss: dropped from the cache, still tracked.
+- **Measured, alike on both libraries:**
+  - ten held statements took 70 lookaside slots with no flags, and none with `PERSISTENT`;
+  - one 200-column `select` took 123 against 0.
+- **Slice 5's rows, which slice 3 already holds,** set privately:
+  - after 33 distinct statements, the `statement` count is 32 at the default, 1 at 1 and 0 at 0;
+  - at 2, A, B, A, C leaves A and C.
+- **The eviction's finalize fails only for a statement moved to its row privately:** a cached
+  `insert … returning` so moved failed busy at its eviction, under another's read.
+- **The consequences' failed-close rows** use `checked-out`, not a convenience.
+- **The two-engine sweep, through the conveniences,** completes unexpired at fuel 259.
+- **Line citations:** decision 9's `connection.sls:417` and `:428`, read at `0913468`, are now at
+  `:509` and `:520`.

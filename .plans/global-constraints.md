@@ -162,6 +162,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
   later return raises `&sqlite-transaction-ended`, never a second commit (ADR-0016,
   ADR-0017). A raise inside `call-with-c-string`'s procedure is caught inside it and
   raised after it, since `call-with-block` refuses a re-entry (ADR-0016).
+- **Every call of a convenience holds a flag of its own,** set once its statement leaves the call,
+  given back or finalized, and read first in every critical section that touches the
+  statement: the check-out's, a miss's prepare, each bind, step and read, and the return's.
+  With it set, the section touches nothing and the call raises `&sqlite-closed`. Chez's engine
+  remainders are multi-shot, and a timer's handler is the caller's code between any two
+  sections (ADR-0016, ADR-0020, amended in M3 slice 3).
 - **Every raise names the procedure the caller called:** M3's conveniences reach M2's statement
   verbs through internals that take a who (ADR-0013, decision 2; ADR-0014, amended).
 - **The statement cache holds only reset statements, prepared `SQLITE_PREPARE_PERSISTENT`,** at
@@ -172,8 +178,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   tracked ones (ADR-0020).
 - **`with-transaction` reads `sqlite3_get_autocommit`** to choose `BEGIN` or a savepoint, and again
   after its body, before any commit or rollback: whether a failure ended a transaction can't be
-  told from its code. It refuses to begin while its connection holds a row (ADR-0017; the M3
-  plan's Q14).
+  told from its code. It refuses to begin while a statement of its connection is at a row or
+  failed (ADR-0017, decision 1; the M3 plan's Q14).
 - **The settings are an allowlist, each value checked in Scheme before anything opens:** six of
   SQLite's, each set, then read back by a second statement and compared, `busy-timeout` first; and
   the library's own `statement-cache`, which SQLite never sees and nothing reads back. They run at

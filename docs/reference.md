@@ -4,6 +4,7 @@ Every name `(chez-sqlite3)` exports, one entry each. Import it with
 `(import (chez-sqlite3))`.
 
 - [Connections](#connections)
+- [Conveniences and counters](#conveniences-and-counters)
 - [Statements](#statements)
 - [Values](#values)
 - [The library](#the-library)
@@ -17,9 +18,11 @@ and `#f` is false. These names stand for:
 Database               a connection, made by open-database
 Statement              a prepared statement, made by prepare-statement
 Void                   no useful value
+Integer                an exact integer
 Natural                an exact integer, 0 or more
 Positive-Integer       an exact integer, 1 or more
 Value                  an exact integer, a flonum, a string, a bytevector or sql-null
+Row                    a vector of a row's values, in column order
 SqlNull                the one value sql-null
 Bytevector             a bytevector
 SqliteError            a condition that sqlite-error? holds
@@ -157,6 +160,234 @@ Whether the value is a connection, open or closed.
 ```scheme run
 (list (database? 'x) (call-with-database ":memory:" database?))
 ;; => (#f #t)
+```
+
+## Conveniences and counters
+
+The conveniences run SQL for you. Each prepares the statement, binds your
+values, steps it, reads what you asked for, and finishes the statement before
+it returns or raises. Most programs need nothing more than this section.
+
+The values after the SQL go to its parameters by position: the first to
+parameter 1, the next to 2, one value for each. A named parameter, such as
+`:a`, takes the value at its index. The count and every value are checked
+before any is bound, as `bind-all!` checks them.
+
+A row is a vector of its values, in column order, each read as
+`column-value` reads it.
+
+SQL that holds no statement, or more than one, is refused as
+`prepare-statement` refuses it; `execute-script!` is the one that runs
+several. Each connection keeps up to 32 statements, reset, to reuse when the
+same SQL comes again. Setting `foreign_keys` or `trusted_schema` makes each
+kept statement prepare itself again, once, at its next use.
+
+A raise always finishes the statement. Another way out, a timer's or a
+keyboard interrupt's handler that escapes, or an engine that runs out of fuel
+and is never resumed, can leave the statement on its row until the connection
+closes. Meanwhile an interrupt on the connection lasts, and if the statement
+writes, a `commit` is refused as busy. Close the connection to clear it.
+
+Each call runs once. Once it has given its statement back, going back into
+it, through a continuation, a timer's handler, or an engine resumed a second
+time, raises a condition that `sqlite-closed?` holds, and touches nothing.
+Going back into the library's own bookkeeping instead raises an assertion
+violation. A continuation taken before the call began makes a new call.
+
+### `execute!`
+
+```text
+execute! : Database String Value ... -> Void
+```
+
+Runs one statement to its end, with the values bound to its parameters, and
+gives nothing back. Any rows it answers are dropped, so a `pragma` that
+answers one runs too. `changes` says how many rows it changed.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (id, name)")
+    (execute! db "insert into t values (?, ?)" 1 "a")
+    (changes db)))
+;; => 1
+```
+
+### `query`
+
+```text
+query : Database String Value ... -> (Listof Row)
+```
+
+Every row the statement answers, in order, as a list of vectors: `()` when
+there is none.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (id, name)")
+    (execute! db "insert into t values (1, 'a'), (2, 'b')")
+    (query db "select id, name from t where id > ? order by id" 0)))
+;; => (#(1 "a") #(2 "b"))
+```
+
+### `query-row`
+
+```text
+query-row : Database String Value ... -> (U Row #f)
+```
+
+The first row, or `#f` when there is none. It never reads a second row.
+
+An `insert ... returning` of several rows, outside a transaction, commits
+only when `query-row` finishes the statement after the first row. If that
+commit fails, as it can while another connection is reading, it raises, and
+the insert is undone.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (list (query-row db "select 1, 2")
+          (query-row db "select 1 where 0"))))
+;; => (#(1 2) #f)
+```
+
+### `query-fold`
+
+```text
+query-fold : Database String (A Row -> A) A Value ... -> A
+```
+
+Calls the procedure on each row in turn as `(proc acc row)`, as `fold-left`
+does: `acc` starts as the value after the procedure, and each answer is the
+next `acc`. It gives the last answer, or the starting value when there is no
+row. A raise from the procedure reaches you unchanged.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (query-fold db "select 1 union all select 2 union all select 3"
+                (lambda (acc row) (+ acc (vector-ref row 0)))
+                0)))
+;; => 6
+```
+
+While the procedure runs, the statement is on its row, so the connection is
+reading. A write in the procedure fails at once as busy if another connection
+holds the write lock, where it would otherwise wait, and an interrupt lasts
+until the fold ends. When the procedure writes, run the fold inside a
+transaction begun with `begin immediate`, which takes the lock first.
+
+The statement is finished when the procedure returns, raises, or leaves
+through a continuation. A continuation that goes back into a finished fold
+raises a condition that `sqlite-closed?` holds, or an assertion violation, and
+never calls the procedure again.
+
+It does not survive an engine's preemption: an engine that runs out of fuel
+leaves the procedure, the statement is finished under it, and the resumed
+fold raises a closed condition. If finishing the statement fails as the engine
+runs out, as a write's `commit` can while another connection reads, the
+engine is lost: its caller gets Chez's own error, "no engine active". If you
+use engines, use the statement verbs.
+
+### `execute-script!`
+
+```text
+execute-script! : Database String -> Void
+```
+
+Runs every statement of the SQL in turn, each to its end, and gives nothing
+back. It takes no values, and drops any rows. Each statement is prepared only
+once the one before it has run. SQL with no statement in it, such as `""` or
+only a comment, does nothing.
+
+It stops at the first error and raises it. The statements before it stay
+done: it begins, commits and rolls back nothing of its own, so a script that
+fails after its own `begin` leaves that transaction open. The error's
+`sqlite-error-sql` is the whole script, and its `sqlite-error-offset` points
+at the token SQLite names, or else at the start of the statement that failed.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (guard (e ((sqlite-error? e) (list (sqlite-error-code e) (sqlite-error-offset e))))
+      (execute-script! db "create table t (x unique); insert into t values (1); insert into t values (1)"))))
+;; => (constraint 53)
+```
+
+A script that holds U+0000 is an assertion violation, and nothing runs. Its
+statements are never kept for reuse.
+
+It does not survive an engine's preemption: an engine that runs out of fuel
+inside it frees the script's copy, and its resume is refused. If you use
+engines, use the statement verbs.
+
+Going back into a script that has begun, through a continuation or an engine
+resumed a second time, never runs it again: it raises a condition that
+`sqlite-closed?` holds, or, inside the script, an assertion violation.
+
+### `changes`
+
+```text
+changes : Database -> Natural
+```
+
+How many rows the last `insert`, `update` or `delete` on this connection
+changed once it finished, not counting the rows its triggers or a foreign
+key's cascade changed. Other statements, such as `create table`, `select`,
+`pragma`, `begin` and `commit`, leave it as it was, so it can be an older
+statement's count. An `insert ... returning` counts only once it is
+finished. Another connection's writes never move it.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x)")
+    (execute! db "insert into t values (1), (2), (3)")
+    (execute! db "create index i on t (x)")
+    (list (changes db) (total-changes db) (last-insert-rowid db))))
+;; => (3 3 3)
+```
+
+### `total-changes`
+
+```text
+total-changes : Database -> Natural
+```
+
+Every row this connection's `insert`, `update` and `delete` statements have
+changed since it opened: its triggers' and cascades' rows too, and rows that
+were rolled back after.
+
+### `last-insert-rowid`
+
+```text
+last-insert-rowid : Database -> Integer
+```
+
+The rowid of the last row an `insert` on this connection added. It can name a
+row that is gone, one a failed statement or a `rollback` undid. An insert
+into a `without rowid` table, and an upsert's `do update`, leave it as it
+was. Another connection's inserts never move it.
+
+### `in-transaction?`
+
+```text
+in-transaction? : Database -> Boolean
+```
+
+Whether the connection is inside a transaction: `#t` from `begin`, before it
+has read anything too, until `commit` or `rollback`. A `select` running
+outside a transaction is reading, but that is no transaction: `#f`.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (let* ((before (in-transaction? db))
+           (inside (begin (execute! db "begin") (in-transaction? db)))
+           (after (begin (execute! db "commit") (in-transaction? db))))
+      (list before inside after))))
+;; => (#f #t #f)
 ```
 
 ## Statements

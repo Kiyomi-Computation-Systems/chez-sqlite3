@@ -1,0 +1,404 @@
+# M3 slice 3's probes, run 2026-11-16 in the Guix container on Chez 10.4.0, from the
+# repository's root: Guix's libsqlite3 3.53.1, and the floor's 3.45.1 through
+# CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH. The commands are in README.md.
+
+### p8-cost.sps, Guix 3.53.1, run 1
+P8: the conveniences' cost through the library
+SQLite 3.53.1; Chez Scheme Version 10.4.0
+
+Part 1. One SELECT of one row by its key, 5000 calls a sample, us a call
+the statement tier by hand:
+  a fresh statement each call            5.62 us  [5.50 to 5.72]
+  one held statement                     1.16 us  [1.15 to 1.23]
+execute!:
+  cached, capacity 32                    1.94 us  [1.92 to 1.99]
+  uncached, capacity 32, 64 SQL          7.99 us  [7.77 to 8.23]
+  off, capacity 0                        6.53 us  [6.50 to 6.63]
+query-row:
+  cached, capacity 32                    2.03 us  [2.01 to 2.08]
+  uncached, capacity 32, 64 SQL          8.19 us  [8.01 to 8.44]
+  off, capacity 0                        6.65 us  [6.65 to 7.07]
+query:
+  cached, capacity 32                    2.36 us  [2.31 to 2.48]
+  uncached, capacity 32, 64 SQL          8.47 us  [8.29 to 8.77]
+  off, capacity 0                        6.97 us  [6.93 to 7.34]
+query-fold:
+  cached, capacity 32                    2.65 us  [2.63 to 2.84]
+  uncached, capacity 32, 64 SQL          8.84 us  [8.75 to 9.03]
+  off, capacity 0                        7.34 us  [7.29 to 7.35]
+check: each answers v + 0 for k = 7: #(7) (#(7)) 7 7
+check: the caches hold 1, 32 and 0 statements, cached, uncached and off
+
+Part 2. A row of N small columns, read whole again and again, ns a value
+1 columns of 1 (100000 rows a sample), the readers agree: #t
+  a section a value                      378.6 ns a value  [371.2 to 394.4]
+  a section a row                        191.0 ns a value  [190.2 to 191.6]
+  query-row, cached, whole              1487.5 ns a value  [1465.4 to 1548.3]
+  a section a value costs 187.6 ns a value more
+10 columns of 1 (10000 rows a sample), the readers agree: #t
+  a section a value                      212.5 ns a value  [208.9 to 217.0]
+  a section a row                         49.0 ns a value  [48.9 to 49.4]
+  query-row, cached, whole               356.9 ns a value  [353.9 to 372.7]
+  a section a value costs 163.5 ns a value more
+100 columns of 1 (1000 rows a sample), the readers agree: #t
+  a section a value                      196.2 ns a value  [193.6 to 199.7]
+  a section a row                         32.9 ns a value  [32.5 to 33.3]
+  query-row, cached, whole               227.3 ns a value  [220.9 to 239.7]
+  a section a value costs 163.3 ns a value more
+1 columns of 'a' (100000 rows a sample), the readers agree: #t
+  a section a value                      448.7 ns a value  [444.1 to 462.1]
+  a section a row                        262.1 ns a value  [257.6 to 266.7]
+  query-row, cached, whole              1607.3 ns a value  [1591.4 to 1618.0]
+  a section a value costs 186.6 ns a value more
+10 columns of 'a' (10000 rows a sample), the readers agree: #t
+  a section a value                      285.7 ns a value  [280.8 to 290.7]
+  a section a row                        110.3 ns a value  [109.4 to 118.1]
+  query-row, cached, whole               446.4 ns a value  [443.7 to 463.8]
+  a section a value costs 175.5 ns a value more
+100 columns of 'a' (1000 rows a sample), the readers agree: #t
+  a section a value                      264.7 ns a value  [260.4 to 270.1]
+  a section a row                         93.7 ns a value  [93.6 to 93.8]
+  query-row, cached, whole               311.6 ns a value  [302.2 to 322.3]
+  a section a value costs 171.1 ns a value more
+
+A critical section alone, ns a section:
+  the loop alone 1.3 ns; with an empty critical-section 9.4 ns
+
+counts at the end: ((block . 0) (connection . 0) (statement . 0))
+(exit 0)
+### p8-cost.sps, Guix 3.53.1, run 2
+P8: the conveniences' cost through the library
+SQLite 3.53.1; Chez Scheme Version 10.4.0
+
+Part 1. One SELECT of one row by its key, 5000 calls a sample, us a call
+the statement tier by hand:
+  a fresh statement each call            5.77 us  [5.55 to 5.85]
+  one held statement                     1.20 us  [1.18 to 1.23]
+execute!:
+  cached, capacity 32                    1.92 us  [1.90 to 2.01]
+  uncached, capacity 32, 64 SQL          8.03 us  [7.82 to 8.36]
+  off, capacity 0                        6.70 us  [6.64 to 6.82]
+query-row:
+  cached, capacity 32                    2.10 us  [2.07 to 2.11]
+  uncached, capacity 32, 64 SQL          8.31 us  [8.13 to 9.10]
+  off, capacity 0                        6.61 us  [6.51 to 7.00]
+query:
+  cached, capacity 32                    2.33 us  [2.31 to 2.56]
+  uncached, capacity 32, 64 SQL          8.51 us  [8.25 to 8.74]
+  off, capacity 0                        7.11 us  [6.86 to 7.41]
+query-fold:
+  cached, capacity 32                    2.71 us  [2.62 to 2.85]
+  uncached, capacity 32, 64 SQL          8.98 us  [8.61 to 9.17]
+  off, capacity 0                        7.42 us  [7.19 to 7.61]
+check: each answers v + 0 for k = 7: #(7) (#(7)) 7 7
+check: the caches hold 1, 32 and 0 statements, cached, uncached and off
+
+Part 2. A row of N small columns, read whole again and again, ns a value
+1 columns of 1 (100000 rows a sample), the readers agree: #t
+  a section a value                      391.0 ns a value  [364.9 to 403.2]
+  a section a row                        192.5 ns a value  [188.3 to 195.9]
+  query-row, cached, whole              1441.7 ns a value  [1383.2 to 1564.5]
+  a section a value costs 198.5 ns a value more
+10 columns of 1 (10000 rows a sample), the readers agree: #t
+  a section a value                      199.3 ns a value  [198.6 to 202.5]
+  a section a row                         47.0 ns a value  [46.7 to 106.3]
+  query-row, cached, whole               332.3 ns a value  [331.1 to 344.0]
+  a section a value costs 152.3 ns a value more
+100 columns of 1 (1000 rows a sample), the readers agree: #t
+  a section a value                      183.6 ns a value  [182.8 to 186.7]
+  a section a row                         32.4 ns a value  [31.6 to 36.7]
+  query-row, cached, whole               221.3 ns a value  [212.8 to 225.2]
+  a section a value costs 151.3 ns a value more
+1 columns of 'a' (100000 rows a sample), the readers agree: #t
+  a section a value                      422.6 ns a value  [419.8 to 461.3]
+  a section a row                        254.8 ns a value  [253.3 to 259.5]
+  query-row, cached, whole              1561.7 ns a value  [1547.5 to 1574.5]
+  a section a value costs 167.8 ns a value more
+10 columns of 'a' (10000 rows a sample), the readers agree: #t
+  a section a value                      278.7 ns a value  [276.8 to 284.3]
+  a section a row                        109.4 ns a value  [109.2 to 111.1]
+  query-row, cached, whole               441.3 ns a value  [434.4 to 455.6]
+  a section a value costs 169.2 ns a value more
+100 columns of 'a' (1000 rows a sample), the readers agree: #t
+  a section a value                      258.6 ns a value  [258.2 to 268.7]
+  a section a row                         96.8 ns a value  [93.4 to 99.6]
+  query-row, cached, whole               303.4 ns a value  [302.1 to 306.9]
+  a section a value costs 161.8 ns a value more
+
+A critical section alone, ns a section:
+  the loop alone 1.2 ns; with an empty critical-section 8.7 ns
+
+counts at the end: ((block . 0) (connection . 0) (statement . 0))
+(exit 0)
+### p8-cost.sps, floor 3.45.1, run 1
+P8: the conveniences' cost through the library
+SQLite 3.45.1; Chez Scheme Version 10.4.0
+
+Part 1. One SELECT of one row by its key, 5000 calls a sample, us a call
+the statement tier by hand:
+  a fresh statement each call            5.64 us  [5.44 to 5.83]
+  one held statement                     1.14 us  [1.12 to 1.17]
+execute!:
+  cached, capacity 32                    2.02 us  [2.00 to 2.10]
+  uncached, capacity 32, 64 SQL          8.10 us  [8.04 to 8.43]
+  off, capacity 0                        6.70 us  [6.46 to 6.82]
+query-row:
+  cached, capacity 32                    2.12 us  [2.08 to 2.18]
+  uncached, capacity 32, 64 SQL          8.32 us  [8.19 to 8.42]
+  off, capacity 0                        6.82 us  [6.75 to 7.16]
+query:
+  cached, capacity 32                    2.40 us  [2.37 to 2.44]
+  uncached, capacity 32, 64 SQL          8.60 us  [8.51 to 8.83]
+  off, capacity 0                        7.10 us  [6.92 to 7.47]
+query-fold:
+  cached, capacity 32                    2.69 us  [2.68 to 2.85]
+  uncached, capacity 32, 64 SQL          8.93 us  [8.74 to 9.31]
+  off, capacity 0                        7.46 us  [7.43 to 7.53]
+check: each answers v + 0 for k = 7: #(7) (#(7)) 7 7
+check: the caches hold 1, 32 and 0 statements, cached, uncached and off
+
+Part 2. A row of N small columns, read whole again and again, ns a value
+1 columns of 1 (100000 rows a sample), the readers agree: #t
+  a section a value                      376.8 ns a value  [372.1 to 385.0]
+  a section a row                        191.3 ns a value  [190.5 to 192.0]
+  query-row, cached, whole              1462.5 ns a value  [1454.7 to 1470.6]
+  a section a value costs 185.5 ns a value more
+10 columns of 1 (10000 rows a sample), the readers agree: #t
+  a section a value                      206.8 ns a value  [204.3 to 223.3]
+  a section a row                         47.8 ns a value  [47.7 to 48.1]
+  query-row, cached, whole               351.8 ns a value  [350.7 to 356.3]
+  a section a value costs 159.0 ns a value more
+100 columns of 1 (1000 rows a sample), the readers agree: #t
+  a section a value                      194.6 ns a value  [192.6 to 198.7]
+  a section a row                         31.9 ns a value  [31.6 to 32.6]
+  query-row, cached, whole               226.5 ns a value  [225.4 to 228.7]
+  a section a value costs 162.6 ns a value more
+1 columns of 'a' (100000 rows a sample), the readers agree: #t
+  a section a value                      449.8 ns a value  [433.0 to 460.2]
+  a section a row                        261.1 ns a value  [254.8 to 275.3]
+  query-row, cached, whole              1590.8 ns a value  [1575.2 to 1613.7]
+  a section a value costs 188.7 ns a value more
+10 columns of 'a' (10000 rows a sample), the readers agree: #t
+  a section a value                      284.6 ns a value  [280.2 to 293.7]
+  a section a row                        107.9 ns a value  [107.7 to 115.0]
+  query-row, cached, whole               447.6 ns a value  [427.6 to 460.8]
+  a section a value costs 176.7 ns a value more
+100 columns of 'a' (1000 rows a sample), the readers agree: #t
+  a section a value                      263.2 ns a value  [261.9 to 264.0]
+  a section a row                         97.5 ns a value  [91.5 to 98.4]
+  query-row, cached, whole               310.1 ns a value  [303.1 to 322.0]
+  a section a value costs 165.6 ns a value more
+
+A critical section alone, ns a section:
+  the loop alone 1.2 ns; with an empty critical-section 9.1 ns
+
+counts at the end: ((block . 0) (connection . 0) (statement . 0))
+(exit 0)
+### p8-cost.sps, floor 3.45.1, run 2
+P8: the conveniences' cost through the library
+SQLite 3.45.1; Chez Scheme Version 10.4.0
+
+Part 1. One SELECT of one row by its key, 5000 calls a sample, us a call
+the statement tier by hand:
+  a fresh statement each call            5.63 us  [5.49 to 6.05]
+  one held statement                     1.13 us  [1.12 to 1.21]
+execute!:
+  cached, capacity 32                    1.98 us  [1.92 to 1.99]
+  uncached, capacity 32, 64 SQL          8.20 us  [7.95 to 8.52]
+  off, capacity 0                        6.75 us  [6.74 to 6.91]
+query-row:
+  cached, capacity 32                    2.05 us  [2.03 to 2.08]
+  uncached, capacity 32, 64 SQL          8.37 us  [7.98 to 8.66]
+  off, capacity 0                        6.88 us  [6.66 to 7.21]
+query:
+  cached, capacity 32                    2.26 us  [2.20 to 2.31]
+  uncached, capacity 32, 64 SQL          8.61 us  [8.33 to 8.87]
+  off, capacity 0                        7.28 us  [6.97 to 7.58]
+query-fold:
+  cached, capacity 32                    2.67 us  [2.62 to 2.82]
+  uncached, capacity 32, 64 SQL          9.06 us  [8.83 to 9.33]
+  off, capacity 0                        7.54 us  [7.35 to 7.58]
+check: each answers v + 0 for k = 7: #(7) (#(7)) 7 7
+check: the caches hold 1, 32 and 0 statements, cached, uncached and off
+
+Part 2. A row of N small columns, read whole again and again, ns a value
+1 columns of 1 (100000 rows a sample), the readers agree: #t
+  a section a value                      372.3 ns a value  [362.1 to 381.2]
+  a section a row                        192.8 ns a value  [191.6 to 203.6]
+  query-row, cached, whole              1455.2 ns a value  [1443.6 to 1476.6]
+  a section a value costs 179.5 ns a value more
+10 columns of 1 (10000 rows a sample), the readers agree: #t
+  a section a value                      212.7 ns a value  [207.6 to 215.1]
+  a section a row                         48.1 ns a value  [47.7 to 49.2]
+  query-row, cached, whole               352.4 ns a value  [349.4 to 358.7]
+  a section a value costs 164.5 ns a value more
+100 columns of 1 (1000 rows a sample), the readers agree: #t
+  a section a value                      194.6 ns a value  [189.1 to 196.1]
+  a section a row                         32.6 ns a value  [31.9 to 33.9]
+  query-row, cached, whole               227.6 ns a value  [225.2 to 233.9]
+  a section a value costs 162.0 ns a value more
+1 columns of 'a' (100000 rows a sample), the readers agree: #t
+  a section a value                      446.2 ns a value  [436.6 to 461.5]
+  a section a row                        261.4 ns a value  [259.6 to 268.9]
+  query-row, cached, whole              1593.5 ns a value  [1571.9 to 1651.0]
+  a section a value costs 184.8 ns a value more
+10 columns of 'a' (10000 rows a sample), the readers agree: #t
+  a section a value                      287.7 ns a value  [285.3 to 295.1]
+  a section a row                        109.7 ns a value  [109.2 to 112.5]
+  query-row, cached, whole               446.6 ns a value  [430.9 to 455.3]
+  a section a value costs 178.1 ns a value more
+100 columns of 'a' (1000 rows a sample), the readers agree: #t
+  a section a value                      266.2 ns a value  [264.9 to 268.0]
+  a section a row                         92.9 ns a value  [91.5 to 95.0]
+  query-row, cached, whole               307.0 ns a value  [301.5 to 315.4]
+  a section a value costs 173.3 ns a value more
+
+A critical section alone, ns a section:
+  the loop alone 1.3 ns; with an empty critical-section 9.1 ns
+
+counts at the end: ((block . 0) (connection . 0) (statement . 0))
+(exit 0)
+
+### lookaside-tails.sps, Guix 3.53.1
+version 3.53.1
+flags 0: lookaside before (0 0)
+flags 0: lookaside holding 10: (0 70)
+flags 0: after finalize: (0 0)
+flags 1: lookaside before (0 0)
+flags 1: lookaside holding 10: (0 0)
+flags 1: after finalize: (0 0)
+"": rc 0 stmt null tail 0 len 0
+";": rc 0 stmt null tail 1 len 1
+"select 1": rc 0 stmt stmt tail 8 len 8
+"select 1;": rc 0 stmt stmt tail 9 len 9
+"select 1; select 2": rc 0 stmt stmt tail 9 len 18
+" -- c": rc 0 stmt null tail 5 len 5
+";; select 2": rc 0 stmt stmt tail 11 len 11
+"select 1 -- c\n; x": rc 0 stmt stmt tail 15 len 17
+"select λ; select 2": rc 1 stmt null tail 10 len 19
+(exit 0)
+### lookaside-tails.sps, floor 3.45.1
+version 3.45.1
+flags 0: lookaside before (0 0)
+flags 0: lookaside holding 10: (0 70)
+flags 0: after finalize: (0 0)
+flags 1: lookaside before (0 0)
+flags 1: lookaside holding 10: (0 0)
+flags 1: after finalize: (0 0)
+"": rc 0 stmt null tail 0 len 0
+";": rc 0 stmt null tail 1 len 1
+"select 1": rc 0 stmt stmt tail 8 len 8
+"select 1;": rc 0 stmt stmt tail 9 len 9
+"select 1; select 2": rc 0 stmt stmt tail 9 len 18
+" -- c": rc 0 stmt null tail 5 len 5
+";; select 2": rc 0 stmt stmt tail 11 len 11
+"select 1 -- c\n; x": rc 0 stmt stmt tail 15 len 17
+"select λ; select 2": rc 1 stmt null tail 10 len 19
+(exit 0)
+### busy-reset.sps, Guix 3.53.1
+version 3.53.1
+after a stepped returning under a read: (reset 5 clear 0) then finalize-ok
+rows now: 1
+(exit 0)
+### busy-reset.sps, floor 3.45.1
+version 3.45.1
+after a stepped returning under a read: (reset 5 clear 0) then finalize-ok
+rows now: 1
+(exit 0)
+
+# Part B's probes, run again after the fix of the slice's review, on both libraries.
+### conveniences-answers.sps, Guix 3.53.1
+version "3.53.1" 
+#<void> 
+#<void> 
+#<void> 
+(#(1 "a") #(2 2.5)) 
+#(1 "a") 
+#f 
+(2 1) 
+(raised (sqlite-error execute! constraint constraint-unique "insert into t values (?, ?)" #f "UNIQUE constraint failed: t.x")) 
+(raised (av execute! (boolean 2 (kind boolean)))) 
+#(1) 
+(raised (sqlite-error query error error "select 1 union all select abs(-9223372036854775807 - 1)" #f "integer overflow")) 
+cache 5 ((block . 0) (connection . 1) (statement . 5)) (ready ready ready ready ready) 
+#<void> 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (40, 0); SELEKT 1; INSERT INTO t VALUES (41, 0);" 30 "near \"SELEKT\": syntax error")) 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (50, 0);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO t VALUES (51, 0);" 30 "no such table: nosuch")) 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (60, 0); SELECT abs(-9223372036854775807 - 1); INSERT INTO t VALUES (61, 0);" 30 "integer overflow")) 
+(raised (sqlite-error execute-script! error error "select 'λ'; selekt 1" 12 "near \"selekt\": syntax error")) 
+#<void> 
+#<void> 
+#<void> 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (70, 0); INSERT INTO t VALUES (" 30 "incomplete input")) 
+(#(1) #(2) #(10) #(11) #(40) #(50) #(60) #(70)) 
+cache 5 ((block . 0) (connection . 1) (statement . 5)) (ready ready ready ready ready) 
+(raised (closed execute-script!)) 
+end ((block . 0) (connection . 0) (statement . 0)) 
+### expiries-unpadded.sps, Guix 3.53.1
+979
+75
+499
+64
+### script-offset-and-returning.sps, Guix 3.53.1
+(error 36 "no such column: nosuchcol")
+(#(2))
+(constraint-unique #f "UNIQUE constraint failed: s.x")
+### section-ticks.sps, Guix 3.53.1
+(plain 1000 section 2 calls-plain 1100 calls-section 2)
+### lookaside-by-flags.sps, Guix 3.53.1
+(script (0 123))
+(script-twice (0 123))
+(prepared-at-0 (0 123))
+(prepared-at-persistent (0 0))
+(query-persistent (0 0))
+(query-at-capacity-0 (0 123))
+### conveniences-answers.sps, floor 3.45.1
+version "3.45.1" 
+#<void> 
+#<void> 
+#<void> 
+(#(1 "a") #(2 2.5)) 
+#(1 "a") 
+#f 
+(2 1) 
+(raised (sqlite-error execute! constraint constraint-unique "insert into t values (?, ?)" #f "UNIQUE constraint failed: t.x")) 
+(raised (av execute! (boolean 2 (kind boolean)))) 
+#(1) 
+(raised (sqlite-error query error error "select 1 union all select abs(-9223372036854775807 - 1)" #f "integer overflow")) 
+cache 5 ((block . 0) (connection . 1) (statement . 5)) (ready ready ready ready ready) 
+#<void> 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (40, 0); SELEKT 1; INSERT INTO t VALUES (41, 0);" 30 "near \"SELEKT\": syntax error")) 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (50, 0);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO t VALUES (51, 0);" 30 "no such table: nosuch")) 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (60, 0); SELECT abs(-9223372036854775807 - 1); INSERT INTO t VALUES (61, 0);" 30 "integer overflow")) 
+(raised (sqlite-error execute-script! error error "select 'λ'; selekt 1" 12 "near \"selekt\": syntax error")) 
+#<void> 
+#<void> 
+#<void> 
+(raised (sqlite-error execute-script! error error "INSERT INTO t VALUES (70, 0); INSERT INTO t VALUES (" 30 "incomplete input")) 
+(#(1) #(2) #(10) #(11) #(40) #(50) #(60) #(70)) 
+cache 5 ((block . 0) (connection . 1) (statement . 5)) (ready ready ready ready ready) 
+(raised (closed execute-script!)) 
+end ((block . 0) (connection . 0) (statement . 0)) 
+### expiries-unpadded.sps, floor 3.45.1
+979
+75
+499
+64
+### script-offset-and-returning.sps, floor 3.45.1
+(error 36 "no such column: nosuchcol")
+(#(2))
+(constraint-unique #f "UNIQUE constraint failed: s.x")
+### section-ticks.sps, floor 3.45.1
+(plain 1000 section 2 calls-plain 1100 calls-section 2)
+### lookaside-by-flags.sps, floor 3.45.1
+(script (0 123))
+(script-twice (0 123))
+(prepared-at-0 (0 123))
+(prepared-at-persistent (0 0))
+(query-persistent (0 0))
+(query-at-capacity-0 (0 123))
+
+== engine-twice.sps (Chez 10.4.0, no SQLite)
+first slice expired: #t count 9
+first resume: (completed done 2000)
+second resume of the same engine: (completed done 3991)

@@ -479,6 +479,42 @@
        (finalize-statement! named)
        (list a b c)))))
 
+;; M3's who-taking internals (the M3 plan, finding F11): a convenience reads
+;; and binds through them, so their NOMEM names the convenience.
+(define column-value/who (reach values-library 'column-value/who))
+(define column-bytevector/who (reach values-library 'column-bytevector/who))
+(define column-name/who (reach values-library 'column-name/who))
+(define bind!/who (reach values-library 'bind!/who))
+
+(define who-name "each NOMEM through M3's who-taking internals names the who it was given, the-convenience, and is raised after its section: column-value/who's, column-bytevector/who's, column-name/who's and bind!/who's reach a handler at depth 1, the read's statement failed")
+(available! who-name)
+(test-equal who-name
+  (list (list (at-depth-1 (sqlite-failure 'the-convenience 'nomem 'nomem "select ?1")) 'failed)
+        (list (at-depth-1 (sqlite-failure 'the-convenience 'nomem 'nomem "select ?1")) 'failed)
+        (at-depth-1 (sqlite-failure 'the-convenience 'nomem 'nomem (string-append "select 1 as " long-name)))
+        (at-depth-1 (sqlite-failure 'the-convenience 'nomem 'nomem "select ?1")))
+  (with-memory-db
+   (lambda (db)
+     (let* ((one (lambda (read)
+                   (let* ((st (prepare-statement db "select ?1"))
+                          (b (bind! st 1 big-text))
+                          (s (step! st))
+                          (r (under-limit (lambda () (handler-depth (lambda () (read 'the-convenience st 0))))))
+                          (state (statement-state st)))
+                     (finalize-statement! st)
+                     (list r state))))
+            (a (one column-value/who))
+            (b (one column-bytevector/who))
+            (named (prepare-statement db (string-append "select 1 as " long-name)))
+            (n16 (call-with-statement-handle 'test-statement-values-nomem named 'column-name
+                   (lambda (connection handle sql) (values #f (column-name16 handle 0)))))
+            (c (under-limit (lambda () (handler-depth (lambda () (column-name/who 'the-convenience named 0))))))
+            (f (finalize-statement! named))
+            (bound (prepare-statement db "select ?1"))
+            (d (under-limit (lambda () (handler-depth (lambda () (bind!/who 'the-convenience bound 1 big-text)))))))
+       (finalize-statement! bound)
+       (list a b c d)))))
+
 (test-equal "the heap limit is back at 0, and every count is zero at the end"
   (list 0 zero-counts)
   (list (guard (e (#t (list 'raised (describe e)))) (heap-limit -1)) (native-counts)))

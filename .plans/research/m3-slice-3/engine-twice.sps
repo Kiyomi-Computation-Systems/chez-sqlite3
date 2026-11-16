@@ -1,0 +1,10 @@
+(import (chezscheme))
+;; Can one engine, an expired computation's remainder, be invoked twice?
+(define count 0)
+(define e (make-engine (lambda () (let loop ((i 0)) (if (< i 2000) (begin (set! count (+ count 1)) (loop (+ i 1))) 'done)))))
+(define more (e 10 (lambda (left v) (list 'completed v)) (lambda (m) m)))
+(printf "first slice expired: ~s count ~s\n" (procedure? more) count)
+(define r1 (guard (c (#t (list 'raised (condition-message c)))) (more 100000 (lambda (left v) (list 'completed v count)) (lambda (m) 'expired))))
+(printf "first resume: ~s\n" r1)
+(define r2 (guard (c (#t (list 'raised (if (message-condition? c) (condition-message c) c)))) (more 100000 (lambda (left v) (list 'completed v count)) (lambda (m) 'expired))))
+(printf "second resume of the same engine: ~s\n" r2)

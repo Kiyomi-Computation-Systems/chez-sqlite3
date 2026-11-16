@@ -87,6 +87,21 @@ told in chez-curl's `.plans/traps.md`.
   amended; [research/m3-slice-1/](research/m3-slice-1/README.md)). (M3 slice 1 and its review,
   chez-sqlite3)
 
+- **An engine's remainder runs twice when resumed twice, and the caller's handlers run between
+  any two sections.** On Chez 10.4.0 an engine that expired after 9 of 2000 counts completed at
+  2000 when its remainder was resumed, and at 3991 when the same remainder was resumed again
+  ([research/m3-slice-3/](research/m3-slice-3/README.md), `engine-twice.sps`). A timer's,
+  keyboard's or collect request's handler is the caller's code, and can capture a continuation
+  wherever interrupts are on. M3 slice 3's review turned both into a statement handed out twice:
+  a second resume of `query`'s remainder stepped and refiled a statement another engine had
+  checked out since, and a finished `query-fold`, re-entered from its timer handler's
+  continuations, left 31 statements tracked and in no cache. A flag guarding a call is read in
+  every section that touches its resource (ADR-0016, amended in M3 slice 3). Two more for a row:
+  a continuation taken before the call's first expression makes a whole new call, with a flag of
+  its own; and one taken inside the caller's procedure finishes that call of the procedure when
+  re-entered, so a counter at the procedure's entry counts it twice. (M3 slice 3's review and
+  fixes, chez-sqlite3)
+
 - **Chez's `map` called its procedure from the end, in pairs.** On 10.4.0,
   `(map (lambda (i) (set! seen (cons i seen)) i) '(0 1 2 3 4 5))` in a program called it on 4,
   5, 2, 3, 0, 1, so over 0 to 31 the first call was on 30. A cache row that filled its table

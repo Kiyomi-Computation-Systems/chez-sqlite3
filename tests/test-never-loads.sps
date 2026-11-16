@@ -212,6 +212,7 @@
 (test-equal "the libraries under src/ that load libsqlite3, found from their imports: native, and each that imports a loader"
   (sorted '((chez-sqlite3)
             (chez-sqlite3 private connection)
+            (chez-sqlite3 private conveniences)
             (chez-sqlite3 private native)
             (chez-sqlite3 private report)
             (chez-sqlite3 private statement)
