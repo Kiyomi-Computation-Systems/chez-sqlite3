@@ -127,6 +127,12 @@
 * A thread a suite forks dies on a raise it does not catch, and a waiter with
   no bound then hangs the suite, naming no test. Make whatever a thread raises
   its answer, and bound every wait for one.
+* Under Valgrind a thread running C keeps the CPU, so a watchdog may never
+  run during the call it means to interrupt. Have it take SQLite's memory
+  mutex each round, so the owner blocks inside SQLite. Every call the owner
+  makes while the mutex may be held is `__collect_safe` or takes none of
+  SQLite's memory, or another thread's collection waits on it
+  (`.plans/traps.md`).
 * Whether a failure ended a transaction can't be told from its code or its
   SQL: the same NOMEM or FULL undid one statement or the whole transaction,
   by one function call. Read `sqlite3_get_autocommit` after it
@@ -135,7 +141,9 @@
   seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
   a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms,
   and under twice the timeout, so a retry in Scheme fails it
-  (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended).
+  (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended). A row that
+  reads the grain itself may time a shorter one, asserting only a bound
+  that holds on either grain.
 * A connection's own statement held at a row stops its writes from waiting:
   under another's write lock they answered BUSY at once, where without the
   held read they waited out a 1500 ms timeout. A row that waits on a lock

@@ -213,7 +213,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   record's mutex (ADR-0019).
 - **No busy handler and no retry in Scheme;** a busy wait ends at its timeout, interrupt or not.
   A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms, and under
-  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5).
+  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5). A row that reads the
+  wait's grain itself may time a shorter one, asserting only a bound that holds on either grain
+  (ADR-0019, amended in M3 slice 6).
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
   `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
 

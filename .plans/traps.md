@@ -150,6 +150,10 @@ told in chez-curl's `.plans/traps.md`.
   `(chez-sqlite3 private statement)` imports whole and defines its own of, so the export became
   `connection-outcome`. (M3 slice 5, chez-sqlite3)
 
+- **An unquoted vector literal is invalid syntax under `#!r6rs`.** Chez refused `(display #(1))`
+  as "invalid syntax #(1)" at expansion, so the whole program failed before its first line ran;
+  `'#(1)` read. Quote every vector literal in a suite or a probe. (M3 slice 6, chez-sqlite3)
+
 - **Chez's `map` called its procedure from the end, in pairs.** On 10.4.0,
   `(map (lambda (i) (set! seen (cons i seen)) i) '(0 1 2 3 4 5))` in a program called it on 4,
   5, 2, 3, 0, 1, so over 0 to 31 the first call was on 30. A cache row that filled its table
@@ -486,6 +490,24 @@ told in chez-curl's `.plans/traps.md`.
   suite passed 90 of 90, and with four reordered 91 of 91. A row now holds the list to the
   convention table, which `test-conventions` holds to native. (M2 slice 2's review, chez-sqlite3)
 
+- **A forked thread's uncaught raise removes the suite's whole temp directory.** A thread
+  inherits its parent's `base-exception-handler`, and `make-process-temp-directory` hooks that
+  handler to remove its directory when the process dies on a raise. So a thread that dies on a
+  raise runs the hook, and the main thread goes on without the directory. A probe printed
+  `(before #t)`, the raise, then `(after #f)`, and exited 0 (`thread-removes-dir.sps`). Under a
+  plant whose thread raised, every later row's open failed `cantopen`. M3 slice 6's suites make
+  every thread's raise its answer, and `test-contention` gives each row its own directory through
+  `call-with-temp-directory`. A fix in the testing library would remove the directory only on the
+  thread that made it. ([research/m3-slice-6/](research/m3-slice-6/README.md); M3 slice 6,
+  chez-sqlite3)
+
+- **A deferred transaction's write fails at once only after it has read.** With nothing read, its
+  first write waited out a 1500 ms busy timeout, 1501 to 1502 ms, then answered `busy`. After a
+  `select`, the same write answered `busy` in 0 ms. Each left the transaction open
+  (`deferred-first-write.sps`). SQLite calls the busy handler only while no read transaction is
+  open (concurrency B2). ADR-0017's consequence had dropped "after a read" (ADR-0017, amended in
+  M3 slice 6). (M3 slice 6, chez-sqlite3)
+
 - **A flag set by a blocked thread can't show that its call returned before a collection.** The
   blocked thread joins the collection before it runs its `set!`, so the flag read "still blocked"
   under every plain binding of M2 slice 3's four blocking calls, and only the time bound failed.
@@ -544,6 +566,22 @@ told in chez-curl's `.plans/traps.md`.
   answered "fair scheduling is not supported on this system". A deadline bounds the watchdog's
   life, and must never fail a row by itself: the latency is the scheduler's. (M3 slice 4's review,
   chez-sqlite3)
+  - **Against a prepare, a watchdog may not run at all.** Under Valgrind, a watchdog against a
+    prepare of 4 MB of comments stopped none of 15 prepares in M3 slice 6's runs, sending 0
+    interrupts in 14 of them. Plain, it stopped 8 of 9, in about 170 ms each.
+  - **A thread blocked on a mutex lets the others run.** So M3 slice 6's watchdog takes SQLite's
+    memory mutex, `SQLITE_MUTEX_STATIC_MEM`, sleeps 1 ms holding it, interrupts, then lets it
+    go. The owner's next allocation inside SQLite blocks, and the interrupt lands there: 3 of 3
+    prepares stopped in the first round, SQL chosen to allocate as it runs. It needs SQLite's
+    memory statistics on.
+  - **Every call the owner makes while the mutex may be held** is `__collect_safe` or takes none
+    of SQLite's memory. Otherwise the owner blocks in a plain call that another thread's
+    collection waits on.
+  - **A critical section around the hold breaks it:** the owner's collections then wait for the
+    section's end, which lets the mutex go.
+
+  ([research/m3-slice-6/](research/m3-slice-6/README.md); ADR-0019, amended in M3 slice 6.)
+  (M3 slice 6, chez-sqlite3)
 
 - **Deleting a stacked PR's base branch closes the PR on GitHub; it doesn't retarget it.** In M3's
   merge train, after #22 was squash-merged, `git push origin --delete m3-slice-1-core` closed #23,

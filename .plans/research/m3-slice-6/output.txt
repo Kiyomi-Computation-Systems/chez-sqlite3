@@ -1,0 +1,42 @@
+$ valgrind -q $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-6/prepare-gate.sps 4 0 3
+(prepared 3978 ms 0 sent)
+(prepared 3820 ms 0 sent)
+(prepared 3806 ms 0 sent)
+
+$ $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-6/prepare-gate.sps 4 0 3
+((raised interrupt) 167 ms 131808 sent)
+((raised interrupt) 172 ms 152707 sent)
+((raised interrupt) 170 ms 150102 sent)
+
+$ valgrind -q $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-6/prepare-mem.sps 300000 hold 3
+900015 chars
+((raised interrupt) 847 ms 1 rounds)
+((raised interrupt) 804 ms 1 rounds)
+((raised interrupt) 793 ms 1 rounds)
+
+$ $CHEZ --program .plans/research/m3-slice-6/section.sps
+1. collections before 1, at the section's end 1 (after allocating 105600000 bytes, trip 8388608), just after 2
+2. sleep 200 ms inside a section: slept after 200 ms
+3. with-mutex inside a section, another thread holding it 300 ms: acquired after 300 ms
+4. (collect-rendezvous) on main while the other sleeps 500 ms inside a section: returned after 501 ms; the section ended 501 ms after the collect began
+5. (collect-rendezvous) on main while the other spins 500 ms inside a section: returned after 500 ms; the section ended 500 ms after the collect began
+
+$ valgrind -q $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-6/p5-direct.sps
+==26== Invalid write of size 4
+==26==    at 0x50D6EF0: sqlite3_interrupt (in /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1)
+==26==  Address 0x4c61f78 is 408 bytes inside a block of size 840 free'd
+interrupted a freed connection
+
+$ $CHEZ --libdirs build/scheme-libs:src:tests --program .plans/research/m3-slice-6/deferred-first-write.sps
+(write-first ((busy busy) 1502) #t)
+(read-first ((busy busy) 0) #t)
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include $CHEZ --libdirs build/scheme-libs:src:tests --program .plans/research/m3-slice-6/deferred-first-write.sps
+(write-first ((busy busy) 1502) #t)
+(read-first ((busy busy) 0) #t)
+
+$ $CHEZ --libdirs build/scheme-libs:src:tests --program .plans/research/m3-slice-6/thread-removes-dir.sps
+(before #t)
+Exception occurred with non-condition value boom
+(after #f)
+

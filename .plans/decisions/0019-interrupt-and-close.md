@@ -7,7 +7,9 @@
   adversarial review: decision 2's flag on both paths a failed close takes, decision 8's held
   read, and a test of the exclusion that doesn't need the gate. Amended 2026-11-16 in M3 slice 5,
   and accepted by the maintainer that day: decision 11's upper bound, the maintainer's "Keep,
-  amend" ([amendment](#amendment-2026-11-16-a-waits-upper-bound-m3-slice-5)).
+  amend" ([amendment](#amendment-2026-11-16-a-waits-upper-bound-m3-slice-5)). Amended
+  2026-11-16 in M3 slice 6, proposed: the interrupt and contention as built, and probes P4 and P5
+  ([amendment](#amendment-2026-11-16-the-interrupt-and-contention-as-built-m3-slice-6)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `interrupt-database!`, the close's part in it, and the busy timeout
 - **Settles:** ADR-0010, decision 1: "M3's `sqlite3_interrupt` … M3 designs it with
@@ -185,3 +187,84 @@ adversarial review ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5
   waits 1000 ms for 1500 (concurrency B3's variant), under it too.
 - **A wait the other connection ends mid-wait is still asserted only as before its timeout's end**
   (slice-0 P3).
+
+## Amendment, 2026-11-16: the interrupt and contention, as built (M3 slice 6)
+
+Proposed in M3 slice 6, from its builders' reports and the lead's checks (the slice's
+[mutation log](../m3-slice-6-mutation-log.md), parts A and B;
+[research/m3-slice-6/](../research/m3-slice-6/README.md)).
+
+- **`interrupt-database!` lives in `(chez-sqlite3 private connection)`,** beside the record and
+  its handle. The handle's one accessor, `call-with-open-handle`, makes the owner check this verb
+  must not (ADR-0012, decision 2), so anywhere else it would need a second accessor.
+  - The handle is read inside the latch's call, holding its mutex, only while the flag is set.
+    The close clears the flag before it can clear the handle, so a set flag means a live handle.
+  - The verb answers nothing, and checks only that its argument is a database.
+- **Decision 2, as built:**
+  - the record holds slice 1's latch, made not interruptible;
+  - `connection-outcome`'s section sets the flag once the record exists;
+  - `close-connection` runs its work through `interrupt-latch-close!`, which clears the flag
+    before the first finalize;
+  - the flag is set again only after the two closes that leave the connection open: a statement
+    found untracked, and `sqlite3_close` refusing, busy beside an unfinished backup.
+- **A close that does close leaves the flag clear,** including one that then raises a finalize's
+  failure (M2's R1), and a second close. A mutant setting it again after either survived every row
+  until a row of each was added: the verb then handed `#f` to `sqlite3_interrupt`, which Chez
+  refuses, so it raised on a closed connection, against decision 4.
+- **Probe P5:** Valgrind does report an interrupt on a freed connection. A direct probe gave
+  "Invalid write of size 4 at sqlite3_interrupt", 408 bytes inside a freed block of 792 at the
+  floor and of 840 on 3.53.1. But the gate's race row can't see a missing exclusion:
+  - the plant, the flag's read made true, hands Chez `#f` once the close has cleared the handle,
+    and Chez refuses it before C;
+  - a plant that read the handle before the latch passed the race's 200 rounds with no error.
+
+  So, as the consequences foresaw, the gate's row sees nothing. The exclusion's failing tests are
+  `test-interrupt-database`'s rows inside the close, on one thread with no timing, and slice 1's
+  stand-in row, the one that fails a latch without its mutex.
+- **The race row runs 20 rounds.** Its plant fails at 1, but under the gate 1, 20 and 200 rounds
+  each cost 10 to 11 s, so 20 buys coverage at no cost.
+- **The suites' watchdog under the gate:** Valgrind runs one thread at a time, and a thread running
+  C keeps it.
+  - A watchdog against a prepare of 4 MB of comments stopped none of 15 prepares under Valgrind,
+    in the slice's runs, sending 0 interrupts in 14 of them. Plain, it stopped 8 of 9.
+  - So each round the suites' watchdog takes SQLite's memory mutex, `SQLITE_MUTEX_STATIC_MEM`,
+    sleeps 1 ms holding it, calls the verb, then lets the mutex go. The owner's call blocks at
+    its next allocation inside SQLite, and the interrupt lands there. Under Valgrind it stopped 3
+    of 3 prepares in its first round.
+  - It needs SQLite's memory statistics on, as both measured libraries keep them. Apple's 3.51.0
+    keeps none, so the maintainer's Mac run reads that row.
+  - Every call the owner makes while the watchdog may hold the mutex is `__collect_safe` or takes
+    none of SQLite's memory. Otherwise the owner could block in a plain call while another
+    thread's collection waits for it.
+  - The hold isn't a critical section: there, the owner's collections waited for the section's
+    end, which released the mutex, and the long prepare ran unstopped in all 4 gated runs.
+- **The long prepare is 3 MB of `select 1 in (1, 1, …)`,** a million and one items, not
+  comments. Each item makes an expression, and so an allocation, where comments make none. The
+  long step calls `randomblob` on each row, for the same reason.
+- **Measured,** alike on both libraries:
+  - the busy wait the interrupt doesn't stop ran 1502 ms plain, and 1509 to 1514 ms under the
+    gate;
+  - the three suites, `test-interrupt-database`, `-reach` and `-close`, took 10, 15 and 10 s under
+    the gate locally.
+- **The contention suite,** `test-contention`: two connections to one WAL file, each on its own
+  thread, under a 1500 ms busy timeout. Every wait for a thread is bounded, and whatever a thread
+  raises is its answer. Measured alike on both libraries:
+
+  | Row | What it holds | Plain | Under the gate |
+  |---|---|---|---|
+  | `BEGIN IMMEDIATE` under the other's write lock | waits, then `busy`, left in autocommit | 1502–1503 ms | 1512–1513 ms |
+  | the other commits 500 ms in | succeeds after the commit, before the timeout's end | 529–530 ms | 532–535 ms |
+  | from that commit to the return (slice-0 P3) | | 29–30 ms | 28–31 ms |
+  | a deferred read, then the other's commit | the write: `busy-snapshot` at once, the transaction open | 0 ms | 1 ms |
+  | a reader's snapshot while the other writes | the writer's steps, each at once | 0 ms | 0–1 ms |
+  | `with-transaction`'s default, `immediate` | the second waits for the first, then both commit; under `'deferred`, `busy-snapshot` | 529–530 ms | 532–533 ms |
+
+- **Decision 11's exception, for the grain itself:** one row, probe P4's, times a 250 ms timeout.
+  It asserts only that `busy` comes within 500 ms, which holds on either grain: a millisecond
+  build answers after 250 ms, and a whole-second build at once. It prints which. Every other
+  timed row keeps decision 11's 1500 ms floor and both bounds.
+- **Probe P4:** both measured libraries sleep in milliseconds. The grain row waited 251 ms plain
+  and 252 to 253 ms under the gate. CI's `main` lane, Ubuntu's 3.45.1, prints its own grain in
+  its log, and the maintainer's Mac run reads Apple's.
+- **The docs give each busy case's remedy** in `sqlite-busy?`'s entry (decision 9): `busy-snapshot`,
+  `locked`, and the four plain `busy`s, with which leave the transaction open.
