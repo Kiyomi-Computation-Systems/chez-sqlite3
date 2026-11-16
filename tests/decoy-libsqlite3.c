@@ -1,6 +1,7 @@
 /* tests/decoy-libsqlite3.c: a stand-in libsqlite3, for
- * tests/test-library-loading-decoys.sps and -real.sps only, through
- * tests/library-loading.sls. chez-sqlite3 itself compiles no C (ADR-0001).
+ * tests/test-library-loading-decoys.sps, -real.sps and -missing.sps only,
+ * through tests/library-loading.sls. chez-sqlite3 itself compiles no C
+ * (ADR-0001).
  *
  * The suite compiles this file at test time, once per build below, as a
  * shared object (-Wall -Werror -shared -fPIC), and points

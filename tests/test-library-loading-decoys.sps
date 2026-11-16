@@ -159,6 +159,17 @@
              decoy-parts)
         (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 
+;; The pattern, written out, so that it and the parts changed together, which
+;; the rows above pass, still fail: three of every five entries to the missing
+;; suite, which holds only missing-api rows, and one each to the decoys' and
+;; the real suite, which hold about 20 children of their own (ADR-0005,
+;; amended 2026-11-16).
+(test-equal "the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite"
+  '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
+    "test-library-loading-missing.sps" "test-library-loading-real.sps"
+    "test-library-loading-missing.sps")
+  deal-pattern)
+
 ;; this-part : (U (Pairof String (Listof String)) #f)
 ;; This suite's part, by its own file's name. The row below writes the name
 ;; out, so a suite copied from another, or a lookup that answers another

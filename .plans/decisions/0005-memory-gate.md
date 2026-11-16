@@ -547,7 +547,7 @@ M3 brings.
 
 By the maintainer's choice of 2026-11-16, "Split into thirds now", in M3 slice 2 (PR #23). It
 replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
-`test-library-loading-real`".
+`test-library-loading-real`", and the alternation ADR-0002's M3 amendment continues.
 
 - **Measured:** M3's five entry points brought the halves to these times under the gate on CI:
 
@@ -572,7 +572,7 @@ replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
     `deal-pattern` in `(library-loading)`. Positions 0, 2 and 4 go to `-missing`, 1 to
     `-decoys` and 3 to `-real`.
   - Of the 41 entry points, that is 25, 8 and 8, and 25, 28 and 28 children. Dealing by thirds
-    would have given 14, 34 and 34 children.
+    would have given 14, 34 and 33 children.
 - **The partition is held in each of the three suites,** so any one alone holds it:
   - the parts, merged in the convention table's order, are its names, each once;
   - each part is what the pattern deals it;
@@ -583,6 +583,10 @@ replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
   - the three took 155 s, 142 s and 140 s, 437 s in all against 430 s;
   - the 7 s more is the third suite's own setup;
   - the floor, 3.45.1, read the same to a second or two.
-- **A later entry point is dealt by the same pattern,** three of every five to `-missing`. A suite
-  the `SLOW` check names is split again in its slice, as before.
+- **A later entry point is dealt by the same pattern,** three of every five to `-missing`, so
+  `-missing` grows fastest and is the next to near the threshold: by the M2 slice 2 amendment's
+  arithmetic, after about 35 more entry points on the slowest runner seen. A suite the `SLOW`
+  check names is split again in its slice, as before.
+- **Each suite writes the pattern out in a row,** so a pattern and parts changed together, which
+  the merge and the dealing rows pass, still fail.
 

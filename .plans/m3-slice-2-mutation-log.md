@@ -346,7 +346,7 @@ in copies of `3e9a506` and of this tree, and the sorted lists compared. The old 
 | missing-api, `threadsafe`, `close`, `next_stmt`, `reset`, `bind_int64`, `column_name`, `column_blob`, `last_insert_rowid` | 8 (4 old decoys, 4 old real) | real |
 
 Builds compiled: decoys 8 + the control, marked, not-sqlite, lacks-rest and the three order builds
-(`open_v2`, `threadsafe`, `initialize`), 15 in all (`threadsafe` and `open_v2` are another part's);
+(`open_v2`, `threadsafe`, `initialize`), 15 in all (all three are other parts');
 real 8 + the control, 9; missing 25.
 
 ### The red runs
@@ -396,10 +396,43 @@ for its own scratch directory, its compiles and its setup. The cost is 5.1 to 5.
 (155/28, 142/28, 140/25). On the slow CI runner (319 s before) the largest would be near 220 s of the 450.
 `make test` passes on both libraries with all three suites named.
 
+## The split's review
+
+An Opus review, read-only, of the split's commit (`d6c58d0`) found that nothing held the pattern
+itself. The dealing row reads the pattern from the same file that holds the parts. So a pattern
+and parts changed together passed every row:
+- **E:** a pattern of three, missing, decoys and real, with the parts re-dealt by it. These are
+  the 14, 34 and 33 children the maintainer's choice of a pattern of five avoids.
+- **F:** a pattern of one, everything to missing.
+
+Each suite now writes the pattern out in a row, as the alternation row wrote out its parity.
+
+| Mutation | missing | decoys | real | Caught by |
+|---|---|---|---|---|
+| E, before the row (the review's run) | pass | pass | pass | nothing |
+| E, after it | 1 fail | 1 fail | 1 fail | the pattern row only |
+
+E was run outside the gate, the three suites from inside its copy, in the container (Guix 3.53.1).
+
+**The review's other mutants,** all caught by the merge, dealing or files rows:
+- C, `entries-dealt` counting from 1;
+- D, its `reverse` dropped;
+- G, the pattern lengthened to six with the parts kept;
+- J, the table gaining an entry no part holds;
+- M, the pattern naming a suite that isn't a part;
+- H, the decoys suite copied over `-missing`;
+- I1, a copy of `-missing` under another name, which fails as unlisted;
+- I2, real renamed;
+- L, every child of `-missing` run without `gated-command`: 25 rows fail on `(valgrind . no)`.
+
+It also found `initialize` missing from the build count above, now corrected. And it found the
+three suites' rows kept, by name and expected value: 108 rows before, 116 after.
+
 ## Findings
 
-- **The alternation is held now:** before this slice nothing held that each half is the entries at
-  its parity; the partition row keeps a swap.
+- **The dealing is held now:** before this slice nothing held that each half was the entries at
+  its parity, and the partition row passed a swap. Since the split, each suite's dealing row and
+  its pattern row hold it.
 - **`test-native` reads `(void)` for a `void` result:** the only way to see a `void` binding made
   `int` by behaviour.
 - **A first run of the floor's gate cost 266 s and 241 s,** 50 s above its rerun and above the
