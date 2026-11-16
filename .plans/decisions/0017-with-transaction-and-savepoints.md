@@ -12,6 +12,10 @@
   accepted by the maintainer that day: the flags read inside the section of the step they guard, the
   savepoints' N, and the engine row's bound
   ([amendment](#amendment-2026-11-15-the-flags-read-where-the-step-is-taken-m3-slice-1)).
+  Amended 2026-11-16 in M3 slice 3, and accepted by the maintainer that day: a failed commit's
+  rollback tried once, and N following the calls' extents, the maintainer's choices that day
+  ("Once", "Reuse N"); the context's `failed` and NOMEM bullets narrowed
+  ([amendment](#amendment-2026-11-16-a-failed-commits-rollback-and-the-savepoints-n-m3-slice-3)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
 - **Settles:** brief §4's "`with-transaction` with nested savepoints, and rollback on a raise"
@@ -281,3 +285,61 @@ connection ([research/m3-slice-1/](../research/m3-slice-1/README.md), `tx-toctou
   expiring,** not to 60, at the outer level and nested, and asserts at every fuel that the call
   commits once or raises `&sqlite-transaction-ended`, and never steps a `COMMIT`, `RELEASE` or
   rollback after `ended` is set. A mutant that checks `ended` outside the step's section fails it.
+
+## Amendment, 2026-11-16: a failed commit's rollback, and the savepoints' N (M3 slice 3)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 3, from M3 slice 4's
+groundwork in M2's session, which ran its probes on 3.53.1 and 3.45.1. M3's session checked the
+outputs this amendment cites. The second and third bullets are the maintainer's choices, 2026-11-16
+("Once", "Reuse N"). The probes, `levels.c` and `failed-active.c`, land with M3 slice 4's research.
+
+- **A second way a failed commit's rollback fails.** At a nested level, with the connection's own
+  `INSERT … RETURNING` held at a row:
+  - `RELEASE chez_sqlite3_1` answered 5, "cannot release savepoint - SQL statements in progress";
+  - by decision 6, `ROLLBACK TO chez_sqlite3_1` answered 101;
+  - the rollback's own `RELEASE` answered 5 again, so the savepoint stayed open, rolled back to
+    its start;
+  - the caller's outer `COMMIT` then answered 5 too, and only its `ROLLBACK` ended the
+    transaction.
+
+  Decision 6 named only the sticky interrupt.
+- **A failed commit's rollback is tried once ("Once").** `ended` is set in the section of the
+  rollback's last step, the `ROLLBACK`, or the `RELEASE` after `ROLLBACK TO`, whatever that step
+  answered. So the critical after thunk issues nothing more, and the commit's failure is raised.
+  - By slice 1's amendment `ended` was set only when the rollback completed. The after thunk
+    would then have rolled back a second time, and failed the same way: here, and after slice 0's
+    P7, the sticky interrupt.
+  - A retry can't succeed: the row that refused the first attempt is still held.
+  - What stays open, `in-transaction?` tells at the outer level. At a nested level the level's
+    writes are undone once its `ROLLBACK TO` has succeeded.
+- **Decision 3's N follows `with-transaction`'s own extents ("Reuse N").** It drops when the call
+  exits, whatever SQLite kept. A sibling at the same depth issues `SAVEPOINT chez_sqlite3_N`
+  above a savepoint left open so. SQLite's `ROLLBACK TO` and `RELEASE` reach the most recent
+  savepoint of a name (S9), so the sibling acts only on its own. The one left open ends with its
+  transaction.
+- **The context's `failed` bullet is narrowed: "after an interrupt a prepare answered 9" held only
+  while another statement held a row** (concurrency I4b).
+  - An interrupted statement alone, after a first step or a later one, read `sqlite3_stmt_busy` 0,
+    and the next prepare answered 0 (`failed-active.c`, F3 to F5).
+  - With another statement still at a row, the prepare answered 9 (F6).
+  - The step that answered BUSY read `stmt_busy` 1, but held no read: a `BEGIN IMMEDIATE` beside
+    it waited out its 1500 ms timeout (F2).
+  - Only the statement a column read's NOMEM failed answered 5 at once (F1).
+
+  Decision 1's refusal of `failed` stands. The statement a column read's NOMEM failed still held a
+  read (F1), and a failed statement wants `reset!` anyway (the M3 plan's §4.2).
+- **"A column read's NOMEM ends it at the reset or finalize after it" holds for a statement that
+  reads a table** (single txn-special G2, G3). One reading no table, as `select ?1`, kept the
+  transaction open through the reset and the finalize alike (G4, G5).
+- **M3's records' "single T1", "T6", "T7" and "T12" are `traps.c`'s sections,** "single traps T1"
+  as the context's "(txn X1, T1)" means it. `txn.c` numbers sections T1 to T7 of its own, so its
+  T1 to T7 collide: ADR-0016's and `traps.md`'s "T7", `last_insert_rowid` after rolled-back rows,
+  is `traps.c`'s.
+
+- **Line citations,** read at `0913468`, now stand elsewhere, M3 slice 3 having grown both files:
+  `connection.sls:478–520` at `:606–648`, `connection.sls:470–473` at about `:598–601`, and
+  `statement.sls:437–438` at `:595–596`.
+- **For slice 4:** `with-transaction`'s own statements go through `checked-out`, whose check is
+  the call's flag (ADR-0016, amended in M3 slice 3). Whether `ended` is passed as that check, so a
+  second resume of its remainder touches none of its statements, is slice 4's to decide, with a
+  row.

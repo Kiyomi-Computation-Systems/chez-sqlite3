@@ -15,6 +15,9 @@
   ([amendment](#amendment-2026-11-15-what-m2-slice-3-measured-and-built)). Amended 2026-11-15, and
   accepted by the maintainer that day: the cache's and the script runner's prepares (M3's plan,
   [amendment](#amendment-2026-11-15-the-caches-and-the-script-runners-prepares-m3s-plan)).
+  Amended 2026-11-16 in M3 slice 3, and accepted by the maintainer that day: the internals as
+  built, the script's prepare, and the call's check
+  ([amendment](#amendment-2026-11-16-the-internals-m3-slice-3-built)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -379,3 +382,43 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   at a row, its `BEGIN IMMEDIATE` and an autocommit INSERT answered BUSY at once under another's
   write lock, where without the held read they waited out a 1500 ms timeout, in WAL and
   rollback-journal mode alike (slice 0's research, P12).
+
+## Amendment, 2026-11-16: the internals M3 slice 3 built
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 3, from its builders'
+reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-3/README.md)).
+
+- **The verbs take a who, as built.**
+  - `statement.sls` exports `step!/who`, `reset!/who` and `column-count/who`, beside `prepared`
+    and `finalized`, which took one already.
+  - `statement-values.sls` exports `bind!/who`, `bind-all!/who`, `clear-bindings!/who`,
+    `column-value/who`, `column-bytevector/who` and `column-name/who`.
+  - M2's verbs are wrappers that pass their own names.
+  - `bind-each!/who` is M3's own, for the M3 plan's Q15:
+    - it reads the parameter count in a section of its own;
+    - it checks every value in Scheme;
+    - then it binds one value a section, checking the index again in each.
+- **The script runner's prepare is `prepared-at`.**
+  - **What it takes:** it prepares from byte START of a C string that the caller holds through
+    `call-with-c-string`, with flags 0 or `SQLITE_PREPARE_PERSISTENT`.
+  - **What it answers, as data:** the statement and its tail; no statement, and the tail; or the
+    failure's extended code, its message and SQLite's raw offset.
+  - **Its statement's SQL** is the text SQLite compiled, START to the tail, decoded strictly.
+  - **What M3's plan amendment's "decision 4's checks, its out-parameters and its section are the
+    same" still holds:** the out-parameters and the section. The checks are its own: the who, the
+    flags, the call's check, the owner, the SQL as `checked-sql` made it, and the start. The C
+    string's extent is the caller's, as [ADR-0016](0016-the-conveniences-and-the-counters.md)'s
+    decision 7 has it.
+- **The cache's check-out and return are `checked-out` and `returned`.**
+  - `returned` resets, clears and files the statement in one accessor section, and finalizes
+    there a statement that failed, or whose reset or clear failed
+    ([ADR-0020](0020-the-statement-cache.md), amended).
+  - Every internal a convenience calls takes the call's check, `#f` for none: `checked-out`'s
+    fifth argument, `prepared-at`'s ninth, `bind-each!/who`'s fourth, and `while-held` around the
+    rest. Each reads the check first in its own section (ADR-0016, amended in M3 slice 3).
+- **Measured on 3.53.1 and 3.45.1 alike:**
+  - after a reset's own BUSY, from an `insert … returning` stepped once under another's read,
+    `sqlite3_clear_bindings` answered 0, `sqlite3_finalize` 0, and the insert was rolled back
+    (`busy-reset.sps`);
+  - ten held statements took 70 lookaside slots with no flags, and none with `PERSISTENT`
+    (`lookaside-tails.sps`).

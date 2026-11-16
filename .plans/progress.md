@@ -29,16 +29,20 @@ newest first.
 - **The maintainer accepted ADR-0016 to ADR-0020** on 2026-11-15, with the M3 plan's Q1 to Q15
   settled, and the plan's amendments to the older records (its §10), applied in M3 slice 0, the
   same day ("Accept all"); and M3 slice 1's amendments to ADR-0016, ADR-0017, ADR-0018 and
-  ADR-0020, the same day ("Accept all").
+  ADR-0020, the same day ("Accept all"); and M3 slice 3's amendments to ADR-0014, ADR-0016,
+  ADR-0017 and ADR-0020, on 2026-11-16 ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
 - **M3 slice 1 is done:** the pure core, as PR #22, `d91ae72`, squash-merged with CI passing in
   every job.
-- **Now: M3 slice 2, the bindings, is PR #23 on `m3-slice-2-bindings`,** built beside slice 1 by
-  the M2 session, rebased onto `d91ae72` and merged in turn (the maintainer, 2026-11-16: "Run all
-  four", slices 1 to 4 in order). The maintainer's
+- **M3 slice 2 is done:** the bindings, as PR #23, `599a43d`, built beside slice 1 by the M2
+  session, squash-merged with CI passing in every job.
+- **Now: M3 slice 3, the conveniences, the counters and the cache, is PR #24 on
+  `m3-slice-3-conveniences`,** rebased onto `599a43d` and merged in turn (the maintainer,
+  2026-11-16: "Run all four", slices 1 to 4 in order). Then slice 4, transactions, PR #25, by the
+  M2 session, and slice 5, the settings, PR #26, by the M3 session. The maintainer's
   order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
@@ -83,11 +87,86 @@ newest first.
     - so what CI can't reach held on the Mac: `sqlite3_bind_text64`'s `unsigned-8` on Apple's
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
-- **Open:** the M3 plan's probes P4, P5, P6 and P8, each in the slice it names (its §7, §8).
+- **Open:** the M3 plan's probes P4 and P5, in slice 6 (its §7, §8). P6 and P8 ran in M3 slice 3.
   Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
   (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-16 — M3 slice 3: the conveniences, the counters and the cache (PR #24)
+
+- **Built** on slices 1 and 2, stacked on slice 2's `0913468`, by three builders in turn:
+  - **Part A,** in M2's `statement.sls`, `statement-values.sls` and `connection.sls`:
+    - the internals that take a who, M2's verbs made wrappers over them;
+    - the script's prepare with flags and its tail, `prepared-at`;
+    - the cache in the connection record, its check-out and return each in one section, and a
+      private opener of a given capacity;
+    - the counters `changes`, `total-changes`, `last-insert-rowid` and `in-transaction?`;
+  - **Part B,** `(chez-sqlite3 private conveniences)`: `execute!`, `query`, `query-row`,
+    `query-fold` and `execute-script!`, with their who, re-entry, cache, counter and engine rows;
+  - **Part C:** §4.8's plants for the slice, P8, and the nine public names with their
+    `docs/reference.md` entries.
+- **Decided by the maintainer** (2026-11-16):
+  - every convenience's call guarded by a flag of its own, read in every section that touches its
+    statement ("Guard every call"; ADR-0016 and ADR-0020, amended);
+  - one section a value kept, after P8 measured its cost ("Keep one value each"; the plan's Q15);
+  - for slice 4, from its groundwork in the M2 session: a failed commit's rollback tried once
+    ("Once"), and a savepoint's N following the calls' extents ("Reuse N"; ADR-0017, amended).
+- **Watched failing:** each suite red against a stub first. Part A ran 87 mutations, all caught;
+  part B 63, 59 caught; part C 21 plants, all caught; the fixes 36, 31 caught. Every survivor is
+  argued in [the log](m3-slice-3-mutation-log.md). The lead's own mutants, seven across the
+  parts and the fixes, were each caught by named rows.
+- **Reviewed** (Opus, read-only), every finding reproduced before it was fixed:
+  - **A statement could be handed out twice.** Chez's engine remainders are multi-shot, and a
+    timer's handler can capture a continuation between any two sections. A second resume of
+    `query`'s remainder stepped and refiled a statement another engine had checked out since.
+    Fixed by the flag on every call.
+  - **`query-fold`'s flag guarded neither its check-out nor its binds:** 93 re-entries of a
+    finished fold, from its timer handler's continuations, left 31 statements tracked and in no
+    cache. Fixed by the same flag.
+  - **A survivor's argument was false:** the fold's read in the step's section isn't redundant,
+    since a timer handler runs between the read after the procedure and the next step. A timer
+    row now kills it.
+  - **The docs promised a closed condition where the engine can be lost,** when the fold's finish
+    fails during an expiry. The docs now say so.
+  - **Minors:** an unreached branch of `code-number`, an engine row that didn't print its fuel,
+    a docs claim about `trusted_schema` that no row held, and part B's probes left git-ignored.
+    Each is fixed.
+- **Measured:**
+  - P6: each convenience completes under an engine at every fuel, first unexpired at 84 to 640;
+  - P8: a cache hit saves 4.5 to 5.0 µs a call; a section a value costs 150 to 200 ns a value
+    more than one a row ([research/m3-slice-3/](research/m3-slice-3/README.md)).
+- **Records,** accepted by the maintainer on 2026-11-16 ("Accept all"):
+  - ADR-0014, ADR-0016, ADR-0017 and ADR-0020 amended;
+  - the plan's §1, §4.2, §4.6, §4.7, §4.8, §5 item 4, §8 and §9;
+  - a constraint each on the conveniences' flag and `with-transaction`'s refusal;
+  - an AGENTS.md rule and a trap, on multi-shot remainders and handlers between sections.
+
+  From slice 4's groundwork, by the M2 session and checked here against its outputs:
+  - a failed commit's second way to fail;
+  - the `failed` evidence and a column read's NOMEM narrowed;
+  - the T-numbered citations;
+  - the heap limits lifted hard then soft, a trap slice 4 records.
+- **CI:** CI_PENDING
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder, part A | Opus | about 554k | 160 | 44 min |
+  | Builder, part B | Opus | about 559k | 121 | 50 min |
+  | Builder, part C | Opus | about 436k | 116 | 31 min |
+  | Adversarial review | Opus | about 438k | 112 | 27 min |
+  | The review's fixes | Opus | about 538k | 140 | 53 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A remainder runs twice when resumed twice, and a timer's handler is the caller's code between
+    any two sections. A flag that guards only around the caller's procedure guards nothing there.
+  - A survivor called redundant by an argument that names the only way in is wrong whenever
+    there is another way in. Try to break each argument with a schedule.
+  - Splitting one large part into two kept each builder's scope narrow, and the third read the
+    second's code fresh.
+  - A tick-count row compares whole calls: a longer SQL's scan alone cleared the threshold, until
+    the SQL was padded to one length.
 
 ### 2026-11-16 — M3 slice 2: the bindings (PR #23)
 
@@ -254,7 +333,8 @@ newest first.
     sweep's bound;
   - five traps.
 - **CI:** passed in all five jobs on `7e5f40c`, before the review's fixes; `memory` took 22m45s,
-  against 22m04s on `main` at `3e2460b`.
+  against 22m04s on `main` at `3e2460b`. It passed in all five again on `0505ff5`, the final
+  commit (run 43783755123), `memory` taking 23m03s.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

@@ -13,7 +13,10 @@
   plan's Q15), from M2's closing review. Amended 2026-11-15 in M3 slice 1, and accepted by the
   maintainer that day: a script's offset when SQLite gives none, the maintainer's "Point at the
   statement", and the engine rows' bound
-  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)). Amended 2026-11-16 in M3 slice 3,
+  and accepted by the maintainer that day: the guard on every call, the maintainer's "Guard
+  every call"; Q15 kept, "Keep one value each"; the engine rows' fuels and P8's cost
+  ([amendment](#amendment-2026-11-16-what-m3-slice-3-built-and-measured)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -288,3 +291,100 @@ reports and its adversarial review. The first bullet's choice is the maintainer'
   expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
   and found its one window at fuels 138 to 174, past 60, and a convenience through the cache can lie
   past 60 too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).
+
+## Amendment, 2026-11-16: what M3 slice 3 built and measured
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 3, from its builders'
+reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-3/README.md); the
+slice's [mutation log](../m3-slice-3-mutation-log.md)). The second bullet's choice and the last's
+are the maintainer's, 2026-11-16 ("Guard every call", "Keep one value each").
+
+- **The conveniences live in `(chez-sqlite3 private conveniences)`,** which loads libsqlite3.
+  `execute!`, `query` and `query-row` share one helper, as built:
+  - it holds no `dynamic-wind`;
+  - a raise in its work is caught, the statement given back with any failure of that return
+    dropped, and the same object raised again;
+  - on a normal return, the return's own failure raises.
+- **Every call is guarded by a flag of its own** ("Guard every call").
+  - **The review found two holes.**
+    - Chez's engine remainders are multi-shot: one remainder, resumed twice, ran twice from the
+      same point (`engine-twice.sps`). A timer's, a keyboard's or a collect request's handler is
+      the caller's code too: it runs between any two critical sections, and can capture a
+      continuation there.
+    - So a second resume of one remainder stepped and refiled a statement that the first resume
+      had given back, while another engine held it. The other engine's resume was then refused.
+    - And a finished fold, re-entered from its timer handler's continuations, checked out or
+      prepared again before its flag was read: 93 re-entries left 31 statements tracked and in no
+      cache.
+    - Decision 6's "nothing but its convenience steps a checked-out statement" took more than
+      guarding the caller's procedure.
+  - **The flag:**
+    - each call of the five conveniences holds one, set once its statement leaves the call,
+      given back or finalized;
+    - every critical section that touches the call's statement reads it first: the check-out's,
+      before the table is read; a miss's prepare, before it prepares; each bind, step and column
+      read; and the return's, which sets it;
+    - `query-fold`'s critical after thunk reads and sets it, and `execute-script!`'s first prepare
+      marks its own;
+    - with it set, the section touches nothing, and the convenience raises `&sqlite-closed` after
+      the section.
+  - **What it doesn't cover:**
+    - a re-entry inside the library's own winds, `call-with-open-handle`'s or `call-with-block`'s,
+      is refused there first, as an assertion violation `re-entered`;
+    - a remainder taken before a call's first expression makes a whole new call, with a flag of
+      its own;
+    - an expiry past the fold's last step, before its return, finalizes the statement, and the
+      resume answers the fold.
+
+    `docs/reference.md` says so.
+  - **What it costs:** each read is a section, about 8 ns (P8, below). The engine rows' fuels
+    fell by about half, since the accessor's checks now run inside the flag's section, where an
+    engine spends no ticks.
+- **Decision 6's flag reads:**
+  - The fold's read inside the step's section isn't redundant. A timer handler runs between the
+    read after the procedure and the next step: with it dropped, a timer row called the
+    procedure 66 times against 18 and left 30 statements at a row.
+  - The read after the procedure is redundant with the next step's, and is kept.
+- **The lost engine:** when the fold's finish fails during an engine's expiry, as an
+  `insert … returning` held under another's read makes it, the plain after thunk raises inside
+  the engine. The engine's caller then gets Chez's "no engine active", as decision 6 says, and
+  `docs/reference.md` now says it too.
+- **Decision 7, as built:**
+  - each statement of the script is finished in a critical wind of its own, finalized on every
+    way out;
+  - a step's failure is taken from `step!/who`'s raise, its extended code mapped back to its
+    number (`code-number`), and rebuilt;
+  - an empty script still prepares once, so a closed connection is refused.
+  - **"Encoded once … copied once" is corrected:** the script is copied twice, by `checked-sql`
+    and by `call-with-c-string`, once a script, never once a statement.
+- **P6, the engine rows, done.** Each call first completes unexpired at these fuels, alike within
+  two on both libraries:
+
+  | Call | Fuel |
+  |---|---|
+  | `execute!` | 84 |
+  | `query` | 156 |
+  | `query-row` | 104 |
+  | `query-fold` | 113 |
+  | an abandoned `query` | 119 |
+  | `execute-script!` | 640 |
+  | two engines on one connection | 259 |
+  | each remainder resumed twice | 101 to 156; the script's, 640 |
+- **P8, done** (`p8-cost.sps`), measured before the guard, alike on both libraries:
+  - a cache hit saves 4.5 to 5.0 µs a call against capacity 0, 63% to 71% of it;
+  - a miss at capacity 32 costs 1.3 to 1.7 µs more than capacity 0;
+  - a section a value costs 150 to 200 ns a value more than a section a row, about three
+    quarters of `query-row`'s time for 100 small integers. An empty section is about 8 ns of
+    that; the rest is each value's checks.
+  - The maintainer kept one section a value ("Keep one value each"): Q15's answer stands.
+- **Line citations,** read at `0913468`, the slice's base, now stand elsewhere:
+
+  | Cited | Now |
+  |---|---|
+  | `statement.sls:444–477` | `:602–635` |
+  | `statement.sls:437–438` | `:595–596` |
+  | `statement.sls:436` | `:594` |
+  | `statement.sls:382–388` | `:427–433` |
+  | `connection.sls:465–470` | `:593–598` |
+
+  They move with any later change; the code's names are the lasting reference.

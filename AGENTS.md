@@ -166,6 +166,13 @@
   by an expiry: read a flag inside the section of the step it guards, and
   sweep an engine row's fuel until the call completes without expiring,
   not to a fixed bound (`.plans/traps.md`).
+* An engine's remainder can be resumed twice, and runs twice from the same
+  point; a timer's, a keyboard's or a collect request's handler is the
+  caller's code, run between any two critical sections, and can capture a
+  continuation there. So a flag that guards a call is read in every
+  section that touches the call's resource, not only around the caller's
+  procedure, and a row tells a whole new call, from a continuation taken
+  before the call began, from a re-entry (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,
