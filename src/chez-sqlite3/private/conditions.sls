@@ -19,6 +19,16 @@
 ;;;     &sqlite-read-only          readonly
 ;;;   &sqlite-invalid-text         TEXT that is not well-formed UTF-8 (ADR-0015)
 ;;;
+;;; M3 adds a fourth class, and two more members under the root (ADR-0013,
+;;; amended for M3):
+;;;
+;;;   &sqlite-error
+;;;     &sqlite-interrupt          interrupt (ADR-0019)
+;;;   &sqlite-setting-mismatch     a setting read back differs from the value
+;;;                                written (ADR-0018)
+;;;   &sqlite-transaction-ended    a body returned after its transaction ended
+;;;                                under it (ADR-0017)
+;;;
 ;;; A raise may compound one with &who, &message and &irritants, so that the
 ;;; default handler prints readable text. Tests assert the reason symbol and
 ;;; the fields, never that text.
@@ -51,6 +61,13 @@
           &sqlite-read-only sqlite-read-only? sqlite-error-subtype
           &sqlite-invalid-text make-sqlite-invalid-text sqlite-invalid-text?
           sqlite-invalid-text-column sqlite-invalid-text-offset raise-invalid-text
+
+          &sqlite-interrupt sqlite-interrupt?
+          &sqlite-setting-mismatch make-sqlite-setting-mismatch sqlite-setting-mismatch?
+          sqlite-setting-mismatch-setting sqlite-setting-mismatch-expected
+          sqlite-setting-mismatch-actual raise-setting-mismatch
+          &sqlite-transaction-ended make-sqlite-transaction-ended sqlite-transaction-ended?
+          raise-transaction-ended
 
           kind-of shown-value checked-accessor)
   (import (chez-sqlite3 private require-threaded)
@@ -260,17 +277,25 @@
   (define-condition-type &sqlite-read-only &sqlite-error
     unchecked-make-sqlite-read-only sqlite-read-only?)
 
-  ;; sqlite-error-subtype : Any -> (U 'busy 'constraint 'read-only #f)
+  ;; sqlite-interrupt? : Any -> Boolean
+  ;; M3's class: a statement another thread's interrupt-database! stopped
+  ;; (ADR-0019, decision 6).
+  (define-condition-type &sqlite-interrupt &sqlite-error
+    unchecked-make-sqlite-interrupt sqlite-interrupt?)
+
+  ;; sqlite-error-subtype : Any -> (U 'busy 'constraint 'read-only 'interrupt #f)
   ;; The class of an &sqlite-error whose primary code's name is CODE, its
   ;; `code` field: busy and locked are 'busy, constraint is 'constraint,
-  ;; readonly is 'read-only. Any other value is #f: another symbol, an
-  ;; extended code's name such as busy-snapshot, an integer, a non-symbol.
-  ;; Total: it raises nothing, for it runs where nothing may raise.
+  ;; readonly is 'read-only, interrupt is 'interrupt. Any other value is #f:
+  ;; another symbol, an extended code's name such as busy-snapshot, an
+  ;; integer, a non-symbol. Total: it raises nothing, for it runs where
+  ;; nothing may raise.
   (define (sqlite-error-subtype code)
     (case code
       ((busy locked) 'busy)
       ((constraint) 'constraint)
       ((readonly) 'read-only)
+      ((interrupt) 'interrupt)
       (else #f)))
 
   ;; exact-integer? : Any -> Boolean
@@ -308,6 +333,7 @@
                   ((busy) unchecked-make-sqlite-busy)
                   ((constraint) unchecked-make-sqlite-constraint)
                   ((read-only) unchecked-make-sqlite-read-only)
+                  ((interrupt) unchecked-make-sqlite-interrupt)
                   (else unchecked-make-sqlite-error))))
       (make code extended-code message sql offset)))
 
@@ -432,9 +458,77 @@
     (raise (condition (make-sqlite-closed) (make-who-condition who)
                       (make-message-condition "the connection or statement is closed"))))
 
+  ;; --- &sqlite-setting-mismatch (ADR-0018; ADR-0013, amended for M3) ---------------
+  ;;
+  ;;   setting   the setting's name, a symbol, as the settings list names it
+  ;;   expected  the value asked for, as a Scheme value
+  ;;   actual    the value read back, as a Scheme value
+  ;;
+  ;; Under the root, not under &sqlite-error: SQLite answered SQLITE_OK
+  ;; throughout, and the read-back differed.
+  (define-condition-type &sqlite-setting-mismatch &chez-sqlite3-error
+    unchecked-make-sqlite-setting-mismatch sqlite-setting-mismatch?
+    (setting unchecked-sqlite-setting-mismatch-setting)
+    (expected unchecked-sqlite-setting-mismatch-expected)
+    (actual unchecked-sqlite-setting-mismatch-actual))
+
+  ;; sqlite-setting-mismatch-setting : &sqlite-setting-mismatch -> Symbol
+  (define sqlite-setting-mismatch-setting
+    (checked-accessor 'sqlite-setting-mismatch-setting sqlite-setting-mismatch?
+                      "an &sqlite-setting-mismatch" unchecked-sqlite-setting-mismatch-setting))
+  ;; sqlite-setting-mismatch-expected : &sqlite-setting-mismatch -> Any
+  (define sqlite-setting-mismatch-expected
+    (checked-accessor 'sqlite-setting-mismatch-expected sqlite-setting-mismatch?
+                      "an &sqlite-setting-mismatch" unchecked-sqlite-setting-mismatch-expected))
+  ;; sqlite-setting-mismatch-actual : &sqlite-setting-mismatch -> Any
+  (define sqlite-setting-mismatch-actual
+    (checked-accessor 'sqlite-setting-mismatch-actual sqlite-setting-mismatch?
+                      "an &sqlite-setting-mismatch" unchecked-sqlite-setting-mismatch-actual))
+
+  ;; make-sqlite-setting-mismatch : Symbol Any Any -> &sqlite-setting-mismatch
+  ;; SETTING checked, a symbol, by refuse-field. EXPECTED and ACTUAL are any
+  ;; values, kept as given. Which symbols name a setting is the settings
+  ;; list's to say, not this constructor's.
+  (define (make-sqlite-setting-mismatch setting expected actual)
+    (unless (symbol? setting)
+      (refuse-field 'make-sqlite-setting-mismatch 'setting "a symbol" setting))
+    (unchecked-make-sqlite-setting-mismatch setting expected actual))
+
+  ;; raise-setting-mismatch : Symbol Symbol Any Any -> Nothing
+  ;; An &sqlite-setting-mismatch of SETTING, EXPECTED and ACTUAL, compounded
+  ;; with &who WHO and a fixed &message. A WHO that is no symbol is an
+  ;; assertion violation from raise-setting-mismatch, checked first; a SETTING
+  ;; the constructor refuses, one from it.
+  (define (raise-setting-mismatch who setting expected actual)
+    (check-raise-who 'raise-setting-mismatch who)
+    (let ((c (make-sqlite-setting-mismatch setting expected actual)))
+      (raise (condition c (make-who-condition who)
+                        (make-message-condition
+                         "a setting read back differs from the value written")))))
+
+  ;; --- &sqlite-transaction-ended (ADR-0017; ADR-0013, amended for M3) ---------------
+
+  ;; make-sqlite-transaction-ended : -> &sqlite-transaction-ended
+  ;; sqlite-transaction-ended? : Any -> Boolean
+  (define-condition-type &sqlite-transaction-ended &chez-sqlite3-error
+    make-sqlite-transaction-ended sqlite-transaction-ended?)
+
+  ;; raise-transaction-ended : Symbol -> Nothing
+  ;; An &sqlite-transaction-ended, compounded with &who WHO and a fixed
+  ;; &message. A WHO that is no symbol is an assertion violation from
+  ;; raise-transaction-ended.
+  (define (raise-transaction-ended who)
+    (check-raise-who 'raise-transaction-ended who)
+    (raise (condition (make-sqlite-transaction-ended) (make-who-condition who)
+                      (make-message-condition
+                       "the body returned after its transaction had ended under it"))))
+
   ;; sqlite-busy? : Any -> Boolean
   ;; sqlite-constraint? : Any -> Boolean
   ;; sqlite-read-only? : Any -> Boolean
+  ;; sqlite-interrupt? : Any -> Boolean
+  ;; sqlite-setting-mismatch? : Any -> Boolean
+  ;; sqlite-transaction-ended? : Any -> Boolean
   ;; sqlite-invalid-text? : Any -> Boolean
   ;; sqlite-invalid-text-column : &sqlite-invalid-text -> Natural
   ;; sqlite-invalid-text-offset : &sqlite-invalid-text -> Natural
