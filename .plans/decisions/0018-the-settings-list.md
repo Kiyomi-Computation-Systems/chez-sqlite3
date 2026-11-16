@@ -5,7 +5,10 @@
   seventh, `statement-cache`, "32, configurable" (Q11); decision 7's in-memory journal mode,
   "Mismatch, raise" (Q9); decision 8's busy timeout, "None, SQLite's 0" (Q10).
   `statement-cache`'s largest value, 1024, is the maintainer's too, "Cap at 1024" (Q13).
-  Decision 5's waits are measured by slice 0's research (P2, P3, P14).
+  Decision 5's waits are measured by slice 0's research (P2, P3, P14). Amended 2026-11-15 in M3
+  slice 1, and accepted by the maintainer that day: what the settings argument is, the rules' names
+  and order, a read-back with no row, and the readers' values
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -163,3 +166,34 @@
   says so.
 - **`docs/reference.md` lists each setting,** its values, and that SQLite would have coerced or
   ignored what the list refuses.
+
+## Amendment, 2026-11-15: what M3 slice 1 settled
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 1, from its builders'
+reports and its adversarial review (`(chez-sqlite3 private settings)`).
+
+- **The settings list is any pair or `()` among open's arguments.** `()` is an empty list, so
+  `(open-database f '())`, which M2 refused as `unknown-option ()`, is accepted once slice 5 wires
+  the list, and `docs/reference.md` says so. A list of options, `'(read-only)`, is refused as
+  `not-an-association-list`. Strings, numbers and booleans stay options, and stay `unknown-option`.
+- **Decision 2's rules are named** `second-settings-list`, `not-an-association-list`,
+  `unknown-setting`, `setting-given-twice` and `setting-out-of-domain`, each the irritants' first
+  symbol. One domain rule covers every setting, its irritants the name and the value as
+  `shown-value` shows it. The list's shape is checked whole first, then each entry left to right:
+  its name, then a repeat, then its domain. A bad option against a bad setting is M3 slice 5's to
+  order, and to test.
+- **Decision 4's read-back is a row's value or no row.** No row is a mismatch, its actual `'()`,
+  nothing read: builds that leave out the flag or pager PRAGMAs (`SQLITE_OMIT_FLAG_PRAGMAS`,
+  `SQLITE_OMIT_FOREIGN_KEY`, `SQLITE_OMIT_PAGER_PRAGMAS`) answer none, by SQLite's pragma table,
+  not measured. Without the rule a no-row read of `foreign-keys` set to `#f` matched (the slice's
+  review).
+- **The readers' values:** `journal-mode` reads its TEXT as a symbol, so on `:memory:` the actual
+  is `memory`; an INTEGER outside a setting's table is the actual as read, as `synchronous`'s 4
+  would be; `#t` and `#f` read from 1 and 0.
+- **The allowlist's complement:** the floor's pragma table (`aPragmaName` in 3.45.1's amalgamation,
+  78 names) and sqlite.org/pragma.html (74, read 2026-11-15) differ by six names. Slice 1's suite
+  refuses their union.
+- **Every engine row of M3 sweeps fuel from 1 until a fuel at which the call completes without
+  expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
+  and found its one window at fuels 138 to 174, past 60, and an open with settings can lie past 60
+  too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).

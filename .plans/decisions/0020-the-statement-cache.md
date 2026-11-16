@@ -6,7 +6,9 @@
   fixed. Its largest value, 1024, is the maintainer's too, "Cap at 1024" (Q13). Decision 8 is
   settled by slice 0's research (P1). Revised the same day after the plan's adversarial review:
   decisions 5, 7 and 9, for a return into a full cache, a reset's failure, the section, and a close
-  that fails.
+  that fails. Amended 2026-11-15 in M3 slice 1, and accepted by the maintainer that day: the table
+  keyed by `string=?`, a statement returned twice, and the engine row's bound
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
 - **Settles:** brief D3 (the maintainer, 2026-11-14: in M3), and its leaning, "bounded and cleared
@@ -161,3 +163,23 @@ Measured on Guix's 3.53.1 and at the floor, 3.45.1, alike but for sizes (M3's re
   through a planted untracked statement, then runs a convenience on the still-open connection.
 - **A held statement re-prepares at its next step after a schema change,** as any prepared
   statement does, and `query` reads its columns after the step (ADR-0016, decision 3).
+
+## Amendment, 2026-11-15: what M3 slice 1 settled
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 1, from its
+adversarial review (`(chez-sqlite3 private statement-cache)`).
+
+- **The table is keyed by `string-hash` and `string=?`,** decision 1's exact text. The plan's §5
+  had asked for opaque keys, and the first build matched them by `equal?`. The review showed a
+  record key running its type's own hash and equality procedures inside the section, and raising
+  there. The caller passes its copy of the SQL, checked to be a string before the section.
+- **A return of the very statement already held under its key** answers nothing to finalize, and
+  the table keeps it where it stood. A different statement returned under a held key is the one
+  finalized, by decision 6.
+- **A finalized statement is a miss** (decision 9) is checked by the caller, slice 3, in the
+  section that checks out or returns, from the statement's own state: the table calls nothing of
+  its caller's.
+- **Every engine row of M3 sweeps fuel from 1 until a fuel at which the call completes without
+  expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
+  and found its one window at fuels 138 to 174, past 60, and two engines' conveniences through the
+  cache can lie past 60 too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).

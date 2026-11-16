@@ -10,7 +10,10 @@
   Revised again after the plan's second review: decision 6's fold, for a re-entry after a normal
   return, its flag as M3's own, and its raise record over the whole body; decision 7's errors,
   rebuilt with the script. Decision 3's section per value is the maintainer's "One value each" (the
-  plan's Q15), from M2's closing review.
+  plan's Q15), from M2's closing review. Amended 2026-11-15 in M3 slice 1, and accepted by the
+  maintainer that day: a script's offset when SQLite gives none, the maintainer's "Point at the
+  statement", and the engine rows' bound
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -267,3 +270,21 @@
   engines takes the statement tier, as ADR-0012's amendment has it take `open-database`.
 - **A script's statements run one by one, each in its own transaction unless the script holds
   one,** as SQLite runs them. A caller who wants it atomic wraps it in `with-transaction`.
+
+## Amendment, 2026-11-15: what M3 slice 1 settled
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 1, from its builders'
+reports and its adversarial review. The first bullet's choice is the maintainer's, 2026-11-15
+("Point at the statement").
+
+- **Decision 7's "SQLite's −1 gives `#f`" is replaced.** A prepare's error with no offset, SQLite's
+  −1, as "no such table" and "incomplete input" answer (M3's research, single script X6, X8),
+  points at the failing statement's first token, past the whitespace, comments and semicolons
+  before it, by ADR-0014's scan: the answer a step's error gets. So every `&sqlite-error`
+  `execute-script!` raises says which statement failed, as decision 7 and ADR-0013's M3 amendment
+  promise. A single statement's prepare, M2's, still gives `#f` for −1 (ADR-0013, amended for
+  M2). `(chez-sqlite3 private script)`'s `script-prepare-offset` answers so.
+- **Every engine row of M3 sweeps fuel from 1 until a fuel at which the call completes without
+  expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
+  and found its one window at fuels 138 to 174, past 60, and a convenience through the cache can lie
+  past 60 too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).

@@ -72,6 +72,27 @@ told in chez-curl's `.plans/traps.md`.
   whose before thunks do nothing, gave the caller's condition (the plan's review, on Chez
   10.4.0). (M3's plan, chez-sqlite3)
 
+- **An engine's expiry inside `with-mutex` lets the mutex go, and a check in one section can be
+  undone before the act in the next.** On Chez 10.4.0 an expiry runs `dynamic-wind`'s after
+  thunks, `with-mutex`'s release among them, and the resume runs the before thunks again: a probe
+  found the mutex free from another thread while the engine was suspended. So `with-mutex` alone
+  doesn't keep a flag's check and the call it guards together, and M3 slice 1's interrupt latch
+  holds both inside one `critical-section` as well. The same split undid a plan: modelled over
+  slice 1's transaction plan, an expiry between `with-transaction`'s autocommit read and its
+  `COMMIT`'s step ran the after thunk's rollback, and the resumed body stepped the `COMMIT` it had
+  planned. At a nested level, with another engine's savepoint at the same depth, the resumed
+  `RELEASE` released that one, and the call answered as committed. The window was at fuels 138
+  to 174, past the plan's sweep of 1 to 60. A flag that guards a step is read in that step's
+  section, and an engine row sweeps fuel until the call completes without expiring (ADR-0017,
+  amended; [research/m3-slice-1/](research/m3-slice-1/README.md)). (M3 slice 1 and its review,
+  chez-sqlite3)
+
+- **Chez's `map` called its procedure from the end, in pairs.** On 10.4.0,
+  `(map (lambda (i) (set! seen (cons i seen)) i) '(0 1 2 3 4 5))` in a program called it on 4,
+  5, 2, 3, 0, 1, so over 0 to 31 the first call was on 30. A cache row that filled its table
+  through `map` evicted `select 30` instead of `select 0`. AGENTS.md's rule already forbade the
+  assumption; this is the order it measured. (M3 slice 1, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -209,6 +230,12 @@ told in chez-curl's `.plans/traps.md`.
   even one that changes nothing: `foreign_keys = 1`, `= 0` and `= off`, and `trusted_schema = 0`
   and `= 1`, each made a held statement re-prepare at its next step. No read form of the six
   settings did, nor a set of the other four (slice-0 P13, P13b). (M3's research, chez-sqlite3)
+
+- **SQLite's list of PRAGMAs and its documentation's differ.** The floor's `aPragmaName`, in
+  3.45.1's amalgamation, holds 78 names, and sqlite.org/pragma.html, read 2026-11-15, lists 74:
+  the table adds `activate_extensions`, `lock_proxy_file`, `lock_status`, `sql_trace` and
+  `vdbe_eqp`, and the page adds `legacy_file_format`. A complement taken from one of them misses
+  names in the other; M3 slice 1's settings suite refuses their union. (M3 slice 1, chez-sqlite3)
 
 ## Checks and environment
 
@@ -381,6 +408,18 @@ told in chez-curl's `.plans/traps.md`.
   one 409.3 s run that the suite stays whole, and #19's own run took 562.2 s, 38 s from the
   timeout. Read a cost from several runs, and let `make test-memory`'s `SLOW` check hold the
   limit. (M2's closing review, chez-sqlite3)
+
+- **`make check-suites` reads a suite's data as forms.** A quoted list holding `(exit return 0)`,
+  a tag in a suite's own event log, was refused as an exit before the suite's verdict, and so was
+  a `case` clause `((exit) …)`. The check reads every datum by its shape, as it must to see an
+  exit anywhere; name such a tag something else. (M3 slice 1, chez-sqlite3)
+
+- **A two-thread row whose mutant shows only inside a bounded wait passes that mutant when a
+  thread is late.** M3 slice 1's interrupt row caught six mutants of the latch only if the closer
+  reached the close's work within the stand-in's 200 ms wait: with a 1 s sleep put in the closer
+  before its close, the mutant without the mutex passed. The fix starts the bounded wait only
+  after the other thread has noted that it is about to act, so the window holds no thread's
+  wake-up. (M3 slice 1's review, chez-sqlite3)
 
 ## Editing the records
 
