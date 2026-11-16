@@ -39,10 +39,11 @@ newest first.
   every job.
 - **M3 slice 2 is done:** the bindings, as PR #23, `599a43d`, built beside slice 1 by the M2
   session, squash-merged with CI passing in every job.
-- **Now: M3 slice 3, the conveniences, the counters and the cache, is PR #24 on
-  `m3-slice-3-conveniences`,** rebased onto `599a43d` and merged in turn (the maintainer,
-  2026-11-16: "Run all four", slices 1 to 4 in order). Then slice 4, transactions, PR #25, by the
-  M2 session, and slice 5, the settings, PR #26, by the M3 session. The maintainer's
+- **M3 slice 3 is done:** the conveniences, the counters and the cache, as PR #24, `f496cf5`,
+  squash-merged with CI passing in every job.
+- **Now: M3 slice 4, transactions, is PR #25 on `m3-slice-4-transactions`,** by the M2 session,
+  rebased onto `f496cf5` and merged in turn (the maintainer, 2026-11-16: "Run all four", slices 1
+  to 4 in order). Then slice 5, the settings, PR #26, by the M3 session, rebased onto it. The maintainer's
   order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
@@ -93,7 +94,7 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-16 — M3 slice 4: transactions (PR PR_PENDING)
+### 2026-11-16 — M3 slice 4: transactions (PR #25)
 
 - **Built** by the M2 session, stacked on slice 3's `9deda02`, from the M3 session's brief once
   slice 3 was final (the maintainer's order of 2026-11-15):
@@ -171,7 +172,12 @@ newest first.
   - ADR-0017's amendment, "`with-transaction` as built";
   - four traps: the hard heap limit lifted alone; a run count blind to a step that failed at
     entry; a lost engine; and a watchdog under Valgrind.
-- **CI:** CI_PENDING
+- **CI:** run 43941964004 on `052c130`: all five jobs passed, and `memory` took 31m22s, against
+  slice 3's 27m01s. Under the gate, on a runner where `test-check-ci` took 85 s:
+  - the slowest was `test-library-loading-decoys`, at 176 s of 450;
+  - `test-transaction-interrupt` took 149 s, against 71 to 109 s locally: the watchdog's latency
+    is Valgrind's scheduling, so this suite's time is the one to read again on a slower runner;
+  - `test-transaction-engine` took 64 s, and the other transaction suites 9 to 20 s.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
