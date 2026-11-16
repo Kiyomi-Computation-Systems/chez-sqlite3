@@ -1090,8 +1090,9 @@
 ;; pending-trial at every F from 1 until the call completes unexpired, and G
 ;; from 1 by pending-stride until R completes within G: the (F G deviation ...) of the trials
 ;; that deviated. Prints the trials made, each with R1 existing; fewer than
-;; ten a fuel, or any other collapse of the sweep, is itself a deviation,
-;; the sweep having reached nothing. A count fixed in trials broke when part
+;; ten a fuel on average, or any other collapse of the whole sweep, is
+;; itself a deviation, the sweep having reached nothing. An average: a
+;; collapse over a stretch of fuels can pass it. A count fixed in trials broke when part
 ;; D made the call cheaper: 647 at every fourth G.
 (define (pending nested?)
   (let floop ((f 1) (found '()) (trials 0))
@@ -1110,7 +1111,7 @@
               ((>= g 1000) (floop (+ f 1) (cons (list f g 'r-never-completed) found) trials))
               (else (gloop (+ g pending-stride) (if (null? r) found (cons (cons f (cons g r)) found)) (+ trials 1))))))))
 
-(test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel"
+(test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel on average"
   '(() ())
   (list (pending #f) (pending #t)))
 

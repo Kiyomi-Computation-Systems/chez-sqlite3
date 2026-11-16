@@ -735,8 +735,8 @@
 
   ;; reported : Symbol Sweep Natural Natural -> (List Any Any Counts)
   ;; RUN's deviations, summarized; whether its interleaved trials past the
-  ;; call's first section reached PAST a fuel, and those both past it BOTH a
-  ;; fuel, of the fuels up to the one at which the call completes, and its
+  ;; call's first section reached PAST a fuel on average, and those both past
+  ;; it BOTH, over the fuels up to the one at which the call completes, and its
   ;; control made every whole new call below the fuel at which the refused
   ;; call completes: a second resume of the same call that ran again would
   ;; look like one to the control; and the counts once it was done. Its fuels and counts printed, naming VERB. A

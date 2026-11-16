@@ -61,7 +61,7 @@
         (newline)))))
 
 ;; past-a-fuel, both-a-fuel : Natural
-;; The fewest trials a fuel, of the fuels up to the one at which the call
+;; The fewest trials a fuel on average, over the fuels up to the one at which the call
 ;; completes, that interleave past the call's first section, and that are
 ;; both past it, for a sweep that reaches anything: a sweep that reused one
 ;; R across every G makes at most one a fuel. None is both past it: every
@@ -89,7 +89,7 @@
   (guard (e (#t (list 'raised (describe e))))
     (clean-call 'execute-script!)))
 
-(test-equal "execute-script!'s remainder R, taken at every odd fuel from 1 until the call completes without expiring, the even fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel interleave past the call's first section, none both past it, every section of the script lying inside its block"
+(test-equal "execute-script!'s remainder R, taken at every odd fuel from 1 until the call completes without expiring, the even fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block"
   (list '() 'interleavings-reached zero-counts)
   (guard (e (#t (list 'raised (describe e))))
     (reported 'execute-script! (sweep 'execute-script! 'odd) past-a-fuel both-a-fuel)))

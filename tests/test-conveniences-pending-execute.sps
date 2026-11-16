@@ -51,7 +51,7 @@
         (newline)))))
 
 ;; past-a-fuel, both-a-fuel : Natural
-;; The fewest trials a fuel, of the fuels up to the one at which the call
+;; The fewest trials a fuel on average, over the fuels up to the one at which the call
 ;; completes, that interleave past the call's first section, and that are
 ;; both past it, for a sweep that reaches anything: a sweep that reused one
 ;; R across every G makes at most one a fuel.
@@ -77,7 +77,7 @@
   (guard (e (#t (list 'raised (describe e))))
     (clean-call 'execute!)))
 
-(test-equal "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel interleave past the call's first section, and as many both past it"
+(test-equal "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"
   (list '() 'interleavings-reached zero-counts)
   (guard (e (#t (list 'raised (describe e))))
     (reported 'execute! (sweep 'execute! 'every) past-a-fuel both-a-fuel)))

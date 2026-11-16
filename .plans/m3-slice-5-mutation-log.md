@@ -909,8 +909,9 @@ flag (slice 3's script row).
 **The guard against a trivial sweep:**
 - a trial is past the first section when the call had made its first section by R1's capture;
 - both past it when it had by R's capture;
-- each sweep makes at least three of each a fuel, of the fuels up to the one at which it
-  completes. The lead's first sweep, which reused one R across every G, made at most one a fuel.
+- each sweep makes at least three of each a fuel on average, over the fuels up to the one at
+  which it completes. The lead's first sweep, which reused one R across every G, made at most one
+  a fuel. An average, as the M2 session noted: a collapse over a stretch of fuels can pass it.
 - The script makes none both past it: every section of the script lies inside its block, and an
   expiry there frees the block.
 
@@ -1190,7 +1191,7 @@ Run by the lead on part D's hand-back, in the worktree and in copies under its g
     completes at fuel 58, and every fourth G made 647 trials a level.
   - **The row now sweeps every G:** 2,504 trials a level, 49 s under the gate, against slice 4's
     46 s at every fourth.
-  - **It fails by name below ten trials a fuel.**
+  - **It fails by name below ten trials a fuel on average.**
   - **It asserts what slice 4 could only observe:** no statement, the body's included, is tracked
     outside the cache. On slice 4's libraries it fails at F 29 from G 46, in 960 of 8,210 trials
     at the outer level and 959 nested. The lead's probe of the same schedule
