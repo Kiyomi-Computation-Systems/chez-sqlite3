@@ -168,6 +168,16 @@ Proposed record is marked *(provisional)* until that record is accepted.
   With it set, the section touches nothing and the call raises `&sqlite-closed`. Chez's engine
   remainders are multi-shot, and a timer's handler is the caller's code between any two
   sections (ADR-0016, ADR-0020, amended in M3 slice 3).
+- **Every call of an open verb holds a claim,** made by its first expression: the position of
+  the next section any run of the call may make. Each run carries its own position, and each
+  section claims it inside the section: the open's, each setting's prepare, step, read and
+  finalize, and a failure's close. A run the call has passed is refused there, touching
+  nothing, and raises `&sqlite-closed`. One remainder can be resumed again while an earlier
+  resume of it is pending, so a flag set only once a call ends lets both runs act (ADR-0018,
+  amended in M3 slice 5).
+- **Text for SQL built by Chez's own procedures, as the settings' PRAGMAs, is built in a
+  critical section:** `number->string`, resumed again from inside, answered `""` or the
+  digits twice (ADR-0018, amended in M3 slice 5).
 - **Every raise names the procedure the caller called:** M3's conveniences reach M2's statement
   verbs through internals that take a who (ADR-0013, decision 2; ADR-0014, amended).
 - **The statement cache holds only reset statements, prepared `SQLITE_PREPARE_PERSISTENT`,** at
@@ -183,7 +193,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **The settings are an allowlist, each value checked in Scheme before anything opens:** six of
   SQLite's, each set, then read back by a second statement and compared, `busy-timeout` first; and
   the library's own `statement-cache`, which SQLite never sees and nothing reads back. They run at
-  open only, and a failure closes the connection, then raises (ADR-0018).
+  open only. A failure closes the connection, then raises, and a close that fails then isn't
+  raised over the setting's condition (ADR-0018, amended in M3 slice 5).
 - **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
@@ -197,7 +208,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the
   record's mutex (ADR-0019).
 - **No busy handler and no retry in Scheme;** a busy wait ends at its timeout, interrupt or not.
-  A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms (ADR-0019).
+  A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms, and under
+  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5).
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
   `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
 

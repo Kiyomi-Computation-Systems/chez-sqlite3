@@ -10,7 +10,9 @@
   keyed by `string=?`, a statement returned twice, and the engine row's bound
   ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)). Amended 2026-11-16 in M3 slice 3,
   and accepted by the maintainer that day: the cache as built, decision 7's section, and the
-  call's flag ([amendment](#amendment-2026-11-16-what-m3-slice-3-built)).
+  call's flag ([amendment](#amendment-2026-11-16-what-m3-slice-3-built)). Amended 2026-11-16
+  in M3 slice 5, and accepted by the maintainer that day: the setting reaches the record
+  ([amendment](#amendment-2026-11-16-the-setting-reaches-the-record-m3-slice-5)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
 - **Settles:** brief D3 (the maintainer, 2026-11-14: in M3), and its leaning, "bounded and cleared
@@ -219,3 +221,17 @@ reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-
 - **The two-engine sweep, through the conveniences,** completes unexpired at fuel 259.
 - **Line citations:** decision 9's `connection.sls:417` and `:428`, read at `0913468`, are now at
   `:509` and `:520`.
+
+## Amendment, 2026-11-16: the setting reaches the record (M3 slice 5)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5
+([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5).
+
+- **The open verbs pass the list's `statement-cache` to the record,** through
+  `connection-outcome`, before any PRAGMA runs (decision 1). The default, 32, is still read from
+  slice 1's settings plan, so it is written once.
+- **`open-database-with-cache-capacity`, the suites' opener until this slice, is gone.** Slice 3's
+  suites open with `'((statement-cache . N))`.
+- **§4.8's cache plants are caught:** the cache ignoring its setting, or evicting one too early or
+  too late, each fails the rows that count statements after 33 distinct ones through `query`, at
+  0, 1, 2 and the default (the slice's [mutation log](../m3-slice-5-mutation-log.md), part B).

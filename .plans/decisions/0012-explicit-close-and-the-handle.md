@@ -11,6 +11,9 @@
   2026-11-15, and accepted by the maintainer that day: the settings, and the close's exclusion of
   interrupts (M3's plan,
   [amendment](#amendment-2026-11-15-the-settings-and-the-closes-exclusion-of-interrupts-m3s-plan)).
+  Amended 2026-11-16 in M3 slice 5, and accepted by the maintainer that day: the open verbs'
+  library, the open's claim, and decision 8's handler around the open
+  ([amendment](#amendment-2026-11-16-the-open-verbs-library-m3-slice-5)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -332,3 +335,30 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   the cache's among them, on either path.
 - **Decision 7's "every verb" has one exception, `interrupt-database!`,** which any thread may
   call, and which does nothing on a closed connection (ADR-0010, amended).
+
+## Amendment, 2026-11-16: the open verbs' library (M3 slice 5)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5, from its
+builders' reports and its adversarial review ([ADR-0018](0018-the-settings-list.md), amended in
+M3 slice 5).
+
+- **`open-database` and `call-with-database` moved to `(chez-sqlite3 private open)`,** a fourth
+  library beside M1 slice 4's three. Their settings run statements through
+  `(chez-sqlite3 private statement)`, which imports `(chez-sqlite3 private connection)`. That
+  library keeps the open's parts, and exports them to the new one:
+  - `prepared-open`, the filename's and the options' checks;
+  - `connection-outcome`, the open's one critical section. It is M1's `open-outcome` renamed:
+    exported under its old name, it clashed with a definition of
+    `(chez-sqlite3 private statement)`'s own, which imports the library whole
+    ([traps.md](../traps.md));
+  - `opened-database`, its outcome raised;
+  - `close-connection`, the close for a who.
+- **`connection-outcome` takes the call's claim,** `refused?`, read first inside the open's
+  section. When another run of the same call has opened, the section opens nothing and answers
+  `(refused)`, which `opened-database` raises as `&sqlite-closed`. So of one call's runs, one
+  alone opens.
+- **Decision 8's handler that marks a raise wraps the open and the settings too,** not the
+  procedure alone. So the close's failure isn't raised over a setting's failure, nor over a
+  refused run's `&sqlite-closed`.
+- **`open-database-with-cache-capacity` is gone.** The suites give `'((statement-cache . N))`
+  ([ADR-0020](0020-the-statement-cache.md), amended in M3 slice 5).

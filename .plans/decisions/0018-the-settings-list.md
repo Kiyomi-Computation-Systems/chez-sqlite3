@@ -8,7 +8,11 @@
   Decision 5's waits are measured by slice 0's research (P2, P3, P14). Amended 2026-11-15 in M3
   slice 1, and accepted by the maintainer that day: what the settings argument is, the rules' names
   and order, a read-back with no row, and the readers' values
-  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)).
+  ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)). Amended 2026-11-16 in M3 slice
+  5, and accepted by the maintainer that day: where the open verbs live, the refusals' order,
+  the checks' section, decision 7's failed close, the maintainer's "Setting's error wins", a
+  claim on every call, the engine rows' fuels, the lock rows, and the context's leaving WAL
+  ([amendment](#amendment-2026-11-16-what-m3-slice-5-built)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -197,3 +201,85 @@ reports and its adversarial review (`(chez-sqlite3 private settings)`).
   expiring,** not to a fixed 60, and names that fuel. Slice 1's review modelled `with-transaction`
   and found its one window at fuels 138 to 174, past 60, and an open with settings can lie past 60
   too ([ADR-0017](0017-with-transaction-and-savepoints.md), amended).
+
+## Amendment, 2026-11-16: what M3 slice 5 built
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5, from its
+builders' reports and its adversarial review
+([research/m3-slice-5/](../research/m3-slice-5/README.md); the slice's
+[mutation log](../m3-slice-5-mutation-log.md)). Decision 7's change is the maintainer's,
+2026-11-16 ("Setting's error wins").
+
+- **The open verbs live in `(chez-sqlite3 private open)`.** The settings run statements through
+  M2's statement tier, and `(chez-sqlite3 private statement)` imports the connection's library, so
+  that library can't run them. It keeps the open's parts, exported to the new one (ADR-0012,
+  amended in M3 slice 5).
+  - `applied-settings!` is exported for the suites. They reach each setting's mismatch through
+    steps no list makes: at open, only `journal-mode` can mismatch, `memory` on `:memory:` and
+    `delete` on `""`.
+- **The refusals' order,** which slice 1's amendment left to this slice:
+  1. `call-with-database`'s procedure: missing, or not a procedure;
+  2. the split: a second list, `second-settings-list`;
+  3. M2's checks, in M2's order: the filename a string, the options, a `file:` name without
+     `uri`;
+  4. the list's own rules, in slice 1's order.
+
+  So each of M2's refusals stands as it was, with a list or without one.
+- **The checks run in one critical section,** what they raise caught there and raised again after
+  it. Chez's `number->string`, resumed again from inside, answered `""`, or, while an earlier
+  resume of it was pending, the digits twice: `call-with-database` sent
+  `PRAGMA busy_timeout = 12341234` to SQLite, read back as a mismatch
+  ([traps.md](../traps.md)). No claim on the call (below) could refuse it, since a run that
+  overtakes the first reaches the open first.
+- **Decision 7, amended** (the maintainer, "Setting's error wins"): a close that fails after a
+  setting's failure isn't raised in its place. The setting's condition reaches the caller, and the
+  connection stays open and counted, for the gate to see, as `call-with-database`'s close isn't
+  raised over its procedure's raise (ADR-0012, decision 8).
+- **Every call holds a claim,** the open verbs' form of ADR-0016's "Guard every call" (amended in
+  M3 slice 3).
+  - **The review found two holes in a flag set once the connection left the call.** One
+    remainder was resumed again while an earlier resume of it was still pending:
+    - taken before the open, the second run opened a second connection, and the first was left
+      open, counted and unreachable;
+    - taken after it, the second applied the settings again, and left a settings statement at a
+      row on the connection returned.
+  - **The claim** is the call's first expression: the position of the next section any run of the
+    call may make. Each run carries its own position, an argument never assigned, so a
+    continuation holds it as it was. Each section compares the two inside the section, and
+    advances the call's:
+    - the open's, at 0, through `connection-outcome`'s `refused?`;
+    - each setting's set and read: the prepare, each step, the read's column, the finalize;
+    - on a failure, the close, claimed by the run whose section failed.
+  - **A run the call has passed is refused** at its next section, which touches nothing, and the
+    run raises `&sqlite-closed` from the verb. So each section runs once a call: one open, each
+    setting applied once, each statement finalized once.
+  - **What it doesn't cover:** a remainder taken before the call's first expression makes a whole
+    new call, with a claim of its own.
+  - **`call-with-database`'s open sits inside the handler that marks a raise,** with the settings
+    and the procedure. So a close's failure isn't raised over a setting's failure, nor over a
+    refused run's `&sqlite-closed`.
+  - `docs/reference.md` says each call opens once and sets each setting once.
+- **The consequences' engine row, done,** each call swept until it completes unexpired, alike on
+  both libraries within a tick. A section spends no engine ticks, so the fuels fell once the checks
+  and each setting's steps ran in sections. Not "every fuel from 1 to 60":
+
+  | Call | Completes unexpired at | Trials |
+  |---|---|---|
+  | `open-database`, the six settings and `statement-cache`, on a file | fuel 221 | 220 |
+  | `call-with-database`, the same, under an engine | fuel 739 | 738 |
+  | one remainder's runs interleaved, `open-database`, two settings on `:memory:` | fuel 75 | 2,775 |
+  | the same, `call-with-database` | fuel 99 | 5,732 |
+  | a failing open resumed twice, `open-database` | fuel 134 | 133 |
+  | the same, `call-with-database` | fuel 156 | 155 |
+
+  `call-with-database`'s procedure, the six settings applied, starts at tick 233.
+- **The lock rows** (decision 5; slice-0 P2, P3, P14), `test-open-locks`, on both libraries: each
+  wait ran 1502 to 1503 ms of a 1500 ms timeout, and is held under twice the timeout, so a retry in
+  Scheme fails it; each refusal came in 0 to 4 ms; a wait the other connection let go of mid-wait
+  ended at 529 to 530 ms.
+- **The context, corrected** (research, `locks.sps`):
+  - **Leaving WAL is refused at once only beside a connection that has read the file,** even one
+    idle now. One opened and never used holds nothing of the file, and doesn't block it. The
+    Context's and the Consequences' "beside any other open connection" mean that.
+  - **Under another's exclusive lock, in rollback-journal mode, every `journal-mode` value
+    waits,** and every `synchronous`, not only those P2 measured. Under a read, only `wal` waits.

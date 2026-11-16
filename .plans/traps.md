@@ -102,6 +102,40 @@ told in chez-curl's `.plans/traps.md`.
   re-entered, so a counter at the procedure's entry counts it twice. (M3 slice 3's review and
   fixes, chez-sqlite3)
 
+- **A remainder resumed again while an earlier resume of it is pending gets past a flag set
+  once a call ends.** M3 slice 5's review took `open-database`'s remainder R before the open, at
+  fuel 199, and resumed it at fuel 38 until it expired after the open, as R1. R resumed again to
+  its end opened a second connection and returned it; R1 was then refused. Its connection stayed
+  open, counted and unreachable. Past the open, the same schedule applied the settings twice.
+  The briefs had modelled "resumed twice" only as one resume run to its end before the next.
+  A claim each section compares with a position the run carries, and advances, holds
+  (ADR-0018, amended in M3 slice 5). (M3 slice 5's review and fixes, chez-sqlite3)
+
+- **Chez's `number->string`, resumed from inside, answers wrong.** On Chez 10.4.0,
+  `(string-append "PRAGMA busy_timeout = " (number->string 1234))` under an engine, its
+  remainder resumed to its end a second time, answered `"PRAGMA busy_timeout = "` at fuels 22,
+  23, 31 and 32. Resumed while an earlier resume was pending, it answered the digits twice,
+  `"12341234"`, or none ([research/m3-slice-5/](research/m3-slice-5/README.md),
+  `number-twice.sps`, `number-interleaved.sps`). `string-append` alone never differed. Build
+  such text in a critical section. (M3 slice 5 and its fixes, chez-sqlite3)
+
+- **A collect request costs an engine's run ticks.** An engine of 300 allocating calls first
+  completed unexpired at fuel 5238 with no collection pending, and at 5253 with one every 4 KiB,
+  whatever the collect-request handler did, nothing included (`gc-ticks.sps`). So two runs of
+  one call at one fuel can stop ticks apart. (M3 slice 5's fixes, chez-sqlite3)
+
+- **A keyboard interrupt that comes pending inside a critical section is handled as the section
+  ends,** before the next expression. A timer and an engine spend no ticks inside one: a timer
+  of 10 had 9 left after 1000 calls in a section, and an engine of fuel 10 around such a
+  section completed with 3 left (`section-end.sps`, Linux only). So the code just after a
+  section is reached by a signal alone. (M3 slice 5's fixes, chez-sqlite3)
+
+- **Exporting a new name from a library can break one that imports it whole.** Chez refuses the
+  importer when it defines the name too: "multiple definitions for open-outcome in body". M3
+  slice 5 exported `open-outcome` from `(chez-sqlite3 private connection)`, which
+  `(chez-sqlite3 private statement)` imports whole and defines its own of, so the export became
+  `connection-outcome`. (M3 slice 5, chez-sqlite3)
+
 - **Chez's `map` called its procedure from the end, in pairs.** On 10.4.0,
   `(map (lambda (i) (set! seen (cons i seen)) i) '(0 1 2 3 4 5))` in a program called it on 4,
   5, 2, 3, 0, 1, so over 0 to 31 the first call was on 30. A cache row that filled its table
@@ -207,8 +241,20 @@ told in chez-curl's `.plans/traps.md`.
   SELECT first (slice-0 P9). (M3's research, chez-sqlite3)
 
 - **Some settings fail at once, with a busy timeout set.** `journal_mode = wal` under another
-  connection's reserved lock, and `journal_mode = delete` on a WAL file while any other connection
-  is open, even an idle one, answered BUSY with no wait under a 200 ms timeout (slice-0 P2). (M3's research,
+  connection's reserved lock, and `journal_mode = delete` on a WAL file beside another connection
+  that has read it, even one idle now, answered BUSY with no wait under a 200 ms timeout (slice-0
+  P2). A connection opened and never used holds nothing of the file, and doesn't block leaving
+  WAL ([research/m3-slice-5/](research/m3-slice-5/README.md), `locks.sps`). (M3's research and M3
+  slice 5, chez-sqlite3)
+
+- **SQLite's unix VFS keeps a closed connection's file descriptor while another connection in
+  the process holds a POSIX lock on the file.** A failed open under another's exclusive lock left
+  one descriptor more, which a later open reused (`busy-probe.sps`). Read a file's descriptors
+  only once every holder has let go. (M3 slice 5, chez-sqlite3)
+
+- **`sqlite3_cancel_auto_extension` keeps SQLite's list of entry points;
+  `sqlite3_reset_auto_extension` frees it.** A suite that registered one and cancelled it failed
+  its `sqlite3_memory_used` check by 8 bytes, which Valgrind didn't report. (M3 slice 5's fixes,
   chez-sqlite3)
 
 - **A refused `BEGIN IMMEDIATE` still takes its lock.** Inside a deferred transaction that had read
