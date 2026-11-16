@@ -331,3 +331,267 @@ Run by the lead on part A's hand-back, in the worktree and in a copy under its g
   narrows the hazard without closing it. The guarantee in either shape is the header's rule: every
   call the owner makes while the watchdog may hold the mutex is `__collect_safe` or takes none of
   SQLite's memory.
+
+## Part B: contention
+
+An Opus agent built part B from the lead's brief, in the slice's worktree, on
+`m3-slice-6-interrupt` over part A's `00dbb28`.
+
+### What part B adds
+
+Part B changes no library's code.
+
+- **`tests/test-contention.sps`, new:** two connections to one WAL file, each opened, used and
+  closed on a thread of its own, each with `((journal-mode . wal) (busy-timeout . 1500))`, or 250
+  for the grain, and each answering its two settings as read back first, its premise. Seven
+  rows, with the load row and the two counts rows, 10 in all:
+  - **W, waits out:** `BEGIN IMMEDIATE`, under the other's `BEGIN IMMEDIATE` and write, waits at
+    least 1000 ms and under 3000, then raises `&sqlite-busy`, `busy` and `busy`, from `execute!`;
+    the waiter is left in autocommit (concurrency B3, B6);
+  - **T, the default waits out,** added after the lead's J3: the same, through `with-transaction`
+    with no mode, so its own `BEGIN IMMEDIATE`. It waits at least 1000 ms and under 3000, then
+    raises `&sqlite-busy`, `busy` and `busy`, from `with-transaction`, naming `"BEGIN
+    IMMEDIATE"`; nothing is begun, `in-transaction?` false and the depth 0, read by the
+    connection's private `database-depth` as `test-transaction-engine` reads it; and the body,
+    which would say so on the board, never runs (ADR-0019, decisions 8 and 11);
+  - **M, mid-wait:** the other commits 500 ms into the wait; `BEGIN IMMEDIATE` succeeds after the
+    commit and before its timeout's end, and sees the other's row; it prints how long after the
+    commit it returned (slice-0 P3);
+  - **U, the upgrade:** a deferred transaction reads; the other commits a write in autocommit; the
+    reader's write raises `busy` and `busy-snapshot` at once, under 1000 ms, and again when tried
+    again; it is still in a transaction, still reads 3 rows; rolled back, a new transaction's
+    write commits, and it reads 5 (B5);
+  - **S, the snapshot:** a reader in a transaction reads 3 rows while the other commits a write in
+    autocommit, holds one open in `BEGIN IMMEDIATE`, and commits it, each at once; once it
+    commits, it reads 5 (B4);
+  - **D, the default:** two threads each run `with-transaction`, no mode, on a body that reads,
+    then writes. The first's body waits up to 500 ms for the second's read, which never comes:
+    the second's `BEGIN IMMEDIATE` is waiting for the first's commit. The second then reads 4,
+    and both commit. The same bodies under `'deferred` both read 3, the first commits, and the
+    second's write raises `busy-snapshot`, its level rolled back, 4 rows in all;
+  - **G, the grain:** probe P4. `BEGIN IMMEDIATE` with a 250 ms timeout raises `busy` and `busy`
+    under 500 ms, which holds on either grain, and the row prints `P4: SQLite V sleeps in
+    milliseconds` (or `whole seconds`), from 125 ms.
+
+  Every wait for another thread is bounded: a thread waits up to 10 s for the other's word and
+  raises, naming it, when it never comes; the main thread waits up to 30 s for each answer, and
+  one not given is `unfinished`. Whatever a thread raises is its answer, the busy conditions W,
+  T, G and D's deferred run expect among them.
+- **`docs/reference.md`:** `sqlite-busy?`'s entry gives each case and its remedy (ADR-0019,
+  decision 9): a table of the extended codes, `busy-snapshot`, `locked` and `busy`; the four
+  plain `busy` cases, B2, B3, B7 and B11; which leave the transaction open; keep `busy-timeout`
+  short, since an interrupt doesn't stop a busy wait; and a run example, a `drop table` beside
+  the connection's own `select` on a row, `(locked #(2))`. `with-transaction`'s sentence on
+  `'deferred` now says the write can't wait only once the transaction has read, as B2 and
+  trap 4 measured, names `busy-snapshot`'s case, and links the entry.
+
+### How the mutants ran
+
+Every plant ran in a copy of the worktree of its own, `build/mut/b/NAME/`, made by
+`tar --exclude=./build --exclude=./.git`, with `build/m3-floor` copied in for the floor's runs,
+through the copy's own `scripts/guix-env`, after `make deps` in the copy, each suite under
+`timeout 300`. A plant is a list of edits, each checked to match its file's text exactly once
+before it is written. The counts are read from the suites' own output (`# of unexpected
+failures`), the rows from its `FAIL` lines, never by eye; none died or hung. The driver
+(`mutants.py`, `rows.py`) and every log are in the session's scratchpad, not the repository.
+
+### The red runs
+
+Part B adds no library code, so no row has a red run against a missing feature: each was watched
+failing against the plants below. The suite's first run failed D alone, on its own expected
+value: `3` where `query-row` answers `#(3)`. T, added after the lead's J3, was watched failing
+against J3, 9 passed and 1 failed, T alone, its wait 3004 ms, `too-long`; then it passed on the
+real code, 1502 ms. The page's new run example and link were watched failing against D1 and D2.
+
+| Suite | Red | Green |
+|---|---|---|
+| `test-contention` | B01 to B12 and J3 each failed it, 1 to 7 of its 7 rows (below) | 10 passed; 9 before T |
+| `test-docs`, the new page | D1 and D2: 100 passed, 1 failed each | 101 passed, part A's 99 and the new example's two rows |
+| `test-reference`, the new page | | 20 passed |
+
+The thread plant first failed every row, the three whose threads raise and the three whose don't
+alike. A thread that dies on a raise runs the base exception handler, where
+`make-process-temp-directory`'s hook removed the suite's one directory, so every later row's
+open answered `cantopen`. The suite now gives each row its own directory, by
+`call-with-temp-directory`, and the plant fails W, D and G alone, each `unfinished` (the trap,
+below).
+
+Green: `make test` ran 72, passed 72, part A's 71 and `test-contention`, before T and again with
+it; at the floor, 3.45.1, through `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH`, it ran 72 and
+passed 72 too. Under the gate,
+`test-docs` took 33 s on 3.53.1 and 32 s at the floor, and `test-reference` 10 s on each, both
+passing with no error.
+
+### The waits, timed
+
+Every wait each row printed, in ms, on the final suite, T among its rows: plain, and under the
+gate, two runs each on each library, first run first.
+
+| Row | The wait | 3.53.1 | 3.45.1 | 3.53.1, gate | 3.45.1, gate |
+|---|---|---|---|---|---|
+| W | `BEGIN IMMEDIATE`, waited out | 1503, 1502 | 1502, 1502 | 1514, 1512 | 1512, 1512 |
+| T | `with-transaction`, waited out | 1502, 1502 | 1502, 1502 | 1512, 1512 | 1512, 1512 |
+| M | `BEGIN IMMEDIATE`, ended mid-wait | 529, 529 | 529, 529 | 532, 532 | 532, 535 |
+| M | from the other's commit to its return | 29, 29 | 29, 29 | 28, 28 | 28, 30 |
+| U | the upgrade's write, `busy-snapshot` | 0, 0 | 0, 0 | 1, 1 | 1, 1 |
+| S | the writer's autocommit insert | 0, 0 | 0, 0 | 1, 0 | 1, 1 |
+| S | its `BEGIN IMMEDIATE` and insert | 0, 0 | 0, 0 | 1, 1 | 1, 1 |
+| S | its `COMMIT` | 0, 0 | 0, 0 | 1, 0 | 0, 0 |
+| D | immediate: the second's call to its first read | 529, 529 | 529, 530 | 532, 533 | 532, 532 |
+| D | deferred: the same | 0, 0 | 0, 0 | 1, 1 | 1, 2 |
+| G | `BEGIN IMMEDIATE`, a 250 ms timeout | 250, 251 | 251, 251 | 253, 252 | 253, 254 |
+
+- **W's and T's waits ran 1502 to 1514 ms,** about 1.5 s under their bound of 3000 on either
+  library, as slice 5's did. The waits M's commit and D's ended ran 529 to 535 ms, 500 of them
+  the other's hold. The suite before T, on the same machine, gave the same figures to within
+  2 ms.
+- **M returned 28 to 30 ms after the other's commit,** P3's 28.7 to 29.1 ms medians: the busy
+  handler's next retry.
+- **D's deferred second read at once, 0 to 2 ms after its call, under the gate too,** so the
+  first's 500 ms window for that read was never near its end. Its immediate second waited
+  the window out.
+- **The waits total about 4.3 s of the suite's wall time,** W's and T's 1.5 s each, the two
+  500 ms holds, and G's 250 ms: the plan's budget was near 20 s (§4.7).
+- **The suite took 4.7 s plain on each library,** 4683 and 4680 ms on 3.53.1, 4676 and 4675 at
+  the floor, a program's whole run inside the container (3.2 s before T); **under the gate, 15 s
+  in each of the four runs** (13 to 14 s before T), by the gate's `time:` lines, each with "ERROR
+  SUMMARY: 0 errors" and nothing lost, none `SLOW`, far under a quarter of the 450 s limit, so it
+  is not split.
+
+### P4: the busy wait's grain
+
+**Both libraries here sleep in milliseconds,** read through the library on 3.53.1 and the
+floor's 3.45.1 alike: G's 250 ms timeout answered busy after 250 to 251 ms plain and 252 to 254
+under the gate, where a whole-second build answers at once, and W's and T's 1500 ms waited 1502
+to 1514, where a whole-second build waits 1000 (concurrency B3, its `HAVE_NANOSLEEP=0` variant).
+The row's print on each:
+
+```text
+P4: SQLite 3.53.1 sleeps in milliseconds: a 250 ms busy timeout answered busy after 251 ms
+P4: SQLite 3.45.1 sleeps in milliseconds: a 250 ms busy timeout answered busy after 251 ms
+```
+
+B01's copy shows the other print: with no timeout set, `P4: SQLite 3.53.1 sleeps in whole
+seconds: a 250 ms busy timeout answered busy after 0 ms`, and G failed on its premise,
+`("wal" 0)`. CI's `main` lane, Ubuntu 24.04's 3.45.1, prints its own line in the log of the
+slice's first run; Apple's waits for the Mac's hand run (the M3 plan, §8).
+
+### The mutations
+
+The suite: `test-contention`, baseline 10; its rows W, T, M, U, S, D and G above. Each plant ran
+on Guix's 3.53.1 and at the floor, 3.45.1, against the final suite, T among its rows, and failed
+the same rows on both.
+
+| Plant | What it plants | Failed |
+|---|---|---|
+| B01 | no busy timeout: `busy-timeout`'s step dropped from the settings' plan | W and T (`at-once`), M (busy at once), D (the second's `BEGIN IMMEDIATE` busy at once); U, S and G by the premise alone, `("wal" 0)` |
+| B02 | a retry in Scheme: a step that answers 5 is reset and stepped once more | W and T (3004 ms, `too-long`), G (502 ms) |
+| B03 | `with-transaction`'s default made `deferred` | D: the default run met `busy-snapshot`, as the deferred one does; T: `BEGIN DEFERRED` took no lock, so the body ran and committed, at once |
+| B04 | a thread's raise not made its answer: `start-thread`'s guard dropped, in the suite | W, T, D and G, each `unfinished`, and no hang |
+| B05 | a retry loop in Scheme: a step that answers 5 is stepped again until 1500 ms have passed | U (`busy-snapshot` after 1500 ms, `waited`), G (1506 ms) |
+| B06 | the extended code lost: the condition's extended code is the primary's | U, D (`busy` for `busy-snapshot`) |
+| B07 | `execute!` rolls the transaction back when its statement answers busy | U: the plant's rollback ended the transaction, so U's own `rollback` raised `error`, `error` |
+| B08 | every connection opened with `SQLITE_OPEN_SHAREDCACHE` | all seven: `locked`, `locked-sharedcache`, at once |
+| B09 | `journal-mode` checked but never set | all seven by the premise, `"delete"`; U, S and D by behaviour too: the other's insert beside the reader's open transaction answered busy, and so did the deferred first's `COMMIT` |
+| B10 | a busy handler in Scheme: no SQLite timeout, and a step that answers 5 sleeps 1500 ms and is stepped again once | all seven by the premise, `("wal" 0)`; M by its bound too, `not-before-the-timeout`, 1500 ms, 1000 after the commit; U `waited`; G about 1500 ms |
+| B11 | B04 and B01 together | all seven: M, a thread that raises only when the library is wrong, `unfinished` too |
+| B12 | `with-transaction`'s default made `exclusive` | T alone, by the SQL its condition names, `"BEGIN EXCLUSIVE"`; it waited 1502 ms as `immediate` does. Before T, **survived**; `test-transaction` fails it |
+| J3 | the lead's: `with-transaction`'s own `BEGIN`, when it answers busy, issued again once | T alone: 3004 and 3005 ms, `too-long`. Before T it survived every suite |
+| D1 | the busy entry's example states `(busy #(2))` | `test-docs`: the example's result row |
+| D2 | `with-transaction`'s link names `#sqlite-busy-cases` | `test-docs`: the links row |
+
+**15 plants, every one caught.** Each row failed at least two plants by its behaviour, not its
+premise alone: W B01, B02, B04, B08 and B11; T B01 to B04, B08, B11, B12 and J3; M B01, B08, B10
+and B11; U B05 to B10; S B08 and B09; D B01, B03, B04, B06, B08, B09 and B11; G B02, B04, B05,
+B08, B10 and B11.
+
+### The survivors, argued
+
+- **J3, the lead's plant, survived every suite before T:** `test-contention` as first built, and
+  `test-transaction`, `-engine`, `-interrupt` and `-nomem`, by the lead's run in
+  `build/lead-mut/B`. No row had `with-transaction` wait out a timeout: W times `execute!`'s
+  `BEGIN IMMEDIATE`, and D's waits end mid-wait, where the retry never runs. So `with-transaction`'s
+  own `BEGIN` could retry in Scheme, against ADR-0019's decisions 8 and 11. T, added for it, has
+  `with-transaction` wait the timeout out under the other's write lock, and fails J3 alone, 3004
+  and 3005 ms; the copy's `transaction.sls` is the lead's byte for byte.
+- **B12, `exclusive` for `immediate`, passes D by behaviour,** and T but for its SQL. In WAL,
+  `BEGIN EXCLUSIVE` and `BEGIN IMMEDIATE` take the same write lock, and readers go on under
+  either: D's default run under B12 answered as under `immediate`, and T waited 1502 ms, on both
+  libraries. Only a rollback-journal file tells them apart, where an exclusive lock stops readers.
+  T fails it by the `sqlite-error-sql` of its condition, `"BEGIN EXCLUSIVE"`; and
+  `test-transaction`'s row "with no mode, with-transaction begins immediate" reads the SQL issued,
+  and failed B12: `("BEGIN EXCLUSIVE" . ready)` where `("BEGIN IMMEDIATE" . ready)` was due, 47
+  of 48 passing.
+- **B04 survives M, U and S,** whose threads raise nothing when the library is right: U catches
+  its `busy-snapshot` itself, since it reads on after it. The guard is the bound's partner only
+  where something else is wrong. Tried against that schedule, B11: M's waiter, its `BEGIN
+  IMMEDIATE` busy at once, died, and M failed by name, `unfinished`, the suite ending.
+- **B05 survives W, T, M, S and D:** a loop whose deadline is the timeout stops after SQLite's
+  own first wait has run it out, so W and T waited about 1502 ms, as without it; M's and D's
+  immediate waits end in success, which the loop never retries; S's writes never answer busy;
+  and D asserts no time for its deferred second's `busy-snapshot`, which came 1500 ms late. Its
+  extra waits show where SQLite's don't: U's `busy-snapshot`, which SQLite answers at once, and
+  G's 250 ms timeout, each then waited about 1500 ms.
+- **B02 survives M, U, S and D:** a retry changes only a step that ends busy. M's wait and D's
+  immediate one end in success, S's writes never answer busy, and `busy-snapshot`, in U and in D's
+  deferred run, answers again at once when stepped again, as U asserts of its own retry.
+- **B10 passes W and T by behaviour,** failing them by the premise alone: SQLite answers at once,
+  the Scheme sleep waits 1500 ms, and one more step answers at once, so each wait is 1500 ms, as
+  SQLite's own. M tells them apart: the other's commit at 500 ms ends SQLite's wait at its next
+  retry, 29 ms later, and the sleep's 1000 ms later.
+- **B01 fails U, S and G by the premise alone.** `busy-snapshot` and S's writes never wait, so the
+  timeout changes nothing there: U's claim is that the timeout doesn't cover the upgrade, which the
+  premise holds is there. G's 0 ms is what a whole-second build answers to a 250 ms timeout, so
+  only the premise tells no timeout from that grain.
+- **B09 fails W, T, M and G by the premise alone:** in rollback-journal mode, `BEGIN IMMEDIATE`
+  under another's reserved lock waits the same.
+
+### The trap the part found
+
+- **A thread that dies on a raise runs the base exception handler, and
+  `make-process-temp-directory`'s hook removes its directory then.** Reproduced with
+  `build/m3s6b-probe/thread-removes-dir.sps`, git-ignored: a program makes the directory, forks a
+  thread that raises `'boom` unguarded, waits for the thread's `dynamic-wind` after thunk, and
+  reads `(file-directory? dir)`: `#t` before, `#f` after, the main thread going on and exiting 0.
+  So one thread's death removed every later row's file, and each open answered `cantopen`. A
+  suite whose threads may raise unguarded gives each row its own directory, as this one does, or
+  guards every thread.
+
+### For the records
+
+- **G times a 250 ms wait,** where ADR-0019's decision 11 and the global constraints have "a row
+  times a wait with a timeout of at least 1500 ms". It asserts no lower bound, only under twice its
+  timeout, which holds on either grain, as the brief asked. Decision 11 wants a line for such a
+  row: a probe's shorter timeout, asserting only under twice it.
+- **P4 is read here on both libraries, milliseconds;** CI's `main` lane and Apple's remain (the
+  M3 plan, §7 and §8).
+- **The trap above** is `traps.md`'s, and perhaps an AGENTS.md line beside "A thread a suite forks
+  dies on a raise": a dying thread also runs `make-process-temp-directory`'s hook. The hook could
+  remove the directory only for a raise on the thread that made it; the testing library is
+  outside part B's brief, so it is unchanged.
+- **ADR-0017's consequence, a deferred write under contention fails at once,** holds once the
+  transaction has read. Measured here, on both libraries, beside another's `BEGIN IMMEDIATE` and
+  write, with a 1500 ms timeout: a deferred transaction's first statement, an insert, waited
+  1502 ms and answered busy; after a `select`, the same insert answered busy in 0 ms; each left
+  the transaction open (`build/m3s6b-probe/deferred-first-write.sps`, git-ignored). It fits B2's
+  reading of the source, the handler called only from no transaction. The page now says "once it
+  has read".
+
+### The lead's checks of part B
+
+Run by the lead on part B's hand-back, in the worktree and in a copy under its git-ignored
+`build/lead-mut/B`.
+
+- **`make test`:** ran 72, passed 72. After the follow-up, `test-contention` passed again, 10 of
+  10.
+- **Reproduced,** on both libraries where they load SQLite:
+  - `deferred-first-write.sps`: the write with nothing read waited 1501 to 1502 ms, and after a
+    read answered in 0 ms;
+  - `thread-removes-dir.sps`: `(before #t)`, then `(after #f)`, exit 0.
+- **The lead's plant, J3:** `with-transaction`'s own `BEGIN` retried once in Scheme on busy, in
+  `begun!`.
+  - **It survived:** `test-contention`, `test-transaction`, `-engine`, `-interrupt` and `-nomem`
+    all passed under it. W times `execute!`'s `BEGIN IMMEDIATE`, and D's waits end mid-wait, so
+    no row had `with-transaction` wait out a full timeout.
+  - **Row T,** added in the follow-up, does: it failed alone under J3, waiting 3004 ms, and
+    passes on the real code at 1502 ms.
