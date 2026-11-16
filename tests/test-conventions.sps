@@ -8,7 +8,7 @@
 ;;;                  with the binding it holds still fails; each row's shape;
 ;;;                  every cited record exists; the allowlists, written out,
 ;;;                  are the types the table uses and void as a result
-;;;   src/           no violation, and the 36 forms are all native's
+;;;   src/           no violation, and the 41 forms are all native's
 ;;;   fixtures       tests/fixtures/conventions/<case>/, each the one fault it
 ;;;                  names, and the whole list of violations asserted: a form
 ;;;                  outside native, an entry that is no string literal, type
@@ -60,7 +60,7 @@
 ;; expected-names : (Listof String)
 ;; ADR-0002's amended order: the report's three, the threadsafe answer,
 ;; sqlite3_initialize, then the rest of M1's required list, then M2's 21
-;; (ADR-0002's M2 amendment).
+;; (ADR-0002's M2 amendment), then M3's five (ADR-0002's M3 amendment).
 (define expected-names
   '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"
     "sqlite3_threadsafe" "sqlite3_initialize"
@@ -73,7 +73,9 @@
     "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
     "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
     "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
-    "sqlite3_column_bytes" "sqlite3_error_offset"))
+    "sqlite3_column_bytes" "sqlite3_error_offset"
+    "sqlite3_changes64" "sqlite3_total_changes64" "sqlite3_last_insert_rowid"
+    "sqlite3_get_autocommit" "sqlite3_interrupt"))
 
 ;; collect-safe-names : (Listof String)
 ;; The calls that can block (ADR-0011, decision 5): open and close from M1,
@@ -192,7 +194,7 @@
 
 ;; --- the table ---------------------------------------------------------------------------
 
-(test-equal "table: it has a row for each of M1's 15 entry points and M2's 21, in ADR-0002's order, and no other"
+(test-equal "table: it has a row for each of M1's 15 entry points, M2's 21 and M3's five, in ADR-0002's order, and no other"
   expected-names
   (map row-name table))
 
@@ -220,10 +222,13 @@
     (int uptr integer-64 double void))
   (list allowed-argument-types allowed-result-types))
 
-(test-equal "table: the types its rows use are exactly the allowlists': every type an argument or a result is the argument allowlist, and every result, and void, the result allowlist; no type is allowed that no row uses"
+(test-equal "table: the types its rows use are exactly the allowlists': every type an argument or a result, but void, is the argument allowlist, and every result, and void, the result allowlist; no type is allowed that no row uses"
   (list (sorted-symbols allowed-argument-types) (sorted-symbols allowed-result-types))
+  ;; void is a result only, so it joins the argument side never (M3's
+  ;; sqlite3_interrupt is the first row to write it).
   (list (sorted-symbols (unique (append (apply append (map row-arguments table))
-                                        (map row-result table))))
+                                        (filter (lambda (t) (not (eq? t 'void)))
+                                                (map row-result table)))))
         (sorted-symbols (unique (cons 'void (map row-result table))))))
 
 (test-equal "table: the types only an argument uses are unsigned-int, unsigned-64 and unsigned-8, which the result allowlist refuses"
@@ -270,7 +275,7 @@
   (let ((r (reverse (cdr form))))
     (if (>= (length r) 3) (caddr r) 'no-entry)))
 
-(test-equal "src: every foreign-procedure form under src/ is one of the 36 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
+(test-equal "src: every foreign-procedure form under src/ is one of the 41 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
   (list (list native-file) '((chez-sqlite3 private native)) (sorted-strings expected-names))
   (if (and (list? src-items) (for-all (lambda (i) (eq? (car i) 'binding)) src-items))
       (list (unique (map cadr src-items))
@@ -389,7 +394,7 @@
 
 ;; --- rows against the real src/, changed in turn ---------------------------------------------
 
-(test-equal "sweep: a row removed fails, by name, for each of the 36 rows"
+(test-equal "sweep: a row removed fails, by name, for each of the 41 rows"
   (map (lambda (name) (list (list 'no-row name))) expected-names)
   (map (lambda (name)
          (checked (lambda ()
@@ -402,7 +407,7 @@
   (checked (lambda ()
              (violations "src" (append table (list (synthetic "sqlite3_extra" '() 'int)))))))
 
-(test-equal "sweep: a row's convention flipped fails, by name, for each of the 36 rows"
+(test-equal "sweep: a row's convention flipped fails, by name, for each of the 41 rows"
   (map (lambda (row)
          (let ((flipped (if (eq? (row-convention row) 'plain) 'collect-safe 'plain)))
            (list (list 'mismatch (row-name row) 'convention flipped (row-convention row)))))
@@ -414,8 +419,8 @@
                                                      (with-field row 'convention flipped)))))))
        table))
 
-(test-equal "sweep: a row's result type changed fails, by name, for each of the 36 rows: int to uptr, and uptr, integer-64 and double to int"
-  (list 36
+(test-equal "sweep: a row's result type changed fails, by name, for each of the 41 rows: int to uptr, and uptr, integer-64, double and void to int"
+  (list 41
         (map (lambda (row)
                (list (list 'mismatch (row-name row) 'result (other-type (row-result row)) (row-result row))))
              table))
@@ -443,6 +448,54 @@
                                                   (with-field (car (rows-named '("sqlite3_bind_int64")))
                                                               'arguments '(uptr int int))))))))
 
+;; M3's five, written out, so that a table loosened with the bindings it holds still fails.
+;; Each takes a handle, a uptr. The three counters answer sqlite3_int64,
+;; get_autocommit an int and the interrupt void, and none can block, so each
+;; is plain (ADR-0011, decision 5, M3 amendment).
+(define m3-five
+  '(("sqlite3_changes64" (uptr) integer-64 plain)
+    ("sqlite3_total_changes64" (uptr) integer-64 plain)
+    ("sqlite3_last_insert_rowid" (uptr) integer-64 plain)
+    ("sqlite3_get_autocommit" (uptr) int plain)
+    ("sqlite3_interrupt" (uptr) void plain)))
+
+(test-equal "table: M3's five are written out: a handle each; sqlite3_int64 for the three counters, int for sqlite3_get_autocommit and void for sqlite3_interrupt; all five plain, never __collect_safe (ADR-0011, decision 5, M3 amendment)"
+  m3-five
+  (map (lambda (name)
+         (let ((row (car (rows-named (list name)))))
+           (list name (row-arguments row) (row-result row) (row-convention row))))
+       (map car m3-five)))
+
+(test-equal "table: M3's five are the last five rows, in ADR-0002's M3 order, after M2's sqlite3_error_offset"
+  (list "sqlite3_error_offset" (map car m3-five))
+  (let ((names (map row-name table)))
+    (list (list-ref names 35) (list-tail names 36))))
+
+(test-equal "sweep: M3's five made __collect_safe each fail, by name: a binding that held the lock-free counters or the interrupt through a collection would let another thread's collection wait on them"
+  (map (lambda (entry) (list (list 'mismatch (car entry) 'convention 'collect-safe 'plain)))
+       m3-five)
+  (map (lambda (entry)
+         (checked (lambda ()
+                    (violations "src" (replace-row table (car entry)
+                                                   (with-field (car (rows-named (list (car entry))))
+                                                               'convention 'collect-safe))))))
+       m3-five))
+
+(test-equal "sweep: sqlite3_changes64's, sqlite3_total_changes64's and sqlite3_last_insert_rowid's results, integer-64, changed to int, sqlite3_get_autocommit's, int, changed to integer-64, and sqlite3_interrupt's, void, changed to int, each fail, by name"
+  '(((mismatch "sqlite3_changes64" result int integer-64))
+    ((mismatch "sqlite3_total_changes64" result int integer-64))
+    ((mismatch "sqlite3_last_insert_rowid" result int integer-64))
+    ((mismatch "sqlite3_get_autocommit" result integer-64 int))
+    ((mismatch "sqlite3_interrupt" result int void)))
+  (map (lambda (plant)
+         (checked (lambda ()
+                    (violations "src" (replace-row table (car plant)
+                                                   (with-field (car (rows-named (list (car plant))))
+                                                               'result (cdr plant)))))))
+       '(("sqlite3_changes64" . int) ("sqlite3_total_changes64" . int)
+         ("sqlite3_last_insert_rowid" . int) ("sqlite3_get_autocommit" . integer-64)
+         ("sqlite3_interrupt" . int))))
+
 ;; every argument of every row, changed at its own position
 (define argument-cases
   (apply append
@@ -459,8 +512,8 @@
                                   found)))))
               table)))
 
-(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 61 arguments"
-  (list 61
+(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 66 arguments"
+  (list 66
         (map (lambda (c)
                (list (list 'mismatch (row-name (car c)) 'arguments (caddr c) (row-arguments (car c)))))
              argument-cases))

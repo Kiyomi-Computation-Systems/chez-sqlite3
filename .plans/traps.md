@@ -421,6 +421,22 @@ told in chez-curl's `.plans/traps.md`.
   after the other thread has noted that it is about to act, so the window holds no thread's
   wake-up. (M3 slice 1's review, chez-sqlite3)
 
+- **A floor run that sets only the library compiles its C against another header.**
+  - **What goes wrong:** `CHEZ_SQLITE3_LIBRARY` chooses the library the suites load. The C they
+    compile reads whichever `sqlite3.h` the compiler finds first: `test-constants`' prototype and
+    constant checks, the C oracle and the decoy. In the container, that header is Guix's 3.53.1.
+  - **Where it happened:** M3 slice 2's local floor runs set only the library. So they held 3.45.1
+    to 3.53.1's header, and passed.
+  - **Reproduced:** under that setting, `$CC -dM -E` printed `SQLITE_VERSION "3.53.1"` while
+    native loaded 3045001.
+  - **The fix:** CI's `floor` lane sets `C_INCLUDE_PATH` to the floor's headers, and a local floor
+    run must too.
+  - **No check:** no suite compares the header with the loaded library. A check would also bind
+    the Mac runs, where Homebrew's library through the override compiles against the SDK's header
+    (the maintainer, 2026-11-16: "Record a trap only").
+
+  (M3 slice 2's review, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

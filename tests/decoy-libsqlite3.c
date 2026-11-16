@@ -1,6 +1,7 @@
 /* tests/decoy-libsqlite3.c: a stand-in libsqlite3, for
- * tests/test-library-loading-decoys.sps and -real.sps only, through
- * tests/library-loading.sls. chez-sqlite3 itself compiles no C (ADR-0001).
+ * tests/test-library-loading-decoys.sps, -real.sps and -missing.sps only,
+ * through tests/library-loading.sls. chez-sqlite3 itself compiles no C
+ * (ADR-0001).
  *
  * The suite compiles this file at test time, once per build below, as a
  * shared object (-Wall -Werror -shared -fPIC), and points
@@ -19,9 +20,9 @@
  * when it is linked and no switch read at run time can hide an entry point
  * from dlsym:
  *
- *   (none)                   the control: the 36 entry points
- *                            (chez-sqlite3 private native) binds, M1's 15
- *                            and M2's 21
+ *   (none)                   the control: the 41 entry points
+ *                            (chez-sqlite3 private native) binds, M1's 15,
+ *                            M2's 21 and M3's five
  *   DECOY_LACKS_<entry>      that one entry point left out
  *   DECOY_NOT_SQLITE         no sqlite3_* function at all
  *   DECOY_MARKER             also defines decoy_marker, which no other
@@ -486,6 +487,56 @@ int sqlite3_error_offset(sqlite3 *db)
 {
   called("sqlite3_error_offset(%s)", db ? "db" : "NULL");
   return -1;
+}
+#endif
+
+/* --- M3's five ------------------------------------------------------------
+   They exist for dlsym: the load binds each and calls none, so no row reads
+   what they answer. Each answers as a connection that has done nothing would:
+   no change, no rowid, in autocommit mode, and an interrupt with nothing to
+   interrupt. */
+
+#ifndef DECOY_LACKS_sqlite3_changes64
+/* 0: no row changed. */
+sqlite3_int64 sqlite3_changes64(sqlite3 *db)
+{
+  called("sqlite3_changes64(%s)", db ? "db" : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_total_changes64
+/* 0: no row changed since the open. */
+sqlite3_int64 sqlite3_total_changes64(sqlite3 *db)
+{
+  called("sqlite3_total_changes64(%s)", db ? "db" : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_last_insert_rowid
+/* 0: no insert. */
+sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db)
+{
+  called("sqlite3_last_insert_rowid(%s)", db ? "db" : "NULL");
+  return 0;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_get_autocommit
+/* 1: outside any transaction. */
+int sqlite3_get_autocommit(sqlite3 *db)
+{
+  called("sqlite3_get_autocommit(%s)", db ? "db" : "NULL");
+  return 1;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_interrupt
+/* Nothing to interrupt. */
+void sqlite3_interrupt(sqlite3 *db)
+{
+  called("sqlite3_interrupt(%s)", db ? "db" : "NULL");
 }
 #endif
 

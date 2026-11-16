@@ -25,7 +25,10 @@
   is split, with a check that holds the rule (M2's closing review,
   [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)). Amended
   2026-11-15, and accepted by the maintainer that day: M3's entry points and suites (M3's plan,
-  [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)).
+  [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)). Amended 2026-11-16
+  by the maintainer's choice, "Split into thirds now", and accepted that day ("Accept all"): the
+  halves split in three (M3 slice 2,
+  [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
 - **Settles:** brief §2.4
@@ -540,3 +543,63 @@ M3 brings.
   straight after (M3's research, single T12). The limit is process-wide, so the row restores it on
   every path, and it needs the memory count on: where it is off, as on Apple's build, the row is
   named unavailable, as the memory check is.
+
+## Amendment, 2026-11-16: the halves split in three (M3 slice 2)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"). By the maintainer's choice of that day,
+"Split into thirds now", in M3 slice 2 (PR #23). It
+replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
+`test-library-loading-real`", and the alternation ADR-0002's M3 amendment continues.
+
+- **Measured:** M3's five entry points brought the halves to these times under the gate on CI:
+
+  | Run | Commit | `test-check-ci` | Decoys | Real |
+  |---|---|---|---|---|
+  | 43768337291 | `bb7feaa`, `main` before M3 | 117 s | 288 s | 250 s |
+  | 43783905101 | `2e844f1`, slice 2 | 90 s | 264 s | 225 s |
+  | 43794568875 | `3e9a506`, slice 2 | 117 s | 319 s | 272 s |
+
+  On the same class of runner as `main`'s, the decoys half grew 31 s. The slowest runner seen ran
+  `test-check-ci` in 135 s. Scaled by `test-check-ci`'s ratio, the split amendment's method, the
+  decoys half would take 368 s there. Scaled by how the halves themselves grew with the runner,
+  28% for `test-check-ci`'s 39% between `785234b`'s run and `bb7feaa`'s, it would take about
+  355 s, 79% of the threshold. The maintainer chose to split now, since slice 2 is the only M3
+  slice that owns these suites.
+- **Three suites:** `test-library-loading-decoys`, `test-library-loading-real`, and a new
+  `test-library-loading-missing`, which holds only missing-api rows.
+- **Dealt by children, not by entry points:**
+  - Each of the first two holds about 20 children beside its missing-api rows: the decoy's
+    behaviours, or the real library, the refusals no decoy reaches, discovery and preflight.
+  - So entry points are dealt in native's order by a pattern of five that repeats,
+    `deal-pattern` in `(library-loading)`. Positions 0, 2 and 4 go to `-missing`, 1 to
+    `-decoys` and 3 to `-real`.
+  - Of the 41 entry points, that is 25, 8 and 8, and 25, 28 and 28 children. Dealing by thirds
+    would have given 14, 34 and 33 children.
+- **The partition is held in each of the three suites,** so any one alone holds it:
+  - the parts, merged in the convention table's order, are its names, each once;
+  - each part is what the pattern deals it;
+  - each suite the partition names is a file, and a suite finds its part by its own file's name.
+- **Measured in the container,** under `make test-memory`, on Guix's 3.53.1, with other runs
+  beside it:
+  - the halves took 224 s and 206 s at `3e9a506`;
+  - the three took 155 s, 142 s and 140 s, 437 s in all against 430 s;
+  - the 7 s more is the third suite's own setup;
+  - the floor, 3.45.1, read the same to a second or two.
+- **On CI,** both runs of the split landed on fast runners, where `test-check-ci` took 84 s and
+  83 s:
+
+  | Run | Commit | Decoys | Real | Missing | `memory` |
+  |---|---|---|---|---|---|
+  | 43854418185 | `d6c58d0` | 174 s | 144 s | 158 s | 24m02s |
+  | 43858091596 | `24b426e` | 172 s | 143 s | 154 s | 23m36s |
+
+  The halves had taken 264 s and 225 s on a runner of about that speed (43783905101). On the slow
+  class, by how the halves grew between `785234b`'s run and `bb7feaa`'s, the largest would take
+  about 225 s.
+- **A later entry point is dealt by the same pattern,** three of every five to `-missing`, so
+  `-missing` grows fastest and is the next to near the threshold: by the M2 slice 2 amendment's
+  arithmetic, after about 35 more entry points on the slowest runner seen. A suite the `SLOW`
+  check names is split again in its slice, as before.
+- **Each suite writes the pattern out in a row,** so a pattern and parts changed together, which
+  the merge and the dealing rows pass, still fail.
+

@@ -1,12 +1,14 @@
 #!r6rs
-;;; (library-loading): what the two suites that load libsqlite3 end to end
-;;; share, tests/test-library-loading-decoys.sps and
-;;; tests/test-library-loading-real.sps (ADR-0002, ADR-0003, ADR-0010,
+;;; (library-loading): what the three suites that load libsqlite3 end to end
+;;; share, tests/test-library-loading-decoys.sps,
+;;; tests/test-library-loading-real.sps and
+;;; tests/test-library-loading-missing.sps (ADR-0002, ADR-0003, ADR-0010,
 ;;; ADR-0013). They were one suite, tests/test-library-loading.sps, until it
 ;;; passed 450 s under the memory gate on CI, three quarters of
-;;; MEMORY_TIMEOUT, where ADR-0005 (amended) splits it in two. Its cost is its
+;;; MEMORY_TIMEOUT, where ADR-0005 (amended) splits it. Its cost is its
 ;;; children, each under a Valgrind of its own there, so each suite runs about
-;;; half of them.
+;;; a third of them: the decoys and the real suite hold the behaviours, and
+;;; the missing suite holds only missing-api rows.
 ;;;
 ;;;   the probe         spawn a child through env and gated-command, and
 ;;;                     read what tests/refusal-probe.sps printed, as data
@@ -14,15 +16,17 @@
 ;;;                     with its counts, its Valgrind line and its call log
 ;;;   the floors        the decoy's versions, from packaging/floors.sexp
 ;;;   the entries       every entry point (chez-sqlite3 private native)
-;;;                     binds, and its partition: each suite's half, by the
-;;;                     suite's file name. Each entry's missing-api row runs
-;;;                     in exactly one suite, and a row in each holds that
-;;;                     the halves, merged in the convention table's order,
-;;;                     are its names, each once
+;;;                     binds, and its partition: each suite's part, by the
+;;;                     suite's file name, dealt by a pattern of five that
+;;;                     repeats. Each entry's missing-api row runs in
+;;;                     exactly one suite, and rows in each hold that the
+;;;                     parts, merged in the convention table's order, are
+;;;                     its names, each once, and that each part is what the
+;;;                     pattern deals it
 ;;;   the decoys        each build of tests/decoy-libsqlite3.c, compiled in
 ;;;                     a suite's scratch directory, and a row on one
 ;;;   the missing-api rows
-;;;                     one per entry point of a half
+;;;                     one per entry point of a part
 ;;;
 ;;; Each suite keeps its own runner, scratch directory and floors, and names
 ;;; the helpers here that take them by the names its rows use. Nothing here
@@ -37,7 +41,8 @@
           once no-native-objects gated? valgrind-line
           outcome report loaded-lines refused-lines report-of loaded refused
           read-floor-values
-          report-entries rest-entries every-entry decoy-halves suite-half merge-halves
+          report-entries rest-entries every-entry deal-pattern decoy-parts suite-part merge-halves
+          entries-dealt
           lacks-build decoy-builds compile-decoys decoy-status decoy-row-in
           read-switch the-report-three threadsafe-call initialize-call log-of memory-used-call
           loaded-calls every-call code-of missing-api-rows)
@@ -238,9 +243,10 @@
 
   ;; The entry points (chez-sqlite3 private native) binds, in its order
   ;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-  ;; rest, M1's ten and then M2's 21. A thirty-seventh that native binds and
-  ;; the decoy lacks refuses the control, and the control's row fails. A row
-  ;; holds the list to the convention table's names, whole and in order.
+  ;; rest, M1's ten, then M2's 21 and M3's five. A forty-second that native
+  ;; binds and the decoy lacks refuses the control, and the control's row
+  ;; fails. A row holds the list to the convention table's names, whole and in
+  ;; order.
   (define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
   (define rest-entries
     '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
@@ -251,38 +257,69 @@
       "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
       "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
       "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
-      "sqlite3_column_bytes" "sqlite3_error_offset"))
+      "sqlite3_column_bytes" "sqlite3_error_offset"
+      "sqlite3_changes64" "sqlite3_total_changes64" "sqlite3_last_insert_rowid"
+      "sqlite3_get_autocommit" "sqlite3_interrupt"))
   (define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
 
-  ;; decoy-halves : (Listof (Pairof String (Listof String)))
-  ;; The partition: each suite's file name under tests/, then the entry points
-  ;; whose missing-api rows it makes, in native's order. Every other entry
-  ;; point goes to each, so each half holds M1's and M2's alike, and each
-  ;; suite about half the gated children. A suite finds its half by its own
-  ;; file's name (suite-half), so a suite copied from the other cannot run
-  ;; the other's half. A row in each suite holds that the halves partition
-  ;; the convention table, and another that each suite named is a file.
-  (define decoy-halves
-    '(("test-library-loading-decoys.sps"
-       "sqlite3_libversion_number" "sqlite3_sourceid" "sqlite3_initialize"
-       "sqlite3_compileoption_get" "sqlite3_close" "sqlite3_errstr" "sqlite3_extended_errcode"
-       "sqlite3_memory_used" "sqlite3_finalize" "sqlite3_reset" "sqlite3_bind_parameter_count"
-       "sqlite3_bind_null" "sqlite3_bind_double" "sqlite3_bind_blob64" "sqlite3_column_name"
-       "sqlite3_column_int64" "sqlite3_column_text" "sqlite3_column_bytes")
-      ("test-library-loading-real.sps"
-       "sqlite3_libversion" "sqlite3_threadsafe" "sqlite3_compileoption_used" "sqlite3_open_v2"
-       "sqlite3_errmsg" "sqlite3_errcode" "sqlite3_next_stmt" "sqlite3_prepare_v3" "sqlite3_step"
-       "sqlite3_clear_bindings" "sqlite3_bind_parameter_index" "sqlite3_bind_int64"
-       "sqlite3_bind_text64" "sqlite3_column_count" "sqlite3_column_type" "sqlite3_column_double"
-       "sqlite3_column_blob" "sqlite3_error_offset")))
+  ;; deal-pattern : (Listof String)
+  ;; The pattern that deals native's order to the suites, by position from 0,
+  ;; repeating: position mod 5 picks the file name at that place. The missing
+  ;; suite takes three of every five, the decoys' and the real suite one each,
+  ;; since each of those two holds about 20 children beside its missing-api
+  ;; rows, and a child costs the same wherever it is.
+  (define deal-pattern
+    '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
+      "test-library-loading-missing.sps" "test-library-loading-real.sps"
+      "test-library-loading-missing.sps"))
 
-  ;; suite-half : (Listof String) -> (U (Pairof String (Listof String)) #f)
-  ;; The half of the suite whose command line is ARGS, (command-line), found
+  ;; decoy-parts : (Listof (Pairof String (Listof String)))
+  ;; The partition: each suite's file name under tests/, then the entry points
+  ;; whose missing-api rows it makes, in native's order, written out. Each part
+  ;; holds M1's, M2's and M3's alike. A suite finds its part by its own file's
+  ;; name (suite-part), so a suite copied from another cannot run the other's
+  ;; part. Rows in each suite hold that the parts partition the convention
+  ;; table, that each is what deal-pattern deals it (entries-dealt), and that
+  ;; each suite named is a file.
+  (define decoy-parts
+    '(("test-library-loading-decoys.sps"
+       "sqlite3_libversion" "sqlite3_compileoption_get" "sqlite3_errcode" "sqlite3_finalize"
+       "sqlite3_bind_parameter_index" "sqlite3_bind_blob64" "sqlite3_column_double"
+       "sqlite3_changes64")
+      ("test-library-loading-real.sps"
+       "sqlite3_threadsafe" "sqlite3_close" "sqlite3_next_stmt" "sqlite3_reset"
+       "sqlite3_bind_int64" "sqlite3_column_name" "sqlite3_column_blob"
+       "sqlite3_last_insert_rowid")
+      ("test-library-loading-missing.sps"
+       "sqlite3_libversion_number" "sqlite3_sourceid" "sqlite3_initialize"
+       "sqlite3_compileoption_used" "sqlite3_open_v2" "sqlite3_errmsg" "sqlite3_errstr"
+       "sqlite3_extended_errcode" "sqlite3_memory_used" "sqlite3_prepare_v3" "sqlite3_step"
+       "sqlite3_clear_bindings" "sqlite3_bind_parameter_count" "sqlite3_bind_null"
+       "sqlite3_bind_double" "sqlite3_bind_text64" "sqlite3_column_count" "sqlite3_column_type"
+       "sqlite3_column_int64" "sqlite3_column_text" "sqlite3_column_bytes"
+       "sqlite3_error_offset" "sqlite3_total_changes64" "sqlite3_get_autocommit"
+       "sqlite3_interrupt")))
+
+  ;; entries-dealt : (Listof String) (Listof String) String -> (Listof String)
+  ;; The elements of ENTRIES that PATTERN deals NAME, in ENTRIES' order: the
+  ;; element at position i, counted from 0, goes to the file name at position
+  ;; (i mod (length PATTERN)) of PATTERN. A row holds each part to this, which
+  ;; merge-halves' row, holding only that the parts partition the table in its
+  ;; order, does not.
+  (define (entries-dealt entries pattern name)
+    (let loop ((rest entries) (i 0) (found '()))
+      (cond ((null? rest) (reverse found))
+            ((equal? (list-ref pattern (mod i (length pattern))) name)
+             (loop (cdr rest) (+ i 1) (cons (car rest) found)))
+            (else (loop (cdr rest) (+ i 1) found)))))
+
+  ;; suite-part : (Listof String) -> (U (Pairof String (Listof String)) #f)
+  ;; The part of the suite whose command line is ARGS, (command-line), found
   ;; by its program's file name, without the directories before it; #f for a
   ;; program the partition does not name.
-  (define (suite-half args)
+  (define (suite-part args)
     (and (pair? args) (string? (car args))
-         (assoc (file-name (car args)) decoy-halves)))
+         (assoc (file-name (car args)) decoy-parts)))
 
   ;; file-name : String -> String
   ;; PATH after its last slash.
@@ -293,12 +330,12 @@
             (else (loop (- i 1))))))
 
   ;; merge-halves : (Listof String) (Listof (Listof String)) -> (Listof String)
-  ;; HALVES merged in ORDER's order. A merge keeps each half's own order and
-  ;; every element of each, so the answer is ORDER exactly when the halves
-  ;; partition it, each half in its order: an entry dropped, doubled, out of
+  ;; PARTS merged in ORDER's order. A merge keeps each part's own order and
+  ;; every element of each, so the answer is ORDER exactly when the parts
+  ;; partition it, each part in its order: an entry dropped, doubled, out of
   ;; order or not in ORDER shows. A name ORDER lacks sorts after every name in
   ;; it.
-  (define (merge-halves order halves)
+  (define (merge-halves order parts)
     (define (rank name)
       (let loop ((rest order) (i 0))
         (cond ((null? rest) i)
@@ -310,7 +347,7 @@
               ((null? b) (append (reverse merged) a))
               ((<= (rank (car a)) (rank (car b))) (loop (cdr a) b (cons (car a) merged)))
               (else (loop a (cdr b) (cons (car b) merged))))))
-    (fold-left merge '() halves))
+    (fold-left merge '() parts))
 
   ;; --- decoys --------------------------------------------------------------------------
 

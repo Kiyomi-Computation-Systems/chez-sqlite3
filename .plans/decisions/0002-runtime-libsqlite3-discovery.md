@@ -218,4 +218,5 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   can't do without them.
 - **Each gets a decoy switch and a `missing-api` row,** continuing the alternation of entry
   points between `test-library-loading-decoys` and `test-library-loading-real`, the halves M2
-  split the suite into in PR #19 (ADR-0005, amended).
+  split the suite into in PR #19 (ADR-0005, amended). Since M3 slice 2, a pattern of five deals
+  them to three suites instead ([ADR-0005](0005-memory-gate.md), amended 2026-11-16).

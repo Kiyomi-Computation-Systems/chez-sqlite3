@@ -1,13 +1,14 @@
 #!r6rs
-;;; One of the two suites that load libsqlite3 end to end, through (chez-sqlite3
+;;; One of the three suites that load libsqlite3 end to end, through (chez-sqlite3
 ;;; private native), tests/refusal-probe.sps and tests/preflight.sps
 ;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the real
 ;;; libsqlite3, the refusals no decoy reaches, discovery, make build's
-;;; preflight, and half of the decoy's missing-api rows;
-;;; tests/test-library-loading-decoys.sps holds the decoy's behaviours and the
-;;; other half. They were one suite until it passed 450 s under the memory
-;;; gate on CI, three quarters of MEMORY_TIMEOUT (ADR-0005, amended);
-;;; (library-loading) holds what both use.
+;;; preflight, and its part of the decoy's missing-api rows.
+;;; tests/test-library-loading-decoys.sps holds the decoy's behaviours and its
+;;; own part; tests/test-library-loading-missing.sps holds only missing-api
+;;; rows, the largest part. They were one suite until it passed 450 s under
+;;; the memory gate on CI, three quarters of MEMORY_TIMEOUT (ADR-0005,
+;;; amended); (library-loading) holds what all three use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -15,9 +16,9 @@
 ;;; tests/refusal-probe.sps in a fresh Chez, through `env`, and reads back
 ;;; what it printed, as data, whole: exit status, every line, and stderr.
 ;;;
-;;;   - decoys: this suite's half of the missing-api rows, as the other suite
-;;;     builds them, and the control build, for preflight. The partition's
-;;;     two rows are held here too, so that either suite alone holds it;
+;;;   - decoys: this suite's part of the missing-api rows, as the other suites
+;;;     build them, and the control build, for preflight. The partition's
+;;;     three rows are held here too, so that any one suite alone holds it;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
 ;;;     then through the override. What it reports must equal what
 ;;;     tests/libsqlite3-oracle.c reads from the same file;
@@ -140,34 +141,57 @@
 
 ;; --- the partition ----------------------------------------------------------------------
 
-;; Each half makes the missing-api rows of one suite. Merged in the table's
-;; order, the halves are its names exactly when each entry is in one half,
-;; once, and each half keeps the table's order; tests/test-library-loading-
-;; decoys.sps holds the same row.
-(test-equal "the two suites' entry lists partition the convention table: merged in its order, they are its names, each once"
+;; Each part makes the missing-api rows of one suite. Merged in the table's
+;; order, the parts are its names exactly when each entry is in one part,
+;; once, and each part keeps the table's order; the other two suites hold the
+;; same row.
+(test-equal "the three suites' entry lists partition the convention table: merged in its order, they are its names, each once"
   (map row-name conventions-table)
-  (merge-halves (map row-name conventions-table) (map cdr decoy-halves)))
+  (merge-halves (map row-name conventions-table) (map cdr decoy-parts)))
 
-;; this-half : (U (Pairof String (Listof String)) #f)
-;; This suite's half, by its own file's name. The row below writes the name
-;; out, so a suite copied from the other, or a lookup that answers another
-;; half, fails it.
-(define this-half (suite-half (command-line)))
+;; The partition is dealt: native's order, by position from 0, by a pattern of
+;; five that repeats (deal-pattern). The row above holds only that the parts
+;; partition the table, each in its order, so two entries swapped between
+;; parts, or one moved to another, passes it. Each part is exactly what the
+;; pattern deals its suite, and every name the pattern holds is a part.
+(test-equal "each suite's part is the entries the pattern deals it, by position in the convention table from 0, and the pattern names only parts"
+  (list decoy-parts 'all)
+  (list (map (lambda (part)
+               (cons (car part) (entries-dealt (map row-name conventions-table) deal-pattern (car part))))
+             decoy-parts)
+        (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 
-(test-equal "this suite runs its own half of the partition, found by its file's name, and each suite the partition names is a file in tests/"
-  (list "test-library-loading-real.sps" (map (lambda (half) (cons (car half) 'present)) decoy-halves))
-  (list (if this-half (car this-half) (list 'unlisted (command-line)))
-        (map (lambda (half)
-               (cons (car half) (if (file-exists? (string-append "tests/" (car half))) 'present 'absent)))
-             decoy-halves)))
+;; The pattern, written out, so that it and the parts changed together, which
+;; the rows above pass, still fail: three of every five entries to the missing
+;; suite, which holds only missing-api rows, and one each to the decoys' and
+;; the real suite, which hold about 20 children of their own (ADR-0005,
+;; amended 2026-11-16).
+(test-equal "the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite"
+  '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
+    "test-library-loading-missing.sps" "test-library-loading-real.sps"
+    "test-library-loading-missing.sps")
+  deal-pattern)
 
-(define this-entries (if this-half (cdr this-half) '()))
+;; this-part : (U (Pairof String (Listof String)) #f)
+;; This suite's part, by its own file's name. The row below writes the name
+;; out, so a suite copied from another, or a lookup that answers another
+;; part, fails it.
+(define this-part (suite-part (command-line)))
+
+(test-equal "this suite runs its own part of the partition, found by its file's name, and each suite the partition names is a file in tests/"
+  (list "test-library-loading-real.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
+  (list (if this-part (car this-part) (list 'unlisted (command-line)))
+        (map (lambda (part)
+               (cons (car part) (if (file-exists? (string-append "tests/" (car part))) 'present 'absent)))
+             decoy-parts)))
+
+(define this-entries (if this-part (cdr this-part) '()))
 
 ;; --- decoys --------------------------------------------------------------------------
 
 ;; builds : (Listof (Pairof String (Listof String)))
 ;; The control, for preflight's rows, and a lacking build for each entry of
-;; this suite's half.
+;; this suite's part.
 (define builds
   (decoy-builds (cons "control" (map lacks-build this-entries))))
 
@@ -191,7 +215,7 @@
 (define control-report (report floor-version floor-number "decoy-sourceid"))
 (define (control-library so) (report-of so 'override control-report))
 
-;; This suite's half of the entry points, each left out, one at a time
+;; This suite's part of the entry points, each left out, one at a time
 ;; ((library-loading)'s missing-api-rows).
 (missing-api-rows decoy-row control-library this-entries)
 
