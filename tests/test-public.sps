@@ -110,6 +110,7 @@
     (close-database! chez-sqlite3 private connection)
     (call-with-database chez-sqlite3 private open)
     (database? chez-sqlite3 private connection)
+    (interrupt-database! chez-sqlite3 private connection)
     (sqlite-version chez-sqlite3 private report)
     (sqlite-version-number chez-sqlite3 private report)
     (sqlite-source-id chez-sqlite3 private report)
@@ -137,6 +138,7 @@
     (sqlite-busy? chez-sqlite3 private conditions)
     (sqlite-constraint? chez-sqlite3 private conditions)
     (sqlite-read-only? chez-sqlite3 private conditions)
+    (sqlite-interrupt? chez-sqlite3 private conditions)
     (prepare-statement chez-sqlite3 private statement)
     (finalize-statement! chez-sqlite3 private statement)
     (call-with-statement chez-sqlite3 private statement)
@@ -179,18 +181,18 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 66 names, counted from the library itself, not from this suite's list"
-  66
+(test-equal "(chez-sqlite3) exports 68 names, counted from the library itself, not from this suite's list"
+  68
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the values, the conveniences, the counters, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
+(test-equal "(chez-sqlite3) exports exactly the connections, the interrupt, the statements, the values, the conveniences, the counters, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; the cache's four procedures; and the transaction depth's two, with-transaction's"
-  (sorted-names '(close-database! database? call-with-open-handle
+(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!; the cache's four procedures; and the transaction depth's two, with-transaction's"
+  (sorted-names '(close-database! database? interrupt-database! call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
                   tracked-statements untrack-statement!
                   prepared-open connection-outcome opened-database close-connection

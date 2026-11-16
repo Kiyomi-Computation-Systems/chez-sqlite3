@@ -18,6 +18,8 @@
 ;;; (ADR-0016, ADR-0020). with-transaction reads autocommit to nest, and again
 ;;; to learn whether its transaction survived its body (ADR-0017). The open
 ;;; verbs take a settings list, applied at open and read back (ADR-0018).
+;;; interrupt-database! is the one verb any thread may call, and the close
+;;; shuts it out before it finalizes anything (ADR-0019).
 (library (chez-sqlite3)
   (export
    ;; --- connections (chez-sqlite3 private open, chez-sqlite3 private connection) ---
@@ -31,6 +33,8 @@
    ;;   Settings = (Listof (Pairof Symbol Any))
    ;; database? : Any -> Boolean
    database?
+   ;; interrupt-database! : Database -> Void
+   interrupt-database!
 
    ;; --- the conveniences (chez-sqlite3 private conveniences) ---
    ;; execute! : Database String Value ... -> Void
@@ -157,6 +161,8 @@
    sqlite-constraint?
    ;; sqlite-read-only? : Any -> Boolean
    sqlite-read-only?
+   ;; sqlite-interrupt? : Any -> Boolean
+   sqlite-interrupt?
    ;; sqlite-invalid-text? : Any -> Boolean
    sqlite-invalid-text?
    ;; sqlite-invalid-text-column : SqliteInvalidText -> Natural
@@ -174,7 +180,7 @@
   (import (chez-sqlite3 private require-threaded)
           (only (chez-sqlite3 private open) open-database call-with-database)
           (only (chez-sqlite3 private connection)
-                close-database! database?
+                close-database! database? interrupt-database!
                 changes total-changes last-insert-rowid in-transaction?)
           (only (chez-sqlite3 private conveniences)
                 execute! execute-script! query query-row query-fold)
@@ -198,6 +204,6 @@
                 sqlite-library-unavailable-detail sqlite-library-unavailable-candidates
                 sqlite-wrong-thread? sqlite-wrong-thread-owner sqlite-wrong-thread-caller
                 sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?
-                sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset
+                sqlite-interrupt? sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset
                 sqlite-setting-mismatch? sqlite-setting-mismatch-setting
                 sqlite-setting-mismatch-expected sqlite-setting-mismatch-actual)))

@@ -1,8 +1,9 @@
 #!r6rs
 ;;; (chez-sqlite3 private connection): a connection to a database, opened,
 ;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its two
-;;; public procedures, close-database! and database?, and M3's counters;
-;;; call-with-open-handle, the one way to a connection's handle, and
+;;; public procedures, close-database! and database?, M3's counters and
+;;; interrupt-database!; call-with-open-handle, the one way to a
+;;; connection's handle, and
 ;;; check-database-owner are M2's statements', with the tracking procedures
 ;;; below; failure-details and first-finalize-failure are exported for the
 ;;; suites too.
@@ -87,6 +88,22 @@
 ;;;   the counters   changes, total-changes, last-insert-rowid and
 ;;;                  in-transaction?, each one plain call through
 ;;;                  call-with-open-handle, which makes every verb's checks
+;;;                  first
+;;;   the interrupt  the record holds slice 1's latch, a mutex and an
+;;;                  interruptible flag ((chez-sqlite3 private interrupt);
+;;;                  ADR-0019, decision 2). connection-outcome's section sets
+;;;                  the flag once the record exists; close-connection runs
+;;;                  its work through interrupt-latch-close!, which clears it
+;;;                  before the first finalize and sets it again when the
+;;;                  work left the connection open: a statement found
+;;;                  untracked, or sqlite3_close failing. interrupt-database!
+;;;                  is the one verb another thread may call: it checks only
+;;;                  that its argument is a database, and calls
+;;;                  sqlite3_interrupt through the latch, holding its mutex,
+;;;                  while the flag is set. It lives here because the record
+;;;                  and its handle do, and the handle's one accessor,
+;;;                  call-with-open-handle, makes the owner check this verb
+;;;                  must not (ADR-0012, decision 2; ADR-0010, amended)
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
@@ -95,6 +112,7 @@
           database-cache-capacity database-cache-count
           database-cache-check-out! database-cache-return!
           changes total-changes last-insert-rowid in-transaction?
+          interrupt-database!
           database-depth set-database-depth!)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
@@ -104,7 +122,8 @@
           (only (chez-sqlite3 private constants) sqlite-open-uri sqlite-result-codes)
           (chez-sqlite3 private conditions)
           (chez-sqlite3 private open-options)
-          (chez-sqlite3 private statement-cache))
+          (chez-sqlite3 private statement-cache)
+          (chez-sqlite3 private interrupt))
 
   (define sqlite-ok (cdr (assq 'ok sqlite-result-codes)))
 
@@ -116,17 +135,20 @@
   ;; can finalize them oldest first. CACHE is its statement cache, of the
   ;; capacity the record is made with, which never changes (ADR-0020). DEPTH
   ;; is how many with-transaction levels are open on it, from 0 (ADR-0017,
-  ;; decision 3).
+  ;; decision 3). LATCH is its interrupt latch, made not interruptible: the
+  ;; open sets it, in its section (ADR-0019, decision 2).
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
             (immutable owner unchecked-database-owner)
             (immutable live unchecked-database-live)
             (mutable serial unchecked-database-serial set-database-serial!)
             (immutable cache unchecked-database-cache)
-            (mutable depth unchecked-database-depth set-unchecked-database-depth!))
+            (mutable depth unchecked-database-depth set-unchecked-database-depth!)
+            (immutable latch unchecked-database-latch))
     (protocol (lambda (new)
                 (lambda (handle owner capacity)
-                  (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity) 0))))
+                  (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity) 0
+                       (make-interrupt-latch)))))
     (sealed #t)
     (opaque #t))
 
@@ -436,8 +458,9 @@
   ;; code and message, its handle closed; or what a call raised,
   ;; call-with-c-string's refusal of U+0000, from WHO before anything is
   ;; allocated, among them. One critical section holds the C string's whole
-  ;; extent: the open, the read of its out-pointer, the count and the
-  ;; record, or else the failure's details and its handle's close. So no
+  ;; extent: the open, the read of its out-pointer, the count, the record
+  ;; and its latch made interruptible (ADR-0019, decision 2), or else the
+  ;; failure's details and its handle's close. So no
   ;; handle is ever left uncounted, and no engine's expiry frees the string
   ;; between the open's calls. It raises nothing.
   ;;
@@ -463,7 +486,9 @@
                    (else
                     (count-up! 'connection)
                     (if (eqv? rc sqlite-ok)
-                        (list 'opened (make-database handle (get-thread-id) capacity))
+                        (let ((db (make-database handle (get-thread-id) capacity)))
+                          (interrupt-latch-open! (unchecked-database-latch db))
+                          (list 'opened db))
                         (let ((details (details-of rc handle)))
                           (when (eqv? (sqlite3-close handle) sqlite-ok)
                             (count-down! 'connection))
@@ -491,42 +516,58 @@
           n
           (loop (sqlite3-next-stmt handle statement) (+ n 1)))))
 
+  ;; close-left-open? : (Pairof Symbol Any) -> Boolean
+  ;; Whether a close's OUTCOME, as close-connection's work answers it, left
+  ;; the connection open: a statement found untracked, or sqlite3_close
+  ;; failing (ADR-0019, decision 2). Raises nothing.
+  (define (close-left-open? outcome)
+    (and (memq (car outcome) '(untracked failed)) #t))
+
   ;; close-connection : Symbol Any -> Void
   ;; DB closed, for WHO; nothing when it is closed already: close-database!'s
   ;; work, and (chez-sqlite3 private open)'s close of a connection whose
-  ;; settings failed, or whose call-with-database ends. In one critical
-  ;; section: every tracked statement finalized, oldest first, the first
-  ;; failure kept; the cache emptied, its statements among those finalized,
-  ;; whether or not the connection then closes, so it never holds a freed
-  ;; one (ADR-0020, decision 9); sqlite3_next_stmt; sqlite3_close; the
-  ;; handle cleared and the count down. After it, by what it answered: a
-  ;; statement found untracked, or sqlite3_close's failure, each raised in
-  ;; place of a finalize's failure, with the connection open and counted;
-  ;; else, the connection closed, the first finalize failure (R1), then a
-  ;; count-down that found the count at zero, count-down!'s double free.
+  ;; settings failed, or whose call-with-database ends. In
+  ;; interrupt-latch-close!'s one critical section: DB's latch made not
+  ;; interruptible, holding its mutex, before anything is finalized, so no
+  ;; interrupt is in flight once the work starts and none starts after
+  ;; (ADR-0019, decision 2); then the work, with the mutex released: every
+  ;; tracked statement finalized, oldest first, the first failure kept; the
+  ;; cache emptied, its statements among those finalized, whether or not
+  ;; the connection then closes, so it never holds a freed one (ADR-0020,
+  ;; decision 9); sqlite3_next_stmt; sqlite3_close; the handle cleared and
+  ;; the count down; then, when a statement was found untracked or
+  ;; sqlite3_close failed, the latch made interruptible again. After it, by
+  ;; what the work answered: a statement found untracked, or sqlite3_close's
+  ;; failure, each raised in place of a finalize's failure, with the
+  ;; connection open and counted; else, the connection closed, the first
+  ;; finalize failure (R1), then a count-down that found the count at zero,
+  ;; count-down!'s double free. The work raises nothing.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
-           (critical-section
-            (let ((handle (unchecked-database-handle db)))
-              (if (not handle)
-                  '(already-closed)
-                  (let* ((failure (finalize-tracked! db handle))
-                         (emptied (statement-cache-clear! (unchecked-database-cache db)))
-                         (untracked (statements-on handle)))
-                    (if (> untracked 0)
-                        (list 'untracked untracked)
-                        (let ((rc (sqlite3-close handle)))
-                          (if (eqv? rc sqlite-ok)
-                              (begin
-                                (set-database-handle! db #f)
-                                (let ((double-free (guard (c (#t c))
-                                                     (count-down! 'connection)
-                                                     #f)))
-                                  (cond (failure (list 'finalize-failed failure))
-                                        (double-free (list 'double-free double-free))
-                                        (else '(closed)))))
-                              (cons 'failed (details-of rc handle)))))))))))
+           (interrupt-latch-close!
+            (unchecked-database-latch db)
+            (lambda ()
+              (let ((handle (unchecked-database-handle db)))
+                (if (not handle)
+                    '(already-closed)
+                    (let* ((failure (finalize-tracked! db handle))
+                           (emptied (statement-cache-clear! (unchecked-database-cache db)))
+                           (untracked (statements-on handle)))
+                      (if (> untracked 0)
+                          (list 'untracked untracked)
+                          (let ((rc (sqlite3-close handle)))
+                            (if (eqv? rc sqlite-ok)
+                                (begin
+                                  (set-database-handle! db #f)
+                                  (let ((double-free (guard (c (#t c))
+                                                       (count-down! 'connection)
+                                                       #f)))
+                                    (cond (failure (list 'finalize-failed failure))
+                                          (double-free (list 'double-free double-free))
+                                          (else '(closed)))))
+                                (cons 'failed (details-of rc handle)))))))))
+            close-left-open?)))
       (case (car outcome)
         ((untracked)
          (assertion-violation who "the connection has statements chez-sqlite3 does not track"
@@ -543,6 +584,30 @@
   ;; closed or not.
   (define (close-database! db)
     (close-connection 'close-database! db))
+
+  ;; --- the interrupt (ADR-0019) ------------------------------------------------------------
+
+  ;; interrupt-database! : Database -> Void
+  ;; Any thread's: DB's running statement, a step or a prepare, made to
+  ;; answer SQLITE_INTERRUPT, and one held at a row with it, by
+  ;; sqlite3_interrupt (ADR-0019, decisions 1 and 5). DB that is no database
+  ;; is an assertion violation; there is no owner check, and no other: on a
+  ;; closed connection, or one closing, it does nothing and raises nothing
+  ;; (decision 4). The handle is read and sqlite3_interrupt called by
+  ;; interrupt-latch-interrupt!, in its one critical section, holding DB's
+  ;; latch's mutex, and only while the latch is interruptible, which the
+  ;; close clears under the same mutex before it finalizes anything. So the
+  ;; flag being set means the handle is live. It reads nothing else of the
+  ;; connection, since any call that takes the connection's own mutex waits
+  ;; for the step it means to stop (M3's research, concurrency I8), and
+  ;; answers nothing.
+  (define (interrupt-database! db)
+    (unless (database? db)
+      (assertion-violation 'interrupt-database! "not a database" 'not-a-database
+                           (shown-value db)))
+    (interrupt-latch-interrupt! (unchecked-database-latch db)
+                                (lambda () (sqlite3-interrupt (unchecked-database-handle db))))
+    (if #f #f))
 
   ;; --- the counters (ADR-0016, decision 8) ---------------------------------------------------
   ;;
