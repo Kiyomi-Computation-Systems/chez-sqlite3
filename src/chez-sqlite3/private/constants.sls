@@ -14,6 +14,9 @@
 ;;;   sqlite-integer ... sqlite-null
 ;;;                             sqlite3_column_type's five type codes (M2)
 ;;;   sqlite-utf8               the text encoding bound text is given (M2)
+;;;   sqlite-prepare-persistent
+;;;                             sqlite3_prepare_v3's flag for a statement kept
+;;;                             and run again (M3)
 ;;;   sqlite-result-codes       every primary and extended result code in
 ;;;                             3.45.1's sqlite3.h, in the header's order
 ;;;   sqlite-result-code-name   a code's name, or the integer
@@ -27,7 +30,7 @@
           sqlite-open-fullmutex sqlite-open-nofollow sqlite-open-exrescode
           sqlite-row sqlite-done
           sqlite-integer sqlite-float sqlite-text sqlite-blob sqlite-null
-          sqlite-utf8
+          sqlite-utf8 sqlite-prepare-persistent
           sqlite-result-codes sqlite-result-code-name sqlite-primary-code-name)
   (import (chez-sqlite3 private require-threaded)
           (rnrs))
@@ -73,6 +76,11 @@
   ;; sqlite-utf8 : Natural              SQLITE_UTF8: sqlite3_bind_text64's
   ;; encoding (ADR-0015, decision 5)
   (define sqlite-utf8 1)
+
+  ;; sqlite-prepare-persistent : Natural   SQLITE_PREPARE_PERSISTENT:
+  ;; sqlite3_prepare_v3's prepFlags bit for a statement that is kept and run
+  ;; again, so SQLite avoids the lookaside memory for it (M3, ADR-0020)
+  (define sqlite-prepare-persistent #x01)
 
   ;; sqlite-result-codes : (Listof (Pairof Symbol Natural))
   ;; Every primary and extended result code of 3.45.1's sqlite3.h (108), in

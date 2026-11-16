@@ -38,6 +38,7 @@
           outcome report loaded-lines refused-lines report-of loaded refused
           read-floor-values
           report-entries rest-entries every-entry decoy-halves suite-half merge-halves
+          entries-at-parity
           lacks-build decoy-builds compile-decoys decoy-status decoy-row-in
           read-switch the-report-three threadsafe-call initialize-call log-of memory-used-call
           loaded-calls every-call code-of missing-api-rows)
@@ -238,9 +239,10 @@
 
   ;; The entry points (chez-sqlite3 private native) binds, in its order
   ;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-  ;; rest, M1's ten and then M2's 21. A thirty-seventh that native binds and
-  ;; the decoy lacks refuses the control, and the control's row fails. A row
-  ;; holds the list to the convention table's names, whole and in order.
+  ;; rest, M1's ten, then M2's 21 and M3's five. A forty-second that native
+  ;; binds and the decoy lacks refuses the control, and the control's row
+  ;; fails. A row holds the list to the convention table's names, whole and in
+  ;; order.
   (define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
   (define rest-entries
     '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
@@ -251,14 +253,17 @@
       "sqlite3_bind_null" "sqlite3_bind_int64" "sqlite3_bind_double" "sqlite3_bind_text64"
       "sqlite3_bind_blob64" "sqlite3_column_count" "sqlite3_column_name" "sqlite3_column_type"
       "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
-      "sqlite3_column_bytes" "sqlite3_error_offset"))
+      "sqlite3_column_bytes" "sqlite3_error_offset"
+      "sqlite3_changes64" "sqlite3_total_changes64" "sqlite3_last_insert_rowid"
+      "sqlite3_get_autocommit" "sqlite3_interrupt"))
   (define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
 
   ;; decoy-halves : (Listof (Pairof String (Listof String)))
   ;; The partition: each suite's file name under tests/, then the entry points
-  ;; whose missing-api rows it makes, in native's order. Every other entry
-  ;; point goes to each, so each half holds M1's and M2's alike, and each
-  ;; suite about half the gated children. A suite finds its half by its own
+  ;; whose missing-api rows it makes, in native's order: the decoys' half the
+  ;; even positions of every-entry, from 0, the real suite's half the odd.
+  ;; Each half holds M1's, M2's and M3's alike, and each suite about half the
+  ;; gated children. A suite finds its half by its own
   ;; file's name (suite-half), so a suite copied from the other cannot run
   ;; the other's half. A row in each suite holds that the halves partition
   ;; the convention table, and another that each suite named is a file.
@@ -268,13 +273,27 @@
        "sqlite3_compileoption_get" "sqlite3_close" "sqlite3_errstr" "sqlite3_extended_errcode"
        "sqlite3_memory_used" "sqlite3_finalize" "sqlite3_reset" "sqlite3_bind_parameter_count"
        "sqlite3_bind_null" "sqlite3_bind_double" "sqlite3_bind_blob64" "sqlite3_column_name"
-       "sqlite3_column_int64" "sqlite3_column_text" "sqlite3_column_bytes")
+       "sqlite3_column_int64" "sqlite3_column_text" "sqlite3_column_bytes"
+       "sqlite3_changes64" "sqlite3_last_insert_rowid" "sqlite3_interrupt")
       ("test-library-loading-real.sps"
        "sqlite3_libversion" "sqlite3_threadsafe" "sqlite3_compileoption_used" "sqlite3_open_v2"
        "sqlite3_errmsg" "sqlite3_errcode" "sqlite3_next_stmt" "sqlite3_prepare_v3" "sqlite3_step"
        "sqlite3_clear_bindings" "sqlite3_bind_parameter_index" "sqlite3_bind_int64"
        "sqlite3_bind_text64" "sqlite3_column_count" "sqlite3_column_type" "sqlite3_column_double"
-       "sqlite3_column_blob" "sqlite3_error_offset")))
+       "sqlite3_column_blob" "sqlite3_error_offset"
+       "sqlite3_total_changes64" "sqlite3_get_autocommit")))
+
+  ;; entries-at-parity : (Listof String) (U 0 1) -> (Listof String)
+  ;; The elements of ENTRIES at the positions of PARITY, counted from 0, in
+  ;; ENTRIES' order: 0 for the even positions, 1 for the odd. The partition
+  ;; alternates: native's order dealt to the two halves in turn, so a row
+  ;; holds each half to this, which merge-halves' row, holding only that the
+  ;; halves partition the table in its order, does not.
+  (define (entries-at-parity entries parity)
+    (let loop ((rest entries) (i 0) (found '()))
+      (cond ((null? rest) (reverse found))
+            ((= (mod i 2) parity) (loop (cdr rest) (+ i 1) (cons (car rest) found)))
+            (else (loop (cdr rest) (+ i 1) found)))))
 
   ;; suite-half : (Listof String) -> (U (Pairof String (Listof String)) #f)
   ;; The half of the suite whose command line is ARGS, (command-line), found

@@ -29,6 +29,17 @@
 ;;;                  sqlite-transient; and every column read, held whole to
 ;;;                  what the C oracle reads of the same SQL. sqlite-transient
 ;;;                  is the header's SQLITE_TRANSIENT, through the oracle
+;;;   M3's five      sqlite3_changes64, sqlite3_total_changes64,
+;;;                  sqlite3_last_insert_rowid, sqlite3_get_autocommit and
+;;;                  sqlite3_interrupt (M3 slice 2). The counters: a fixed
+;;;                  script on :memory:, the four read after each statement,
+;;;                  held whole to what the C oracle reads of the same script
+;;;                  and to a written-out literal, and to the 64-bit rowids at
+;;;                  2^63-1, -2^63 and past 2^32. The autocommit flag: each
+;;;                  state its own row. The interrupt, on one thread: a held
+;;;                  row's next step answers SQLITE_INTERRUPT, and with no
+;;;                  statement running it is a no-op. Every argument is a
+;;;                  handle, a uptr, so Chez's int range never bites here
 ;;;   C strings      call-with-c-string: UTF-8 on bytes where encodings
 ;;;                  differ, the NUL written, U+0000 refused at every position
 ;;;                  before anything is allocated, by kind, from the WHO it is
@@ -74,7 +85,7 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) foreign-ref foreign-set! foreign-sizeof getenv machine-type
+        (only (chezscheme) foreign-ref foreign-set! foreign-sizeof getenv machine-type void
               library-exports fork-thread make-mutex with-mutex collect-rendezvous
               sleep make-time disable-interrupts enable-interrupts)
         (chez-sqlite3-testing)
@@ -165,6 +176,11 @@
 (define sqlite3-column-blob (native-procedure 'sqlite3-column-blob))
 (define sqlite3-column-bytes (native-procedure 'sqlite3-column-bytes))
 (define sqlite3-error-offset (native-procedure 'sqlite3-error-offset))
+(define sqlite3-changes64 (native-procedure 'sqlite3-changes64))
+(define sqlite3-total-changes64 (native-procedure 'sqlite3-total-changes64))
+(define sqlite3-last-insert-rowid (native-procedure 'sqlite3-last-insert-rowid))
+(define sqlite3-get-autocommit (native-procedure 'sqlite3-get-autocommit))
+(define sqlite3-interrupt (native-procedure 'sqlite3-interrupt))
 ;; sqlite-transient is a value, not a procedure: when native cannot be
 ;; reached it is the raising procedure, which no row's expected value is,
 ;; and which no binding takes as a uptr.
@@ -353,7 +369,7 @@
   counts-after-load)
 
 ;; No back door: the exports, written out whole.
-(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings and M2's 21, sqlite-transient, and the C-string, out-pointer and byte helpers"
+(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings, M2's 21 and M3's five, sqlite-transient, and the C-string, out-pointer and byte helpers"
   (sorted-names '(loaded-libsqlite3 loaded-threadsafe
                   sqlite3-open-v2 sqlite3-close sqlite3-errmsg sqlite3-errstr sqlite3-errcode
                   sqlite3-extended-errcode sqlite3-next-stmt sqlite3-memory-used
@@ -363,7 +379,9 @@
                   sqlite3-bind-null sqlite3-bind-int64 sqlite3-bind-double sqlite3-bind-text64
                   sqlite3-bind-blob64 sqlite3-column-count sqlite3-column-name sqlite3-column-type
                   sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
-                  sqlite3-column-bytes sqlite3-error-offset sqlite-transient
+                  sqlite3-column-bytes sqlite3-error-offset
+                  sqlite3-changes64 sqlite3-total-changes64 sqlite3-last-insert-rowid
+                  sqlite3-get-autocommit sqlite3-interrupt sqlite-transient
                   call-with-c-string c-string->string call-with-out-pointer
                   call-with-bytes foreign-bytes c-string->bytevector))
   (guard (e (#t (list 'raised (describe e))))
@@ -1041,6 +1059,303 @@
       (cons (length (cdar columns-oracle)) (map length (cdar columns-oracle)))
       columns-oracle))
 
+;; --- M3's five: the counters, the autocommit flag and the interrupt -------------------------------
+;; Every argument is a handle, a uptr, so Chez's int range (-2^31 to 2^32-1)
+;; never bites here: no row feeds one a value past it. A result is another
+;; matter, and the rows below read sqlite3_int64s past 32 bits.
+
+;; run-statement : Natural String -> (List Integer (U Integer Symbol) Integer)
+;; SQL prepared on DB, stepped to the first answer but SQLITE_ROW (a cap of
+;; 1000 rows, past which it is too-many-rows) and finalized: the prepare's
+;; code, the step's, the finalize's. A prepare that makes no statement
+;; answers (CODE no-statement 0).
+(define (run-statement db sql)
+  (let* ((prepared (prepare db sql))
+         (statement (cadr prepared)))
+    (if (eqv? statement 0)
+        (list (car prepared) 'no-statement 0)
+        (let* ((stepped (let loop ((rows 0))
+                          (let ((code (sqlite3-step statement)))
+                            (cond ((not (eqv? code sqlite-row)) code)
+                                  ((= rows 1000) 'too-many-rows)
+                                  (else (loop (+ rows 1)))))))
+               (finalized (sqlite3-finalize statement)))
+          (list (car prepared) stepped finalized)))))
+
+;; read-counters : Natural -> (List Integer Integer Integer Integer)
+;; (CHANGES TOTAL ROWID AUTOCOMMIT): the four of M3's five that read, called in
+;; this order, each once.
+(define (read-counters db)
+  (let* ((changes (sqlite3-changes64 db))
+         (total (sqlite3-total-changes64 db))
+         (rowid (sqlite3-last-insert-rowid db))
+         (autocommit (sqlite3-get-autocommit db)))
+    (list changes total rowid autocommit)))
+
+;; run-script : Natural (Listof String) -> (Listof (List (List Integer Any Integer) (List Integer ...)))
+;; Each of SQLS run by run-statement, in order, and the four read after it.
+(define (run-script db sqls)
+  (in-order (lambda (sql)
+              (let* ((codes (run-statement db sql))
+                     (counters (read-counters db)))
+                (list codes counters)))
+            sqls))
+
+;; counters-script : (Listof String)
+;; Three inserts at once, then one, an update, a select, a delete of every
+;; row, and a BEGIN and COMMIT, then a BEGIN and ROLLBACK. A trigger inserts
+;; into another table for each row of t, which sqlite3_total_changes64 counts
+;; and sqlite3_changes64 does not, so the two differ from the first change on;
+;; the rowids are ones no counter reaches (1003, 7777, -5, 43); and the counts
+;; of the changing statements, 3, 1, 2, 4, 1 and 2, differ from the totals,
+;; 6, 8, 10, 14, 16 and 20.
+(define counters-script
+  '("create table t(id integer primary key, v)"
+    "create table log(n)"
+    "create trigger tr after insert on t begin insert into log values (new.id); end"
+    "insert into t values (1001, 'a'), (1002, 'b'), (1003, 'c')"
+    "insert into t values (7777, 'd')"
+    "update t set v = 'z' where id < 1003"
+    "select id, v from t"
+    "delete from t where id > 1000"
+    "begin"
+    "insert into t values (-5, 'e')"
+    "commit"
+    "begin"
+    "insert into t values (42, 'f'), (43, 'g')"
+    "rollback"))
+
+;; The 64-bit rowids: past 32 bits, at the signed 64-bit extremes, and a
+;; value whose low 32 bits are 1.
+(define rowid-script
+  '("create table r(id integer primary key)"
+    "insert into r values (9223372036854775807)"
+    "insert into r values (-9223372036854775808)"
+    "insert into r values (4294967297)"))
+
+;; oracle-counters : (Listof String) -> (U (Listof (List Integer Integer Integer Integer)) Any)
+;; What the C oracle reads of SQLS; its datum when it failed.
+(define (oracle-counters sqls)
+  (let ((answer (if expected-path
+                    (libsqlite3-oracle-counters getenv expected-path sqls)
+                    (list 'no-oracle 'no-path expected-choice))))
+    (if (and (list? answer) (pair? answer) (pair? (car answer)) (eq? (caar answer) 'counters))
+        (cdar answer)
+        answer)))
+
+(define counters-oracle (oracle-counters counters-script))
+(define rowids-oracle (oracle-counters rowid-script))
+
+(test-equal "the C oracle read the four counters after each statement of both scripts: 14 and 4"
+  '(14 4)
+  (list (if (list? counters-oracle) (length counters-oracle) counters-oracle)
+        (if (list? rowids-oracle) (length rowids-oracle) rowids-oracle)))
+
+(test-equal "the C oracle's counters ran under Valgrind exactly when the gate asked"
+  (cons 'valgrind (if (getenv "CHEZ_SQLITE3_GATE_CHILD") 'yes 'no))
+  (let ((answer (if expected-path
+                    (libsqlite3-oracle-counters getenv expected-path rowid-script)
+                    (list 'no-oracle 'no-path))))
+    (or (and (list? answer) (for-all pair? answer) (assq 'valgrind answer))
+        (list 'valgrind 'no-oracle answer))))
+
+;; every statement's own codes: SQLITE_OK to prepare, SQLITE_DONE to step, SQLITE_OK to finalize
+(define (all-done n) (make-list-of n (list ok sqlite-done ok)))
+
+(test-equal "after each statement of the script, sqlite3_changes64, sqlite3_total_changes64, sqlite3_last_insert_rowid and sqlite3_get_autocommit read, whole, what the C oracle reads: 14 rows of four; every prepare and finalize answers SQLITE_OK and every step SQLITE_DONE; the close answers SQLITE_OK and every count is zero after"
+  (list (list (all-done 14) counters-oracle) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let ((script (run-script db counters-script)))
+         (list (map car script) (map cadr script)))))))
+
+;; Written out, so that a script whose every statement changed nothing, or
+;; whose counters all read the same, fails whatever the oracle reads. Read
+;; from the oracle on 3.53.1 and on 3.45.1, which agree on all of it. The
+;; trigger's rows are in the totals only: 3 inserts and 3 into log make 6.
+;; A SELECT, a BEGIN and a COMMIT change none of the four but the flag; a
+;; ROLLBACK undoes rows and leaves the totals as they were.
+(define counters-written
+  '((0 0 0 1)       ; create table t
+    (0 0 0 1)       ; create table log
+    (0 0 0 1)       ; create trigger
+    (3 6 1003 1)    ; insert three rows, three more by the trigger
+    (1 8 7777 1)    ; insert one
+    (2 10 7777 1)   ; update two: the rowid is the last insert's
+    (2 10 7777 1)   ; select: nothing changes
+    (4 14 7777 1)   ; delete four, which no trigger sees
+    (4 14 7777 0)   ; begin: autocommit off
+    (1 16 -5 0)     ; insert one inside it
+    (1 16 -5 1)     ; commit: autocommit on
+    (1 16 -5 0)     ; begin
+    (2 20 43 0)     ; insert two inside it
+    (2 20 43 1)))   ; rollback: autocommit on, nothing undone in the counts
+
+(test-equal "the same sequence has the written-out counters: 3 changes and 6 in all after the first insert, rowid 7777 after the update, the select and the delete, -5 inside the first transaction, 43 in the second and its rollback, and the flag 0 exactly inside BEGIN"
+  (list (list (all-done 14) counters-written) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let ((script (run-script db counters-script)))
+         (list (map car script) (map cadr script)))))))
+
+;; The oracle is held to the literal by a second route too: they must agree.
+(test-equal "the oracle's counters are the written-out ones: the comparison above is of the library with the library, and this holds the oracle to the literal"
+  counters-written
+  counters-oracle)
+
+;; The rows of the 64-bit range: an int binding of sqlite3_last_insert_rowid
+;; reads the low 32 bits, sign-extended: 2^63-1 as -1, -2^63 as 0 and
+;; 2^32+1 as 1.
+(test-equal "sqlite3_last_insert_rowid after an insert at rowid 2^63-1 is 9223372036854775807, whole; every count is zero after"
+  (list 9223372036854775807 ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((created (run-statement db "create table r(id integer primary key)"))
+              (inserted (run-statement db "insert into r values (9223372036854775807)")))
+         (sqlite3-last-insert-rowid db))))))
+
+(test-equal "sqlite3_last_insert_rowid after an insert at rowid -2^63 is -9223372036854775808, whole; every count is zero after"
+  (list -9223372036854775808 ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((created (run-statement db "create table r(id integer primary key)"))
+              (inserted (run-statement db "insert into r values (-9223372036854775808)")))
+         (sqlite3-last-insert-rowid db))))))
+
+(test-equal "sqlite3_last_insert_rowid after an insert at rowid 2^32+1 is 4294967297, whole; every count is zero after"
+  (list 4294967297 ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((created (run-statement db "create table r(id integer primary key)"))
+              (inserted (run-statement db "insert into r values (4294967297)")))
+         (sqlite3-last-insert-rowid db))))))
+
+(define (rowid-script-answer)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let ((script (run-script db rowid-script)))
+         (list (map car script) (map cadr script)))))))
+
+(test-equal "the 64-bit script, a create and three inserts at 2^63-1, -2^63 and 2^32+1, reads the oracle's four counters after each, whole; every statement answers OK, DONE, OK, and every count is zero after"
+  (list (list (all-done 4) rowids-oracle) ok zero-counts)
+  (rowid-script-answer))
+
+(test-equal "the 64-bit script has the written-out counters: rowids whole, changes 1 and totals 1 to 3 for each insert"
+  (list (list (all-done 4)
+              '((0 0 0 1) (1 1 9223372036854775807 1) (1 2 -9223372036854775808 1)
+                (1 3 4294967297 1)))
+        ok zero-counts)
+  (rowid-script-answer))
+
+;; get_autocommit, each state its own row: a fresh connection is in
+;; autocommit mode; BEGIN leaves it; COMMIT and ROLLBACK return to it.
+(test-equal "sqlite3_get_autocommit is 1 on a fresh :memory: connection, outside any transaction; every count is zero after"
+  (list 1 ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory (lambda (db) (sqlite3-get-autocommit db)))))
+
+(test-equal "sqlite3_get_autocommit is 0 inside BEGIN; every code is OK, DONE, OK and every count is zero after"
+  (list (list (list ok sqlite-done ok) 0) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((began (run-statement db "begin"))
+              (flag (sqlite3-get-autocommit db)))
+         (list began flag))))))
+
+(test-equal "sqlite3_get_autocommit is 1 after BEGIN and COMMIT, the flag 0 between them; every count is zero after"
+  (list (list (list ok sqlite-done ok) 0 (list ok sqlite-done ok) 1) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((began (run-statement db "begin"))
+              (inside (sqlite3-get-autocommit db))
+              (committed (run-statement db "commit"))
+              (outside (sqlite3-get-autocommit db)))
+         (list began inside committed outside))))))
+
+(test-equal "sqlite3_get_autocommit is 1 after BEGIN and ROLLBACK, the flag 0 between them; every count is zero after"
+  (list (list (list ok sqlite-done ok) 0 (list ok sqlite-done ok) 1) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((began (run-statement db "begin"))
+              (inside (sqlite3-get-autocommit db))
+              (rolled (run-statement db "rollback"))
+              (outside (sqlite3-get-autocommit db)))
+         (list began inside rolled outside))))))
+
+;; sqlite3_interrupt, on one thread: deterministic. A statement held at a
+;; row is running, so the interrupt reaches it; with none running it is lost
+;; (the M3 plan, section 4.4; research: concurrency I2, I3).
+(define interrupted (code-of 'interrupt))
+
+(test-equal "sqlite3_interrupt answers the unspecified value, as a void result does, never a number"
+  (list 'void ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory (lambda (db) (if (eq? (sqlite3-interrupt db) (void)) 'void 'not-void)))))
+
+(test-equal "a statement held at its row, then sqlite3_interrupt: its next step answers SQLITE_INTERRUPT, 9, and its finalize that code too; a statement after it runs to a row, 7, and DONE; every count is zero after"
+  (list (list sqlite-row interrupted interrupted (list ok sqlite-row 7 sqlite-done ok))
+        ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((prepared (prepare db "select 1 union all select 2"))
+              (statement (cadr prepared))
+              (held (sqlite3-step statement))
+              (void-result (sqlite3-interrupt db))
+              (stopped (sqlite3-step statement))
+              (finalized (sqlite3-finalize statement))
+              (next (prepare db "select 7"))
+              (next-statement (cadr next))
+              (row (sqlite3-step next-statement))
+              (value (sqlite3-column-int64 next-statement 0))
+              (done (sqlite3-step next-statement))
+              (next-finalized (sqlite3-finalize next-statement)))
+         (list held stopped finalized
+               (list (car next) row value done next-finalized)))))))
+
+(test-equal "sqlite3_interrupt with no statement running is a no-op: on a fresh connection, the next statement, select 7, steps to a row, 7, and DONE, and finalizes SQLITE_OK; every count is zero after"
+  (list (list ok sqlite-row 7 sqlite-done ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((void-result (sqlite3-interrupt db))
+              (next (prepare db "select 7"))
+              (statement (cadr next))
+              (row (sqlite3-step statement))
+              (value (sqlite3-column-int64 statement 0))
+              (done (sqlite3-step statement))
+              (finalized (sqlite3-finalize statement)))
+         (list (car next) row value done finalized))))))
+
+(test-equal "sqlite3_interrupt after a statement ran to DONE, not reset, is lost too: another statement, select 9, then steps to a row, 9, and DONE; every code is OK or DONE or ROW as written, and every count is zero after"
+  (list (list ok sqlite-row sqlite-done ok sqlite-row 9 sqlite-done ok ok) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((first (prepare db "select 1"))
+              (first-statement (cadr first))
+              (first-row (sqlite3-step first-statement))
+              (first-done (sqlite3-step first-statement))
+              (void-result (sqlite3-interrupt db))
+              (second (prepare db "select 9"))
+              (second-statement (cadr second))
+              (second-row (sqlite3-step second-statement))
+              (value (sqlite3-column-int64 second-statement 0))
+              (second-done (sqlite3-step second-statement))
+              (first-finalized (sqlite3-finalize first-statement))
+              (second-finalized (sqlite3-finalize second-statement)))
+         (list (car first) first-row first-done (car second) second-row value second-done
+               first-finalized second-finalized))))))
+
 ;; --- call-with-c-string and c-string->string ----------------------------------------------------
 
 ;; c-bytes : String -> Any
@@ -1663,7 +1978,7 @@
 ;; head of what it runs, and which of step-names that uses, so a step whose
 ;; body was swapped for another's, or that stopped calling its binding or
 ;; checking its answer, changes the list too.
-(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list and M2's 21, in ADR-0002's order; each with the head of what it runs and the load's names it uses"
+(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list, M2's 21 and M3's five, in ADR-0002's order; each with the head of what it runs and the load's names it uses"
   '((chosen call-with-values)
     (libsqlite3-loaded guard)
     (raw-libversion-number bind-required)
@@ -1706,7 +2021,12 @@
     (sqlite3-column-text bind-required report)
     (sqlite3-column-blob bind-required report)
     (sqlite3-column-bytes bind-required report)
-    (sqlite3-error-offset bind-required report))
+    (sqlite3-error-offset bind-required report)
+    (sqlite3-changes64 bind-required report)
+    (sqlite3-total-changes64 bind-required report)
+    (sqlite3-last-insert-rowid bind-required report)
+    (sqlite3-get-autocommit bind-required report)
+    (sqlite3-interrupt bind-required report))
   (if body-read?
       (let loop ((forms native-body) (found '()))
         (if (null? forms)
@@ -1794,8 +2114,13 @@
           (sqlite3-column-text report "sqlite3_column_text")
           (sqlite3-column-blob report "sqlite3_column_blob")
           (sqlite3-column-bytes report "sqlite3_column_bytes")
-          (sqlite3-error-offset report "sqlite3_error_offset"))
-        36)
+          (sqlite3-error-offset report "sqlite3_error_offset")
+          (sqlite3-changes64 report "sqlite3_changes64")
+          (sqlite3-total-changes64 report "sqlite3_total_changes64")
+          (sqlite3-last-insert-rowid report "sqlite3_last_insert_rowid")
+          (sqlite3-get-autocommit report "sqlite3_get_autocommit")
+          (sqlite3-interrupt report "sqlite3_interrupt"))
+        41)
   (if body-read?
       (list (let loop ((forms native-body) (found '()))
               (if (null? forms)

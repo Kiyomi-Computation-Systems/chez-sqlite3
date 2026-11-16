@@ -100,6 +100,7 @@
     (sqlite-blob . "SQLITE_BLOB")
     (sqlite-null . "SQLITE_NULL")
     (sqlite-utf8 . "SQLITE_UTF8")
+    (sqlite-prepare-persistent . "SQLITE_PREPARE_PERSISTENT")
     (sqlite-result-codes . (each "SQLITE_"))
     (sqlite-result-code-name . procedure)
     (sqlite-primary-code-name . procedure)))
@@ -532,6 +533,13 @@
         ((ends-with? c-type "*") 'uptr)
         (else #f)))
 
+;; result-type : String -> (U Symbol #f)
+;; A result's Chez type: chez-type's, and void for void, which only a result
+;; may be (sqlite3_interrupt's). chez-type still maps void to nothing, so a
+;; void argument stays unmapped.
+(define (result-type c-type)
+  (if (string=? c-type "void") 'void (chez-type c-type)))
+
 ;; map-problems : Table -> (Listof (List String Any Any Any Any))
 ;; Each row whose Chez types are not the map of its C types:
 ;; (NAME MAPPED-ARGUMENTS MAPPED-RESULT ARGUMENTS RESULT).
@@ -539,7 +547,7 @@
   (filter (lambda (m) m)
           (map (lambda (row)
                  (let ((arguments (map chez-type (cadr (row-prototype row))))
-                       (result (chez-type (car (row-prototype row)))))
+                       (result (result-type (car (row-prototype row)))))
                    (if (and (equal? arguments (row-arguments row)) (eq? result (row-result row)))
                        #f
                        (list (row-name row) arguments result (row-arguments row) (row-result row)))))
@@ -645,8 +653,8 @@
 (test-equal "values: every question got an answer"
   '() (filter (lambda (c) (eq? (answer-for c) 'no-answer)) asked-names))
 
-(test-equal "values: the table asks 108 codes, and the checks ask 123 names: those, the 9 open flags, the 5 type codes and SQLITE_UTF8; SQLITE_ROW and SQLITE_DONE are the table's own"
-  '(108 123) (list (length table) (length asked-names)))
+(test-equal "values: the table asks 108 codes, and the checks ask 124 names: those, the 9 open flags, the 5 type codes, SQLITE_UTF8 and SQLITE_PREPARE_PERSISTENT; SQLITE_ROW and SQLITE_DONE are the table's own"
+  '(108 124) (list (length table) (length asked-names)))
 
 ;; --- the table's own shape ------------------------------------------------------------
 
@@ -835,8 +843,8 @@
                rows)
           f))))
 
-(test-equal "prototypes: the table has a row for each of M1's 15 entry points and M2's 21"
-  36 (length conventions-table))
+(test-equal "prototypes: the table has a row for each of M1's 15 entry points, M2's 21 and M3's five"
+  41 (length conventions-table))
 
 (test-equal "prototypes: the header declares each row's prototype exactly: the rows it does not, each by name"
   '()
@@ -966,6 +974,39 @@
          (list "sqlite3_bind_blob64"
                '("int" ("sqlite3_stmt*" "int" "const void*" "sqlite3_uint64" "void(*)(void*)"))
                '(uptr int uptr unsigned-64 int) 'int 'plain '()))))
+
+(test-equal "the prototype check refuses each of M3's five written as its near miss: the three counters' sqlite3_int64 as int, sqlite3_get_autocommit's int as sqlite3_int64, sqlite3_interrupt's void as int, each by name; and answers 1 for each written right"
+  '((("sqlite3_changes64" . 0) ("sqlite3_total_changes64" . 0) ("sqlite3_last_insert_rowid" . 0)
+     ("sqlite3_get_autocommit" . 0) ("sqlite3_interrupt" . 0))
+    (("sqlite3_changes64" . 1) ("sqlite3_total_changes64" . 1) ("sqlite3_last_insert_rowid" . 1)
+     ("sqlite3_get_autocommit" . 1) ("sqlite3_interrupt" . 1)))
+  (list
+   (verdicts-of
+    (list (list "sqlite3_changes64" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
+          (list "sqlite3_total_changes64" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
+          (list "sqlite3_last_insert_rowid" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
+          (list "sqlite3_get_autocommit" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'integer-64 'plain '())
+          (list "sqlite3_interrupt" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())))
+   (verdicts-of
+    (list (list "sqlite3_changes64" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'integer-64 'plain '())
+          (list "sqlite3_total_changes64" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'integer-64 'plain '())
+          (list "sqlite3_last_insert_rowid" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'integer-64 'plain '())
+          (list "sqlite3_get_autocommit" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
+          (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'void 'plain '())))))
+
+(test-equal "the map check maps a void result to void and nothing else to it: sqlite3_interrupt written void is no problem, written int, or with a void argument, it is, and so is a counter written void"
+  '(()
+    (("sqlite3_interrupt" (uptr) void (uptr) int))
+    (("sqlite3_interrupt" (#f) void (void) void))
+    (("sqlite3_changes64" (uptr) integer-64 (uptr) void)))
+  (list (map-problems
+         (list (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'void 'plain '())))
+        (map-problems
+         (list (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'int 'plain '())))
+        (map-problems
+         (list (list "sqlite3_interrupt" '("void" ("void")) '(void) 'void 'plain '())))
+        (map-problems
+         (list (list "sqlite3_changes64" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'void 'plain '())))))
 
 (test-end "constants")
 

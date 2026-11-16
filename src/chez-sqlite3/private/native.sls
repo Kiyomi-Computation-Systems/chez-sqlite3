@@ -27,10 +27,11 @@
 ;;;                  initialises itself at its first open unless it was built
 ;;;                  with SQLITE_OMIT_AUTOINIT, where the application must. An
 ;;;                  answer but SQLITE_OK is load-failed
-;;;   7. the rest    every other entry point M1 requires, then M2's 21, in
-;;;                  ADR-0002's amended order, eagerly: sqlite3_prepare_v3,
-;;;                  sqlite3_finalize, sqlite3_step, sqlite3_reset,
-;;;                  sqlite3_clear_bindings, sqlite3_bind_parameter_count,
+;;;   7. the rest    every other entry point M1 requires, then M2's 21 and
+;;;                  M3's five, in ADR-0002's amended order, eagerly:
+;;;                  sqlite3_prepare_v3, sqlite3_finalize, sqlite3_step,
+;;;                  sqlite3_reset, sqlite3_clear_bindings,
+;;;                  sqlite3_bind_parameter_count,
 ;;;                  sqlite3_bind_parameter_index, sqlite3_bind_null,
 ;;;                  sqlite3_bind_int64, sqlite3_bind_double,
 ;;;                  sqlite3_bind_text64, sqlite3_bind_blob64,
@@ -38,7 +39,10 @@
 ;;;                  sqlite3_column_type, sqlite3_column_int64,
 ;;;                  sqlite3_column_double, sqlite3_column_text,
 ;;;                  sqlite3_column_blob, sqlite3_column_bytes and
-;;;                  sqlite3_error_offset (ADR-0002, M2's amendment)
+;;;                  sqlite3_error_offset (ADR-0002, M2's amendment), then
+;;;                  sqlite3_changes64, sqlite3_total_changes64,
+;;;                  sqlite3_last_insert_rowid, sqlite3_get_autocommit and
+;;;                  sqlite3_interrupt (ADR-0002, M3's amendment)
 ;;;   8. the check   sqlite3_memory_used read once, the baseline, and the
 ;;;                  check against it registered with the counters, for
 ;;;                  suite-exit-status (chez-sqlite3 private memory-check)
@@ -78,7 +82,9 @@
 ;;; schema and waits in the busy handler under another connection's lock;
 ;;; sqlite3_step, which does the statement's I/O and waits there too; and
 ;;; sqlite3_reset and sqlite3_finalize, measured waiting 1502 ms in the busy
-;;; handler under another connection's read. Every other binding is plain.
+;;; handler under another connection's read. Every other binding is plain,
+;;; M3's five among them: no measurement or documentation shows one waiting
+;;; (ADR-0011, decision 5, M3's amendment).
 ;;; sqlite-transient is SQLITE_TRANSIENT, the destructor that makes SQLite
 ;;; copy a bound value: a pointer whose bits are all ones, computed from the
 ;;; pointer's size (ADR-0001).
@@ -130,7 +136,9 @@
           sqlite3-bind-null sqlite3-bind-int64 sqlite3-bind-double sqlite3-bind-text64
           sqlite3-bind-blob64 sqlite3-column-count sqlite3-column-name sqlite3-column-type
           sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
-          sqlite3-column-bytes sqlite3-error-offset sqlite-transient
+          sqlite3-column-bytes sqlite3-error-offset
+          sqlite3-changes64 sqlite3-total-changes64 sqlite3-last-insert-rowid
+          sqlite3-get-autocommit sqlite3-interrupt sqlite-transient
           call-with-c-string c-string->string call-with-out-pointer
           call-with-bytes foreign-bytes c-string->bytevector)
   (import (chez-sqlite3 private require-threaded)
@@ -808,6 +816,49 @@
     (load-step
      (bind-required report
        (foreign-procedure "sqlite3_error_offset" (uptr) int))))
+
+  ;; sqlite3-changes64 : Positive-Integer -> Integer
+  ;; sqlite3_int64 sqlite3_changes64(sqlite3*): the rows the most recently
+  ;; completed INSERT, UPDATE or DELETE changed, triggers' own not counted. 64
+  ;; bits, never an int (ADR-0016, decision 8).
+  (define sqlite3-changes64
+    (load-step
+     (bind-required report
+       (foreign-procedure "sqlite3_changes64" (uptr) integer-64))))
+
+  ;; sqlite3-total-changes64 : Positive-Integer -> Integer
+  ;; sqlite3_int64 sqlite3_total_changes64(sqlite3*): the rows every INSERT,
+  ;; UPDATE and DELETE changed since the connection opened, triggers' included.
+  (define sqlite3-total-changes64
+    (load-step
+     (bind-required report
+       (foreign-procedure "sqlite3_total_changes64" (uptr) integer-64))))
+
+  ;; sqlite3-last-insert-rowid : Positive-Integer -> Integer
+  ;; sqlite3_int64 sqlite3_last_insert_rowid(sqlite3*): the rowid of the most
+  ;; recent successful INSERT, any 64-bit integer, negative ones too.
+  (define sqlite3-last-insert-rowid
+    (load-step
+     (bind-required report
+       (foreign-procedure "sqlite3_last_insert_rowid" (uptr) integer-64))))
+
+  ;; sqlite3-get-autocommit : Positive-Integer -> Integer
+  ;; int sqlite3_get_autocommit(sqlite3*): 1 outside a transaction, 0 inside
+  ;; one.
+  (define sqlite3-get-autocommit
+    (load-step
+     (bind-required report
+       (foreign-procedure "sqlite3_get_autocommit" (uptr) int))))
+
+  ;; sqlite3-interrupt : Positive-Integer -> Void
+  ;; void sqlite3_interrupt(sqlite3*): makes a statement running on the
+  ;; connection, a held row's included, answer SQLITE_INTERRUPT; a no-op when
+  ;; none runs. The one binding that may be called off the owning thread
+  ;; (ADR-0011, M3's amendment).
+  (define sqlite3-interrupt
+    (load-step
+     (bind-required report
+       (foreign-procedure "sqlite3_interrupt" (uptr) void))))
 
   ;; --- 8. the exit check ---------------------------------------------------------------
   ;; The count SQLite holds once initialised and bound, before anything is

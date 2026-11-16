@@ -10,6 +10,9 @@
 ;;;                      each column read in C (the program's --rows mode)
 ;;;   libsqlite3-oracle-transient
 ;;;                      the header's SQLITE_TRANSIENT (its --transient mode)
+;;;   libsqlite3-oracle-counters
+;;;                      the four counters after each of a script's statements,
+;;;                      read in C (its --counters mode, M3 slice 2)
 ;;;   c-compiler         $CC as a command's words, for every compile
 ;;;   split-words        a string cut at whitespace
 ;;;
@@ -25,7 +28,7 @@
 ;;; path, not in src/.
 (library (libsqlite3-oracle)
   (export libsqlite3-oracle oracle-fields libsqlite3-oracle-rows libsqlite3-oracle-transient
-          c-compiler split-words)
+          libsqlite3-oracle-counters c-compiler split-words)
   (import (rnrs)
           (chez-sqlite3-testing))
 
@@ -94,6 +97,19 @@
   ;; loads no library. It never raises.
   (define (libsqlite3-oracle-transient getenv)
     (oracle-answer getenv '("--transient") '(transient)))
+
+  ;; libsqlite3-oracle-counters : (String -> (U String #f)) String (Listof String)
+  ;;                              -> (U (List (Pairof 'counters (Listof (List Integer Integer Integer Integer)))
+  ;;                                          (Pairof 'valgrind Symbol))
+  ;;                                    (List 'no-oracle Symbol Any))
+  ;; What the program's --counters mode reads from the library at PATH: SQLS,
+  ;; one statement each, run in order on one fresh :memory: database, and after
+  ;; each its (CHANGES TOTAL ROWID AUTOCOMMIT), read with the header's types;
+  ;; (counters (CHANGES TOTAL ROWID AUTOCOMMIT) ...), then the valgrind line;
+  ;; or (no-oracle STEP EVIDENCE). Each statement goes as hex of its UTF-8
+  ;; bytes. It never raises.
+  (define (libsqlite3-oracle-counters getenv path sqls)
+    (oracle-answer getenv (cons* "--counters" path (map utf8-hex sqls)) '(counters)))
 
   ;; oracle-answer : (String -> (U String #f)) (Listof String) (Listof Symbol)
   ;;                 -> (U (Listof (Pairof Symbol Any)) (List 'no-oracle Symbol Any))

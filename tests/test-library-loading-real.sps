@@ -148,6 +148,16 @@
   (map row-name conventions-table)
   (merge-halves (map row-name conventions-table) (map cdr decoy-halves)))
 
+;; The partition alternates: native's order dealt to the two suites in turn,
+;; the decoys' suite the even positions from 0, this suite's the odd. The row
+;; above holds only that the halves partition the table, each in its order, so
+;; two entries swapped between the halves, or one moved to the other, passes it.
+(test-equal "the decoys' half is the entries at the even positions of the convention table, from 0, and the real suite's half those at the odd positions: the halves alternate"
+  (list (entries-at-parity (map row-name conventions-table) 0)
+        (entries-at-parity (map row-name conventions-table) 1))
+  (list (cdr (assoc "test-library-loading-decoys.sps" decoy-halves))
+        (cdr (assoc "test-library-loading-real.sps" decoy-halves))))
+
 ;; this-half : (U (Pairof String (Listof String)) #f)
 ;; This suite's half, by its own file's name. The row below writes the name
 ;; out, so a suite copied from the other, or a lookup that answers another
