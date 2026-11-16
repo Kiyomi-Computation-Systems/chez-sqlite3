@@ -288,6 +288,114 @@ suites' failed rows.
 | NC1 | `sqlite3_interrupt` bound to `sqlite3_close` | caught: native 4, conventions 10, decoys 1 |
 | PG1 | `_Generic`'s default in the prototype check made 1 | caught: constants 5 of the prototype rows (39 passed, 5 failed); the review ran 38 and 5 before the fix-2 row |
 
+## The gate split in three
+
+On slice 2's second CI run, 43794568875, a slow runner, the halves of `test-library-loading` took
+319 s and 272 s, against the 450 s at which `make test-memory` names a suite `SLOW`; on `main`, the
+same class of runner, 288 s and 250 s. The maintainer chose (2026-11-16) to split them in three
+now, in the one M3 slice that owns the files. A Sonnet agent did it test first from
+the maintainer's brief; the mutations ran in whole copies of the tree under the worktree's
+git-ignored `build/m3s2-split/mut/` (`tar --exclude=./build --exclude=./.git`), each suite run from
+inside the copy, outside the gate but for the ungated child, which ran under it.
+
+- **The split.** A third suite, `tests/test-library-loading-missing.sps`, holds only missing-api
+  rows. `(library-loading)` deals the 41 entry points, in native's order, by position from 0, by a
+  pattern of five that repeats, `deal-pattern`: missing, decoys, missing, real, missing. That is 25
+  to missing, 8 to decoys and 8 to real, as the brief counted. The partition is `decoy-parts`
+  (was `decoy-halves`), still written out; `suite-part` (was `suite-half`) finds a suite's part by
+  its file's name; `entries-dealt` (was `entries-at-parity`) deals a list by a pattern.
+- **Children** (the gate's per-child logs): decoys 28 (20 behaviours and the order rows, 8 missing-api),
+  real 28 (20 and 8), missing 25. The brief's 25, 28 and 28 held.
+- **How the partition is held.** Three rows in each of the three suites, so any one alone holds
+  it: the merge (`merge-halves`, which already took a list), the dealing (each part is exactly what
+  `entries-dealt` gives its name, and every name in the pattern is a part), and the files (this
+  suite finds its own part by its name, and each suite the partition names is a file in `tests/`).
+  The alternation row is gone; the dealing row replaces it.
+- **The new suite's gate.** Its children run through `spawn-in`, so `gated-command`, and each says
+  whether it ran under memcheck (`decoy-row-in`'s expected answer holds `valgrind-line`); the suite
+  fails a child that didn't.
+- **The records in the code.** The Makefile's `MEMORY_TIMEOUT` comment and its "Not covered" list,
+  `check-memory-gate.sh`'s case-p comment, `refusal-probe.sps`'s two comments, and each suite's and
+  `(library-loading)`'s header. `check-suites`, `check-ci`, `check-memory-gate` and
+  `check-test-fails` hold no suite's name or count (`SUITES` is a wildcard), so none changed, and
+  neither did the workflow.
+
+### The rows moved
+
+Each suite's runner was made to print every test's name and expected value, scratch paths masked,
+in copies of `3e9a506` and of this tree, and the sorted lists compared. The old pair ran 108 rows
+(101 distinct, the five setup rows held in both); the three now run 116.
+
+- **Unchanged, each with its name and its expected value:** all 41 missing-api rows, the order
+  rows, the behaviours, the real library, the refusals, discovery and preflight. 25 missing-api
+  rows moved to `-missing`, 13 from the old decoys' 21 and 12 from the old real's 20; the decoys
+  suite keeps 4 of its old and takes 4 of the real's, and the real suite the reverse (see the
+  table).
+- **Held in all three, as each needs them** (5): CHEZ names the Chez to spawn; mktemp -d made a
+  scratch directory; packaging/floors.sexp gives the decoys their versions; this suite's own process
+  never loaded a libsqlite3, nor a decoy; the scratch directory is removed. `-missing` holds
+  these five and nothing else but the partition's three and its 25 missing-api rows: 33 rows.
+- **Replaced** (6 old rows, 9 new): in each suite the two partition rows (the merge, "the two suites'"
+  now "the three suites'", and the files row, "half" now "part") and the alternation row, which the
+  dealing row replaces. Each suite has the three.
+
+| Rows | Before | Now |
+|---|---|---|
+| missing-api, the 25 entries `libversion_number`, `sourceid`, `initialize`, `compileoption_used`, `open_v2`, `errmsg`, `errstr`, `extended_errcode`, `memory_used`, `prepare_v3`, `step`, `clear_bindings`, `bind_parameter_count`, `bind_null`, `bind_double`, `bind_text64`, `column_count`, `column_type`, `column_int64`, `column_text`, `column_bytes`, `error_offset`, `total_changes64`, `get_autocommit`, `interrupt` | 13 old decoys, 12 old real | missing |
+| missing-api, `libversion`, `compileoption_get`, `errcode`, `finalize`, `bind_parameter_index`, `bind_blob64`, `column_double`, `changes64` | 8 (4 old decoys, 4 old real) | decoys |
+| missing-api, `threadsafe`, `close`, `next_stmt`, `reset`, `bind_int64`, `column_name`, `column_blob`, `last_insert_rowid` | 8 (4 old decoys, 4 old real) | real |
+
+Builds compiled: decoys 8 + the control, marked, not-sqlite, lacks-rest and the three order builds
+(`open_v2`, `threadsafe`, `initialize`), 15 in all (`threadsafe` and `open_v2` are another part's);
+real 8 + the control, 9; missing 25.
+
+### The red runs
+
+| Check | Red run | Against | Green run |
+|---|---|---|---|
+| S1 | the new rows written first, in the three suites, with `decoy-parts` still the old two halves, 21 and 20 | caught: the dealing row, 1 fail of 51 in decoys, and the dealing and the files rows, 2 of 8, in missing (it is not in the partition: `unlisted`); the merge row passed in both. The real suite was not run red | 38, 45 and 33 passed, none failed |
+
+### The mutations
+
+7 mutations, 15 runs (the first four in each of the three suites), all caught. Outside the gate, each
+suite run from inside its copy, `tests/test-library-loading-X.sps`, in the container (Guix 3.53.1).
+Counts are the failures of each run, with the passes, against 33 (missing), 38 (decoys), 45 (real).
+
+| Mutation | missing | decoys | real | Caught by |
+|---|---|---|---|---|
+| `sqlite3_close` dropped from the real part | 2 fail (31) | 2 fail (36) | 2 fail (42) | the merge row and the dealing row, in every suite |
+| `sqlite3_close` in the real part and also appended to the decoys' | 2 fail (31) | 2 fail (37) | 2 fail (43) | the merge row and the dealing row |
+| `sqlite3_libversion` moved from the decoys' part to the front of the real's: the merge's order holds | 1 fail (32) | 1 fail (36) | 1 fail (45) | the dealing row only; the merge row passes |
+| the pattern's decoys and real places swapped (position 1 real, 3 decoys) | 1 fail (32) | 1 fail (37) | 1 fail (44) | the dealing row only |
+| the missing suite finds its part by `real`'s name: `(suite-part (list "tests/test-library-loading-real.sps"))` | 1 fail (15) | | | the files row; the suite then ran real's 8 rows. Decoys and real, unmutated, passed 38 and 45 |
+| a child of the missing suite run without `gated-command` (`lacks-sqlite3_sourceid`'s only), under `make test-memory MEMORY_SUITES=tests/test-library-loading-missing.sps` | 1 fail (32), `(valgrind . no)` for `(valgrind . yes)`; the run FAIL | | | the child's own row, `valgrind-line` |
+| the missing suite's exit line dropped, `make check-suites` | | | | `check-suites: tests/test-library-loading-missing.sps: its last datum is (test-end "library-loading-missing"), not (exit (suite-exit-status runner))`, make Error 1 |
+
+The dealing row holds what the merge row can't: the third mutation moves one entry between two
+parts, keeps the table's order in the merge, and passes the merge row in all three suites.
+
+## The gate split in three, measured
+
+`make test-memory` in the container, the three suites together, run once each way, `3e9a506` (two
+suites) against this tree (three), in whole copies of their own, the Guix 3.53.1 run and the floor
+(3.45.1) run side by side on one machine. Seconds, as the gate prints them; a lone run is not a
+reading of the cost, and CI's figures are the maintainer's.
+
+| Suite | children | Guix 3.53.1 | floor 3.45.1 |
+|---|---|---|---|
+| decoys, before | 41 | 224 | 223 |
+| real, before | 40 | 206 | 206 |
+| **sum, before** | 81 | 430 | 429 |
+| decoys, after | 28 | 155 | 154 |
+| real, after | 28 | 142 | 142 |
+| missing, after | 25 | 140 | 139 |
+| **sum, after** | 81 | 437 | 435 |
+
+The slowest suite fell from 224 s to 155 s, 31%, on both. Sums rise by 7 s and 6 s: each suite pays
+for its own scratch directory, its compiles and its setup. The cost is 5.1 to 5.6 s per child
+(155/28, 142/28, 140/25). On the slow CI runner (319 s before) the largest would be near 220 s of the 450.
+`make test` passes on both libraries with all three suites named.
+
 ## Findings
 
 - **The alternation is held now:** before this slice nothing held that each half is the entries at

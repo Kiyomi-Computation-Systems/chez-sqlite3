@@ -45,13 +45,14 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 # run, so that it is split before a slow runner kills it (ADR-0005, amended).
 # Valgrind runs 10 to 50 times slower than Chez alone. Most suites take 7 to
 # 12 s under it in the container (.plans/research/memory-gate/). The
-# exceptions are tests/test-library-loading-decoys.sps and -real.sps, whose
-# children each run under a Valgrind of their own, 38 apiece. They were one
-# suite, which took 562 s with its 76 children on CI's slowest runner of M2,
-# 38 s short of the limit. 600 s is far below CI's 60-minute job limit, so a
-# hang is named HUNG before the job is killed. make test-memory refuses a
-# MEMORY_TIMEOUT that is not a positive whole number, as make test refuses
-# such a TEST_TIMEOUT.
+# exceptions are tests/test-library-loading-decoys.sps, -real.sps and
+# -missing.sps, whose children each run under a Valgrind of their own, about
+# 25 to 28 apiece. They were one suite, which took 562 s with its 76 children
+# on CI's slowest runner of M2, 38 s short of the limit, then two, which took
+# 319 s and 272 s on a slow runner of M3's slice 2. 600 s is far below CI's
+# 60-minute job limit, so a hang is named HUNG before the job is killed.
+# make test-memory refuses a MEMORY_TIMEOUT that is not a positive whole
+# number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
 MEMORY_TIMEOUT ?= 600
 
@@ -414,9 +415,10 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # that runs from another working directory.
 # Not covered (ADR-0005, amended):
 #   - a child started without gated-command runs outside Valgrind, unseen:
-#     the children of tests/test-library-loading-decoys.sps, -real.sps and
-#     test-blocks.sps each say whether they ran under memcheck (preflight's,
-#     which prints no such line, by the one new log in the gate's directory),
+#     the children of tests/test-library-loading-decoys.sps, -real.sps,
+#     -missing.sps and test-blocks.sps each say whether they ran under
+#     memcheck (preflight's, which prints no such line, by the one new log in
+#     the gate's directory),
 #     and those suites fail if one did not; no other suite's children are
 #     held so;
 #   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a

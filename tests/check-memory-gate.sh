@@ -123,9 +123,9 @@
 #                   (stale). And a child run without gated-command runs
 #                   outside Valgrind, and the gate cannot see it: its leak
 #                   passes (unwrapped). That is the gap ADR-0005 records;
-#                   tests/test-library-loading-decoys.sps and -real.sps
-#                   close it for their own children, each of which must say
-#                   it ran under memcheck
+#                   tests/test-library-loading-decoys.sps, -real.sps and
+#                   -missing.sps close it for their own children, each of
+#                   which must say it ran under memcheck
 #   r  slow         test-memory prints each suite's time under the gate, and
 #                   names a suite SLOW, failing the run, once its time passes
 #                   three quarters of MEMORY_TIMEOUT, as ADR-0005 splits

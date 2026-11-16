@@ -1,12 +1,14 @@
 #!r6rs
-;;; One of the two suites that load libsqlite3 end to end, through (chez-sqlite3
+;;; One of the three suites that load libsqlite3 end to end, through (chez-sqlite3
 ;;; private native), tests/refusal-probe.sps and a decoy (ADR-0002, ADR-0003,
-;;; ADR-0010, ADR-0013): this one holds the decoy's behaviours and half of its
-;;; missing-api rows; tests/test-library-loading-real.sps holds the real
+;;; ADR-0010, ADR-0013): this one holds the decoy's behaviours and its part of
+;;; the missing-api rows. tests/test-library-loading-real.sps holds the real
 ;;; libsqlite3, the refusals no decoy reaches, discovery, make build's
-;;; preflight, and the other half. They were one suite until it passed 450 s
-;;; under the memory gate on CI, three quarters of MEMORY_TIMEOUT (ADR-0005,
-;;; amended); (library-loading) holds what both use.
+;;; preflight, and its own part; tests/test-library-loading-missing.sps holds
+;;; only missing-api rows, the largest part. They were one suite until it
+;;; passed 450 s under the memory gate on CI, three quarters of
+;;; MEMORY_TIMEOUT (ADR-0005, amended); (library-loading) holds what all
+;;; three use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -15,7 +17,7 @@
 ;;; what it printed, as data, whole: exit status, every line, and stderr.
 ;;;
 ;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc)
-;;;     once per build, each export of this suite's half left out one at a
+;;;     once per build, each export of this suite's part left out one at a
 ;;;     time, and run under one behaviour per row, chosen by
 ;;;     CHEZ_SQLITE3_DECOY. Each row asserts the refusal's reason and every
 ;;;     field (plan section 3.4), and the decoy's call log, whole. The log
@@ -30,8 +32,9 @@
 ;;;     times, and the later two must answer what the first did, with no
 ;;;     second load in the call log and no second library in the process;
 ;;;   - the partition: each entry point's missing-api row runs in exactly one
-;;;     of the two suites, this one's half found by its file's name, and two
-;;;     rows, here and in the other suite, hold the halves and the suites.
+;;;     of the three suites, this one's part found by its file's name, and
+;;;     three rows, here and in each other suite, hold the parts, the pattern
+;;;     that deals them and the suites.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
 ;;; requires them zero (ADR-0005, decision 4). Each runs through
@@ -136,44 +139,46 @@
   (map row-name conventions-table)
   every-entry)
 
-;; Each half makes the missing-api rows of one suite. Merged in the table's
-;; order, the halves are its names exactly when each entry is in one half,
-;; once, and each half keeps the table's order; tests/test-library-loading-
-;; real.sps holds the same row.
-(test-equal "the two suites' entry lists partition the convention table: merged in its order, they are its names, each once"
+;; Each part makes the missing-api rows of one suite. Merged in the table's
+;; order, the parts are its names exactly when each entry is in one part,
+;; once, and each part keeps the table's order; the other two suites hold the
+;; same row.
+(test-equal "the three suites' entry lists partition the convention table: merged in its order, they are its names, each once"
   (map row-name conventions-table)
-  (merge-halves (map row-name conventions-table) (map cdr decoy-halves)))
+  (merge-halves (map row-name conventions-table) (map cdr decoy-parts)))
 
-;; The partition alternates: native's order dealt to the two suites in turn,
-;; the decoys' suite the even positions from 0, this suite's the odd. The row
-;; above holds only that the halves partition the table, each in its order, so
-;; two entries swapped between the halves, or one moved to the other, passes it.
-(test-equal "the decoys' half is the entries at the even positions of the convention table, from 0, and the real suite's half those at the odd positions: the halves alternate"
-  (list (entries-at-parity (map row-name conventions-table) 0)
-        (entries-at-parity (map row-name conventions-table) 1))
-  (list (cdr (assoc "test-library-loading-decoys.sps" decoy-halves))
-        (cdr (assoc "test-library-loading-real.sps" decoy-halves))))
+;; The partition is dealt: native's order, by position from 0, by a pattern of
+;; five that repeats (deal-pattern). The row above holds only that the parts
+;; partition the table, each in its order, so two entries swapped between
+;; parts, or one moved to another, passes it. Each part is exactly what the
+;; pattern deals its suite, and every name the pattern holds is a part.
+(test-equal "each suite's part is the entries the pattern deals it, by position in the convention table from 0, and the pattern names only parts"
+  (list decoy-parts 'all)
+  (list (map (lambda (part)
+               (cons (car part) (entries-dealt (map row-name conventions-table) deal-pattern (car part))))
+             decoy-parts)
+        (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 
-;; this-half : (U (Pairof String (Listof String)) #f)
-;; This suite's half, by its own file's name. The row below writes the name
-;; out, so a suite copied from the other, or a lookup that answers another
-;; half, fails it.
-(define this-half (suite-half (command-line)))
+;; this-part : (U (Pairof String (Listof String)) #f)
+;; This suite's part, by its own file's name. The row below writes the name
+;; out, so a suite copied from another, or a lookup that answers another
+;; part, fails it.
+(define this-part (suite-part (command-line)))
 
-(test-equal "this suite runs its own half of the partition, found by its file's name, and each suite the partition names is a file in tests/"
-  (list "test-library-loading-decoys.sps" (map (lambda (half) (cons (car half) 'present)) decoy-halves))
-  (list (if this-half (car this-half) (list 'unlisted (command-line)))
-        (map (lambda (half)
-               (cons (car half) (if (file-exists? (string-append "tests/" (car half))) 'present 'absent)))
-             decoy-halves)))
+(test-equal "this suite runs its own part of the partition, found by its file's name, and each suite the partition names is a file in tests/"
+  (list "test-library-loading-decoys.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
+  (list (if this-part (car this-part) (list 'unlisted (command-line)))
+        (map (lambda (part)
+               (cons (car part) (if (file-exists? (string-append "tests/" (car part))) 'present 'absent)))
+             decoy-parts)))
 
-(define this-entries (if this-half (cdr this-half) '()))
+(define this-entries (if this-part (cdr this-part) '()))
 
 ;; --- decoys --------------------------------------------------------------------------
 
 ;; builds : (Listof (Pairof String (Listof String)))
 ;; The builds this suite's rows use: the behaviours' four, a lacking build for
-;; each entry of its half, and the three the order rows use, whatever half
+;; each entry of its part, and the three the order rows use, whatever part
 ;; they are in.
 (define builds
   (decoy-builds
@@ -266,7 +271,7 @@
                        (append (list "decoy(?)") the-report-three
                                (list threadsafe-call initialize-call memory-used-call)))))
 
-;; This suite's half of the entry points, each left out, one at a time
+;; This suite's part of the entry points, each left out, one at a time
 ;; ((library-loading)'s missing-api-rows).
 (missing-api-rows decoy-row control-library this-entries)
 

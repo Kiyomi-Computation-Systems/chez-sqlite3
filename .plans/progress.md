@@ -35,7 +35,7 @@ newest first.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
 - **Now: M3 slice 1, the pure core, is PR #22 on `m3-slice-1-core`.** Slice 2, the bindings, is
-  built beside it by the M2 session, on `m3-slice-2-bindings`, and stacks on it. The maintainer's
+  PR #23 on `m3-slice-2-bindings`, built beside it by the M2 session and stacked on it. The maintainer's
   order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
