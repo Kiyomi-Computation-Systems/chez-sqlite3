@@ -78,10 +78,14 @@
 ;;; any is bound, with each value bound in a critical section of its own
 ;;; (the maintainer's answer to the M3 plan's Q15, "One value each"), each
 ;;; of its sections reading the convenience's call's flag first, through
-;;; (chez-sqlite3 private statement)'s while-held.
+;;; (chez-sqlite3 private statement)'s while-held. And bind-each!/at, its
+;;; work as data, each section made by its caller's sectioner: execute!,
+;;; query and query-row's claim on their call, at the run's position
+;;; (ADR-0016, amended in M3 slice 5's part D); bind-each!/who is it, each
+;;; section by while-held.
 (library (chez-sqlite3 private statement-values)
   (export bind! bind-all! clear-bindings! column-value column-bytevector column-name
-          bind!/who bind-all!/who bind-each!/who clear-bindings!/who
+          bind!/who bind-all!/who bind-each!/who bind-each!/at clear-bindings!/who
           column-value/who column-bytevector/who column-name/who)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
@@ -341,25 +345,76 @@
   ;; LEFT?, a convenience's call's check, or #f for none, is read first in
   ;; each of those sections, the count's and each value's, by while-held:
   ;; when it answers true, the section binds nothing, and &sqlite-closed is
-  ;; raised from WHO after it.
+  ;; raised from WHO after it. query-fold's flag; bind-each!/at's work, each
+  ;; section by held-sectioner, what it answers raised.
   (define (bind-each!/who who st given left?)
+    (let ((run (bind-each!/at who st given (held-sectioner who left?) 0)))
+      (unless (eq? (car run) 'done) (raise (caddr run)))))
+
+  ;; Section = (U (List 'answered Natural A ...) (List 'raised Natural Any) (List 'refused))
+  ;; Sectioner = Natural (-> A ...) -> Section
+  ;; Run = (U (List 'done Natural Any) (List 'raised Natural Any) (List 'refused))
+  ;; A section a run of a convenience's call makes at position N, the
+  ;; Sectioner's, as data: THUNK's answers, or what it raised, each with the
+  ;; run's next position; or refused, THUNK never run. How the run's work
+  ;; ended: done, its next position and its answer; a raise, with its next
+  ;; position; or a section refused, the run's work over (the conveniences'
+  ;; header).
+
+  ;; held-sectioner : Symbol (U (-> Any) #f) -> Sectioner
+  ;; THUNK's section by while-held, for WHO, reading LEFT? first: its
+  ;; answers, or what it raised, &sqlite-closed when LEFT? answered true
+  ;; among it, caught after while-held's section. Never refused.
+  (define (held-sectioner who left?)
+    (lambda (n thunk)
+      (guard (c (#t (list 'raised (+ n 1) c)))
+        (call-with-values (lambda () (while-held who left? thunk))
+          (lambda answers (cons 'answered (cons (+ n 1) answers)))))))
+
+  ;; finished-at : Symbol Natural Outcome -> Run
+  ;; OUTCOME, a count's refusal or a bind's, finished by finish for WHO,
+  ;; outside any section, a run at position N: done when it raises nothing,
+  ;; else what it raised.
+  (define (finished-at who n outcome)
+    (guard (c (#t (list 'raised n c)))
+      (finish who outcome)
+      (list 'done n 'bound)))
+
+  ;; bind-each!/at : Symbol Statement (Listof Value) Sectioner Natural -> Run
+  ;; bind-each!/who's work for a run of a convenience's call at position N,
+  ;; each of its sections made by SECTION, which execute!, query and
+  ;; query-row's claim makes: the count's at N, then each value's, in order
+  ;; (the conveniences' header). Done, answering bound, at the position
+  ;; after the last value's; a refusal of the count or a value, or a bind's
+  ;; failure, raised, with the run's next position; a section refused, the
+  ;; run's work over, nothing bound by it. GIVEN is planned before any
+  ;; section, so a string is encoded once, and every value is checked before
+  ;; any is bound. Raises nothing.
+  (define (bind-each!/at who st given section n)
     (let* ((plans (plans-of given))
-           (count (while-held who left?
-                    (lambda ()
-                      (call-with-statement-handle who st 'bind-all!
-                        (lambda (connection handle sql)
-                          (values #f (sqlite3-bind-parameter-count handle)))))))
-           (n (length plans)))
-      (cond ((not (= n count))
-             (finish who (list 'refused 'value-count-mismatch n count)))
-            ((first-refused plans given) => (lambda (refused) (finish who refused)))
-            (else
-             (let loop ((plans plans) (rest given) (index 1))
-               (unless (null? plans)
-                 (finish who (while-held who left?
-                               (lambda ()
-                                 (bound-outcome who st (list 'index index) (car plans) index (car rest)))))
-                 (loop (cdr plans) (cdr rest) (+ index 1))))))))
+           (counted (section n (lambda ()
+                                 (call-with-statement-handle who st 'bind-all!
+                                   (lambda (connection handle sql)
+                                     (values #f (sqlite3-bind-parameter-count handle))))))))
+      (if (not (eq? (car counted) 'answered))
+          counted
+          (let ((n (cadr counted)) (count (caddr counted)) (k (length plans)))
+            (cond ((not (= k count))
+                   (finished-at who n (list 'refused 'value-count-mismatch k count)))
+                  ((first-refused plans given) => (lambda (refused) (finished-at who n refused)))
+                  (else
+                   (let loop ((plans plans) (rest given) (index 1) (n n))
+                     (if (null? plans)
+                         (list 'done n 'bound)
+                         (let ((s (section n (lambda ()
+                                               (bound-outcome who st (list 'index index) (car plans)
+                                                              index (car rest))))))
+                           (if (not (eq? (car s) 'answered))
+                               s
+                               (let ((bound (finished-at who (cadr s) (caddr s))))
+                                 (if (eq? (car bound) 'done)
+                                     (loop (cdr plans) (cdr rest) (+ index 1) (cadr bound))
+                                     bound))))))))))))
 
   ;; clear-bindings!/who : Symbol Statement -> Void
   ;; clear-bindings!'s work for WHO, which everything it raises names.

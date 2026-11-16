@@ -3,7 +3,8 @@
 Evidence that each rule slice 5's suites claim to guard fails through the property it names
 ([M3 plan](2026-11-15-m3-plan.md) §5, slice 5). Format of
 [the M3 slice 3 log](m3-slice-3-mutation-log.md). The slice is built in two parts, A and B, each
-keeping its own part of this log; part C holds the fixes of the slice's review.
+keeping its own part of this log; part C holds the fixes of the slice's review, and part D the
+conveniences' claim, the fix of a defect in slice 3 that the M2 session found.
 
 ## Part A: the settings list at open
 
@@ -775,3 +776,425 @@ connection counted.
   part of `(chez-sqlite3 private connection)`, is left for the lead.
 - **`sqlite3_cancel_auto_extension` keeps SQLite's list of entry points,** 8 bytes the memory
   check finds; `sqlite3_reset_auto_extension` frees it.
+
+## Part D: the conveniences' claim
+
+The M2 session, sweeping slice 4, found slice 5's open-verb hole in slice 3's conveniences, and the
+lead reproduced it (`build/verify-d/pending-sweep.sps`). The schedule: at fuel F a fresh engine's
+remainder R; R resumed at G until it expires again, as R1; R resumed again to its end, then R1.
+`execute!`, `query` and `query-row` left a statement tracked outside the cache in 1,361, 3,655 and
+1,849 trials, 1,935 and 602 of them at a row. **The maintainer's decision, 2026-11-16:** fix it in
+slice 5's PR, as part D, applying slice 5's claim to the conveniences. An Opus agent built it from
+the lead's brief, in the slice's worktree. Its probes are in the worktree's git-ignored
+`build/d-probe/`, its mutants and driver in `build/mut/d/`.
+
+- **The mechanism, confirmed** (`mechanism.sps`). At fuel 10, R lay before the check-out. R
+  resumed at G 46 to 51 prepared S1 and expired holding it, as R1. R's run found S1 out of the
+  cache, prepared S2, gave it back and set the flag. R1 was refused at its next section, still
+  holding S1.
+- **Wrong answers too, which the lead's probe did not read** (`answers.sps`). Two runs both past
+  the check-out share the statement, and the flag passes both until it is given back. So R stepped
+  past rows R1 had read: `query` answered `(#(2) #(3))` in 901 trials, `query-row` `#(2)` in 55.
+  And where both runs prepared, `execute!` inserted its row twice: 156 trials of the new suite.
+
+### The shape: a claim on every section
+
+**Every section claims its position, not only the check-out's and a miss's prepare's.** With slice
+3's flag kept for the sections the runs share, two runs both past the check-out would each pass
+every step and read, as the wrong answers above did. Only a position each run carries tells them
+apart.
+
+As built, in `(chez-sqlite3 private conveniences)`, for `execute!`, `query` and `query-row`:
+
+- **The claim** is the call's first expression, `(let ((claim (made-claim))) ...)`: the position
+  of the next section any run of the call may make, 0 at first, `#f` once the call has ended.
+- **Each run's position** is an argument, never assigned, so a continuation holds it as it was.
+- **Each section** claims its position in `in-section`, inside one critical section, and answers
+  data: the work's answers, or its raise, with the run's next position. In order:
+  - 0: the check-out and a miss's prepare, in one section, `checked-out` taking no check of its
+    own; the statement noted there by its on-made;
+  - each bind, the count's and each value's, by `bind-each!/at` through the claim's sectioner,
+    one value a section as before (Q15);
+  - each step; at a row, the column count's read and each column's;
+  - the return, by `returned`, which ends the claim.
+- **A run the call has passed is refused** at its next section: the section touches nothing, and
+  the run raises `&sqlite-closed` from the verb, making no section after ("Guard every call").
+- **A raise in a section** gives the statement back at the run's next position, its failure
+  dropped, and is raised again. A give-back that is refused raises `&sqlite-closed`.
+- **A raise no section caught,** a timer's or a keyboard handler's between two sections, gives the
+  statement back by a claim of whatever position is next, unless the call has ended, then is
+  raised again. Whichever run held the statement is refused at its next section.
+
+**`query-fold` and `execute-script!` keep slice 3's flag,** and their code is unchanged. An
+expiry inside the fold's wind finishes its statement and sets its flag, and one inside the
+script's block frees the block, so neither survives a preemption, and no second run reaches a
+statement another holds. Their sweeps hold. `bind-each!/who`, the fold's, is now
+`bind-each!/at`'s work with `while-held` sections, its behaviour as it was.
+
+**What it costs:** the check-out's checks now run inside its claimed section, and every section
+spends no ticks, so the three's fuels fell by about half. The fold's rose a little, its binds
+now going through `bind-each!/at`.
+
+| Row, on 3.53.1 and 3.45.1 alike | Before | After |
+|---|---|---|
+| engines: `execute!`, `query`, `query-row` complete unexpired at fuel | 84, 156, 104 | 43, 82, 47 |
+| engines: `query-fold`, and abandoned | 113, 113 | 117, 117 |
+| engines: an abandoned `query` completes in one slice at fuel | 119 | 60 |
+| engines: `execute-script!`; the two engines | 640; 259 | 640; 126 |
+| resumed: `query`, `query-row`, `execute!`, cold and warm | 148/141, 106/99, 112/105 | 72/72, 46/46, 51/51 |
+| resumed: a failed return; `query-fold`; the script | 156; 135; 638 | 78; 150; 638 |
+| statement-who: `bind-each!/who` completes unexpired at fuel | 111 | 151 |
+
+ADR-0016's P6 table cites the engines' fuels from before.
+
+### The files and signatures
+
+- **`src/chez-sqlite3/private/conveniences.sls`:**
+  - new, internal:
+    - `made-claim : -> Claim`, where `Claim = (U Natural #f) Boolean -> Boolean`;
+    - `in-section : Claim (U Natural #f) Boolean (-> A ...) -> Section`;
+    - `sectioner : Claim -> Sectioner`;
+    - `and-then : Run (Natural Any -> Run) -> Run`;
+    - `step-at : Symbol Statement Claim Natural -> Section`;
+    - `row-at : Symbol Statement Claim Natural -> Run`;
+  - changed: `with-checked-out : Symbol Claim Any Any (Statement Natural -> Run) -> A`;
+  - gone: `given-back`;
+  - unchanged: the six exports' signatures, `query-fold`, `execute-script!`, and the fold's
+    `row-of` and `stepped`.
+- **`src/chez-sqlite3/private/statement-values.sls`:**
+  - new, exported: `bind-each!/at : Symbol Statement (Listof Value) Sectioner Natural -> Run`;
+  - new, internal: `held-sectioner : Symbol (U (-> Any) #f) -> Sectioner`, and
+    `finished-at : Symbol Natural Outcome -> Run`;
+  - the types: `Section = (U (List 'answered Natural A ...) (List 'raised Natural Any)
+    (List 'refused))`, `Sectioner = Natural (-> A ...) -> Section`, `Run = (U (List 'done Natural
+    Any) (List 'raised Natural Any) (List 'refused))`;
+  - `bind-each!/who`'s signature is as it was.
+- **`src/chez-sqlite3/private/statement.sls`:** unchanged. `checked-out`'s check stays for the
+  fold and for slice 4's `with-transaction`, which passes one.
+- **The suites:** `tests/conveniences-pending.sls`, a new test library, and six suites,
+  `test-conveniences-pending-execute`, `-query`, `-query-row`, `-fold`, `-script-odd` and
+  `-script-even`; `test-statement-values`' export row grows by `bind-each!/at`.
+- **`docs/reference.md`:** the conveniences' re-entry paragraph says what the claim holds, and the
+  raise paragraph names a handler's raise.
+
+### The suites
+
+**The schedule** is the lead's, each trial on a fresh `:memory:` connection holding t's three
+rows, made by one statement through the statement tier, so the cache starts empty. F runs from 1
+until the call completes unexpired; G from 1 until R completes within G, where R is resumed once
+more instead. After every trial:
+
+- each run answers the call's answer, or `&sqlite-closed` from the verb; the fold and the script
+  also a library wind's refusal of a re-entry;
+- the call made its statement once, by the authorizer's count; the script each statement at most
+  once;
+- its effect came once: `execute!`'s row, the script's rows a prefix of its own;
+- no statement is tracked outside the cache, none at a row, and the cache holds what one clean
+  call leaves, its bindings cleared;
+- once the connection is closed, every count is what it was.
+
+**The tell:** `sqlite3_auto_extension` sets an authorizer on every connection, which notes each
+select and insert prepared. SQLite never calls it at a cache's check-out.
+
+**The control,** at each fuel: R taken on a connection whose cache holds none, resumed to its end
+twice. The second makes a whole new call when the authorizer sees the SQL prepared again. A trial
+may make one where the control did, at its fuel or the one before. Each fuel begins with a
+collection, as slice 5's sweeps do.
+
+**The control's bound:** it cannot tell a whole new call from the same call run again, which a
+call that lost its claim or its flag does. So every whole new call must come below the fuel at
+which the same call, refused at its first check, completes: that check follows the claim or the
+flag (slice 3's script row).
+
+**The guard against a trivial sweep:**
+- a trial is past the first section when the call had made its first section by R1's capture;
+- both past it when it had by R's capture;
+- each sweep makes at least three of each a fuel, of the fuels up to the one at which it
+  completes. The lead's first sweep, which reused one R across every G, made at most one a fuel.
+- The script makes none both past it: every section of the script lies inside its block, and an
+  expiry there frees the block.
+
+**More schedules,** for what a raise from the caller's handler does:
+- **a timer handler that raises,** at every tick, for all five: the statement finished each time;
+- **one that first takes a statement for the call's SQL** and steps it, for `query` and
+  `query-row`: the call's give-back leaves it alone;
+- **a keyboard interrupt pending inside a section,** for `query-row`. SIGINT is raised from the
+  authorizer, inside the check-out's prepare, and from SQLite's profile trace, inside the return's
+  reset. No tick falls between a section's end and the code just after it, so only such an
+  interrupt reaches there;
+- **a `query` whose second step fails,** swept: the failure is raised by one run, and again by each
+  run taken past the call's give-back; every other run is refused.
+
+**The script's sweep is split by the parity of R's fuel.** It makes about 52,000 trials, 225 s
+under the gate in one suite. Each half runs every G at its own fuels, and G = 1 alone at the
+other's, which tells where the call completes. Bounding it by gaps between sections was tried and
+dropped (Findings): slices don't compose.
+
+### The red runs
+
+Each new row ran first against the libraries before part D, in a copy, `build/mut/d/red`, holding
+`3ae146d`'s `src/` and the new suites.
+
+| Suite | Red | Green |
+|---|---|---|
+| `test-conveniences-pending-execute` | 6 passed, 2 failed: the sweep, the timer | 8 passed |
+| `test-conveniences-pending-query` | 7 passed, 4 failed: both sweeps, the timer, the taken | 11 passed |
+| `test-conveniences-pending-query-row` | 7 passed, 4 failed: the sweep, the timer, the taken, the check-out's keyboard | 11 passed |
+| `test-conveniences-pending-fold` | 8 passed | 8 passed |
+| `test-conveniences-pending-script-odd` | 8 passed | 8 passed |
+| `test-conveniences-pending-script-even` | 7 passed | 7 passed |
+| `test-statement-values`, its export row | 46 passed, 1 failed | 47 passed |
+
+What the libraries before part D failed:
+
+| Sweep | Fuel | Trials | Deviating | By kind |
+|---|---|---|---|---|
+| `execute!` | 90 | 3,910 | 1,717 | left 1,360; prepares 1,326; answer 357; rows 156 |
+| `query` | 144 | 10,147 | 6,973 | left 3,655; prepares 3,570; answer 3,318 |
+| `query`, failing | 188 | 17,361 | 7,192 | left 5,087; prepares 4,650; failures 2,381; answer 1,749; bindings 375 |
+| `query-row` | 102 | 5,044 | 2,546 | left 1,849; prepares 1,806; answer 697 |
+
+- **The timer rows failed at 7 ticks each** of the three: a raise just past the check-out's
+  section left the statement out of the cache. Slice 3's `with-checked-out` bound the statement
+  outside its guard, so nothing gave it back: a second hole the brief did not name.
+- **The fold's and the script's rows pass there,** as the lead found, and are watched failing by
+  their mutants (below). The keyboard row at the return passes there too: slice 3's give-back
+  raised outside its guard. M02 and M12 fail it.
+
+Green:
+- **`make test`:** ran 64, passed 64, against the baseline's 58 of 58, the six suites added.
+- **At the floor, 3.45.1,** through `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH`: the library
+  loaded 3.45.1, and the six suites and slice 3's six convenience suites, `test-statement-values`
+  and `test-statement-who` passed at the same counts. Every fuel printed matched 3.53.1's.
+
+### The sweeps
+
+| Sweep, on 3.53.1 and 3.45.1 alike | Completes unexpired at fuel | Trials with R1 | Past the first section | Both past it | Last whole new call, refused call |
+|---|---|---|---|---|---|
+| `execute!` | 42 | 820 | 715 | 325 | 8, 72 |
+| `query` | 72 | 2,485 | 2,380 | 1,540 | 8, 72 |
+| `query`, its second step failing | 84 | 3,403 | 3,298 | 2,278 | 8, 72 |
+| `query-row` | 46 | 990 | 885 | 435 | 8, 72 |
+| `query-fold` | 154 | 11,834 | 9,760 | 4,040 | 8, 94 |
+| `execute-script!`, odd fuels | 431 | 25,817 | 8,568 | 0 | 8, 75 |
+| `execute-script!`, even fuels | 431 | 25,460 | 8,449 | 0 | 8, 75 |
+
+The timer rows complete before the handler runs at tick 36, 66, 40, 148 and 425, the handler
+raising at every tick before. The taken rows are `query`'s and `query-row`'s, at the same ticks.
+
+### Time
+
+Each suite plainly and under `make test-memory`, on both libraries, in the container. Each
+passed under the gate with no error and nothing lost, none `SLOW`.
+
+| Suite | Plain, 3.53.1 | Plain, 3.45.1 | Gate, 3.53.1 | Gate, 3.45.1 |
+|---|---|---|---|---|
+| `test-conveniences-pending-execute` | 0.4 s | 0.4 s | 14 s | 14 s |
+| `test-conveniences-pending-query` | 0.8 s | 0.8 s | 36 s | 33 s |
+| `test-conveniences-pending-query-row` | 0.4 s | 0.4 s | 14 s | 14 s |
+| `test-conveniences-pending-fold` | 1.3 s | 1.2 s | 54 s | 52 s |
+| `test-conveniences-pending-script-odd` | 2.7 s | 2.4 s | 112 s | 105 s |
+| `test-conveniences-pending-script-even` | 2.5 s | 2.3 s | 110 s | 102 s |
+| `test-conveniences` | 0.3 s | 0.3 s | 10 s | 11 s |
+| `test-conveniences-who` | 0.4 s | 0.4 s | 13 s | 12 s |
+| `test-conveniences-reentry` | 0.3 s | 0.3 s | 10 s | 10 s |
+| `test-conveniences-engines` | 0.3 s | 0.3 s | 11 s | 12 s |
+| `test-conveniences-resumed` | 0.6 s | 0.6 s | 18 s | 18 s |
+| `test-conveniences-counters` | 0.3 s | 0.3 s | 11 s | 11 s |
+| `test-statement-values` | 0.5 s | 0.4 s | 12 s | 13 s |
+| `test-statement-who` | 0.5 s | 0.5 s | 12 s | 12 s |
+
+The script's halves, the largest, take a quarter of the 450 s threshold here.
+`test-library-loading` took 230 s here and 308 s on CI (ADR-0005, amended), so on a slow runner
+each half may take about 220 s.
+
+### The mutations
+
+Every mutation ran in one of three copies under `build/mut/d/`, `m1` to `m3`, made without `.git` or
+`build/`, after `make deps` in each, through each copy's own `scripts/guix-env`. The driver,
+`build/mut/d/drive.py`, its definitions `define.py`, works as slice 5's part C's does: it syncs
+the worktree's `src/`, `tests/` and `docs/` into the copy, checks that each old text occurs once,
+writes the mutant, runs fifteen suites each under `timeout 300`, reads their counts from their own
+output, and puts the file back. The suites: the six new ones (P-), slice 3's six convenience
+suites (C-), `test-statement-who`, `test-statement-values` and `test-connection-cache`.
+
+**33 mutations, 29 caught, 4 survived,** on the final libraries and suites, run once.
+`coverage.py` reads every new row against the red runs, the mutants and the plants: each failed
+under at least one.
+
+#### The claim and its sites (`conveniences.sls`)
+
+| Mutation | What it plants | Failed |
+|---|---|---|
+| M01 | the claim never refuses a stale position | P-execute, P-query 2, P-query-row |
+| M02 | the claim never ends: a claim of whatever is next still claims after the return | P-query-row: the return's keyboard row |
+| M03 | the claim compares with `<=` | **survived** |
+| M04 | the claim made in a section of its own, the work outside it | P 9 rows, C-who, C-resumed 4 |
+| M05 | the check-out's section claimed, never refusing | P 4 rows, C-resumed 4 |
+| M06 | each bind's section claimed, never refusing | P-execute, P-query, P-query-row: the bindings |
+| M07 | each step's section claimed, never refusing | P 4 rows, C-resumed 3 |
+| M08 | the column count's section claimed, never refusing | **survived** |
+| M09 | each column's section claimed, never refusing | P-query, C-resumed 2 |
+| M10 | the return's section claimed, never refusing | P-query, C-who, C-resumed 4 |
+| M11 | a raise no section caught gives nothing back | P 6 rows: the timer, taken and check-out keyboard rows |
+| M12 | that give-back made by no claim, even once the call has ended | P-query-row: the return's keyboard row |
+| M13 | the statement noted after the check-out's section, not inside it | P-query-row: the check-out's keyboard row |
+| M14 | a section's raise gives the run its own position, not the next | P-query 2, C 6, C-who 4, C-reentry, C-counters |
+| M15 | a refused give-back after a raise raises the work's condition | P-query: the failing sweep |
+| M16 | the claim made after the SQL's checks, not first | **survived** |
+| M17 | the check-out claimed in an empty section, `checked-out` run after it | P 4 rows, C-resumed 4 |
+
+#### `bind-each!/at` (`statement-values.sls`)
+
+| Mutation | What it plants | Failed |
+|---|---|---|
+| M20 | the count read outside its claimed section, an empty section claimed in its place | P 4 rows, C-resumed |
+| M21 | each value bound outside its claimed section, the same | P 4 rows, C-resumed |
+| M22 | a refusal of the count or a value gives the count's own position | C 2, C-who 3 |
+| M23 | each value claims the count's next position | P 17 rows, C 9, C-who 5, C-engines 5, C-resumed 3, C-reentry |
+| M24 | `held-sectioner` ignores the fold's flag | C-resumed, statement-who |
+
+#### The flag's sites kept (`query-fold`'s, `execute-script!`'s)
+
+| Mutation | What it plants | Failed |
+|---|---|---|
+| F01 | the fold's check-out reads no flag | P-fold, C-resumed 2 |
+| F02 | the fold's binds read no flag | C-resumed |
+| F03 | the fold's steps read no flag | C-resumed |
+| F04 | the fold's column count and reads read no flag | C-resumed |
+| F05 | the fold reads no flag after its procedure | **survived** |
+| F06 | the fold's finish acts on every exit, its flag not read | C-reentry, C-resumed |
+| F07 | the fold's finish never sets its flag | P-fold, C-who, C-reentry 2, C-resumed |
+| F08 | the script's first prepare never marks the run begun | P-script-odd, P-script-even, C-who, C-resumed |
+| F09 | the script's first prepare takes no check | P-script-odd, P-script-even, C-who, C-resumed |
+| F10 | the fold's finish gives back on a normal exit, nothing on another | P-fold 2, C 2, C-who, C-reentry 5, C-engines 2, C-resumed |
+| F11 | a script statement's wind finalizes nothing | P-script-odd 2, P-script-even, C-engines, C-resumed |
+
+F11 was first written with a parenthesis too many, and every suite died at the read; it was
+fixed and run again.
+
+#### The plants of the shared rows (`build/mut/d/plants.py`)
+
+Each written into a copy's `tests/conveniences-pending.sls`, or its environment; the six suites
+run.
+
+| Plant | What it plants | Failed |
+|---|---|---|
+| Q1 | `CHEZ_SQLITE3_LIBRARY` names no file | every row but the load's counts, in each suite |
+| Q2 | the library leaks a connection when it loads | both counts rows, and every row judging counts |
+| Q3 | the authorizer's action codes wrong: nothing noted | the tells, and every sweep |
+| Q4 | `tell-reset` resets nothing | the unregistering row, in each suite |
+| Q5 | the entry point never registered | the tells, and every sweep |
+
+### The mutants that proved the suites short
+
+The first pass, on the suites before their last rows, left M02, M06, M12, M13 and M15 surviving,
+and F08 and F09 caught only by slice 3's suites. Each was argued, the argument tried against a
+schedule, and the schedule kept as a row where it killed:
+
+- **M02 and M12, the claim's end.** No tick falls between the return's section and the guard's
+  exit, so no timer handler gets there. A keyboard interrupt that comes pending inside the return
+  does (`keyboard.sps`): under both, the statement the handler took back from the cache was reset
+  and filed while it held it. Kept: the return's keyboard row.
+- **M13, the statement noted after the check-out's section.** The same window, after the
+  check-out: SIGINT raised from the authorizer inside the miss's prepare. Kept: the check-out's
+  keyboard row.
+- **M06, a stale bind never refused.** A run before the binds, resumed once its twin had ended the
+  call, bound the statement the cache then held: the judge never read the cached statement's
+  bindings. Kept: the judge steps it unbound.
+- **M15, a refused give-back's raise.** No sweep had a failing call. Kept: the failing `query`.
+- **F08 and F09, the script run twice.** The control took a second resume of the same call,
+  running the script again, for a whole new call. Kept: the refused call's bound.
+- **F10 and F11** were added: no mutant reached the fold's or the script's timer row.
+
+### The survivors
+
+- **M03, `<=` for `eqv?` in the claim, is equivalent,** as slice 5's C05. A run's position never
+  passes the call's: positions advance only by a claim, which sets the call's to the claiming
+  run's next. Tried against every sweep: no deviation.
+- **M08, the column count's read never refused, is equivalent,** as slice 3's D06. The count is
+  read by `sqlite3_column_count` alone, which changes nothing, and the accessor allows it in every
+  live state. A stale run's read is followed by its first column's section, which refuses it; and
+  where the stale run and its twin stand at the same count, whichever claims the next section goes
+  on from the same state. Tried against every sweep: no deviation.
+- **M16, the claim made after the SQL's checks,** changes nothing a row can see, as slice 5's C08.
+  A remainder taken in the checks makes a whole new call, which the control measures and the trial
+  allows. Under it, `query`'s last whole new call moved from fuel 8 to 43, and the failing
+  `query`'s to 76, below the refused call's bound. A reference call of the same shape, its first
+  expression marking it, was tried as a tighter bound, and failed the fixed libraries by two ticks
+  (`boundary.sps`, Findings). The docs' "a continuation taken before the call began makes a new
+  call" would take in one taken inside the checks; no row holds the claim's place.
+- **F05, the fold's read after its procedure,** is slice 3's survivor, argued there: the next
+  step's section reads the flag first. Tried against the fold's sweep: no deviation.
+
+### The lead's probe, rerun on the fixed libraries
+
+| Call | Trials | Flagged before | Flagged after |
+|---|---|---|---|
+| `execute!` | 820 | 1,361 of 3,911 | 0 |
+| `query` | 2,487 | 3,655 of 10,147 | 0 |
+| `query-row` | 991 | 1,849 of 5,044 | 0 |
+| `query-fold` | 703 | 0 | 0 |
+| `execute-script!` | 52,432 | 0 | 0 |
+
+The counts were zero after. `answers.sps`, its copy that reads each run's answer, found no
+wrong answer. The fold's row sweeps nothing: the lead's probe passed the fold its seed for its
+procedure, so every trial raised at the procedure's check (the lead's checks, below).
+
+### Findings
+
+- **Slices don't compose** (`ticks.sps`). Stepped one tick a slice, the script completed in 123
+  slices; in one slice it takes 433. An engine's fuel counts ticks within a slice only, so trial
+  (F, G) is not (F − 1, G + 1), and no map of positions by tick can bound a sweep.
+- **Where a remainder lies depends on the code after its point** (`boundary.sps`). One first
+  expression, followed by different code, put the whole-new-call boundary at fuel 6 or 7;
+  `execute!`'s is at 8. No reference call places a first expression to the tick.
+- **No tick falls between a section's end and the code just after it,** confirming slice 5's
+  `section-end.sps`. A timer handler never reaches the give-back's or the check-out's last
+  instructions; only a keyboard interrupt that came pending inside the section does.
+- **A control that reads effects cannot tell a whole new call from the same call run again.**
+  Bound it by a fuel past the first expression, the refused call's.
+- **Slice 3's `with-checked-out` lost its statement after a raise just past the check-out,** at 7
+  ticks of each of the three, its statement bound outside its guard.
+- **`query-fold`'s flag is made after its procedure's check,** not by its first expression. No
+  row tells: its last whole new call is at fuel 8, as the others'.
+- **The six suites add about 340 s, under six minutes, to the memory job** here, most of it
+  the script's halves.
+
+### The lead's checks
+
+Run by the lead on part D's hand-back, in the worktree and in copies under its git-ignored
+`build/lead-mut/`.
+
+- **`make test`:** ran 64, passed 64.
+- **The gate and the floor:** the six suites passed under `make test-memory` on both libraries,
+  none slow, and the fourteen, with slice 3's convenience suites, `test-statement-values` and
+  `test-statement-who`, passed plain at the floor.
+- **The lead's probe, corrected,** now [research/m3-slice-5/](research/m3-slice-5/README.md)'s
+  `pending-sweep.sps`: the fold given its procedure, and each fuel begun with a collection, so its
+  counts are the same from run to run and on both libraries. Before part D, `execute!` 1,360 of
+  3,910, `query` 3,655 of 10,147, `query-row` 1,849 of 5,044, `query-fold` 0 of 6,331 and
+  `execute-script!` 0 of 52,430. After, none of 820, 2,485, 990, 6,874 and 52,430.
+- **A warm cache,** which no suite sweeps, since the authorizer sees no check-out
+  (`pending-sweep-warm.sps`): each connection runs the call once first, so R's check-out is a
+  hit. `execute!`, `query` and `query-row` hold in all 820, 2,485 and 990 trials. The fold's
+  7,340 flags are its finish on an expiry inside its wind, which costs the cache its statement;
+  none leaves one outside the cache or at a row.
+- **`answers.sps` on the libraries before part D:** `query` answered `(#(2) #(3))` and
+  `query-row` `#(2)`, 900 and 55 trials.
+- **Traps reproduced:** `ticks.sps` and `boundary.sps`, as reported; and slice 3's second hole,
+  the execute suite's timer row on the libraries before part D, its insert left tracked and
+  ready, out of an empty cache, at ticks 50 to 52.
+- **The lead's mutants,** each run against the fifteen suites (`build/lead-mut/drive-d.py`):
+
+  | Mutation | What it plants | Failed |
+  |---|---|---|
+  | L5 | a refused run, holding no statement, raises `&sqlite-closed` over its own raise | C-who 3 |
+  | L10 | a bind failing after its section answers the section, not its raise | P timer rows 4, P taken 2, C-who 4, statement-who |
+  | L16 | `execute!`'s refused run answers as the call does, raising nothing | C-who, C-resumed |
+  | L20 | a raise no section caught replaced by `&sqlite-closed` | P timer rows 3, P taken 2, P-query-row's keyboard rows 2 |
+  | L21 | the return's own failure, after the work, dropped | C, C-who 2, C-resumed |
+
+  All five caught. L10 failed more than predicted: a timer's raise during a bind's finish, outside
+  any section, reaches `finished-at`'s guard. L16 passes the new suites, whose judge takes the
+  call's answer or `&sqlite-closed` from any run; slice 3's resumed rows hold it.

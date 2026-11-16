@@ -25,25 +25,64 @@
 ;;; critical sections, so a with-exception-handler handler of a convenience's
 ;;; raise runs at depth 1.
 ;;;
-;;; Each call holds a flag, set once its statement leaves the call: given
-;;; back to the cache, or finalized (the maintainer's choice, 2026-11-16,
-;;; after M3 slice 3's review). Chez's engine remainders are multi-shot,
-;;; and a timer's, keyboard's or collect request's handler can capture a
-;;; continuation between any two critical sections, so a call can be
-;;; resumed, or re-entered, after its statement has left it, and another
-;;; caller may hold that statement by then. Every critical section that
-;;; touches the call's statement reads the flag first: the check-out's,
-;;; before the table is read; a miss's prepare, before it prepares, both
-;;; through checked-out's LEFT?; each bind's, through bind-each!/who's;
-;;; each step's and each column read's, through while-held; and the
-;;; return's or the finalize's, which also sets it. Set, the section touches
-;;; nothing, and the convenience raises &sqlite-closed after it. So no
-;;; statement is handed out twice, filed twice or left stray. A re-entry
-;;; inside the library's own winds, call-with-open-handle's, around a
-;;; check-out or a prepare, and call-with-block's, around a script, is
-;;; refused by those winds, an assertion violation, re-entered, before any
-;;; flag is read. A remainder taken before a call's first expression is the
-;;; caller's: resumed, it makes a whole new call, with a flag of its own.
+;;; Chez's engine remainders are multi-shot, and a timer's, keyboard's or
+;;; collect request's handler can capture a continuation between any two
+;;; critical sections, so one call can have several runs pending at once,
+;;; each going on from where its remainder was taken: R, taken before the
+;;; check-out and resumed until it expires again after it, is R1, and R can
+;;; then be resumed again while R1 holds the statement (M3 slice 5's part D,
+;;; the M2 session's sweep). Slice 3's flag, set once the statement left the
+;;; call, could not tell two pending runs apart: R found R1's statement out
+;;; of the cache, prepared a second, gave it back and set the flag, and R1
+;;; was refused at its next section still holding the first, left out of the
+;;; cache, at a row for query and query-row; and two runs both past the
+;;; check-out both stepped the one statement, one answering rows the other
+;;; had stepped past. So execute!, query and query-row hold a claim on their
+;;; call, as the open verbs do (ADR-0018, amended in M3 slice 5): the
+;;; position of the next section any run of the call may make, made by the
+;;; call's first expression. Each run carries its own position, an argument,
+;;; never assigned, so a continuation holds it as it was, and every section
+;;; of the call claims it inside the section, advancing the call's:
+;;;
+;;;   0         the check-out, and a miss's prepare, in one section, so the
+;;;             call makes its statement once, by one run
+;;;   1 ...     each bind's, the count's and each value's, by bind-each!/at
+;;;             (Q15, "One value each"); then each step's; at a row, the
+;;;             column count's and each column's read
+;;;   the last  the return, by returned, which ends the claim
+;;;
+;;; A run the call has passed is refused at its next section: the section
+;;; touches nothing, and the run raises &sqlite-closed from the verb, and
+;;; makes no section after (the maintainer's "Guard every call", ADR-0016,
+;;; amended in M3 slice 3). So each section runs once a call, by whichever
+;;; run reaches it first, and a refused run holds nothing: no two runs of
+;;; one call each hold a statement, nor step one twice. Every section claims
+;;; its position, not only the two that make or hand out the statement:
+;;; with the flag kept for the rest, two runs both past the check-out would
+;;; share the statement and pass every section. A section's outcome is data,
+;;; with the run's next position, so a raise in one gives the statement back
+;;; at the position after it. A raise no section caught, a timer's or a
+;;; keyboard handler's between two sections, gives the statement back by a
+;;; claim of whatever position is next, unless the call has ended, so a
+;;; raise always finishes it, whichever run then held it.
+;;;
+;;; query-fold and execute-script! keep slice 3's flag, which their winds
+;;; make enough: an engine's expiry inside the fold's wind finishes its
+;;; statement and sets its flag, and one inside the script's block frees the
+;;; block, so neither survives a preemption, and no second run reaches a
+;;; statement another holds. Every critical section that touches the call's
+;;; statement reads the flag first: the check-out's, before the table is
+;;; read; a miss's prepare, before it prepares, both through checked-out's
+;;; LEFT?; each bind's, through bind-each!/who's; each step's and each
+;;; column read's, through while-held; and the return's or the finalize's,
+;;; which also sets it. Set, the section touches nothing, and the
+;;; convenience raises &sqlite-closed after it. A re-entry inside the
+;;; library's own winds, call-with-open-handle's, around a check-out or a
+;;; prepare, and call-with-block's, around a script, is refused by those
+;;; winds, an assertion violation, re-entered, before any flag is read.
+;;;
+;;; A remainder taken before a call's first expression is the caller's:
+;;; resumed, it makes a whole new call, with a claim or a flag of its own.
 ;;;
 ;;; The four that take parameters check out a statement from the
 ;;; connection's statement cache, a fresh one prepared
@@ -56,18 +95,16 @@
 ;;;   execute!, query, query-row
 ;;;       call no procedure of the caller's and hold no dynamic-wind: a raise
 ;;;       inside one is caught, the statement given back, and the raise made
-;;;       again, the same object, &sqlite-closed among them, a flag's read
-;;;       finding the statement gone. A failure of that return is dropped then,
+;;;       again, the same object. A failure of that return is dropped then,
 ;;;       so the convenience's own condition reaches the caller unchanged; a
 ;;;       return that fails after a convenience's own work raises its failure:
 ;;;       query-row's reset of an insert ... returning that commits under
 ;;;       another's read, or the finalize of a statement the return evicted.
 ;;;       Under an engine each completes: an expiry falls only between
 ;;;       critical sections, and nothing but the convenience reaches its
-;;;       checked-out statement; a remainder resumed a second time, once
-;;;       the first has given the statement back, raises &sqlite-closed at
-;;;       its next section, and the return's section, finding the flag set,
-;;;       touches nothing. A way out that is no raise, an escaping
+;;;       checked-out statement; a run resumed once another has passed it,
+;;;       before the return or after, raises &sqlite-closed at its next
+;;;       section, touching nothing. A way out that is no raise, an escaping
 ;;;       timer or keyboard handler, or an engine never resumed, leaves the
 ;;;       statement out of the cache until the close (ADR-0016, decision 6).
 ;;;   query-fold
@@ -96,10 +133,10 @@
           (only (chez-sqlite3 private connection) check-database-owner)
           (only (chez-sqlite3 private statement) checked-out returned finalized step!/who
                 column-count/who checked-sql prepared-at while-held)
-          (only (chez-sqlite3 private statement-values) bind-each!/who column-value/who)
+          (only (chez-sqlite3 private statement-values) bind-each!/who bind-each!/at column-value/who)
           (only (chez-sqlite3 private script) script-prepare-offset script-step-offset))
 
-  ;; --- a row ------------------------------------------------------------------------
+  ;; --- query-fold's row and step ------------------------------------------------------
 
   ;; row-of : Symbol Statement (-> Boolean) -> (Vectorof Value)
   ;; ST's row, at a row, for WHO: its column count read once, now, after the
@@ -122,78 +159,158 @@
   (define (stepped who st left?)
     (while-held who left? (lambda () (step!/who who st))))
 
-  ;; --- execute!, query and query-row ----------------------------------------------------
+  ;; --- execute!, query and query-row: the call's claim -----------------------------------
 
-  ;; with-checked-out : Symbol Any Any (Statement (-> Boolean) -> A) -> A
+  ;; Claim = (U Natural #f) Boolean -> Boolean
+  ;; made-claim : -> Claim
+  ;; A call's claim: the position of the next section any run of the call
+  ;; may make, 0 at first, or #f once its last section is made, held by the
+  ;; procedure answered. Given N, a run's position, and LAST?, called inside
+  ;; that run's section: #t when the call's position is N, or N is #f and
+  ;; the call has not ended, the call's position then advanced past N, or
+  ;; ended when LAST?; else #f, nothing changed. Raises nothing.
+  (define (made-claim)
+    (let ((at 0))
+      (lambda (n last?)
+        (and at
+             (or (not n) (eqv? at n))
+             (begin (set! at (if last? #f (+ at 1))) #t)))))
+
+  ;; in-section : Claim (U Natural #f) Boolean (-> A ...) -> Section
+  ;; THUNK's work as the section at position N of its call, in one critical
+  ;; section, CLAIM given N and LAST? first: refused, THUNK never runs;
+  ;; claimed, THUNK's answers, or what it raised, caught there, each with
+  ;; the run's next position, N + 1, #f for none. Section is
+  ;; (chez-sqlite3 private statement-values)'s. Raises nothing.
+  (define (in-section claim n last? thunk)
+    (critical-section
+     (if (claim n last?)
+         (let ((next (and n (+ n 1))))
+           (guard (c (#t (list 'raised next c)))
+             (call-with-values thunk (lambda answers (cons 'answered (cons next answers))))))
+         '(refused))))
+
+  ;; sectioner : Claim -> Sectioner
+  ;; A run's sections for bind-each!/at, each claiming its position.
+  (define (sectioner claim)
+    (lambda (n thunk) (in-section claim n #f thunk)))
+
+  ;; and-then : Run (Natural Any -> Run) -> Run
+  ;; NEXT given RUN's next position and answer, when RUN is done; else RUN.
+  (define (and-then run next)
+    (if (eq? (car run) 'done) (next (cadr run) (caddr run)) run))
+
+  ;; step-at : Symbol Statement Claim Natural -> Section
+  ;; ST stepped by step!/who, for WHO, the section at N: answering #t at a
+  ;; row, #f at done.
+  (define (step-at who st claim n)
+    (in-section claim n #f (lambda () (step!/who who st))))
+
+  ;; row-at : Symbol Statement Claim Natural -> Run
+  ;; ST's row, at a row, for WHO, from position N: its column count read
+  ;; once, in the section at N, after the step (single K2.1, K2.2, K2.7),
+  ;; then each column from 0, in order, by column-value/who, each in a
+  ;; section of its own (Q15). A named let, never map, whose order of calls
+  ;; is not fixed (AGENTS.md). Done, answering the row.
+  (define (row-at who st claim n)
+    (let ((counted (in-section claim n #f (lambda () (column-count/who who st)))))
+      (if (not (eq? (car counted) 'answered))
+          counted
+          (let* ((count (caddr counted))
+                 (row (make-vector count)))
+            (let loop ((i 0) (n (cadr counted)))
+              (if (= i count)
+                  (list 'done n row)
+                  (let ((read (in-section claim n #f (lambda () (column-value/who who st i)))))
+                    (if (eq? (car read) 'answered)
+                        (begin (vector-set! row i (caddr read))
+                               (loop (+ i 1) (cadr read)))
+                        read))))))))
+
+  ;; with-checked-out : Symbol Claim Any Any (Statement Natural -> Run) -> A
   ;; WORK's answer, WORK given a statement for SQL on DB checked out of DB's
-  ;; cache, for WHO, and the call's check, once the statement is given back
-  ;; to it. The call's flag is made first, unset; the check, LEFT?, answers
-  ;; it, and the check-out reads it in its section and in a miss's prepare's,
-  ;; WORK in each bind's, step's and read's. checked-out's refusals and a
-  ;; miss's failed prepare raise as they come, since no statement is out
-  ;; then. A raise in WORK is caught, the statement given back with any
-  ;; failure of that return dropped, and raised again, the same object.
-  ;; Otherwise the return's own failure raises. WORK is the convenience's
-  ;; own, and calls nothing of the caller's; there is no dynamic-wind
-  ;; (ADR-0016, decision 6).
-  (define (with-checked-out who db sql work)
-    (let* ((left #f)
-           (left? (lambda () left))
-           (leave! (lambda () (set! left #t)))
-           (st (checked-out who db sql #f left?))
-           (outcome (guard (c (#t (list 'raised c)))
-                      (list 'answered (work st left?)))))
-      (if (eq? (car outcome) 'answered)
-          (begin (given-back who st left? leave!) (cadr outcome))
-          (begin (guard (e (#t #f)) (given-back who st left? leave!))
-                 (raise (cadr outcome))))))
-
-  ;; given-back : Symbol Statement (-> Boolean) (-> Any) -> Void
-  ;; ST given back to its cache by returned, for WHO, in a critical section
-  ;; that reads the call's flag, LEFT?, first: set, the statement left the
-  ;; call already, the section touches nothing, and &sqlite-closed is raised
-  ;; from WHO after it. Else LEAVE! sets the flag and the return runs, in the
-  ;; same section, so no expiry or interrupt falls between them; what the
-  ;; return raises, after its own sections, a reset's failure or an evicted
-  ;; statement's finalize's, is caught in this one and raised again after
-  ;; it, the same object.
-  (define (given-back who st left? leave!)
-    (let ((outcome (critical-section
-                    (if (left?)
-                        '(left)
-                        (begin
-                          (leave!)
-                          (guard (c (#t (list 'raised c)))
-                            (returned who st)
-                            '(given-back)))))))
+  ;; cache, for WHO, and the run's position after the check-out, once the
+  ;; statement is given back to it. CLAIM is the call's, made by its first
+  ;; expression. The sections, each claiming its position:
+  ;;   - the check-out, and a miss's prepare, one section at 0, by
+  ;;     checked-out with no check of its own; the statement noted in HELD,
+  ;;     inside it, by on-made;
+  ;;   - WORK's, each bind's, step's and read's, in order;
+  ;;   - the return, by returned, at the run's next position, the call's
+  ;;     last.
+  ;; A section refused: the run touches nothing more, and &sqlite-closed is
+  ;; raised from WHO. Else the check-out's refusal, or its prepare's failure,
+  ;; raises, no statement out. A raise in WORK's sections: the statement
+  ;; given back, any failure of that return dropped, and the raise raised
+  ;; again, the same object. WORK done: the return's own failure raises,
+  ;; else WORK's answer. A raise no section caught, a timer's or keyboard
+  ;; handler's between two sections, gives back HELD, the call's statement,
+  ;; by a claim of whatever position is next, unless the call has ended,
+  ;; and is raised again: whichever run held it then is refused at its next
+  ;; section. Everything is raised after every section. WORK is the
+  ;; convenience's own, and calls nothing of the caller's; there is no
+  ;; dynamic-wind (ADR-0016, decision 6).
+  (define (with-checked-out who claim db sql work)
+    (let* ((held #f)
+           (outcome
+            (guard (c (#t (list 'escaped c)))
+              (let* ((out (in-section claim 0 #f
+                            (lambda () (checked-out who db sql (lambda (st) (set! held st)) #f))))
+                     (run (if (eq? (car out) 'answered) (work (caddr out) (cadr out)) out)))
+                (if (and held (memq (car run) '(done raised)))
+                    (list 'given run
+                          (in-section claim (cadr run) #t (lambda () (returned who held))))
+                    (list 'kept run))))))
       (case (car outcome)
-        ((given-back) (if #f #f))
-        ((left) (raise-closed who))
-        (else (raise (cadr outcome))))))
+        ((given)
+         (let ((run (cadr outcome)) (back (caddr outcome)))
+           (cond ((eq? (car back) 'refused) (raise-closed who))
+                 ((eq? (car run) 'raised) (raise (caddr run)))
+                 ((eq? (car back) 'raised) (raise (caddr back)))
+                 (else (caddr run)))))
+        ((kept)
+         (let ((run (cadr outcome)))
+           (if (eq? (car run) 'raised) (raise (caddr run)) (raise-closed who))))
+        (else
+         (when held (in-section claim #f #t (lambda () (returned who held))))
+         (raise (cadr outcome))))))
 
   ;; execute! : Database String Value ... -> Void
   ;; SQL, one statement, run on DB with GIVEN bound to its parameters, 1 to
   ;; n: stepped to done, any rows it answers dropped, as sqlite3_exec drops
   ;; them (M3's research, single script X7), a PRAGMA's set among them.
   ;; Answers nothing: changes says what it counts (ADR-0016, decision 4).
+  ;; The call's claim is its first expression.
   (define (execute! db sql . given)
-    (with-checked-out 'execute! db sql
-      (lambda (st left?)
-        (bind-each!/who 'execute! st given left?)
-        (let loop () (when (stepped 'execute! st left?) (loop)))))
-    (if #f #f))
+    (let ((claim (made-claim)))
+      (with-checked-out 'execute! claim db sql
+        (lambda (st n)
+          (and-then (bind-each!/at 'execute! st given (sectioner claim) n)
+                    (lambda (n bound)
+                      (let loop ((n n))
+                        (let ((s (step-at 'execute! st claim n)))
+                          (cond ((not (eq? (car s) 'answered)) s)
+                                ((caddr s) (loop (cadr s)))
+                                (else (list 'done (cadr s) 'stepped)))))))))
+      (if #f #f)))
 
   ;; query : Database String Value ... -> (Listof Row)
   ;; Every row SQL answers on DB, GIVEN bound to its parameters, in order,
-  ;; each a vector of its values in column order.
+  ;; each a vector of its values in column order. The call's claim is its
+  ;; first expression.
   (define (query db sql . given)
-    (with-checked-out 'query db sql
-      (lambda (st left?)
-        (bind-each!/who 'query st given left?)
-        (let loop ((rows '()))
-          (if (stepped 'query st left?)
-              (loop (cons (row-of 'query st left?) rows))
-              (reverse rows))))))
+    (let ((claim (made-claim)))
+      (with-checked-out 'query claim db sql
+        (lambda (st n)
+          (and-then (bind-each!/at 'query st given (sectioner claim) n)
+                    (lambda (n bound)
+                      (let loop ((n n) (rows '()))
+                        (let ((s (step-at 'query st claim n)))
+                          (cond ((not (eq? (car s) 'answered)) s)
+                                ((caddr s)
+                                 (and-then (row-at 'query st claim (cadr s))
+                                           (lambda (n row) (loop n (cons row rows)))))
+                                (else (list 'done (cadr s) (reverse rows))))))))))))
 
   ;; query-row : Database String Value ... -> (U Row #f)
   ;; The first row SQL answers on DB, GIVEN bound to its parameters, or #f
@@ -201,12 +318,17 @@
   ;; statement is reset after the first (the M3 plan's Q3). The reset that
   ;; commits a multi-row insert ... returning in autocommit can fail, BUSY
   ;; under another's read, rolling the insert back, and that raises
-  ;; (ADR-0016, decision 5).
+  ;; (ADR-0016, decision 5). The call's claim is its first expression.
   (define (query-row db sql . given)
-    (with-checked-out 'query-row db sql
-      (lambda (st left?)
-        (bind-each!/who 'query-row st given left?)
-        (and (stepped 'query-row st left?) (row-of 'query-row st left?)))))
+    (let ((claim (made-claim)))
+      (with-checked-out 'query-row claim db sql
+        (lambda (st n)
+          (and-then (bind-each!/at 'query-row st given (sectioner claim) n)
+                    (lambda (n bound)
+                      (let ((s (step-at 'query-row st claim n)))
+                        (cond ((not (eq? (car s) 'answered)) s)
+                              ((caddr s) (row-at 'query-row st claim (cadr s)))
+                              (else (list 'done (cadr s) #f))))))))))
 
   ;; --- query-fold ------------------------------------------------------------------------
 

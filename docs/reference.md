@@ -268,17 +268,23 @@ several. Each connection keeps up to 32 statements, or as many as its
 again. Setting `foreign_keys` or `trusted_schema` makes each
 kept statement prepare itself again, once, at its next use.
 
-A raise always finishes the statement. Another way out, a timer's or a
-keyboard interrupt's handler that escapes, or an engine that runs out of fuel
-and is never resumed, can leave the statement on its row until the connection
-closes. Meanwhile an interrupt on the connection lasts, and if the statement
-writes, a `commit` is refused as busy. Close the connection to clear it.
+A raise always finishes the statement, even one from a timer's or a keyboard
+interrupt's handler. Another way out, such a handler that jumps out through a
+continuation, or an engine that runs out of fuel and is never resumed, can
+leave the statement on its row until the connection closes. Meanwhile an
+interrupt on the connection lasts, and if the statement writes, a `commit` is
+refused as busy. Close the connection to clear it.
 
-Each call runs once. Once it has given its statement back, going back into
-it, through a continuation, a timer's handler, or an engine resumed a second
-time, raises a condition that `sqlite-closed?` holds, and touches nothing.
-Going back into the library's own bookkeeping instead raises an assertion
-violation. A continuation taken before the call began makes a new call.
+Each call runs once. Going back into a call that has begun, through a
+continuation, a timer's handler, or an engine resumed a second time, touches
+nothing once its statement is back: it raises a condition that
+`sqlite-closed?` holds. For `execute!`, `query` and `query-row` this holds
+even when two ways back in are unfinished at once: the call makes its
+statement once and takes each step once, whichever way back in gets there
+first. A way back in that another has passed raises the same condition, and
+one from after the call's end ends again as the call did. Going back into
+the library's own bookkeeping instead raises an assertion violation. A
+continuation taken before the call began makes a new call.
 
 ### `execute!`
 

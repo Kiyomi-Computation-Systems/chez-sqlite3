@@ -1,0 +1,78 @@
+#!r6rs
+;; M3 slice 5's part D: the lead's sweep. For each convenience, at every fuel F
+;; a fresh engine's remainder R; R resumed at G until it expires as R1; R
+;; resumed again to its end; then R1 to its end. G from 1 until R completes
+;; within G; F until the call completes unexpired. Each fuel begins with a
+;; collection, collect-trip-bytes raised, so no collect request shifts its
+;; ticks (gc-ticks.sps). After each trial, flag any statement tracked but not
+;; cached, or one at a row, then close the connection; each trial opens its own.
+(import (rnrs) (rnrs eval) (only (chezscheme) make-engine collect collect-trip-bytes))
+(define (reach lib name) (eval name (environment lib)))
+(define open-database (reach '(chez-sqlite3) 'open-database))
+(define close-database! (reach '(chez-sqlite3) 'close-database!))
+(define query (reach '(chez-sqlite3) 'query))
+(define query-row (reach '(chez-sqlite3) 'query-row))
+(define query-fold (reach '(chez-sqlite3) 'query-fold))
+(define execute! (reach '(chez-sqlite3) 'execute!))
+(define execute-script! (reach '(chez-sqlite3) 'execute-script!))
+(define tracked-statements (reach '(chez-sqlite3 private connection) 'tracked-statements))
+(define database-cache-count (reach '(chez-sqlite3 private connection) 'database-cache-count))
+(define statement-state (reach '(chez-sqlite3 private statement) 'statement-state))
+(define native-counts (reach '(chez-sqlite3 private counters) 'native-counts))
+(define (what e) (if (and (condition? e) (who-condition? e)) (list (condition-who e) (condition-message e)) 'raised))
+(define (attempt thunk) (guard (e (#t (list 'raised (what e)))) (thunk)))
+(define (slice e fuel) (e fuel (lambda (left . v) (list 'completed (car v))) (lambda (m) (list 'expired m))))
+(define (finish e) (let ((r (slice e 1000000))) (if (eq? (car r) 'completed) (cadr r) (finish (cadr r)))))
+
+(define (fresh)
+  (let ((db (open-database ":memory:")))
+    (execute! db "create table t (x)")
+    (execute! db "insert into t values (1), (2), (3)")
+    db))
+
+(define calls
+  (list (cons 'execute! (lambda (db) (execute! db "insert into t values (?)" 9)))
+        (cons 'query (lambda (db) (query db "select x from t where x > ?" 0)))
+        (cons 'query-row (lambda (db) (query-row db "select x from t where x > ?" 0)))
+        (cons 'query-fold (lambda (db) (query-fold db "select x from t" (lambda (acc row) (+ acc 1)) 0)))
+        (cons 'execute-script! (lambda (db) (execute-script! db "insert into t values (7); insert into t values (8);")))))
+
+(define (sweep name call)
+  (let ((trials 0) (bad '()))
+    (collect-trip-bytes (* 128 1024 1024))
+    (let floop ((fuel 1))
+      (collect)
+      (let* ((db (fresh))
+             (r (slice (make-engine (lambda () (attempt (lambda () (call db))))) fuel)))
+        (close-database! db)
+        (when (eq? (car r) 'expired)
+          (let gloop ((g 1))
+            (let* ((db (fresh))
+                   (r (slice (make-engine (lambda () (attempt (lambda () (call db))))) fuel)))
+              (if (not (eq? (car r) 'expired))
+                  (close-database! db)
+                  (let* ((R (cadr r)) (r1 (slice R g)))
+                    (if (not (eq? (car r1) 'expired))
+                        (begin (close-database! db) (floop (+ fuel 1)))
+                        (let* ((second (finish R)) (third (finish (cadr r1)))
+                               (states (map statement-state (tracked-statements db)))
+                               (cached (database-cache-count db))
+                               (stray (- (length states) cached)))
+                          (set! trials (+ trials 1))
+                          (when (or (> stray 0) (memq 'row states))
+                            (set! bad (cons (list 'fuel fuel 'g g 'second second 'third third 'states states 'cached cached) bad)))
+                          (close-database! db)
+                          (gloop (+ g 1)))))))))))
+    (display (list name 'trials trials 'flagged (length bad)
+                   'with-row (length (filter (lambda (b) (memq 'row (list-ref b 9))) bad))
+                   'with-done (length (filter (lambda (b) (memq 'done (list-ref b 9))) bad))
+                   'thirds (let loop ((b bad) (seen '()))
+                             (if (null? b) seen
+                                 (loop (cdr b) (if (member (list-ref (car b) 7) seen) seen (cons (list-ref (car b) 7) seen)))))))
+    (newline)
+    (let loop ((b (reverse bad)) (n 0))
+      (when (and (pair? b) (< n 0)) (write (car b)) (newline) (loop (cdr b) (+ n 1))))))
+
+(display (list 'version ((reach '(chez-sqlite3) 'sqlite-version)))) (newline)
+(for-each (lambda (c) (sweep (car c) (cdr c))) calls)
+(display (list 'counts (native-counts))) (newline)

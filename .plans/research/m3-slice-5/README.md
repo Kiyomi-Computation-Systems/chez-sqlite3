@@ -109,3 +109,44 @@ $ scripts/guix-env sh -c '$CHEZ --program .plans/research/m3-slice-5/section-end
   and a timer's reach, but not of a signal's: `call-with-database` records its connection inside
   the open's section, and `test-open-interleave` raises SIGINT inside each section to hold it.
   The probe loads glibc's `libc.so.6` by name, so it runs on Linux.
+
+## Part D's probes: the conveniences under pending resumes
+
+Five probes, run 2026-11-16 in the Guix container on Chez 10.4.0, from the repository's root. Their
+output is at the end of [output.txt](output.txt): `pending-sweep.sps` and `mechanism.sps` first
+with `3ae146d`'s `src/`, the libraries before part D, then all but `mechanism.sps` on the fixed
+libraries, and the two sweeps again at the floor, 3.45.1.
+
+```
+$ scripts/guix-env sh -c '$CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-5/pending-sweep.sps'
+```
+
+- **The lead's sweep** ([pending-sweep.sps](pending-sweep.sps)): each of the five conveniences,
+  at every fuel F a fresh engine's remainder R, resumed at G until it expires as R1, then R to its
+  end, then R1, each trial on a connection of its own, each fuel begun with a collection. **Before
+  part D,** `execute!` left a statement tracked outside the cache in 1,360 of 3,910 trials,
+  `query` in 3,655 of 10,147, 1,935 of them at a row, and `query-row` in 1,849 of 5,044, 602 at a
+  row; `query-fold` in none of 6,331 and `execute-script!` in none of 52,430. **After,** none in
+  820, 2,485, 990, 6,874 and 52,430, alike on both libraries. The lead's first version of it
+  resumed one R at every G, and so swept nothing past G = 1, and its fold passed the seed for the
+  procedure, raising at the procedure's check every time ([traps.md](../../traps.md)).
+- **With a warm cache** ([pending-sweep-warm.sps](pending-sweep-warm.sps)): the same schedule,
+  each connection having run the call once, so R's check-out is a hit. Each run answers the clean
+  call's answer or `&sqlite-closed`, the cache holds what the clean call leaves, nothing is
+  tracked outside it or at a row, and from fuel 12 the table holds one call's rows. `execute!`,
+  `query` and `query-row` hold in 820, 2,485 and 990 trials. `query-fold`'s 7,340 flags are its
+  own design: an expiry inside its wind finishes the statement, so the cache loses it and the
+  runs raise `&sqlite-closed` or a re-entry's assertion violation, as ADR-0016's slice 3 amendment
+  says. None of them leaves a statement outside the cache or at a row.
+- **The mechanism** ([mechanism.sps](mechanism.sps)), before part D: at fuel 10, G 46, R1 held
+  the call's statement out of the cache, 3 tracked and 2 cached; R prepared a second and filed it,
+  4 and 3; R1 was then refused, `&sqlite-closed`, still holding the first, 4 and 3.
+- **Slices don't compose** ([ticks.sps](ticks.sps)): `execute-script!` stepped one tick a slice
+  completes in 123 slices, but a trial at F 1 and G 127 had not begun the script. Of 527 sampled
+  trials, 432 stood elsewhere than the stepped run after F + G ticks. So trial (F, G) is not
+  (F − 1, G + 1), and a sweep can't be bounded by a map of positions by tick.
+- **Where a remainder lies depends on the code after it** ([boundary.sps](boundary.sps)): the
+  last fuel whose remainder, resumed twice, makes a whole new call is 8 for `execute!`, and 6 or 7
+  for two references with the same first expression and different code after it. So no reference
+  call places a first expression to the tick: part D's suites bound a whole new call by the fuel
+  at which the same call, refused at its first check, completes.
