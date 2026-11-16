@@ -86,6 +86,117 @@ newest first.
 
 ## Close-outs
 
+### 2026-11-16 — M3 slice 2: the bindings (PR #23)
+
+- **Built** by the M2 session, beside slice 1 and stacked on it (the maintainer's order of
+  2026-11-15, relayed by the M3 session and confirmed in this session's pane, "Yes, push and open
+  it"):
+  - **native's five bindings,** after M2's 21, in ADR-0002's M3 order and its seventh step. Each
+    is checked with `foreign-entry?`, and all are plain:
+    - `sqlite3-changes64`, `sqlite3-total-changes64` and `sqlite3-last-insert-rowid`, `integer-64`;
+    - `sqlite3-get-autocommit`, `int`;
+    - `sqlite3-interrupt`, `void`;
+  - `sqlite-prepare-persistent`, held to `sqlite3.h`;
+  - the convention table's five rows, and a `result-type` in `test-constants` for a `void` result,
+    held against the map's whole list of C types;
+  - **`test-native`'s rows:**
+    - the four counters after each statement of a 14-statement script, held to a new
+      `--counters` mode of the C oracle and to a written literal, with a trigger to separate the
+      changes from the total;
+    - the rowids at 2⁶³−1, −2⁶³ and 2³²+1, whole;
+    - the autocommit flag in each state;
+    - the interrupt, on one thread;
+    - the oracle's modes and `run-statement` refusing a statement with a tail;
+  - a decoy switch and a `missing-api` row per entry point.
+- **Measured,** on 3.53.1 and 3.45.1 alike: with a statement held at a row, `sqlite3_interrupt`
+  makes its next step and its finalize answer 9. With none running, or after one ran to DONE, the
+  interrupt is lost.
+- **The gate, split in three** (ADR-0005, amended 2026-11-16):
+  - **Why:** on slice 2's slow run, M3's five entry points brought the halves to 319 s and 272 s,
+    against the 450 s `SLOW` line. On the same class of runner on `main` they had taken 288 s and
+    250 s. The maintainer chose to split now ("Split into thirds now").
+  - **The new suite:** `test-library-loading-missing` holds only missing-api rows.
+  - **The dealing:** a pattern of five deals native's order. Positions 0, 2 and 4 go to
+    `-missing`, 1 to `-decoys` and 3 to `-real`.
+  - **Children,** 25, 28 and 28, since the other two hold about 20 children of their own.
+  - **The partition is held in each suite:** the merge, the dealing, the pattern written out, and
+    the files.
+
+  | Run | Commit | `test-check-ci` | Decoys | Real | Missing | `memory` |
+  |---|---|---|---|---|---|---|
+  | 43768337291 | `bb7feaa`, `main` | 117 s | 288 s | 250 s | | 27m32s |
+  | 43783905101 | `2e844f1` | 90 s | 264 s | 225 s | | 24m32s |
+  | 43794568875 | `3e9a506` | 117 s | 319 s | 272 s | | 29m38s |
+  | 43854418185 | `d6c58d0`, split | 84 s | 174 s | 144 s | 158 s | 24m02s |
+  | 43858091596 | `24b426e`, split | 83 s | 172 s | 143 s | 154 s | 23m36s |
+
+  Both runs of the split landed on fast runners. On the slow class, by how the halves grew
+  between `785234b`'s run and `bb7feaa`'s, the largest would take about 225 s.
+
+- **Decided by the maintainer:**
+  - 2026-11-15: the push and the PR ("Yes, push and open it");
+  - 2026-11-16: the split ("Split into thirds now");
+  - 2026-11-16: the floor's header recorded as a trap, with no check ("Record a trap only").
+- **Watched failing:** each suite was run red first ([the log](m3-slice-2-mutation-log.md)).
+  - the build's 62 mutants, all caught;
+  - each of the review fixes' rows, on its mutant;
+  - the review's own 15: 11 caught, 2 argued equivalent (O1, O2), and 2 surviving by the decoy's
+    design (D1, D2), whose answers no row reads;
+  - the split's 7, all caught;
+  - the split review's 10, all caught once each suite wrote the pattern out.
+- **Reviewed** (Opus, read-only), twice. Each finding was reproduced before it was fixed.
+  - **The slice:** no blocker, 1 major and 10 minors.
+    - **The major:** the PR body said the `int` plants and the order swaps were caught by form
+      alone. `last_insert_rowid`'s `int` is caught by behaviour too, and the order only by
+      `test-native`'s body rows.
+    - **The minors:**
+      - the record strings cited records that don't say the claim, after my first correction too;
+      - `result-type`'s `void` map was untested against its complement;
+      - the oracle leaked its connection on bad hex;
+      - the oracle and `run-statement` dropped a statement's tail, both sides agreeing;
+      - the log's gate table was of the pre-rebase tree, and two of its red-run figures matched
+        no run;
+      - the briefs' floor command never set the floor's header;
+      - the slice's CI times weren't yet read;
+      - the decoy's five answers are never observed;
+      - two nits.
+  - **The split:** no blocker, 1 major and 5 minors.
+    - **The major:** ADR-0002's M3 amendment still said the entry points alternate.
+    - **The minors:**
+      - nothing held the pattern itself;
+      - the decoy's header named two suites;
+      - the ADR's thirds arithmetic was wrong;
+      - the log's build count left out `initialize`;
+      - an unused import.
+- **Records,** proposed in this PR:
+  - ADR-0005's amendment "the halves split in three";
+  - a pointer in ADR-0002's M3 amendment;
+  - a trap and an AGENTS.md line on a floor run's header.
+- **Unreproduced:** `check-memory-gate`'s case b missed the statement plant's leak once, in a full
+  run of the checks straight after `make test`: "make test-memory exited 0 … got: test-memory:
+  pass tests/memory-plant-statement.sps". Fifteen isolated runs of the plant and two full reruns
+  of the check caught it. It is M2 slice 3's plant, and this slice changes nothing it reaches.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder | Sonnet | about 288k | 99 | 60 min |
+  | Adversarial review | Opus | about 329k | 122 | 37 min |
+  | The review's fixes | Sonnet | about 136k | 75 | 45 min |
+  | The split | Sonnet | about 122k | 50 | 34 min |
+  | The split's review | Opus | about 194k | 56 | 16.5 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A floor run that sets only the library compiles its C against another header.
+  - A record string's citation is checked only for the record's existence. Twice this slice cited
+    a record for a claim it doesn't make. Read the decision before citing it.
+  - Balance a split by children, not by entry points: each half held about 20 children of its
+    own, so dealing by thirds would have left 34, 33 and 14.
+  - `test-check-ci`'s ratio overstates the halves' growth on a slower runner: between two runs it
+    rose 39%, and the halves 28%.
+  - A rule read from the file it holds holds nothing: the dealing row read the pattern from the
+    parts' own file, until each suite wrote it out.
+
 ### 2026-11-15 — M3 slice 1: the pure core (PR #22)
 
 - **Built,** in pure Scheme on synthetic inputs, with no foreign code, by two builders in parallel

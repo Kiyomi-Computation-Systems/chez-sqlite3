@@ -583,6 +583,17 @@ replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
   - the three took 155 s, 142 s and 140 s, 437 s in all against 430 s;
   - the 7 s more is the third suite's own setup;
   - the floor, 3.45.1, read the same to a second or two.
+- **On CI,** both runs of the split landed on fast runners, where `test-check-ci` took 84 s and
+  83 s:
+
+  | Run | Commit | Decoys | Real | Missing | `memory` |
+  |---|---|---|---|---|---|
+  | 43854418185 | `d6c58d0` | 174 s | 144 s | 158 s | 24m02s |
+  | 43858091596 | `24b426e` | 172 s | 143 s | 154 s | 23m36s |
+
+  The halves had taken 264 s and 225 s on a runner of about that speed (43783905101). On the slow
+  class, by how the halves grew between `785234b`'s run and `bb7feaa`'s, the largest would take
+  about 225 s.
 - **A later entry point is dealt by the same pattern,** three of every five to `-missing`, so
   `-missing` grows fastest and is the next to near the threshold: by the M2 slice 2 amendment's
   arithmetic, after about 35 more entry points on the slowest runner seen. A suite the `SLOW`

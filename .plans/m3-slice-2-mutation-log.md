@@ -294,7 +294,7 @@ On slice 2's second CI run, 43794568875, a slow runner, the halves of `test-libr
 319 s and 272 s, against the 450 s at which `make test-memory` names a suite `SLOW`; on `main`, the
 same class of runner, 288 s and 250 s. The maintainer chose (2026-11-16) to split them in three
 now, in the one M3 slice that owns the files. A Sonnet agent did it test first from
-the maintainer's brief; the mutations ran in whole copies of the tree under the worktree's
+its brief; the mutations ran in whole copies of the tree under the worktree's
 git-ignored `build/m3s2-split/mut/` (`tar --exclude=./build --exclude=./.git`), each suite run from
 inside the copy, outside the gate but for the ungated child, which ran under it.
 
