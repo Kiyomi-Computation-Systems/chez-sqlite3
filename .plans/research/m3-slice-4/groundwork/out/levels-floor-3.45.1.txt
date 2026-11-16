@@ -1,0 +1,1654 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+E1, outer. UNIQUE, default conflict (ABORT)
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E1, nested. UNIQUE, default conflict (ABORT)
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E4, outer. INSERT OR ROLLBACK
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR ROLLBACK INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E4, nested. INSERT OR ROLLBACK
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR ROLLBACK INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E8, outer. a trigger's RAISE(ROLLBACK)
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (99)
+    step: rc 1811, extended 1811, "trigger said rollback"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E8, nested. a trigger's RAISE(ROLLBACK)
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (99)
+    step: rc 1811, extended 1811, "trigger said rollback"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E24, outer. refused at prepare: no such table
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO nosuch VALUES (1)
+    prepare: rc 1, extended 1, "no such table: nosuch"
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E24, nested. refused at prepare: no such table
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO nosuch VALUES (1)
+    prepare: rc 1, extended 1, "no such table: nosuch"
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F1, outer. FULL, no function, no constraint
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT x FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F1, nested. FULL, no function, no constraint
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT x FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F2, outer. FULL, one function call
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT lower(x) FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F2, nested. FULL, one function call
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT lower(x) FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+N1, outer. NOMEM by the heap limit, a SELECT reading a table
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT randomblob(100000) FROM src LIMIT 1
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+N1, nested. NOMEM by the heap limit, a SELECT reading a table
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT randomblob(100000) FROM src LIMIT 1
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+N2, outer. NOMEM by the heap limit, a SELECT reading no table
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT randomblob(100000)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+N2, nested. NOMEM by the heap limit, a SELECT reading no table
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT randomblob(100000)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+N3, outer. NOMEM by the heap limit, a multi-row INSERT with a statement journal
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+N3, nested. NOMEM by the heap limit, a multi-row INSERT with a statement journal
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT randomblob(100000) FROM src LIMIT 3
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+N4, outer. NOMEM by the heap limit, a one-row INSERT
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (randomblob(100000))
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+N4, nested. NOMEM by the heap limit, a one-row INSERT
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (randomblob(100000))
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+G2, outer. a column read's NOMEM, a SELECT reading a table, then reset
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    reset: rc 7
+    after the reset: autocommit 1
+    finalize: rc 0
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+G2, nested. a column read's NOMEM, a SELECT reading a table, then reset
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    reset: rc 7
+    after the reset: autocommit 1
+    finalize: rc 0
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+G3, outer. a column read's NOMEM, a SELECT reading a table, then finalize
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    finalize: rc 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+G3, nested. a column read's NOMEM, a SELECT reading a table, then finalize
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    finalize: rc 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+G2u, outer. a column read's NOMEM, a SELECT reading a table, left unfinished through the exit
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    left unfinished: stmt_busy 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 7, finalize rc 7, extended then 7
+
+G2u, nested. a column read's NOMEM, a SELECT reading a table, left unfinished through the exit
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1 FROM src LIMIT 1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    left unfinished: stmt_busy 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 7, finalize rc 7, extended then 7
+
+G4, outer. a column read's NOMEM, a SELECT reading no table, then reset
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    reset: rc 7
+    after the reset: autocommit 0
+    finalize: rc 0
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+G4, nested. a column read's NOMEM, a SELECT reading no table, then reset
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    reset: rc 7
+    after the reset: autocommit 0
+    finalize: rc 0
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+G4u, outer. a column read's NOMEM, a SELECT reading no table, left unfinished through the exit
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    left unfinished: stmt_busy 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 7, finalize rc 7, extended then 7
+
+G4u, nested. a column read's NOMEM, a SELECT reading no table, left unfinished through the exit
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    left unfinished: stmt_busy 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 7, finalize rc 7, extended then 7
+
+I1, outer. an interrupted write
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT i FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+I1, nested. an interrupted write
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT i FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+I3, outer. an interrupted SELECT reading a table
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT count(*) FROM k, src
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+I3, nested. an interrupted SELECT reading a table
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT count(*) FROM k, src
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E13, outer. a deferred foreign key, the body returns
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO c VALUES (7)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue COMMIT: step rc 787, extended 787, "FOREIGN KEY constraint failed"
+      its finalize: rc 787, extended 787
+  the commit failed; autocommit read: 0
+  the failed commit: the level rolled back, then its failure raised
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E13, nested. a deferred foreign key, the body returns
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO c VALUES (7)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t inner,outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: step rc 787, extended 787, "FOREIGN KEY constraint failed"
+      its finalize: rc 787, extended 787
+  the outer COMMIT failed with the transaction open: ROLLBACK
+    issue ROLLBACK: 101
+    after the outer level: autocommit 1
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+O7, outer. an INSERT ... RETURNING held at its row, the body returns
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO r VALUES (6), (7) RETURNING x
+    step: rc 100, row 6, stmt_busy 1; held
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue COMMIT: step rc 5, extended 5, "cannot commit transaction - SQL statements in progress"
+      its finalize: rc 5, extended 5
+  the commit failed; autocommit read: 0
+  the failed commit: the level rolled back, then its failure raised
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 100, finalize rc 0, extended then 0
+
+O7, nested. an INSERT ... RETURNING held at its row, the body returns
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO r VALUES (6), (7) RETURNING x
+    step: rc 100, row 6, stmt_busy 1; held
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue RELEASE chez_sqlite3_1: step rc 5, extended 5, "cannot release savepoint - SQL statements in progress"
+      its finalize: rc 5, extended 5
+  the commit failed; autocommit read: 0
+  the failed commit: the level rolled back, then its failure raised
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: step rc 5, extended 5, "cannot release savepoint - SQL statements in progress"
+      its finalize: rc 5, extended 5
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: step rc 5, extended 5, "cannot commit transaction - SQL statements in progress"
+      its finalize: rc 5, extended 5
+  the outer COMMIT failed with the transaction open: ROLLBACK
+    issue ROLLBACK: 101
+    after the outer level: autocommit 1
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    the held statement afterwards: step rc 100, finalize rc 0, extended then 0
+
+L1, outer. INSERT OR ROLLBACK caught, a later write, the body returns
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR ROLLBACK INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body carries on: INSERT INTO t VALUES ('after')
+  the body returns; autocommit read: 1
+  the exit: nothing issued, &sqlite-transaction-ended
+    after the exit: autocommit 1
+    db sees: t after; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t after; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue COMMIT: step rc 1, extended 1, "cannot commit - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+L1, nested. INSERT OR ROLLBACK caught, a later write, the body returns
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR ROLLBACK INTO u VALUES (1)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body carries on: INSERT INTO t VALUES ('after')
+  the body returns; autocommit read: 1
+  the exit: nothing issued, &sqlite-transaction-ended
+    after the exit: autocommit 1
+    db sees: t after; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t after; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue RELEASE chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+C0, outer. the control: a write, the body returns
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (1)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue COMMIT: 101
+    after the exit: autocommit 1
+    db sees: t outer; b 1 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t outer; b 1 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+C0, nested. the control: a write, the body returns
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (1)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t inner,outer; b 1 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t inner,outer; b 1 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+R0, outer. the control: a write, the body raises
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (1)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+R0, nested. the control: a write, the body raises
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (1)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E2, outer. UNIQUE at the 3rd row of 4, default conflict
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (20), (21), (1), (22)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E2, nested. UNIQUE at the 3rd row of 4, default conflict
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO u VALUES (20), (21), (1), (22)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E3a, outer. NOT NULL
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn VALUES (NULL)
+    step: rc 1299, extended 1299, "NOT NULL constraint failed: bn.x"
+    finalize: rc 1299; the connection's extended code then 1299
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E3a, nested. NOT NULL
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn VALUES (NULL)
+    step: rc 1299, extended 1299, "NOT NULL constraint failed: bn.x"
+    finalize: rc 1299; the connection's extended code then 1299
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E3b, outer. CHECK
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc VALUES (5000)
+    step: rc 275, extended 275, "CHECK constraint failed: x < 1000"
+    finalize: rc 275; the connection's extended code then 275
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E3b, nested. CHECK
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc VALUES (5000)
+    step: rc 275, extended 275, "CHECK constraint failed: x < 1000"
+    finalize: rc 275; the connection's extended code then 275
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E6, outer. INSERT OR FAIL at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR FAIL INTO u VALUES (30), (31), (1), (32)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E6, nested. INSERT OR FAIL at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT OR FAIL INTO u VALUES (30), (31), (1), (32)
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E7, outer. UPDATE OR ROLLBACK
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE OR ROLLBACK u SET x = 1 WHERE x = 2
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E7, nested. UPDATE OR ROLLBACK
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE OR ROLLBACK u SET x = 1 WHERE x = 2
+    step: rc 2067, extended 2067, "UNIQUE constraint failed: u.x"
+    finalize: rc 2067; the connection's extended code then 2067
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E9, outer. a trigger's RAISE(ABORT) at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ua VALUES (40), (41), (99), (42)
+    step: rc 1811, extended 1811, "trigger said abort"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E9, nested. a trigger's RAISE(ABORT) at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ua VALUES (40), (41), (99), (42)
+    step: rc 1811, extended 1811, "trigger said abort"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E10, outer. a trigger's RAISE(FAIL) at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uf VALUES (50), (51), (99), (52)
+    step: rc 1811, extended 1811, "trigger said fail"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E10, nested. a trigger's RAISE(FAIL) at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uf VALUES (50), (51), (99), (52)
+    step: rc 1811, extended 1811, "trigger said fail"
+    finalize: rc 1811; the connection's extended code then 1811
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E11, outer. a trigger's RAISE(IGNORE) at the 3rd row of 4, the body returns
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ui VALUES (60), (61), (99), (62)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue COMMIT: 101
+    after the exit: autocommit 1
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 3, ci 0 rows; src 30000 bytes
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 3, ci 0 rows; src 30000 bytes
+
+E11, nested. a trigger's RAISE(IGNORE) at the 3rd row of 4, the body returns
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ui VALUES (60), (61), (99), (62)
+    step: 101
+    finalize: rc 0; the connection's extended code then 0
+  the body returns; autocommit read: 0
+  the exit: the level committed
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t inner,outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 3, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t inner,outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 3, ci 0 rows; src 30000 bytes
+
+E12, outer. an immediate foreign key
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ci VALUES (7)
+    step: rc 787, extended 787, "FOREIGN KEY constraint failed"
+    finalize: rc 787; the connection's extended code then 787
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E12, nested. an immediate foreign key
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO ci VALUES (7)
+    step: rc 787, extended 787, "FOREIGN KEY constraint failed"
+    finalize: rc 787; the connection's extended code then 787
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E14, outer. integer overflow at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT CASE WHEN v = 3 THEN abs(-9223372036854775807 - 1) ELSE 100 + v END FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4)
+    step: rc 1, extended 1, "integer overflow"
+    finalize: rc 1; the connection's extended code then 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E14, nested. integer overflow at the 3rd row of 4
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT CASE WHEN v = 3 THEN abs(-9223372036854775807 - 1) ELSE 100 + v END FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4)
+    step: rc 1, extended 1, "integer overflow"
+    finalize: rc 1; the connection's extended code then 1
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E15, outer. FULL, one row, no constraints
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E15, nested. FULL, one row, no constraints
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E16, outer. FULL, 100 rows of zeroblob(3000), no constraints
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E16, nested. FULL, 100 rows of zeroblob(3000), no constraints
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E17, outer. FULL, one row, a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E17, nested. FULL, one row, a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E18, outer. FULL, 100 rows of zeroblob(3000), a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E18, nested. FULL, 100 rows of zeroblob(3000), a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT zeroblob(3000) FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E19, outer. FULL, 800 rows, no function, UNIQUE, NOT NULL and CHECK
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc SELECT 100 + i FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 800) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E19, nested. FULL, 800 rows, no function, UNIQUE, NOT NULL and CHECK
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc SELECT 100 + i FROM (WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 800) SELECT i FROM n)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+E21, outer. NOMEM by the heap limit, 3 rows calling randomblob, a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT randomblob(100000) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E21, nested. NOMEM by the heap limit, 3 rows calling randomblob, a NOT NULL column
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT randomblob(100000) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E22, outer. NOMEM by the heap limit, 3 rows, UNIQUE, NOT NULL and CHECK
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc SELECT 100 + v + 0 * length(randomblob(100000)) FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+E22, nested. NOMEM by the heap limit, 3 rows, UNIQUE, NOT NULL and CHECK
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO uc SELECT 100 + v + 0 * length(randomblob(100000)) FROM (SELECT 1 AS v UNION ALL SELECT 2 UNION ALL SELECT 3)
+    (the limit still in force when the step returned; 0 once lifted)
+    step: rc 7, extended 7, "out of memory"
+    finalize: rc 7; the connection's extended code then 7
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F3, outer. FULL, one constraint (NOT NULL), no function
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT x FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F3, nested. FULL, one constraint (NOT NULL), no function
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO bn SELECT x FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F4, outer. FULL, zeroblob(3000) per row of src
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT zeroblob(3000) FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F4, nested. FULL, zeroblob(3000) per row of src
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b SELECT zeroblob(3000) FROM src
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F5, outer. FULL, zeroblob(100000), one row
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F5, nested. FULL, zeroblob(100000), one row
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b VALUES (zeroblob(100000))
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F6, outer. FULL, an UPDATE calling no function
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = x || x
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F6, nested. FULL, an UPDATE calling no function
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = x || x
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+F7, outer. FULL, an UPDATE calling lower
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = lower(x || x)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F7, nested. FULL, an UPDATE calling lower
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = lower(x || x)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F8, outer. FULL, an UPDATE calling zeroblob
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = zeroblob(9000)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+F8, nested. FULL, an UPDATE calling zeroblob
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: UPDATE src SET x = zeroblob(9000)
+    (max_page_count set to page_count: 26)
+    step: rc 13, extended 13, "database or disk is full"
+    finalize: rc 13; the connection's extended code then 13
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+G5, outer. a column read's NOMEM, a SELECT reading no table, then finalize
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    finalize: rc 7
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+G5, nested. a column read's NOMEM, a SELECT reading no table, then finalize
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: SELECT ?1
+    step: rc 100
+    sqlite3_column_text under the limit: NULL, extended 7; the limit still in force straight after, 0 once lifted
+    after the read: autocommit 0
+    finalize: rc 7
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+I2, outer. an interrupted write calling a function (a statement journal)
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT abs(i) FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK: step rc 1, extended 1, "cannot rollback - no transaction is active"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+I2, nested. an interrupted write calling a function (a statement journal)
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: INSERT INTO b WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT abs(i) FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 1
+  the exit: nothing issued
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  a mutant that reads no autocommit issues:
+    issue ROLLBACK TO chez_sqlite3_1: step rc 1, extended 1, "no such savepoint: chez_sqlite3_1"
+      its finalize: rc 1, extended 1
+    the connection's extended code then: 1
+
+I4, outer. an interrupted SELECT reading no table
+    issue BEGIN IMMEDIATE: 101
+    the level begun, its marker written: autocommit 0
+  the body: WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT count(*) FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK: 101
+    after the exit: autocommit 1
+    db sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+
+I4, nested. an interrupted SELECT reading no table
+    issue BEGIN IMMEDIATE: 101
+    issue SAVEPOINT chez_sqlite3_1: 101
+    the level begun, its marker written: autocommit 0
+  the body: WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1000000) SELECT count(*) FROM k
+    (progress calls: 50)
+    step: rc 9, extended 9, "interrupted"
+    finalize: rc 9; the connection's extended code then 9
+  the body raises; autocommit read: 0
+  the exit: the level rolled back
+    issue ROLLBACK TO chez_sqlite3_1: 101
+    issue RELEASE chez_sqlite3_1: 101
+    after the exit: autocommit 0
+    db sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+    db2 sees: t (none); b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes
+  the outer level, the caller's: COMMIT
+    issue COMMIT: 101
+    after the outer level: autocommit 1
+    db2 sees: t outer; b 0 rows; r 0 rows; u 1,2; bn 0, uc 1, ua 0, uf 0, ui 0, ci 0 rows; src 30000 bytes

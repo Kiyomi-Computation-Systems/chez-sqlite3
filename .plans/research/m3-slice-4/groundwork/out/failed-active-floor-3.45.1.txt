@@ -1,0 +1,83 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+
+F1. a column read's NOMEM: SELECT ?1 FROM src, 100,000 bytes of TEXT bound with their length
+  S step 100; sqlite3_column_text under the heap limit: NULL, extended 7
+  stmt_busy(S): 1
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, at once
+time: 0.002 ms
+  S finalized: 7
+
+F2. a step that answered BUSY: S prepared, then c2's BEGIN EXCLUSIVE and write, then S's step with no timeout
+  S step: 5, extended 5
+  stmt_busy(S): 1
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1501.965 ms
+  S finalized: 5
+
+F3. an interrupted first step: S a long SELECT reading a table, interrupted at its 50th progress call
+  S step: 9; progress calls 50; is_interrupted 1
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1501.935 ms
+  S finalized: 9
+
+F4. an interrupted later step: S answered a row, then its next step was interrupted
+  S first step: 100; next step: 9; progress calls 50; is_interrupted 1
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.597 ms
+  S finalized: 9
+
+F5. an interrupted step beside another statement H held at a row
+  H step 100; S step: 9
+  (H finalized first, 0, so only S is left)
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.459 ms
+  S finalized: 9
+
+F6. an interrupted step while another statement H still holds a row (concurrency I4b)
+  H step 100; S step: 9; stmt_busy(S) 0; with H held, c1 prepares SELECT 1: 9
+  (H finalized, 0)
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.182 ms
+  S finalized: 9
+
+C1. the control: a step failing on a constraint
+  S step: 2067
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.616 ms
+  S finalized: 2067
+
+C2. the control: a statement at done, not reset
+  S steps: 100 then 101
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.602 ms
+  S finalized: 0
+
+C3. the control: a statement at a row (slice-0 P12's held read)
+  S step: 100
+  stmt_busy(S): 1
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, at once
+time: 0.003 ms
+  S finalized: 0
+
+C4. the control: a statement prepared, never stepped
+  stmt_busy(S): 0
+  c1 prepares SELECT 1: 0; its step 100
+  under c2's BEGIN IMMEDIATE and write, c1's BEGIN IMMEDIATE (1500 ms timeout): 5, waited
+time: 1502.492 ms
+  S finalized: 0

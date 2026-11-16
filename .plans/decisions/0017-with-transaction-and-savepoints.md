@@ -16,6 +16,11 @@
   rollback tried once, and N following the calls' extents, the maintainer's choices that day
   ("Once", "Reuse N"); the context's `failed` and NOMEM bullets narrowed
   ([amendment](#amendment-2026-11-16-a-failed-commits-rollback-and-the-savepoints-n-m3-slice-3)).
+  Amended 2026-11-16 in M3 slice 4, and accepted by the maintainer that day ("Accept all"): `with-transaction`
+  as built, `ended` as the check-out's check, one section a statement, the builder's choices the
+  maintainer confirmed that day ("Confirm, and name the SQL"; "Document it"; "One section per
+  statement"), and four consequences found by the slice's review
+  ([amendment](#amendment-2026-11-16-with-transaction-as-built-m3-slice-4)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
 - **Settles:** brief §4's "`with-transaction` with nested savepoints, and rollback on a raise"
@@ -343,3 +348,75 @@ outputs this amendment cites. The second and third bullets are the maintainer's 
   the call's flag (ADR-0016, amended in M3 slice 3). Whether `ended` is passed as that check, so a
   second resume of its remainder touches none of its statements, is slice 4's to decide, with a
   row.
+
+## Amendment, 2026-11-16: `with-transaction` as built (M3 slice 4)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all").
+
+M3 slice 4 built `with-transaction` in `(chez-sqlite3 private transaction)`, over slice 1's plan,
+and settled what the records left to it. The evidence is in
+[research/m3-slice-4/](../research/m3-slice-4/README.md) and
+[the slice's log](../m3-slice-4-mutation-log.md). The groundwork's probes, `levels.c` and
+`failed-active.c` among them, are in
+[research/m3-slice-4/groundwork/](../research/m3-slice-4/groundwork/README.md). Each point is held by a row, watched failing
+against a plant.
+
+- **`ended` is the check-out's check** (slice 3's question, settled by a row). A remainder taken
+  once `ended` is set and resumed a second time touched none of the call's statements, on either
+  library: at the final text, 303 and 306 remainders, outer and nested, each answering 42, the
+  re-entry's refusal or `&sqlite-transaction-ended`. With a check-out that read nothing, a second
+  resume's `COMMIT` or `RELEASE` reached SQLite and answered an error; under the three sections
+  first built, one that read only the use's own flag checked out `COMMIT` or `RELEASE` again in 6
+  of 381 remainders a level.
+- **Each of its own statements is taken from the cache, stepped and given back in one critical
+  section** (the maintainer, 2026-11-16: "One section per statement"). In three sections, an engine
+  that expired between a failed `RELEASE`'s step and its return, and was then lost, left that
+  statement tracked as `failed`, so every later `with-transaction` on the connection was refused,
+  with no statement of the caller's to reset.
+- **A failed commit's rollback runs with its plan in one critical section.** With the plan and
+  each step in sections of their own, an expiry between `ROLLBACK TO` and `RELEASE` let the
+  critical after thunk issue the `ROLLBACK TO` again, against slice 3's "Once". Recording how far
+  the rollback had gone, step by step, failed the engine sweep while each statement took three
+  sections. With one section a statement, that design passes the sweep, but a timer's handler
+  that re-enters the body from inside the call still ran the `ROLLBACK TO` twice under it, and
+  never with the plan and the rollback in one section, which leaves no window at all. A row
+  holds both.
+- **A rollback stops at its first failed step** (the maintainer, 2026-11-16: "Confirm, and name
+  the SQL"). After a failed `ROLLBACK TO`, no `RELEASE` is issued: it can undo nothing, and it
+  fails the same way. `ended` is set in the section of the last step taken, so slice 3's "the
+  `RELEASE` after `ROLLBACK TO`" reads "the last step taken".
+- **A failure in giving one of its own statements back to the cache is dropped,** and the step's
+  outcome is the answer (confirmed the same day). The review found no path where it happens.
+- **Decision 1's refusal carries the held statement's state and SQL** (the maintainer, the same
+  day): its irritants are `(statement-not-finished STATE SQL)`, STATE `row` or `failed`, both read
+  in the section that refuses.
+- **A remainder resumed again while an earlier resume of it is pending** (the schedule M3
+  slice 5's review found) leaves the level whole. In about 2,090 trials a level, each
+  with a fresh connection and engine, the depth was restored, none of the call's statements was
+  left behind or outside the cache, and a later call committed. `ended` and `begun` are set
+  in the section of the step that decides them, never when the call ends.
+- **The savepoints' names are built inside `call-with-open-handle`'s section,** where no expiry
+  lands. Under a remainder resumed a second time, Chez's `number->string` answered "", and a plant
+  that built the name outside the section handed SQLite `SAVEPOINT chez_sqlite3_`, which it took
+  as a savepoint of that name.
+- **Consequences,** each a sentence in `docs/reference.md`'s Transactions:
+  - **A handler that runs before the unwind is part of the body** (the maintainer, 2026-11-16:
+    "Document it"). A `with-exception-handler` handler of the body's raise runs inside the call:
+    whatever it leaves open is committed or rolled back with the rest of the level, as the body's
+    own SQL is, since autocommit can't tell one transaction from another. A handler that escapes
+    has it rolled back; one that resumes the body has it committed by the body's return. A `guard`'s clause runs after the unwind
+    and isn't affected. Once the call has ended its own level, as when a return after the
+    transaction ended raises `&sqlite-transaction-ended`, it issues nothing more, and a
+    transaction a handler begins then stays open.
+  - **Resuming an engine, or calling a continuation, taken outside the call from inside it leaves
+    the call.** Chez runs the call's after thunk and then its before thunk, so the level rolls
+    back, and its return raises `&sqlite-transaction-ended`. The depth and the savepoints' names
+    hold ("Reuse N").
+  - **An expiry whose rollback fails loses the engine:** its caller gets an assertion violation,
+    "no engine active", as for the conveniences (ADR-0016, amended in M3 slice 3).
+  - **A second resume of a remainder commits nothing again.** It may answer as the first did,
+    raise `&sqlite-transaction-ended`, or refuse the re-entry.
+- **The engine sweep runs to completion,** past the plan's "fuel from 1 to 60", as the global
+  constraints ask. At the final text it completes at fuel 112, and slice 1's plant fails at fuels
+  106 to 109, against the model's 138 to 174. A fuel is the suite's as well as the code's: rows
+  added elsewhere in the suite moved every sweep by two fuels.

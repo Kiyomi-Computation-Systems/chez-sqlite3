@@ -15,7 +15,8 @@
 ;;; (chez-sqlite3 private statement-values) (ADR-0015). The conveniences run
 ;;; one statement each, through the connection's statement cache, and finish
 ;;; it on every path; the counters are SQLite's, read as it keeps them
-;;; (ADR-0016, ADR-0020).
+;;; (ADR-0016, ADR-0020). with-transaction reads autocommit to nest, and again
+;;; to learn whether its transaction survived its body (ADR-0017).
 (library (chez-sqlite3)
   (export
    ;; --- connections (chez-sqlite3 private connection) ---
@@ -51,6 +52,13 @@
    last-insert-rowid
    ;; in-transaction? : Database -> Boolean
    in-transaction?
+
+   ;; --- transactions (chez-sqlite3 private transaction) ---
+   ;; with-transaction : (case-> (Database (-> A ...) -> A ...) (Database Mode (-> A ...) -> A ...))
+   with-transaction
+   ;;   Mode = (U 'deferred 'immediate 'exclusive)
+   ;; sqlite-transaction-ended? : Any -> Boolean
+   sqlite-transaction-ended?
 
    ;; --- statements (chez-sqlite3 private statement) ---
    ;; prepare-statement : Database String -> Statement
@@ -159,6 +167,8 @@
                 changes total-changes last-insert-rowid in-transaction?)
           (only (chez-sqlite3 private conveniences)
                 execute! execute-script! query query-row query-fold)
+          (only (chez-sqlite3 private transaction) with-transaction)
+          (only (chez-sqlite3 private conditions) sqlite-transaction-ended?)
           (only (chez-sqlite3 private statement)
                 prepare-statement finalize-statement! call-with-statement statement?
                 statement-sql parameter-count step! reset! column-count)

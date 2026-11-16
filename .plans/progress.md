@@ -39,11 +39,12 @@ newest first.
   every job.
 - **M3 slice 2 is done:** the bindings, as PR #23, `599a43d`, built beside slice 1 by the M2
   session, squash-merged with CI passing in every job.
-- **Now: M3 slice 3, the conveniences, the counters and the cache, is PR #24 on
-  `m3-slice-3-conveniences`,** rebased onto `599a43d` and merged in turn (the maintainer,
-  2026-11-16: "Run all four", slices 1 to 4 in order). Then slice 4, transactions, PR #25, by the
-  M2 session, and slice 5, the settings, PR #26, by the M3 session. The maintainer's
-  order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
+- **M3 slice 3 is done:** the conveniences, the counters and the cache, as PR #24, `f496cf5`,
+  squash-merged with CI passing in every job.
+- **Now: M3 slice 4, transactions, is PR #25 on `m3-slice-4-transactions`,** by the M2 session,
+  rebased onto `f496cf5` and merged in turn (the maintainer, 2026-11-16: "Run all four", slices 1
+  to 4 in order). Then slice 5, the settings, PR #26, by the M3 session, rebased onto it. The
+  maintainer's order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
   too, and M2's Mac run is done, below.
@@ -92,6 +93,122 @@ newest first.
   (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-16 — M3 slice 4: transactions (PR #25)
+
+- **Built** by the M2 session, stacked on slice 3's `9deda02`, from the M3 session's brief once
+  slice 3 was final (the maintainer's order of 2026-11-15):
+  - **groundwork first,** read-only, while slice 3 was being built (the maintainer's choice in the
+    M2 session's pane, "Slice 4 groundwork"): every case the slice cites, measured on both
+    libraries, its gaps closed by probes, the NOMEM rig tried, and the builder's brief drafted.
+    Its findings went to slice 3's records, and the heap limit's trap here;
+  - **`(chez-sqlite3 private transaction)`:** `with-transaction` over slice 1's plan. Each of its
+    own statements goes through slice 3's cache, taken, stepped and given back in one critical
+    section, with `ended` as the check-out's check. The connection record gains its depth;
+  - **`with-transaction` and `sqlite-transaction-ended?`,** exported (62 names), and a
+    Transactions section in `docs/reference.md`;
+  - **four suites:** `test-transaction` (48 rows), `-nomem` (25), `-engine` (15) and
+    `-interrupt` (8); and the heap limit lifted hard then soft in `test-statement-values-nomem`,
+    with a second connection's read to hold it.
+- **Decided by the maintainer** (2026-11-16, in the M2 session's pane):
+  - the builder's three choices confirmed, and the refusal naming the held statement's SQL
+    ("Confirm, and name the SQL");
+  - a handler that runs before the unwind counts as part of the body ("Document it");
+  - each statement used in one critical section ("One section per statement").
+
+  "Once" and "Reuse N", from the groundwork, were decided in the M3 session's pane and are in
+  slice 3's records.
+- **Watched failing:**
+  - each new suite red against a stub that calls the body plainly;
+  - 50 plants in [the log](m3-slice-4-mutation-log.md): §4.8's, the builder's, both reviews' and
+    the fixes'. Every one is caught. Two more are argued equivalent there: `begun-on-failure` at
+    the outer level, and `pending-begun-on-ended`.
+- **Reviewed** (Opus, read-only), every finding reproduced before it was fixed. No blocker; nine
+  majors and seven minors:
+  - **four rules no row held,** each mutant passing every suite: an escape past a failed rollback,
+    the same after a resumed raise, a failed `BEGIN`, and the level a return had already ended;
+  - **"Once" broken under an engine:** an expiry between `ROLLBACK TO` and `RELEASE` let the after
+    thunk issue the `ROLLBACK TO` again. Fixed by running the failed commit's rollback with its
+    plan in one section; recording progress step by step failed the same row;
+  - **a handler's transaction rolled back by the exit,** kept as documented behaviour;
+  - **an engine taken outside the call, resumed inside it,** leaves the call: documented, with a
+    row;
+  - **the interrupt suite's time,** Valgrind's one thread at a time: the watchdog bounded by a
+    deadline that never fails a row;
+  - **records:** the log's stale counts, and the docs overclaiming a second resume;
+  - **minors:** the run-count sensor's reach, two NOMEM headers, a `[B]` row's false premise, a
+    missing NOMEM refusal row, a comment, and a docs sentence on a lost engine.
+
+  The fixes found one more: an engine lost between a failed `RELEASE`'s step and its return left
+  it tracked as `failed`, so every later `with-transaction` on that connection was refused. Fixed
+  by "One section per statement".
+
+  **The closing review** (Opus, read-only) of the fixes and the records found no blocker, and two
+  majors:
+  - the second-resume row could no longer fail the design it settled, since one section a
+    statement hid the stray `COMMIT` from its snapshot. It now asserts the second answers too;
+  - the records called the step-by-step rollback equivalent, where a timer's handler re-entering
+    the body still ran `ROLLBACK TO` twice under it. That's now a row.
+
+  Its minors were:
+  - three docs sentences;
+  - the once row's allowance for a lost engine;
+  - a stale comment and stale figures;
+  - a nested `SAVEPOINT` failure no row made, now made by a timer;
+  - a watchdog whose raise hung the suite.
+- **Slice 5's schedule,** a remainder resumed again while an earlier resume of it is pending (the
+  M3 session, from its own review): `with-transaction` stays whole under it, the depth restored,
+  none of its statements left behind, and a later call committing, in a row of about 2,090
+  trials a level. The same sweep found slice 3's conveniences leaving a statement outside the
+  cache; the maintainer chose to fix that in slice 5.
+- **Measured** ([research/m3-slice-4/](research/m3-slice-4/README.md)), alike on 3.53.1 and
+  3.45.1:
+  - the engine sweep completes at fuel 112, and slice 1's plant fails at fuels 106 to 109,
+    against the model's 138 to 174;
+  - a remainder resumed a second time once `ended` was set touched no statement;
+  - the NOMEM rig, a step and a column read each under the limit alone;
+  - the interrupt suite, 11 to 109 s under the gate: Valgrind's scheduling, not the code.
+- **Records,** accepted by the maintainer on 2026-11-16 ("Accept all"):
+  - ADR-0017's amendment, "`with-transaction` as built";
+  - four traps: the hard heap limit lifted alone; a run count blind to a step that failed at
+    entry; a lost engine; and a watchdog under Valgrind.
+- **CI:** run 43941964004 on `052c130`: all five jobs passed, and `memory` took 31m22s, against
+  slice 3's 27m01s. Under the gate, on a runner where `test-check-ci` took 85 s:
+  - the slowest was `test-library-loading-decoys`, at 176 s of 450;
+  - `test-transaction-interrupt` took 149 s, against 71 to 109 s locally: the watchdog's latency
+    is Valgrind's scheduling, so this suite's time is the one to read again on a slower runner;
+  - `test-transaction-engine` took 64 s, and the other transaction suites 9 to 20 s.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Groundwork, read-only | Opus | about 475k | 114 | 32 min |
+  | Builder | Opus | about 602k | 153 | 57 min |
+  | Adversarial review | Opus | about 356k | 84 | 25 min |
+  | The review's fixes | Opus | about 431k | 137 | 40 min |
+  | One section per statement | Sonnet | about 120k | 46 | 15 min |
+  | Closing review | Opus | about 282k | 73 | 22 min |
+  | The closing review's fixes | Sonnet | about 200k | 80 | 25 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A brief's assertion can be false on green code. "No statement of its own tracked" forgot that
+    the cache tracks what it keeps. Read what the green code leaves before writing the row.
+  - A plant worded after the brief can be masked. "The after thunk without its `ended` check"
+    passed every row, since each step reads `ended` itself; the plant that acts twice must also
+    clear it.
+  - Tracked statements can't see a cached statement stepped twice; only a run count can, and a
+    run count can't see a step that failed at entry. A row that counts needs both.
+  - A fuel is the suite's as well as the code's: rows added to the engine suite moved every sweep.
+    Cite a window with the text it was read at.
+  - Groundwork run while the base was being built meant the maintainer's decisions were settled
+    before the builder started.
+  - **Research kept only in a git-ignored scratch directory dies with its worktree.** The
+    groundwork's probes, which ADR-0017 cites, were lost when the slice 2 worktree was removed
+    after #23 merged. They were recovered from the agent's transcript, run again, and committed
+    under [research/m3-slice-4/groundwork/](research/m3-slice-4/groundwork/README.md). Before
+    removing a worktree, check whether any record cites a file only its `build/` holds.
+  - **Deleting a stacked PR's base branch closes the PR, not retargets it** ([traps.md](traps.md)).
+    #23 was closed that way, then reopened.
 
 ### 2026-11-16 — M3 slice 3: the conveniences, the counters and the cache (PR #24)
 

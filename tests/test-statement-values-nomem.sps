@@ -5,10 +5,17 @@
 ;;;
 ;;; The suite binds sqlite3_hard_heap_limit64 itself, and sets it to
 ;;; sqlite3_memory_used plus 1,000 bytes around the one read, setting it back
-;;; to 0 however the read ends. A 100,000-byte TEXT, bigger than SQLite's
-;;; lookaside, bound with its length and read back through select ?1, makes
-;;; sqlite3_column_text allocate a NUL-terminated copy, and that allocation
-;;; answers NOMEM (the research's heap-limit.c, on both libraries).
+;;; to 0 however the read ends, and then sqlite3_soft_heap_limit64, bound
+;;; here too, to 0: the hard limit sets the soft one with it, and its lift
+;;; alone leaves SQLite's memory pressure on for the process, so a later
+;;; second connection's read beside a write transaction answered BUSY (M3
+;;; slice 4's groundwork, C4). Only the peer row below holds the soft lift:
+;;; the check that both limits read 0 can't tell the hard lift alone, since
+;;; sqlite3_hard_heap_limit64(0) zeroes the soft limit too. A 100,000-byte
+;;; TEXT, bigger than SQLite's lookaside, bound with its length and read
+;;; back through select ?1, makes sqlite3_column_text allocate a
+;;; NUL-terminated copy, and that allocation answers NOMEM (the research's
+;;; heap-limit.c, on both libraries).
 ;;;
 ;;;   the read       column-value and column-bytevector raise &sqlite-error
 ;;;                  nomem once, with the SQL and no offset; the statement is
@@ -24,6 +31,8 @@
 ;;;                  stays (measured on both, build/m2s4/probes/name-nomem.sps)
 ;;;   after the section
 ;;;                  each raise at depth 1
+;;;   the peer       after them, a second connection reads beside a write
+;;;                  transaction that has read a table, and gets its row
 ;;;
 ;;; Where SQLite keeps no memory count, as on a build with
 ;;; SQLITE_DEFAULT_MEMSTATUS=0 like Apple's, the limit is kept but not
@@ -101,6 +110,9 @@
 ;; before; a negative N reads it, and 0 means no limit.
 (define heap-limit (bound 'sqlite3_hard_heap_limit64
                           (foreign-procedure "sqlite3_hard_heap_limit64" (integer-64) integer-64)))
+;; sqlite3_int64 sqlite3_soft_heap_limit64(sqlite3_int64 N): the same, soft.
+(define soft-limit (bound 'sqlite3_soft_heap_limit64
+                          (foreign-procedure "sqlite3_soft_heap_limit64" (integer-64) integer-64)))
 ;; int sqlite3_get_autocommit(sqlite3*): 0 inside a transaction.
 (define get-autocommit (bound 'sqlite3_get_autocommit (foreign-procedure "sqlite3_get_autocommit" (uptr) int)))
 ;; const void *sqlite3_column_name16(sqlite3_stmt*, int N): converts the
@@ -191,12 +203,13 @@
 
 ;; under-limit : (-> Any) -> Any
 ;; THUNK's answer, run with the hard heap limit at the memory SQLite uses
-;; now plus 1,000 bytes, and set back to 0 however THUNK ends.
+;; now plus 1,000 bytes, and both limits set back to 0, the hard then the
+;; soft, however THUNK ends.
 (define (under-limit thunk)
   (dynamic-wind
     (lambda () (heap-limit (+ (sqlite3-memory-used) 1000)))
     thunk
-    (lambda () (heap-limit 0))))
+    (lambda () (heap-limit 0) (soft-limit 0))))
 
 ;; read-under-limit : Database (-> Any) -> (List Any Symbol)
 ;; What THUNK, a read, raised under the limit, and whether an &sqlite-error's
@@ -515,9 +528,51 @@
        (finalize-statement! bound)
        (list a b c d)))))
 
-(test-equal "the heap limit is back at 0, and every count is zero at the end"
-  (list 0 zero-counts)
-  (list (guard (e (#t (list 'raised (describe e)))) (heap-limit -1)) (native-counts)))
+;; peer-read : -> Any
+;; In a fresh file: t, and src, ten rows of 3,000 bytes; a second
+;; connection; the first in BEGIN IMMEDIATE, a row written to t, then src
+;; read. What the second connection's read of t answers, or raises, beside
+;; it; then both limits.
+(define (peer-read)
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (dir)
+       (let ((path (string-append dir "/peer.db")))
+         (with-db path
+           (lambda (db)
+             (let* ((a (exec! db "create table t (x)"))
+                    (b (exec! db "create table src (x)"))
+                    (c (exec! db "insert into src select replace(hex(zeroblob(1500)), '0', 'a') from (with recursive n(i) as (select 1 union all select i + 1 from n where i < 10) select i from n)")))
+               (with-db path
+                 (lambda (db2)
+                   (let* ((begun (exec! db "begin immediate"))
+                          (w (exec! db "insert into t values ('written')"))
+                          (read (let* ((q (prepare-statement db "select count(*) from src"))
+                                       (s (step! q))
+                                       (n (column-value q 0)))
+                                  (finalize-statement! q)
+                                  n))
+                          (peer (attempt (lambda ()
+                                           (let* ((q (prepare-statement db2 "select count(*) from t"))
+                                                  (r (guard (e (#t (finalize-statement! q) (raise e)))
+                                                       (step! q)
+                                                       (column-value q 0))))
+                                             (finalize-statement! q)
+                                             r))))
+                          (end (exec! db "rollback")))
+                     (list read peer (list 'hard (heap-limit -1) 'soft (soft-limit -1))))))))))))))
+
+(define peer-name "after the NOMEM rows, a second connection reads beside a write transaction that has read a table, and gets its row, not busy: the limits' lift, the hard then the soft, left no memory pressure behind; both limits read 0")
+(available! peer-name)
+(test-equal peer-name
+  '(10 0 (hard 0 soft 0))
+  (peer-read))
+
+(test-equal "both heap limits are back at 0, and every count is zero at the end"
+  (list 0 0 zero-counts)
+  (list (guard (e (#t (list 'raised (describe e)))) (heap-limit -1))
+        (guard (e (#t (list 'raised (describe e)))) (soft-limit -1))
+        (native-counts)))
 
 (test-end "statement-values-nomem")
 

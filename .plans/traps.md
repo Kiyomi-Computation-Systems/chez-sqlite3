@@ -108,6 +108,13 @@ told in chez-curl's `.plans/traps.md`.
   through `map` evicted `select 30` instead of `select 0`. AGENTS.md's rule already forbade the
   assumption; this is the order it measured. (M3 slice 1, chez-sqlite3)
 
+- **An engine whose expiry runs an after thunk that raises is lost.** In M3 slice 4's sweeps,
+  where an engine expired inside `with-transaction` and the rollback its after thunk issued
+  failed, the engine's caller got an assertion violation from `raise`, "no engine active", and
+  no remainder to resume. The statements that call had checked out and not yet given back stayed
+  tracked, one of them `failed`, until `with-transaction` took, stepped and gave back each of its
+  statements in one critical section. (M3 slice 4, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -251,6 +258,24 @@ told in chez-curl's `.plans/traps.md`.
   the table adds `activate_extensions`, `lock_proxy_file`, `lock_status`, `sql_trace` and
   `vdbe_eqp`, and the page adds `legacy_file_format`. A complement taken from one of them misses
   names in the other; M3 slice 1's settings suite refuses their union. (M3 slice 1, chez-sqlite3)
+
+- **Lifting only the hard heap limit leaves SQLite under memory pressure for the rest of the
+  process.** `sqlite3_hard_heap_limit64(H)` sets the soft threshold to H too, and an allocation
+  near it sets `mem0.nearlyFull`. `sqlite3_hard_heap_limit64(0)` zeroes the threshold but never
+  clears the flag. Only an allocation made while a threshold is set, or
+  `sqlite3_soft_heap_limit64`, clears it (`malloc.c`, read in 3.45.1's amalgamation).
+  - **Measured on 3.53.1 and 3.45.1:** after a NOMEM and the hard lift alone, a writer in
+    `BEGIN IMMEDIATE` that read a table made a second connection's read answer BUSY.
+    `sqlite3_soft_heap_limit64(0)` after the hard lift cleared it.
+  - **Both limits read 0 after the hard lift alone,** so reading them back can't show it: only
+    the second connection's read does.
+  - **Lift hard, then soft.** (M3 slice 4's groundwork, chez-sqlite3)
+
+- **`sqlite3_stmt_status(…, SQLITE_STMTSTATUS_RUN)` doesn't count a step that fails at entry.**
+  On 3.53.1 and 3.45.1, an interrupted step beside a held row raised SQLITE_INTERRUPT, and the
+  statement's run count stayed 0. The same statement stepped again normally read 1. A row that
+  counts steps by RUN can't see a step that failed before it ran: count those through the
+  statement's state or the connection's extended code. (M3 slice 4's review, chez-sqlite3)
 
 ## Checks and environment
 
@@ -451,6 +476,23 @@ told in chez-curl's `.plans/traps.md`.
     (the maintainer, 2026-11-16: "Record a trap only").
 
   (M3 slice 2's review, chez-sqlite3)
+
+- **Under Valgrind, a watchdog thread waits while another thread runs C.** Valgrind runs one
+  thread at a time, and the owner's `sqlite3_step` kept the lock, so a watchdog meant to
+  interrupt it every 5 ms sent its first interrupt 16.5 s and 42.7 s into the call. Whole runs of
+  `test-transaction-interrupt` took 12 to 71 s under the gate, and 99 s once. `--fair-sched=yes`
+  answered "fair scheduling is not supported on this system". A deadline bounds the watchdog's
+  life, and must never fail a row by itself: the latency is the scheduler's. (M3 slice 4's review,
+  chez-sqlite3)
+
+- **Deleting a stacked PR's base branch closes the PR on GitHub; it doesn't retarget it.** In M3's
+  merge train, after #22 was squash-merged, `git push origin --delete m3-slice-1-core` closed #23,
+  whose base it was. GitHub retargets a dependent PR only when the merged PR's own branch is
+  deleted through its merge flow, and `delete_branch_on_merge` is off here.
+  - **Recovered** by pushing the branch back at its old SHA, `gh pr reopen 23`, `gh pr edit 23
+    --base main`, and then deleting the branch.
+  - **The order:** merge; retarget the next PR to `main`; check that no open PR still has the old
+    base; then delete. (M3's merge train, chez-sqlite3)
 
 ## Editing the records
 

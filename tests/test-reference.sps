@@ -495,6 +495,20 @@
   '()
   (unlike-source))
 
+;; entry-line : String -> Any
+;; The one text line of NAME's entry, or no-entry.
+(define (entry-line name)
+  (let ((entry (find (lambda (e) (equal? (caddr e) (string->symbol name))) entries)))
+    (if entry (entry-signature entry) 'no-entry)))
+
+(test-equal "with-transaction's and sqlite-transaction-ended?'s entries hold their signatures, written out, and each is its source comment"
+  '("with-transaction : (case-> (Database (-> A ...) -> A ...) (Database Mode (-> A ...) -> A ...))"
+    "sqlite-transaction-ended? : Any -> Boolean"
+    ("with-transaction : (case-> (Database (-> A ...) -> A ...) (Database Mode (-> A ...) -> A ...))")
+    ("sqlite-transaction-ended? : Any -> Boolean"))
+  (list (entry-line "with-transaction") (entry-line "sqlite-transaction-ended?")
+        (comments-of "with-transaction") (comments-of "sqlite-transaction-ended?")))
+
 (test-end "reference")
 
 ;; SRFI-64 sets no exit status; this is the shared form.

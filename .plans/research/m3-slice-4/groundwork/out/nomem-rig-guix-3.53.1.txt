@@ -1,0 +1,183 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+load: loaded
+the memory count: kept: the count is above 0 while a :memory: connection is open
+
+S1, outer: select randomblob(100000) from src limit 1
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S2, outer: select randomblob(100000)
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S3, outer: insert into b select randomblob(100000) from src limit 3
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S4, outer: insert into b values (randomblob(100000))
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R1, outer: select ?1 from src limit 1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (reset! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R2, outer: select ?1 from src limit 1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R3, outer: select ?1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (reset! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R4, outer: select ?1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S1, nested: select randomblob(100000) from src limit 1
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S2, nested: select randomblob(100000)
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value no-value) (autocommit-after 0) (db-sees (answered "outer")) (db2-sees (answered "(none)")) (the-caller-commits-the-outer-level no-value db2-then (answered "outer")))
+
+S3, nested: insert into b select randomblob(100000) from src limit 3
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+S4, nested: insert into b values (randomblob(100000))
+  (the-step (raised (sqlite-error step! nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R1, nested: select ?1 from src limit 1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (reset! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R2, nested: select ?1 from src limit 1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (autocommit-read 1) (nothing-issued) (autocommit-after 1) (db-sees (answered "(none)")) (db2-sees (answered "(none)")) ())
+
+R3, nested: select ?1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (reset! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value no-value) (autocommit-after 0) (db-sees (answered "outer")) (db2-sees (answered "(none)")) (the-caller-commits-the-outer-level no-value db2-then (answered "outer")))
+
+R4, nested: select ?1
+  (the-read (raised (sqlite-error column-value nomem nomem)))
+  the-limit-in-force-when-the-call-returned
+  (hard 0 soft 0)
+  (state failed)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (autocommit-read 0) (rolled-back no-value no-value) (autocommit-after 0) (db-sees (answered "outer")) (db2-sees (answered "(none)")) (the-caller-commits-the-outer-level no-value db2-then (answered "outer")))
+
+X1, outer: a NOMEM, then sqlite3_hard_heap_limit64(0) alone
+  (the-nomem (raised (sqlite-error step! nomem nomem)))
+  (limits-after-the-lift hard 0 soft 0)
+  (db2-reads-t-after-the-write before-db-reads-src (answered 0))
+  (db-in-begin-immediate-reads-src (answered 10))
+  (db2-reads-t-then (raised (sqlite-busy step! busy busy)))
+  (db2-reads-t-after-the-rollback (answered 0))
+
+X2, outer: a NOMEM, then sqlite3_hard_heap_limit64(0) and sqlite3_soft_heap_limit64(0)
+  (the-nomem (raised (sqlite-error step! nomem nomem)))
+  (limits-after-the-lift hard 0 soft 0)
+  (db2-reads-t-after-the-write before-db-reads-src (answered 0))
+  (db-in-begin-immediate-reads-src (answered 10))
+  (db2-reads-t-then (answered 0))
+  (db2-reads-t-after-the-rollback (answered 0))
+
+the limits at the end: (hard 0 soft 0)
+the counts at the end: ((block . 0) (connection . 0) (statement . 0))
