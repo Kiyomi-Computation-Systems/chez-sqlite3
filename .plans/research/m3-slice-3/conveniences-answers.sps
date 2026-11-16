@@ -1,0 +1,47 @@
+;; M3 slice 3, part B's probe: what the conveniences answer, through
+;; (chez-sqlite3 private conveniences), before the suites asserted it: the
+;; shapes of execute!, query, query-row and query-fold; a refused bind and a
+;; failed step; the cache's count after; execute-script!'s rebuilt errors and
+;; their offsets, for a prepare's error, one SQLite gives no offset, a step's,
+;; and after a two-byte character; SQL holding no statement; and a closed
+;; connection. Run from the repository's root:
+;;   $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-3/conveniences-answers.sps
+(import (rnrs) (rnrs eval) (chez-sqlite3) (chez-sqlite3 private conveniences)
+        (only (chez-sqlite3 private connection) tracked-statements database-cache-count open-database-with-cache-capacity)
+        (only (chez-sqlite3 private statement) statement-state)
+        (chez-sqlite3 private counters))
+(define (show . xs) (for-each (lambda (x) (write x) (display " ")) xs) (newline))
+(define (what e)
+  (cond ((sqlite-error? e) (list 'sqlite-error (condition-who e) (sqlite-error-code e) (sqlite-error-extended-code e) (sqlite-error-sql e) (sqlite-error-offset e) (sqlite-error-message e)))
+        ((sqlite-closed? e) (list 'closed (condition-who e)))
+        ((assertion-violation? e) (list 'av (condition-who e) (condition-irritants e)))
+        (else (list 'other e))))
+(define-syntax try (syntax-rules () ((_ e) (guard (c (#t (list 'raised (what c)))) e))))
+(show 'version (sqlite-version))
+(define db (open-database ":memory:"))
+(show (try (execute! db "create table t (x unique, y)")))
+(show (try (execute! db "insert into t values (?, ?)" 1 "a")))
+(show (try (execute! db "insert into t values (?, ?)" 2 2.5)))
+(show (try (query db "select x, y from t order by x")))
+(show (try (query-row db "select x, y from t order by x")))
+(show (try (query-row db "select x from t where x > 100")))
+(show (try (query-fold db "select x from t order by x" (lambda (acc row) (cons (vector-ref row 0) acc)) '())))
+(show (try (execute! db "insert into t values (?, ?)" 1 "dup")))
+(show (try (execute! db "insert into t values (?, ?)" 1 #t)))
+(show (try (query-row db "select 1 union all select abs(-9223372036854775807 - 1)")))
+(show (try (query db "select 1 union all select abs(-9223372036854775807 - 1)")))
+(show 'cache (database-cache-count db) (native-counts) (map statement-state (tracked-statements db)))
+(show (try (execute-script! db "insert into t values (10, 'b'); select x from t; insert into t values (11, 'c')")))
+(show (try (execute-script! db "INSERT INTO t VALUES (40, 0); SELEKT 1; INSERT INTO t VALUES (41, 0);")))
+(show (try (execute-script! db "INSERT INTO t VALUES (50, 0);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO t VALUES (51, 0);")))
+(show (try (execute-script! db "INSERT INTO t VALUES (60, 0); SELECT abs(-9223372036854775807 - 1); INSERT INTO t VALUES (61, 0);")))
+(show (try (execute-script! db "select 'λ'; selekt 1")))
+(show (try (execute-script! db "")))
+(show (try (execute-script! db ";;;")))
+(show (try (execute-script! db "-- nothing")))
+(show (try (execute-script! db "INSERT INTO t VALUES (70, 0); INSERT INTO t VALUES (")))
+(show (try (query db "select x from t order by x")))
+(show 'cache (database-cache-count db) (native-counts) (map statement-state (tracked-statements db)))
+(close-database! db)
+(show (try (execute-script! db "")))
+(show 'end (native-counts))

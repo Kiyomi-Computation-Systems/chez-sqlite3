@@ -61,16 +61,55 @@
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
 ;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
+;;;
+;;; M3's internals (ADR-0013, decision 2; ADR-0014, amended for M3; the M3
+;;; plan, findings F1 and F11). Each takes a WHO, the procedure its caller's
+;;; caller called, and everything it raises names it; the public verbs above
+;;; are thin wrappers passing their own names:
+;;;
+;;;   prepared, finalized    M2's, as they stood: prepare-statement's and
+;;;                          finalize-statement!'s work for a WHO
+;;;   step!/who, reset!/who, column-count/who
+;;;                          step!'s, reset!'s and column-count's
+;;;   prepared-at            one statement prepared from a byte offset of a C
+;;;                          string its caller holds, with flags 0 or
+;;;                          SQLITE_PREPARE_PERSISTENT, answered as data with
+;;;                          its tail's byte offset: never refused for a tail,
+;;;                          nor for holding no statement (F1)
+;;;   checked-out, returned  the statement cache's use (ADR-0020): a
+;;;                          statement for SQL, the cache's or a fresh one,
+;;;                          and the same statement given back
+;;;   while-held             a section around one of the accessor's, that
+;;;                          reads a convenience's flag before the accessor's
+;;;                          checks (below)
+;;;
+;;; checked-sql, prepare-statement's checks of its SQL, is exported for
+;;; prepared-at's callers, which check a whole script once.
+;;;
+;;; A convenience's call holds a flag, set once its statement leaves the
+;;; call, given back to the cache or finalized (the maintainer's choice,
+;;; 2026-11-16, after M3 slice 3's review): Chez's engine remainders are
+;;; multi-shot, and a timer's or keyboard's handler can capture a
+;;; continuation between any two sections, so a call can be resumed, or
+;;; re-entered, after its statement has gone back to the cache, and another
+;;; caller may hold it by then. Every section that touches the call's
+;;; statement reads the flag first, through LEFT?, the call's check, a
+;;; procedure of no arguments or #f for none: checked-out's and the miss's
+;;; prepare's, prepared-at's, and, through while-held, a bind's, a step's
+;;; and a read's. When LEFT? answers true, the section touches nothing, and
+;;; &sqlite-closed is raised from WHO after it.
 (library (chez-sqlite3 private statement)
   (export prepare-statement finalize-statement! call-with-statement statement?
           statement-sql parameter-count step! reset! column-count
-          call-with-statement-handle statement-state sql-length-fits?)
+          call-with-statement-handle statement-state sql-length-fits?
+          prepared finalized step!/who reset!/who column-count/who
+          checked-sql prepared-at checked-out returned while-held)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
-          (only (chezscheme) dynamic-wind)
+          (only (chezscheme) critical-section dynamic-wind)
           (chez-sqlite3 private native)
           (chez-sqlite3 private counters)
-          (only (chez-sqlite3 private constants) sqlite-result-codes)
+          (only (chez-sqlite3 private constants) sqlite-result-codes sqlite-prepare-persistent)
           (chez-sqlite3 private conditions)
           (chez-sqlite3 private connection)
           (chez-sqlite3 private statement-state)
@@ -299,9 +338,14 @@
                (let ((outcome (finalize-handle! st connection)))
                  (untrack-statement! (unchecked-statement-database st) st)
                  (values #f outcome))))))
-      (cond ((not (pair? outcome)) (if #f #f))
-            ((eq? (car outcome) 'failed) (raise-failure who outcome))
-            (else (raise (cadr outcome))))))
+      (raise-finalize-outcome who outcome)))
+
+  ;; raise-finalize-outcome : Symbol (U 'finalized Finalize-Outcome) -> Void
+  ;; OUTCOME, finalize-handle!'s, raised from WHO when it is a failure.
+  (define (raise-finalize-outcome who outcome)
+    (cond ((not (pair? outcome)) (if #f #f))
+          ((eq? (car outcome) 'failed) (raise-failure who outcome))
+          (else (raise (cadr outcome)))))
 
   ;; finalize-statement! : Statement -> Void
   ;; ST finalized, whatever its state, and no longer tracked by its
@@ -334,38 +378,59 @@
                                'sql-too-long (bytevector-length bytes)))
         (values copy bytes))))
 
-  ;; prepare-outcome : Symbol Database String Bytevector (U (Statement -> Any) #f)
+  ;; prepare-flags? : Any -> Boolean
+  ;; Whether FLAGS is a prepare's flags in v1: 0, or SQLITE_PREPARE_PERSISTENT,
+  ;; which the statement cache's statements take (ADR-0020, decision 4).
+  (define (prepare-flags? flags)
+    (or (eqv? flags 0) (eqv? flags sqlite-prepare-persistent)))
+
+  ;; prepare-call : Symbol Positive-Integer Positive-Integer Positive-Integer Natural
+  ;;                -> (Values Natural (Pairof Integer (Listof Any)) Natural)
+  ;; sqlite3_prepare_v3 on CONNECTION of the NBYTE bytes at ADDRESS, their NUL
+  ;; counted, with FLAGS, inside its caller's section: the statement's and
+  ;; the tail's out-parameters made, used and freed here, and
+  ;; sqlite3_errmsg and sqlite3_error_offset read straight after a failure.
+  ;; Answers the statement, 0 for none; the answer, (CODE) or (CODE MESSAGE
+  ;; OFFSET); and the tail's address.
+  (define (prepare-call who connection address nbyte flags)
+    (let-values (((inner tail)
+                  (call-with-out-pointer who
+                    (lambda (tail-slot)
+                      (let-values (((answer statement)
+                                    (call-with-out-pointer who
+                                      (lambda (statement-slot)
+                                        (let ((rc (sqlite3-prepare-v3 connection address nbyte
+                                                                      flags statement-slot tail-slot)))
+                                          (if (eqv? rc sqlite-ok)
+                                              (list rc)
+                                              (list rc (message-of connection rc)
+                                                    (sqlite3-error-offset connection))))))))
+                        (cons statement answer))))))
+      (values (car inner) (cdr inner) tail)))
+
+  ;; prepare-outcome : Symbol Database String Bytevector Natural (U (Statement -> Any) #f)
+  ;;                   (U (-> Any) #f)
   ;;   -> (U (List 'prepared Statement) (List 'failed Integer String (U Natural #f))
-  ;;         (List 'empty) (List 'more Natural))
-  ;; COPY prepared on DB, BYTES its UTF-8, in call-with-open-handle's section:
-  ;; the C string, the statement's and the tail's out-parameters, the
-  ;; prepare, sqlite3_errmsg and sqlite3_error_offset read straight after a
-  ;; failure, the count, the tail's scan, and either the finalize of a
-  ;; statement with more after it, or the record, its tracking and ON-MADE
-  ;; called with it, which call-with-statement uses to learn of it in the
-  ;; same section. Answers the statement; or the failure's code, message and
-  ;; character offset; or empty for a NULL statement; or more, with the byte
-  ;; offset of what the tail holds.
-  (define (prepare-outcome who db copy bytes on-made)
+  ;;         (List 'empty) (List 'more Natural) (List 'left))
+  ;; COPY prepared on DB with FLAGS, BYTES its UTF-8, in
+  ;; call-with-open-handle's section: LEFT?, when a procedure, evaluated
+  ;; first, and left when it answers true, nothing allocated or prepared;
+  ;; else the C string, prepare-call, the count, the tail's scan, and either
+  ;; the finalize of a statement with more after it, or the record, its
+  ;; tracking and ON-MADE called with it, which call-with-statement uses to
+  ;; learn of it in the same section. Answers the statement; or the
+  ;; failure's code, message and character offset; or empty for a NULL
+  ;; statement; or more, with the byte offset of what the tail holds.
+  (define (prepare-outcome who db copy bytes flags on-made left?)
     (call-with-open-handle who db
       (lambda (connection)
-        (call-with-c-string who copy
-          (lambda (c-sql)
-            (let-values (((inner tail)
-                          (call-with-out-pointer who
-                            (lambda (tail-slot)
-                              (let-values (((answer statement)
-                                            (call-with-out-pointer who
-                                              (lambda (statement-slot)
-                                                (let ((rc (sqlite3-prepare-v3 connection c-sql
-                                                                              (+ (bytevector-length bytes) 1)
-                                                                              0 statement-slot tail-slot)))
-                                                  (if (eqv? rc sqlite-ok)
-                                                      (list rc)
-                                                      (list rc (message-of connection rc)
-                                                            (sqlite3-error-offset connection))))))))
-                                (cons statement answer))))))
-              (made-outcome who db copy bytes on-made (car inner) (cdr inner) (- tail c-sql))))))))
+        (if (and left? (left?))
+            '(left)
+            (call-with-c-string who copy
+              (lambda (c-sql)
+                (let-values (((statement answer tail)
+                              (prepare-call who connection c-sql (+ (bytevector-length bytes) 1) flags)))
+                  (made-outcome who db copy bytes on-made statement answer (- tail c-sql)))))))))
 
   ;; made-outcome : Symbol Database String Bytevector (U Procedure #f) Natural
   ;;                (Pairof Integer (Listof Any)) Integer -> Prepare-Outcome
@@ -391,23 +456,157 @@
                (when on-made (on-made st))
                (list 'prepared st)))))))
 
+  ;; prepared-checked : Symbol Database String Bytevector Natural (U (Statement -> Any) #f)
+  ;;                    (U (-> Any) #f) -> Statement
+  ;; COPY, checked by checked-sql, BYTES its UTF-8, prepared on DB with FLAGS
+  ;; for WHO, DB checked to be a database on its owning thread: DB open, in
+  ;; the section, then LEFT?, a call's check, true there raising
+  ;; &sqlite-closed after it, nothing prepared; the prepare's failure, a
+  ;; NULL statement and a tail holding more, each raised after it.
+  (define (prepared-checked who db copy bytes flags on-made left?)
+    (let ((outcome (prepare-outcome who db copy bytes flags on-made left?)))
+      (case (car outcome)
+        ((prepared) (cadr outcome))
+        ((left) (raise-closed who))
+        ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) copy (cadddr outcome)))
+        ((empty)
+         (assertion-violation who "SQL holding no statement" 'no-statement (shown-value copy)))
+        (else
+         (assertion-violation who "SQL holding more than one statement"
+                              'more-than-one-statement
+                              (utf8-offset->index bytes (cadr outcome)))))))
+
   ;; prepared : Symbol Any Any (U (Statement -> Any) #f) -> Statement
-  ;; SQL prepared on DB, for WHO, by the checks in order: DB a database, on
-  ;; its owning thread; SQL by checked-sql; DB open, in the section. Each
-  ;; refusal, and the prepare's failure, raised after the section.
+  ;; SQL prepared on DB, for WHO, with no flags, by the checks in order: DB a
+  ;; database, on its owning thread; SQL by checked-sql; DB open, in the
+  ;; section. Each refusal, and the prepare's failure, raised after the
+  ;; section. ON-MADE, when a procedure, is called with the statement inside
+  ;; the prepare's section (call-with-statement's hand-over).
   (define (prepared who db sql on-made)
     (check-database-owner who db)
     (let-values (((copy bytes) (checked-sql who sql)))
-      (let ((outcome (prepare-outcome who db copy bytes on-made)))
-        (case (car outcome)
-          ((prepared) (cadr outcome))
-          ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) copy (cadddr outcome)))
-          ((empty)
-           (assertion-violation who "SQL holding no statement" 'no-statement (shown-value copy)))
-          (else
-           (assertion-violation who "SQL holding more than one statement"
-                                'more-than-one-statement
-                                (utf8-offset->index bytes (cadr outcome))))))))
+      (prepared-checked who db copy bytes 0 on-made #f)))
+
+  ;; --- preparing from a C string the caller holds --------------------------------------
+  ;;
+  ;; A script's statements are prepared one at a time from one block, the
+  ;; script's whole C string, which execute-script! holds for its loop
+  ;; (ADR-0016, decision 7): so the script is copied once, not once a
+  ;; statement, and each prepare passes the address of its statement's start.
+  ;; The script is checked once, by checked-sql, before its block is made.
+
+  ;; check-on-made : Symbol Any -> Void
+  (define (check-on-made who on-made)
+    (unless (or (not on-made) (procedure? on-made))
+      (assertion-violation who "on-made is a procedure or #f" 'not-a-procedure
+                           (shown-value on-made))))
+
+  ;; check-left : Symbol Any -> Void
+  ;; A call's check, LEFT?, is a procedure of no arguments or #f, else an
+  ;; assertion violation from WHO, not-a-procedure.
+  (define (check-left who left?)
+    (unless (or (not left?) (procedure? left?))
+      (assertion-violation who "a call's check is a procedure or #f" 'not-a-procedure
+                           (shown-value left?))))
+
+  ;; first-outcome : Database String Bytevector (U (Statement -> Any) #f) Natural Natural
+  ;;                 (Pairof Integer (Listof Any)) Natural
+  ;;   -> (U (List 'prepared Statement Natural) (List 'empty Natural)
+  ;;         (List 'failed Integer String Integer))
+  ;; What prepared-at answers once its prepare, from byte START of BYTES,
+  ;; SQL's UTF-8, returned STATEMENT, ANSWER and TAIL, the tail's byte
+  ;; offset. Inside the same section: the count, the record, holding the
+  ;; statement's own text, its tracking and ON-MADE.
+  (define (first-outcome db sql bytes on-made start statement answer tail)
+    (cond
+      ((not (eqv? (car answer) sqlite-ok))
+       (list 'failed (car answer) (cadr answer) (caddr answer)))
+      ((eqv? statement 0) (list 'empty tail))
+      (else
+       (count-up! 'statement)
+       (let ((st (make-statement statement db (own-text sql bytes start tail) 'ready)))
+         (track-statement! db st (lambda (connection) (finalize-handle! st connection)))
+         (when on-made (on-made st))
+         (list 'prepared st tail)))))
+
+  ;; own-text : String Bytevector Natural Natural -> String
+  ;; The text SQLite compiled, bytes START to TAIL of BYTES, SQL's UTF-8,
+  ;; decoded strictly: linear in the statement's length, so a script's loop
+  ;; stays linear in the script's. SQLite starts and ends a statement on a
+  ;; character's boundary, so the bytes are well-formed; were they not, SQL
+  ;; whole. Raises nothing for a TAIL within START to BYTES' length.
+  (define (own-text sql bytes start tail)
+    (let* ((n (if (<= start tail (bytevector-length bytes)) (- tail start) 0))
+           (slice (make-bytevector n)))
+      (bytevector-copy! bytes start slice 0 n)
+      (let ((decoded (strict-utf8->string slice)))
+        (if (string? decoded) decoded sql))))
+
+  ;; prepared-at : Symbol Any String Bytevector Positive-Integer Natural Natural
+  ;;               (U (Statement -> Any) #f) (U (-> Any) #f)
+  ;;   -> (U (List 'prepared Statement Natural) (List 'empty Natural)
+  ;;         (List 'failed Integer String Integer))
+  ;; The first statement from byte START of BYTES prepared on DB with FLAGS,
+  ;; for WHO. SQL is a copy checked by checked-sql and BYTES its UTF-8, as
+  ;; checked-sql answered them; BLOCK is the address of their C string, held
+  ;; by the caller through call-with-c-string for as long as it calls this.
+  ;; nByte is the bytes from START with the NUL. Answers, as data:
+  ;;   (prepared ST TAIL)  ST live, ready, counted and tracked by DB, its SQL
+  ;;                       the text SQLite compiled, START to TAIL; ON-MADE
+  ;;                       called with it in the prepare's section; TAIL the
+  ;;                       byte offset in BYTES where the rest begins, never
+  ;;                       scanned or refused (the M3 plan, F1)
+  ;;   (empty TAIL)        SQLite found no statement from START: only
+  ;;                       whitespace, comments and semicolons, or nothing
+  ;;   (failed CODE MESSAGE OFFSET)
+  ;;                       the prepare failed: its extended code,
+  ;;                       sqlite3_errmsg and sqlite3_error_offset read
+  ;;                       straight after it, OFFSET in bytes from START, or
+  ;;                       -1, for script-prepare-offset
+  ;; The checks, in order, each an assertion violation before the section:
+  ;; WHO a symbol, from prepared-at; FLAGS 0 or SQLITE_PREPARE_PERSISTENT,
+  ;; from prepared-at, not-prepare-flags; ON-MADE and LEFT? each a procedure
+  ;; or #f, from WHO; DB a database, from WHO, on its owning thread, else
+  ;; &sqlite-wrong-thread; SQL a string, BYTES a bytevector of at most
+  ;; 2^31-2 bytes, BLOCK an exact positive integer, from prepared-at,
+  ;; not-checked-sql; START within 0 to BYTES' length, from WHO,
+  ;; start-out-of-range. Then DB open, in the section, else &sqlite-closed
+  ;; from WHO, raised after it; then LEFT?, a call's check, when a
+  ;; procedure: true, the section prepares nothing, and &sqlite-closed is
+  ;; raised from WHO after it. execute-script! passes its first prepare a
+  ;; check that marks the call's run begun, and answers whether it had begun
+  ;; already, so a call re-entered before its block runs no statement again.
+  ;; The section holds the out-parameters, the prepare, the reads after a
+  ;; failure, the count and the tracking (ADR-0014, decisions 4 and 10).
+  (define (prepared-at who db sql bytes block start flags on-made left?)
+    (check-who 'prepared-at who)
+    (unless (prepare-flags? flags)
+      (assertion-violation 'prepared-at "a prepare's flags are 0 or SQLITE_PREPARE_PERSISTENT"
+                           'not-prepare-flags (shown-value flags)))
+    (check-on-made who on-made)
+    (check-left who left?)
+    (check-database-owner who db)
+    (unless (and (string? sql) (bytevector? bytes) (sql-length-fits? (bytevector-length bytes))
+                 (integer? block) (exact? block) (> block 0))
+      (assertion-violation 'prepared-at "SQL, its UTF-8 and its C string, as checked-sql and call-with-c-string made them"
+                           'not-checked-sql))
+    (unless (and (integer? start) (exact? start) (<= 0 start (bytevector-length bytes)))
+      (assertion-violation who "a statement's start is a byte offset into its SQL"
+                           'start-out-of-range (shown-value start) (bytevector-length bytes)))
+    (let ((outcome
+           (call-with-open-handle who db
+             (lambda (connection)
+               (if (and left? (left?))
+                   '(left)
+                   (let-values (((statement answer tail)
+                                 (prepare-call who connection (+ block start)
+                                               (+ (- (bytevector-length bytes) start) 1) flags)))
+                     (first-outcome db sql bytes on-made start statement answer (- tail block))))))))
+      (if (eq? (car outcome) 'left)
+          (raise-closed who)
+          outcome)))
+
+  ;; --- prepare-statement ---------------------------------------------------------------
 
   ;; prepare-statement : Database String -> Statement
   ;; SQL, one statement, prepared on DB, ready and tracked by DB until it is
@@ -491,22 +690,24 @@
     (call-with-statement-handle 'parameter-count st 'parameter-count
       (lambda (connection handle sql) (values #f (sqlite3-bind-parameter-count handle)))))
 
+  ;; column-count/who : Symbol Statement -> Natural
+  ;; column-count's work for WHO, which everything it raises names.
+  (define (column-count/who who st)
+    (call-with-statement-handle who st 'column-count
+      (lambda (connection handle sql) (values #f (sqlite3-column-count handle)))))
+
   ;; column-count : Statement -> Natural
   ;; How many columns ST's rows have now, sqlite3_column_count's answer, read
   ;; afresh at every call: another connection's change to a table changes it
   ;; at the next step (ADR-0014, decision 5).
   (define (column-count st)
-    (call-with-statement-handle 'column-count st 'column-count
-      (lambda (connection handle sql) (values #f (sqlite3-column-count handle)))))
+    (column-count/who 'column-count st))
 
-  ;; step! : Statement -> Boolean
-  ;; #t when sqlite3_step has a row ready, the state row; #f when it has
-  ;; finished, done. Any other answer leaves ST failed and raises
-  ;; &sqlite-error from the step's own code, with ST's SQL. Allowed in ready
-  ;; and row only: a done or failed statement is refused until reset!.
-  (define (step! st)
+  ;; step!/who : Symbol Statement -> Boolean
+  ;; step!'s work for WHO, which everything it raises names.
+  (define (step!/who who st)
     (let ((outcome
-           (call-with-statement-handle 'step! st 'step!
+           (call-with-statement-handle who st 'step!
              (lambda (connection handle sql)
                (let* ((answer (sqlite3-step handle))
                       (state (state-after-step answer)))
@@ -517,7 +718,36 @@
                              state)))))))
       (cond ((eq? outcome 'row) #t)
             ((eq? outcome 'done) #f)
-            (else (raise-failure 'step! outcome)))))
+            (else (raise-failure who outcome)))))
+
+  ;; step! : Statement -> Boolean
+  ;; #t when sqlite3_step has a row ready, the state row; #f when it has
+  ;; finished, done. Any other answer leaves ST failed and raises
+  ;; &sqlite-error from the step's own code, with ST's SQL. Allowed in ready
+  ;; and row only: a done or failed statement is refused until reset!.
+  (define (step! st)
+    (step!/who 'step! st))
+
+  ;; reset-outcome : Statement Positive-Integer Positive-Integer String
+  ;;                 -> (U (List 'failed Integer String String) #f)
+  ;; sqlite3_reset of ST, HANDLE its handle, inside the accessor's section:
+  ;; a failure of the reset's own, by finish-failure, with sqlite3_errmsg
+  ;; read straight after and a copy of SQL; #f when there is none.
+  (define (reset-outcome st connection handle sql)
+    (let* ((state (unchecked-statement-state st))
+           (answer (sqlite3-reset handle))
+           (failure (finish-failure state answer))
+           (message (and failure (message-of connection answer))))
+      (and failure (list 'failed failure message (string-copy sql)))))
+
+  ;; reset!/who : Symbol Statement -> Void
+  ;; reset!'s work for WHO, which everything it raises names.
+  (define (reset!/who who st)
+    (let ((outcome
+           (call-with-statement-handle who st 'reset!
+             (lambda (connection handle sql)
+               (values 'ready (reset-outcome st connection handle sql))))))
+      (when outcome (raise-failure who outcome))))
 
   ;; reset! : Statement -> Void
   ;; ST rewound, ready again, its bindings kept, whatever sqlite3_reset
@@ -525,14 +755,150 @@
   ;; ... returning stepped once, then raises &sqlite-error; a failed step's
   ;; code, which the reset repeats, does not (ADR-0014, decision 7).
   (define (reset! st)
+    (reset!/who 'reset! st))
+
+  ;; --- the statement cache (ADR-0020) ------------------------------------------------------
+  ;;
+  ;; The cache is the connection's, in its record (connection.sls), and
+  ;; holds only ready statements prepared SQLITE_PREPARE_PERSISTENT, each
+  ;; filed under its own SQL copy, which never changes. A statement is
+  ;; checked out while in use, and out of the cache meanwhile. Both changes
+  ;; are made inside call-with-open-handle's section, which raises nothing
+  ;; and answers data: before it, the database is checked to be one, on its
+  ;; owner's thread, and the SQL checked and copied, so the table's lookup
+  ;; cannot raise and its key cannot change; after it, a statement the
+  ;; return evicts, or refuses to file, is finalized by finalized, and its
+  ;; failure raised (ADR-0020, decisions 5 and 7). A finalized statement is
+  ;; a miss, in the cache or checked out: it is never handed out, nor filed.
+
+  ;; checked-out : Symbol Any Any (U (Statement -> Any) #f) (U (-> Any) #f) -> Statement
+  ;; A ready statement for SQL on DB, for WHO: the one DB's cache holds under
+  ;; SQL's text, checked out, or else one prepared afresh, by
+  ;; prepare-statement's rules, with SQLITE_PREPARE_PERSISTENT while the
+  ;; cache's capacity is above 0, and with no flags at 0 (ADR-0020, decisions
+  ;; 2 and 4). ON-MADE, a procedure or #f, is called with it inside the
+  ;; section that checks it out or prepares it, so no escaping interrupt
+  ;; falls between its hand-over and the caller's knowing of it (ADR-0016,
+  ;; decision 6). A held statement that is not ready, finalized above all,
+  ;; is a miss: dropped from the cache, never handed out; one finalized
+  ;; already needs nothing more, and one a suite moved through
+  ;; tracked-statements stays tracked until it is finalized or DB closes.
+  ;; LEFT?, the call's check, a procedure of no arguments or #f for none, is
+  ;; evaluated first in the check-out's section, before the table is read,
+  ;; and in a miss's prepare's, before it prepares: when it answers true,
+  ;; that section touches nothing, and &sqlite-closed is raised from WHO
+  ;; after it. So a convenience's call resumed, or re-entered, after its
+  ;; statement has gone back to the cache checks out nothing again.
+  ;; with-transaction's own statements pass #f. The checks, in order:
+  ;; ON-MADE and LEFT?, from WHO; DB a database on its owning thread; SQL by
+  ;; checked-sql; DB open, in the section. Each refusal, and the miss's
+  ;; prepare failing, holding no statement or more than one, raised after
+  ;; its section, from WHO.
+  (define (checked-out who db sql on-made left?)
+    (check-who 'checked-out who)
+    (check-on-made who on-made)
+    (check-left who left?)
+    (check-database-owner who db)
+    (let-values (((copy bytes) (checked-sql who sql)))
+      (let* ((flags (if (> (database-cache-capacity db) 0) sqlite-prepare-persistent 0))
+             (outcome
+              (call-with-open-handle who db
+                (lambda (connection)
+                  (if (and left? (left?))
+                      '(left)
+                      (let ((found (database-cache-check-out! db copy)))
+                        (if (and (eq? (car found) 'hit) (eq? (state-of (cadr found)) 'ready))
+                            (begin (when on-made (on-made (cadr found))) found)
+                            '(miss))))))))
+        (case (car outcome)
+          ((hit) (cadr outcome))
+          ((left) (raise-closed who))
+          (else (prepared-checked who db copy bytes flags on-made left?))))))
+
+  ;; while-held : Symbol (U (-> Any) #f) (-> A ...) -> A ...
+  ;; THUNK's answers, THUNK making one section through the accessor, a
+  ;; bind's, a step's or a read's, for a convenience's call, WHO its name.
+  ;; LEFT?, the call's check, is evaluated first, in a critical section
+  ;; around THUNK, so before the accessor's checks of the statement's state:
+  ;; when it answers true, the call's statement has left it, THUNK never
+  ;; runs, and &sqlite-closed is raised from WHO after the section. What
+  ;; THUNK raises, after the accessor's section, is caught in this one and
+  ;; raised again after it, the same object, so nothing raises inside it.
+  ;; With LEFT? #f, THUNK is called plainly. A LEFT? that is neither is an
+  ;; assertion violation from WHO, not-a-procedure.
+  (define (while-held who left? thunk)
+    (check-left who left?)
+    (if (not left?)
+        (thunk)
+        (let ((outcome (critical-section
+                        (if (left?)
+                            '(left)
+                            (guard (c (#t (list 'raised c)))
+                              (call-with-values thunk (lambda answers (cons 'answered answers))))))))
+          (case (car outcome)
+            ((answered) (apply values (cdr outcome)))
+            ((left) (raise-closed who))
+            (else (raise (cadr outcome)))))))
+
+  ;; returned : Symbol Any -> Void
+  ;; ST, a statement checked-out answered, given back to its connection's
+  ;; cache, for WHO, in one section, through the accessor, whose checks come
+  ;; first: a statement, on its connection's owning thread. Then, by its
+  ;; state, read in that section:
+  ;;   - finalized, or its connection closed: nothing, a miss;
+  ;;   - failed, by its step or a read: finalized there, never kept, so the
+  ;;     next prepare reads the schema afresh (ADR-0020, decision 5); the
+  ;;     finalize repeats the failure's code, which raises nothing again;
+  ;;   - else reset, its bindings cleared, and filed as the cache's most
+  ;;     recent, under its own SQL copy. The table answers what to finalize:
+  ;;     the least recently used, evicted from a full cache; or ST itself,
+  ;;     at a capacity of 0, or when the cache holds its SQL already. Each is
+  ;;     finalized after the section, and a failure of its own raised.
+  ;;   - a reset or a clear that fails: ST finalized in the section, not
+  ;;     kept, and that failure raised after it, &sqlite-error from WHO with
+  ;;     ST's SQL. The reset that commits an insert ... returning stepped
+  ;;     once can answer BUSY, rolling the insert back (ADR-0014's context).
+  ;; Whether the caller is already raising, and its condition wins, is the
+  ;; caller's to know (ADR-0016, decision 5).
+  (define (returned who st)
     (let ((outcome
-           (call-with-statement-handle 'reset! st 'reset!
+           (call-with-statement-handle who st 'finalize-statement!
              (lambda (connection handle sql)
-               (let* ((state (unchecked-statement-state st))
-                      (answer (sqlite3-reset handle))
-                      (failure (finish-failure state answer))
-                      (message (and failure (message-of connection answer))))
-                 (values 'ready
-                         (and failure
-                              (list 'failed failure message (string-copy sql)))))))))
-      (when outcome (raise-failure 'reset! outcome)))))
+               (let ((db (unchecked-statement-database st)))
+                 (if (eq? (unchecked-statement-state st) 'failed)
+                     (let ((finalize (finalize-handle! st connection)))
+                       (untrack-statement! db st)
+                       (values #f (list 'discarded finalize)))
+                     (let* ((reset (reset-outcome st connection handle sql))
+                            (cleared (or reset (cleared-outcome connection handle sql))))
+                       (if cleared
+                           (let ((finalize (finalize-handle! st connection)))
+                             (untrack-statement! db st)
+                             (values #f (list 'not-kept cleared finalize)))
+                           ;; The accessor sets ready, in this section, before
+                           ;; anything can check the statement out.
+                           (values 'ready (cons 'filed (database-cache-return! db sql st)))))))))))
+      (when (pair? outcome)
+        (case (car outcome)
+          ((discarded) (raise-finalize-outcome who (cadr outcome)))
+          ((not-kept) (raise-failure who (cadr outcome)))
+          (else (finalize-each who (cdr outcome)))))))
+
+  ;; cleared-outcome : Positive-Integer Positive-Integer String
+  ;;                   -> (U (List 'failed Integer String String) #f)
+  ;; sqlite3_clear_bindings of HANDLE, inside the accessor's section: a
+  ;; failure, with sqlite3_errmsg read straight after, or #f.
+  (define (cleared-outcome connection handle sql)
+    (let ((code (sqlite3-clear-bindings handle)))
+      (and (not (eqv? code sqlite-ok))
+           (list 'failed code (message-of connection code) (string-copy sql)))))
+
+  ;; finalize-each : Symbol (Listof Statement) -> Void
+  ;; Each of STATEMENTS finalized by finalized, for WHO, in order; then the
+  ;; first failure any raised, raised again, once all are finalized.
+  (define (finalize-each who statements)
+    (let loop ((rest statements) (first #f))
+      (if (null? rest)
+          (when first (raise (car first)))
+          (let ((failure (guard (c (#t (list c))) (finalized who (car rest)) #f)))
+            (loop (cdr rest) (or first failure)))))))

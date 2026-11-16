@@ -12,7 +12,10 @@
 ;;; explicitly: no collection closes one (ADR-0010, ADR-0012). A statement
 ;;; belongs to its connection and its thread, and closing the connection
 ;;; finalizes it (ADR-0014). Its values are bound and read by
-;;; (chez-sqlite3 private statement-values) (ADR-0015).
+;;; (chez-sqlite3 private statement-values) (ADR-0015). The conveniences run
+;;; one statement each, through the connection's statement cache, and finish
+;;; it on every path; the counters are SQLite's, read as it keeps them
+;;; (ADR-0016, ADR-0020).
 (library (chez-sqlite3)
   (export
    ;; --- connections (chez-sqlite3 private connection) ---
@@ -25,6 +28,29 @@
    call-with-database
    ;; database? : Any -> Boolean
    database?
+
+   ;; --- the conveniences (chez-sqlite3 private conveniences) ---
+   ;; execute! : Database String Value ... -> Void
+   execute!
+   ;; execute-script! : Database String -> Void
+   execute-script!
+   ;; query : Database String Value ... -> (Listof Row)
+   query
+   ;; query-row : Database String Value ... -> (U Row #f)
+   query-row
+   ;; query-fold : Database String (A Row -> A) A Value ... -> A
+   query-fold
+   ;;   Row = (Vectorof Value)
+
+   ;; --- the counters (chez-sqlite3 private connection) ---
+   ;; changes : Database -> Natural
+   changes
+   ;; total-changes : Database -> Natural
+   total-changes
+   ;; last-insert-rowid : Database -> Integer
+   last-insert-rowid
+   ;; in-transaction? : Database -> Boolean
+   in-transaction?
 
    ;; --- statements (chez-sqlite3 private statement) ---
    ;; prepare-statement : Database String -> Statement
@@ -129,7 +155,10 @@
    sqlite-invalid-text-offset)
   (import (chez-sqlite3 private require-threaded)
           (only (chez-sqlite3 private connection)
-                open-database close-database! call-with-database database?)
+                open-database close-database! call-with-database database?
+                changes total-changes last-insert-rowid in-transaction?)
+          (only (chez-sqlite3 private conveniences)
+                execute! execute-script! query query-row query-fold)
           (only (chez-sqlite3 private statement)
                 prepare-statement finalize-statement! call-with-statement statement?
                 statement-sql parameter-count step! reset! column-count)

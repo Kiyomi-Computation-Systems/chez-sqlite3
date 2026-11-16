@@ -63,10 +63,28 @@
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
 ;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
+;;;
+;;; M3 adds (ADR-0016, ADR-0020):
+;;;
+;;;   the cache      the record holds its statement cache, slice 1's table,
+;;;                  its capacity fixed when the record is made: 32 by
+;;;                  open-database and call-with-database, or the one
+;;;                  open-database-with-cache-capacity is given, 0 to 1024,
+;;;                  for the suites until slice 5's settings reach it. The
+;;;                  database-cache procedures read and change it inside a
+;;;                  verb's critical section, for (chez-sqlite3 private
+;;;                  statement)'s check-out and return; the close empties it,
+;;;                  whether or not the connection closes
+;;;   the counters   changes, total-changes, last-insert-rowid and
+;;;                  in-transaction?, each one plain call through
+;;;                  call-with-open-handle, which makes every verb's checks
 (library (chez-sqlite3 private connection)
   (export open-database close-database! call-with-database database?
           call-with-open-handle failure-details check-database-owner
-          track-statement! untrack-statement! tracked-statements first-finalize-failure)
+          track-statement! untrack-statement! tracked-statements first-finalize-failure
+          open-database-with-cache-capacity database-cache-capacity database-cache-count
+          database-cache-check-out! database-cache-return!
+          changes total-changes last-insert-rowid in-transaction?)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind get-thread-id)
@@ -74,23 +92,34 @@
           (chez-sqlite3 private counters)
           (only (chez-sqlite3 private constants) sqlite-open-uri sqlite-result-codes)
           (chez-sqlite3 private conditions)
-          (chez-sqlite3 private open-options))
+          (chez-sqlite3 private open-options)
+          (only (chez-sqlite3 private settings) settings-plan raise-setting-refusal)
+          (chez-sqlite3 private statement-cache))
 
   (define sqlite-ok (cdr (assq 'ok sqlite-result-codes)))
+
+  ;; default-cache-capacity : Natural
+  ;; The cache's capacity when no setting gives one: the settings' plan's,
+  ;; for a list that names none, so the default is written once, in
+  ;; (chez-sqlite3 private settings) (ADR-0020, decision 1).
+  (define default-cache-capacity (cadr (settings-plan '())))
 
   ;; database? : Any -> Boolean
   ;; Opaque, so record-rtd on a database raises, and sealed, so no type
   ;; extends it; not nongenerative, so no other definition makes its type.
   ;; LIVE is the statements it tracks, an eq-hashtable from each statement to
   ;; its entry; SERIAL the number the next one tracked takes, so the close
-  ;; can finalize them oldest first.
+  ;; can finalize them oldest first. CACHE is its statement cache, of the
+  ;; capacity the record is made with, which never changes (ADR-0020).
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
             (immutable owner unchecked-database-owner)
             (immutable live unchecked-database-live)
-            (mutable serial unchecked-database-serial set-database-serial!))
+            (mutable serial unchecked-database-serial set-database-serial!)
+            (immutable cache unchecked-database-cache))
     (protocol (lambda (new)
-                (lambda (handle owner) (new handle owner (make-eq-hashtable) 0))))
+                (lambda (handle owner capacity)
+                  (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity)))))
     (sealed #t)
     (opaque #t))
 
@@ -267,6 +296,49 @@
                              ((cddr (car rest)) handle))))
               (loop (cdr rest) (cons outcome outcomes)))))))
 
+  ;; --- the statement cache (ADR-0020) ---------------------------------------------------
+  ;;
+  ;; The record's table holds statements as opaque values, keyed by the SQL's
+  ;; exact text, a string its caller has checked and copied. Check-out and
+  ;; return are called inside the critical section of the verb that makes
+  ;; them, in call-with-open-handle's, with the connection checked open, so
+  ;; they read and change the table with interrupts off; neither raises for a
+  ;; database and a string key, and each answers what slice 1's table
+  ;; answers. The caller finalizes what a return answers, after its section.
+
+  ;; database-cache-check-out! : Database String -> (U (List 'hit Any) (List 'miss))
+  ;; The statement DB's cache holds under KEY, removed from it, as (hit S);
+  ;; (miss) when it holds none, or DB is no database. Raises nothing.
+  (define (database-cache-check-out! db key)
+    (if (database? db)
+        (statement-cache-check-out! (unchecked-database-cache db) key)
+        '(miss)))
+
+  ;; database-cache-return! : Database String Any -> (Listof Any)
+  ;; STATEMENT filed under KEY as DB's cache's most recent: what to finalize,
+  ;; by slice 1's table, the evicted one, or STATEMENT itself at a capacity
+  ;; of 0 or when the cache holds KEY already; (STATEMENT) when DB is no
+  ;; database. Raises nothing.
+  (define (database-cache-return! db key statement)
+    (if (database? db)
+        (statement-cache-return! (unchecked-database-cache db) key statement)
+        (list statement)))
+
+  ;; database-cache-capacity : Database -> Natural
+  ;; The most statements DB's cache holds, fixed when DB was opened. DB
+  ;; checked by check-owned first, from database-cache-capacity.
+  (define (database-cache-capacity db)
+    (check-owned 'database-cache-capacity db)
+    (statement-cache-capacity (unchecked-database-cache db)))
+
+  ;; database-cache-count : Database -> Natural
+  ;; How many statements DB's cache holds now, read in one critical section;
+  ;; 0 once DB is closed. DB checked by check-owned first, from
+  ;; database-cache-count. For the suites.
+  (define (database-cache-count db)
+    (check-owned 'database-cache-count db)
+    (critical-section (statement-cache-count (unchecked-database-cache db))))
+
   ;; raise-finalize-failure : Symbol Finalize-Outcome -> Nothing
   ;; OUTCOME, a failure, raised from WHO: (failed CODE MESSAGE SQL) as an
   ;; &sqlite-error carrying SQL and no offset, (raised C) as C itself.
@@ -330,18 +402,19 @@
                                   'file-uri-without-uri-option (shown-value copy)))
            (values copy flags))))))
 
-  ;; open-outcome : Symbol String Natural
+  ;; open-outcome : Symbol String Natural Natural
   ;;                -> (U (List 'opened Database) (List 'failed Integer String)
   ;;                      (List 'raised Any))
-  ;; NAME, a checked copy, opened with FLAGS and owned by this thread: the
-  ;; database; or the failure's extended code and message, its handle
-  ;; closed; or what a call raised, call-with-c-string's refusal of U+0000,
-  ;; from WHO before anything is allocated, among them. One critical section
-  ;; holds the C string's whole extent: the open, the read of its
-  ;; out-pointer, the count and the record, or else the failure's details and
-  ;; its handle's close. So no handle is ever left uncounted, and no engine's
-  ;; expiry frees the string between the open's calls. It raises nothing.
-  (define (open-outcome who name flags)
+  ;; NAME, a checked copy, opened with FLAGS and owned by this thread, its
+  ;; cache of CAPACITY, checked: the database; or the failure's extended
+  ;; code and message, its handle closed; or what a call raised,
+  ;; call-with-c-string's refusal of U+0000, from WHO before anything is
+  ;; allocated, among them. One critical section holds the C string's whole
+  ;; extent: the open, the read of its out-pointer, the count and the
+  ;; record, or else the failure's details and its handle's close. So no
+  ;; handle is ever left uncounted, and no engine's expiry frees the string
+  ;; between the open's calls. It raises nothing.
+  (define (open-outcome who name flags capacity)
     (critical-section
      (guard (c (#t (list 'raised c)))
        (call-with-c-string who name
@@ -354,7 +427,7 @@
                (else
                 (count-up! 'connection)
                 (if (eqv? rc sqlite-ok)
-                    (list 'opened (make-database handle (get-thread-id)))
+                    (list 'opened (make-database handle (get-thread-id) capacity))
                     (let ((details (details-of rc handle)))
                       (when (eqv? (sqlite3-close handle) sqlite-ok)
                         (count-down! 'connection))
@@ -370,20 +443,36 @@
       ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))
       (else (raise (cadr outcome)))))
 
-  ;; open-connection : Symbol String Natural -> Database
+  ;; open-connection : Symbol String Natural Natural -> Database
   ;; A database opened on NAME, a checked copy, with FLAGS, owned by this
-  ;; thread; or &sqlite-error from WHO. NAME holding U+0000 is
-  ;; call-with-c-string's refusal, from WHO, before anything is allocated.
-  ;; Each is raised after the open's critical section.
-  (define (open-connection who name flags)
-    (opened-database who (open-outcome who name flags)))
+  ;; thread, its cache of CAPACITY, checked; or &sqlite-error from WHO. NAME
+  ;; holding U+0000 is call-with-c-string's refusal, from WHO, before
+  ;; anything is allocated. Each is raised after the open's critical section.
+  (define (open-connection who name flags capacity)
+    (opened-database who (open-outcome who name flags capacity)))
 
   ;; open-database : String Symbol ... -> Database
   ;; FILENAME opened with OPTIONS, owned by the calling thread
-  ;; (open-options' table; ADR-0012, decision 3).
+  ;; (open-options' table; ADR-0012, decision 3), its statement cache of 32.
   (define (open-database filename . options)
     (let-values (((name flags) (prepared-open 'open-database filename options)))
-      (open-connection 'open-database name flags)))
+      (open-connection 'open-database name flags default-cache-capacity)))
+
+  ;; open-database-with-cache-capacity : Natural String Symbol ... -> Database
+  ;; open-database's work, its statement cache of CAPACITY: the private way
+  ;; the suites open a connection of a given capacity until slice 5's
+  ;; statement-cache setting reaches the same field (the M3 plan, section
+  ;; 4.6). CAPACITY is checked first, by the settings' own rule for
+  ;; statement-cache, an exact integer from 0 to 1024, else an assertion
+  ;; violation, setting-out-of-domain statement-cache and the value; then
+  ;; open-database's checks; each before anything is allocated.
+  (define (open-database-with-cache-capacity capacity filename . options)
+    (let* ((who 'open-database-with-cache-capacity)
+           (plan (settings-plan (list (cons 'statement-cache capacity)))))
+      (unless (eq? (car plan) 'settings)
+        (raise-setting-refusal who plan))
+      (let-values (((name flags) (prepared-open who filename options)))
+        (open-connection who name flags (cadr plan)))))
 
   ;; --- closing -----------------------------------------------------------------------------
 
@@ -398,12 +487,14 @@
   ;; close-connection : Symbol Any -> Void
   ;; DB closed, for WHO; nothing when it is closed already. In one critical
   ;; section: every tracked statement finalized, oldest first, the first
-  ;; failure kept; sqlite3_next_stmt; sqlite3_close; the handle cleared and
-  ;; the count down. After it, by what it answered: a statement found
-  ;; untracked, or sqlite3_close's failure, each raised in place of a
-  ;; finalize's failure, with the connection open and counted; else, the
-  ;; connection closed, the first finalize failure (R1), then a count-down
-  ;; that found the count at zero, count-down!'s double free.
+  ;; failure kept; the cache emptied, its statements among those finalized,
+  ;; whether or not the connection then closes, so it never holds a freed
+  ;; one (ADR-0020, decision 9); sqlite3_next_stmt; sqlite3_close; the
+  ;; handle cleared and the count down. After it, by what it answered: a
+  ;; statement found untracked, or sqlite3_close's failure, each raised in
+  ;; place of a finalize's failure, with the connection open and counted;
+  ;; else, the connection closed, the first finalize failure (R1), then a
+  ;; count-down that found the count at zero, count-down!'s double free.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
@@ -412,6 +503,7 @@
               (if (not handle)
                   '(already-closed)
                   (let* ((failure (finalize-tracked! db handle))
+                         (emptied (statement-cache-clear! (unchecked-database-cache db)))
                          (untracked (statements-on handle)))
                     (if (> untracked 0)
                         (list 'untracked untracked)
@@ -442,6 +534,42 @@
   ;; closed or not.
   (define (close-database! db)
     (close-connection 'close-database! db))
+
+  ;; --- the counters (ADR-0016, decision 8) ---------------------------------------------------
+  ;;
+  ;; Each checks DB as every verb does, a database, on its owning thread, and
+  ;; open, through call-with-open-handle, and makes its one plain call there:
+  ;; the counters are SQLite's, read as it keeps them (M3's research, single
+  ;; B1 and B2).
+
+  ;; changes : Database -> Natural
+  ;; The rows the last INSERT, UPDATE or DELETE on DB to finish changed,
+  ;; sqlite3_changes64's answer: a trigger's own rows are not counted, and
+  ;; DDL, SELECT, PRAGMA, BEGIN and COMMIT leave it as it was.
+  (define (changes db)
+    (call-with-open-handle 'changes db (lambda (handle) (sqlite3-changes64 handle))))
+
+  ;; total-changes : Database -> Natural
+  ;; The rows every INSERT, UPDATE and DELETE on DB has changed since it
+  ;; opened, sqlite3_total_changes64's answer: triggers' and cascades' rows
+  ;; among them, and rows a rollback undid.
+  (define (total-changes db)
+    (call-with-open-handle 'total-changes db (lambda (handle) (sqlite3-total-changes64 handle))))
+
+  ;; last-insert-rowid : Database -> Integer
+  ;; The rowid of the last row an INSERT on DB made, sqlite3_last_insert_rowid's
+  ;; answer: it can name a row a failure or a rollback undid, and a WITHOUT
+  ;; ROWID table's insert or an upsert's DO UPDATE leaves it as it was.
+  (define (last-insert-rowid db)
+    (call-with-open-handle 'last-insert-rowid db (lambda (handle) (sqlite3-last-insert-rowid handle))))
+
+  ;; in-transaction? : Database -> Boolean
+  ;; Whether DB is inside a transaction, sqlite3_get_autocommit answering 0:
+  ;; #t after a deferred BEGIN that has read nothing, and #f while an
+  ;; autocommit SELECT holds a read.
+  (define (in-transaction? db)
+    (call-with-open-handle 'in-transaction? db
+      (lambda (handle) (eqv? (sqlite3-get-autocommit handle) 0))))
 
   ;; --- call-with-database ------------------------------------------------------------------
 
@@ -493,7 +621,8 @@
                   (lambda ()
                     (opened-database who
                                      (critical-section
-                                      (let ((outcome (open-outcome who name flags)))
+                                      (let ((outcome (open-outcome who name flags
+                                                                   default-cache-capacity)))
                                         (when (eq? (car outcome) 'opened)
                                           (set! db (cadr outcome)))
                                         outcome)))

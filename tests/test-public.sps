@@ -5,7 +5,7 @@
 ;;;   the exports    (chez-sqlite3)'s, written out whole, so nothing private,
 ;;;                  no raw binding of native's among it, can pass through
 ;;;                  unseen: check-seam's rule (g) holds (chezscheme)'s names
-;;;                  alone. connection's and report's too
+;;;                  alone. connection's, conveniences' and report's too
 ;;;   re-exports     src/chez-sqlite3.sls, read as data, is one library form
 ;;;                  with no body; every public name is the very procedure its
 ;;;                  private library defines, eq?, so referencing a condition
@@ -156,7 +156,16 @@
     (sql-null? chez-sqlite3 private values)
     (sqlite-invalid-text? chez-sqlite3 private conditions)
     (sqlite-invalid-text-column chez-sqlite3 private conditions)
-    (sqlite-invalid-text-offset chez-sqlite3 private conditions)))
+    (sqlite-invalid-text-offset chez-sqlite3 private conditions)
+    (execute! chez-sqlite3 private conveniences)
+    (execute-script! chez-sqlite3 private conveniences)
+    (query chez-sqlite3 private conveniences)
+    (query-row chez-sqlite3 private conveniences)
+    (query-fold chez-sqlite3 private conveniences)
+    (changes chez-sqlite3 private connection)
+    (total-changes chez-sqlite3 private connection)
+    (last-insert-rowid chez-sqlite3 private connection)
+    (in-transaction? chez-sqlite3 private connection)))
 
 (test-begin "public")
 
@@ -164,22 +173,30 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 51 names, counted from the library itself, not from this suite's list"
-  51
+(test-equal "(chez-sqlite3) exports 60 names, counted from the library itself, not from this suite's list"
+  60
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the values, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
+(test-equal "(chez-sqlite3) exports exactly the connections, the statements, the values, the conveniences, the counters, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures and the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!"
+(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; M3's four counters; the cache's four procedures; and the suites' opener of a given capacity"
   (sorted-names '(open-database close-database! call-with-database database? call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
-                  tracked-statements untrack-statement!))
+                  tracked-statements untrack-statement!
+                  changes total-changes last-insert-rowid in-transaction?
+                  database-cache-check-out! database-cache-return! database-cache-capacity
+                  database-cache-count open-database-with-cache-capacity))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
+
+(test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number, for the suites"
+  (sorted-names '(execute! execute-script! query query-row query-fold code-number))
+  (guard (e (#t (list 'raised (describe e))))
+    (sorted-names (library-exports '(chez-sqlite3 private conveniences)))))
 
 (test-equal "(chez-sqlite3 private report) exports exactly the seven report procedures"
   (sorted-names '(sqlite-version sqlite-version-number sqlite-source-id sqlite-library-path

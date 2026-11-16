@@ -464,10 +464,11 @@
   zero-counts
   (native-counts))
 
-(test-equal "(chez-sqlite3 private statement) exports exactly its verbs, the accessor, statement-state and sql-length-fits?"
-  '(call-with-statement call-with-statement-handle column-count finalize-statement!
-    parameter-count prepare-statement reset! sql-length-fits? statement-sql statement-state
-    statement? step!)
+(test-equal "(chez-sqlite3 private statement) exports exactly its verbs, the accessor, statement-state and sql-length-fits?, and M3's internals: the who-taking verbs, checked-sql, prepared-at, the cache's checked-out and returned, and while-held, the section that reads a convenience's flag"
+  '(call-with-statement call-with-statement-handle checked-out checked-sql column-count
+    column-count/who finalize-statement! finalized parameter-count prepare-statement prepared
+    prepared-at reset! reset!/who returned sql-length-fits? statement-sql statement-state
+    statement? step! step!/who while-held)
   (guard (e (#t (list 'raised (describe e))))
     (list-sort (lambda (a b) (string<? (symbol->string a) (symbol->string b)))
                (library-exports statement-library))))
