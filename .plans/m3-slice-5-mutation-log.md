@@ -1185,6 +1185,16 @@ Run by the lead on part D's hand-back, in the worktree and in copies under its g
 - **Traps reproduced:** `ticks.sps` and `boundary.sps`, as reported; and slice 3's second hole,
   the execute suite's timer row on the libraries before part D, its insert left tracked and
   ready, out of an empty cache, at ticks 50 to 52.
+- **Slice 4's pending row, after the rebase onto slice 4's `5c295c1`:**
+  - **Its guard failed:** it wanted at least 1,000 trials. Part D made the call cheaper, so it
+    completes at fuel 58, and every fourth G made 647 trials a level.
+  - **The row now sweeps every G:** 2,504 trials a level, 49 s under the gate, against slice 4's
+    46 s at every fourth.
+  - **It fails by name below ten trials a fuel.**
+  - **It asserts what slice 4 could only observe:** no statement, the body's included, is tracked
+    outside the cache. On slice 4's libraries it fails at F 29 from G 46, in 960 of 8,210 trials
+    at the outer level and 959 nested. The lead's probe of the same schedule
+    (`build/lead-probe/tx-pending.sps`) agrees: 960 trials with a stray before part D, none after.
 - **The lead's mutants,** each run against the fifteen suites (`build/lead-mut/drive-d.py`):
 
   | Mutation | What it plants | Failed |

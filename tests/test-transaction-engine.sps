@@ -989,11 +989,11 @@
 ;; schedule broke. After both runs: the depth is restored, in-transaction? is
 ;; #f once the outer level is over, a later with-transaction commits, and
 ;; none of with-transaction's own statements is tracked other than ready, or
-;; outside the cache. Only with-transaction's own SQL is read: the body's
-;; execute! is slice 3's convenience, and in some trials R1's
-;; execute! raises &sqlite-closed (its call's flag), leaving its statement
-;; tracked outside the cache at ready or done (outer F=29 G=46 and G=66);
-;; that is observed, and asserted neither way.
+;; outside the cache; nor is any statement, the body's included, tracked
+;; outside the cache. The body's execute! holds a claim on its call since
+;; M3 slice 5's part D. Before it, slice 3's flag left the body's insert
+;; tracked outside the cache from F 29, G 46: this row, run on slice 4's
+;; libraries, failed 960 of 8,210 trials at the outer level and 959 nested.
 
 ;; cached? : Database String -> Boolean
 ;; Whether DB's cache holds a statement under SQL, read by taking it out and
@@ -1063,13 +1063,15 @@
                           (let* ((depth (database-depth db))
                                  (in (in-transaction? db))
                                  (left (own-left db))
+                                 (stray (- (length (tracked-statements db)) (database-cache-count db)))
                                  (later (attempt (lambda () (with-transaction db (lambda () 'later-committed))))))
                             (append
                              (if (and nested? (not (equal? inside '(1 ())))) (list (list 'inside inside)) '())
                              (if (eqv? depth 0) '() (list (list 'depth depth)))
                              (if in (list 'in-transaction-after) '())
                              (if (eq? later 'later-committed) '() (list (list 'later later)))
-                             (if (null? left) '() (list (list 'left left)))))))))))
+                             (if (null? left) '() (list (list 'left left)))
+                             (if (> stray 0) (list (list 'stray stray)) '())))))))))
           (cond ((symbol? r) r)
                 ((and (pair? r) (eq? (car r) 'raised)) (list (list 'the-trial-raised r)))
                 (else r))))
@@ -1077,17 +1079,20 @@
         (when db (guard (e (#t #f)) (close-database! db)))))))
 
 ;; pending-stride : Positive-Integer
-;; G steps by this, from 1: under the memory gate the full sweep cost the
-;; suite 100 s, for 16,420 trials, and a stride of 4 keeps every F and about
-;; every fourth G, with R1 existing at each.
-(define pending-stride 4)
+;; G steps by this, from 1: every G. Slice 4 swept every fourth, its full
+;; sweep 100 s under the memory gate for 16,420 trials; since M3 slice 5's
+;; part D the call completes at fuel 58, and every G costs less. An engine's
+;; fuel names no fixed point in the code, so every G is swept
+;; (.plans/traps.md).
+(define pending-stride 1)
 
 ;; pending : Boolean -> (Listof Any)
 ;; pending-trial at every F from 1 until the call completes unexpired, and G
 ;; from 1 by pending-stride until R completes within G: the (F G deviation ...) of the trials
 ;; that deviated. Prints the trials made, each with R1 existing; fewer than
-;; 1000, or any other collapse of the sweep, is itself a
-;; deviation, the sweep having reached nothing.
+;; ten a fuel, or any other collapse of the sweep, is itself a deviation,
+;; the sweep having reached nothing. A count fixed in trials broke when part
+;; D made the call cheaper: 647 at every fourth G.
 (define (pending nested?)
   (let floop ((f 1) (found '()) (trials 0))
     (let gloop ((g 1) (found found) (trials trials))
@@ -1098,13 +1103,14 @@
                (display " trials, the call completed unexpired at fuel ")
                (write f)
                (newline)
-               (append (reverse found) (if (< trials 1000) (list (list 'too-few-trials-with-r1 trials)) '())))
+               (append (reverse found)
+                       (if (< trials (* 10 f)) (list (list 'too-few-trials-with-r1 trials 'fuel f)) '())))
               ((eq? r 'r-completed-at-g)
                (if (>= f 5000) (reverse (cons 'no-completion found)) (floop (+ f 1) found trials)))
               ((>= g 1000) (floop (+ f 1) (cons (list f g 'r-never-completed) found) trials))
               (else (gloop (+ g pending-stride) (if (null? r) found (cons (cons f (cons g r)) found)) (+ trials 1))))))))
 
-(test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, and none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache"
+(test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel"
   '(() ())
   (list (pending #f) (pending #t)))
 

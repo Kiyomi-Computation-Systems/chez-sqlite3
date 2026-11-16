@@ -563,8 +563,9 @@ told in chez-curl's `.plans/traps.md`.
   Take a fresh remainder and connection for every trial, check the call's clean answer first, and
   count the trials in which both runs got past the call's first section: a sweep fails by name
   when that count is trivial, as M3 slice 5's part D suites do (the M2 session's guard;
-  [research/m3-slice-5/](research/m3-slice-5/README.md), `pending-sweep.sps`). (M3 slice 5's
-  part D, chez-sqlite3)
+  [research/m3-slice-5/](research/m3-slice-5/README.md), `pending-sweep.sps`). Count it a fuel,
+  not in all: slice 4's guard of 1,000 trials failed at 647 once part D halved the call's fuel.
+  (M3 slice 5's part D, chez-sqlite3)
 
 ## Editing the records
 
