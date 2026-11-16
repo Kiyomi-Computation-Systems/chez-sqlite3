@@ -185,10 +185,16 @@
 * One remainder can also be resumed again while an earlier resume of it
   is still pending, so a flag set only once a call ends lets both runs
   act. Give the call a claim that each section compares, inside the
-  section, with a position the run carries, and advances (ADR-0018,
-  amended). Build text with Chez's own procedures inside a critical
-  section: `number->string`, resumed from inside, answered `""` or the
-  digits twice (`.plans/traps.md`).
+  section, with a position the run carries, and advances (ADR-0016,
+  ADR-0018, amended). Build text with Chez's own procedures inside a
+  critical section: `number->string`, resumed from inside, answered `""`
+  or the digits twice (`.plans/traps.md`).
+* A sweep of an engine's remainders takes a fresh engine and connection
+  for every trial, checks the call's clean answer first, and fails by
+  name when too few trials have both runs past the call's first section:
+  one remainder reused across trials sweeps nothing past the first. An
+  engine's fuel names no fixed point in the code, so sweep every pair of
+  fuels (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

@@ -162,12 +162,16 @@ Proposed record is marked *(provisional)* until that record is accepted.
   later return raises `&sqlite-transaction-ended`, never a second commit (ADR-0016,
   ADR-0017). A raise inside `call-with-c-string`'s procedure is caught inside it and
   raised after it, since `call-with-block` refuses a re-entry (ADR-0016).
-- **Every call of a convenience holds a flag of its own,** set once its statement leaves the call,
-  given back or finalized, and read first in every critical section that touches the
-  statement: the check-out's, a miss's prepare, each bind, step and read, and the return's.
-  With it set, the section touches nothing and the call raises `&sqlite-closed`. Chez's engine
-  remainders are multi-shot, and a timer's handler is the caller's code between any two
-  sections (ADR-0016, ADR-0020, amended in M3 slice 3).
+- **Every call of `execute!`, `query` and `query-row` holds a claim,** as the open verbs' do
+  (below), claimed inside each section of the call: the check-out and a miss's prepare, one
+  section; each bind, step and read; and the return. A run the call has passed is refused there,
+  touching nothing, and raises `&sqlite-closed`. A raise no section caught gives the statement
+  back by a claim of whatever position is next. **Every call of `query-fold` and
+  `execute-script!` holds a flag,** set once its statement leaves the call, given back or
+  finalized, and read first in every critical section that touches the statement; an expiry
+  inside their winds finishes it. Chez's engine remainders are multi-shot, and a timer's handler
+  is the caller's code between any two sections (ADR-0016, ADR-0020, amended in M3 slices 3 and
+  5).
 - **Every call of an open verb holds a claim,** made by its first expression: the position of
   the next section any run of the call may make. Each run carries its own position, and each
   section claims it inside the section: the open's, each setting's prepare, step, read and

@@ -16,7 +16,10 @@
   ([amendment](#amendment-2026-11-15-what-m3-slice-1-settled)). Amended 2026-11-16 in M3 slice 3,
   and accepted by the maintainer that day: the guard on every call, the maintainer's "Guard
   every call"; Q15 kept, "Keep one value each"; the engine rows' fuels and P8's cost
-  ([amendment](#amendment-2026-11-16-what-m3-slice-3-built-and-measured)).
+  ([amendment](#amendment-2026-11-16-what-m3-slice-3-built-and-measured)). Amended 2026-11-16
+  in M3 slice 5's part D, and accepted by the maintainer that day: the claim of `execute!`,
+  `query` and `query-row`, and P6's fuels again
+  ([amendment](#amendment-2026-11-16-the-conveniences-claim-m3-slice-5-part-d)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -388,3 +391,86 @@ are the maintainer's, 2026-11-16 ("Guard every call", "Keep one value each").
   | `connection.sls:465–470` | `:593–598` |
 
   They move with any later change; the code's names are the lasting reference.
+
+## Amendment, 2026-11-16: the conveniences' claim (M3 slice 5, part D)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5's part D, from
+its builder's report and the lead's checks (the slice's
+[mutation log](../m3-slice-5-mutation-log.md), part D;
+[research/m3-slice-5/](../research/m3-slice-5/README.md)). Where the fix went is the
+maintainer's choice, 2026-11-16 ("In slice 5's PR").
+
+- **The M2 session found slice 5's open-verb hole in the conveniences,** sweeping slice 4. One
+  remainder R, taken at fuel F, was resumed at G until it expired again, as R1; then R was resumed
+  to its end, then R1 ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5).
+  - R1 prepared the call's statement and expired holding it. R found it out of the cache,
+    prepared a second, gave that back and set the call's flag. R1 was then refused at its next
+    section, still holding the first, outside the cache (`mechanism.sps`).
+  - The lead's sweep, a fresh engine and connection a trial, found it in 1,360 of 3,910 trials of
+    `execute!`, 3,655 of 10,147 of `query` (1,935 at a row) and 1,849 of 5,044 of `query-row`
+    (602 at a row) (`pending-sweep.sps`). The close finalized each, but one at a row holds a read
+    until then, and decision 3 says none is left at a row once the call has returned or raised.
+  - Two runs both past the check-out shared one statement, and the flag passed both. Part D's
+    sweeps, run on the code before it, found wrong answers in 3,318 trials of `query` and 697 of
+    `query-row`, as `(#(2) #(3))`, rows the other run had stepped past. `execute!` inserted its
+    row twice in 156.
+- **`execute!`, `query` and `query-row` hold a claim,** as the open verbs do, in place of slice
+  3's flag.
+  - The claim is the call's first expression: the position of the next section any run of the
+    call may make. The return ends it.
+  - Each run carries its own position, an argument never assigned. Every section claims it inside
+    the section, advancing the call's:
+    - 0, the check-out and a miss's prepare, one section;
+    - each bind, the count's and each value's, one value a section (Q15);
+    - each step, and at a row the column count's read and each column's;
+    - last, the return.
+  - A run the call has passed is refused at its next section: it touches nothing, and raises
+    `&sqlite-closed` from the verb ("Guard every call").
+  - Every section claims, not only the two that make or hand out the statement. With the flag
+    kept for the rest, two runs past the check-out would each pass every step.
+- **A raise that no section caught gives the statement back,** a timer's or a keyboard handler's
+  between two sections, by a claim of whatever position is next, unless the call has ended. It is
+  then raised again. The statement is noted inside the check-out's section, so this holds even
+  just after it. Slice 3's helper bound the statement outside its guard: a timer's raise just
+  past the check-out, at 7 ticks of each of the three, left it out of the cache. Now a raise
+  always finishes it, as decision 6 says.
+- **A give-back refused after a raise raises `&sqlite-closed`,** where slice 3 raised the work's
+  condition: another run has passed the call.
+- **`query-fold` and `execute-script!` keep slice 3's flag.** An expiry inside the fold's wind
+  finishes its statement, and one inside the script's block frees the block, so no second run
+  reaches a statement another holds (the consequences). Their sweeps found nothing. The fold's
+  flag is made after its procedure's check, not first; no row can tell.
+- **`bind-each!/at`,** in `(chez-sqlite3 private statement-values)`, is the binds' work as data,
+  each section made by its caller's: the claim's for the three, `while-held`'s for the fold's
+  `bind-each!/who`.
+- **The sweeps,** in six suites. Each trial runs on a fresh connection, and each fuel begins with
+  a collection. A trial is judged by:
+  - each run's answer;
+  - an authorizer's count of the call's prepares;
+  - its effect on the table;
+  - every statement's state, and the cache's bindings.
+
+  They fail by name when too few trials interleave. Alike on both libraries:
+
+  | Call | Completes unexpired at fuel | Trials with R1 | Both runs past the first section |
+  |---|---|---|---|
+  | `execute!` | 42 | 820 | 325 |
+  | `query` | 72 | 2,485 | 1,540 |
+  | `query`, its second step failing | 84 | 3,403 | 2,278 |
+  | `query-row` | 46 | 990 | 435 |
+  | `query-fold` | 154 | 11,834 | 4,040 |
+  | `execute-script!` | 431 | 51,277 | none: an expiry frees its block |
+
+- **P6's fuels fell by about half for the three,** whose check-out's checks now run inside a
+  section, where an engine spends no ticks. Alike on both libraries:
+
+  | Call | Slice 3 | Now |
+  |---|---|---|
+  | `execute!` | 84 | 43 |
+  | `query` | 156 | 82 |
+  | `query-row` | 104 | 47 |
+  | `query-fold` | 113 | 117 |
+  | an abandoned `query` | 119 | 60 |
+  | `execute-script!` | 640 | 640 |
+  | two engines on one connection | 259 | 126 |
+  | each remainder resumed twice | 101 to 156; the script's, 640 | 46 to 150; the script's, 638 |

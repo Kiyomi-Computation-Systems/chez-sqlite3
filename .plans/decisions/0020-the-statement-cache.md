@@ -12,7 +12,10 @@
   and accepted by the maintainer that day: the cache as built, decision 7's section, and the
   call's flag ([amendment](#amendment-2026-11-16-what-m3-slice-3-built)). Amended 2026-11-16
   in M3 slice 5, and accepted by the maintainer that day: the setting reaches the record
-  ([amendment](#amendment-2026-11-16-the-setting-reaches-the-record-m3-slice-5)).
+  ([amendment](#amendment-2026-11-16-the-setting-reaches-the-record-m3-slice-5)). Amended
+  2026-11-16 in M3 slice 5's part D, and accepted by the maintainer that day: the check-out and
+  the return claim
+  ([amendment](#amendment-2026-11-16-the-check-out-and-the-return-claim-m3-slice-5-part-d)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
 - **Settles:** brief D3 (the maintainer, 2026-11-14: in M3), and its leaning, "bounded and cleared
@@ -235,3 +238,17 @@ Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5
 - **§4.8's cache plants are caught:** the cache ignoring its setting, or evicting one too early or
   too late, each fails the rows that count statements after 33 distinct ones through `query`, at
   0, 1, 2 and the default (the slice's [mutation log](../m3-slice-5-mutation-log.md), part B).
+
+## Amendment, 2026-11-16: the check-out and the return claim (M3 slice 5, part D)
+
+Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5's part D
+([ADR-0016](0016-the-conveniences-and-the-counters.md), amended the same day).
+
+- **For `execute!`, `query` and `query-row`, the check-out and a miss's prepare are one section,
+  the call's first claimed, and the return is its last.** They pass `checked-out` no check, `#f`:
+  the claim decides, in the section around it. Slice 3's flag, read by the check-out's and the
+  return's sections, could not tell one pending run of a call from another: a run found the
+  statement another run held out of the cache, and prepared a second.
+- **The statement is noted inside the check-out's section,** by `checked-out`'s on-made, so a
+  raise just after the section still gives it back.
+- **`query-fold` still passes its flag** to `checked-out`, as slice 3 built it.
