@@ -43,8 +43,8 @@ newest first.
   squash-merged with CI passing in every job.
 - **Now: M3 slice 4, transactions, is PR #25 on `m3-slice-4-transactions`,** by the M2 session,
   rebased onto `f496cf5` and merged in turn (the maintainer, 2026-11-16: "Run all four", slices 1
-  to 4 in order). Then slice 5, the settings, PR #26, by the M3 session, rebased onto it. The maintainer's
-  order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
+  to 4 in order). Then slice 5, the settings, PR #26, by the M3 session, rebased onto it. The
+  maintainer's order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
   too, and M2's Mac run is done, below.
@@ -168,7 +168,7 @@ newest first.
   - a remainder resumed a second time once `ended` was set touched no statement;
   - the NOMEM rig, a step and a column read each under the limit alone;
   - the interrupt suite, 11 to 109 s under the gate: Valgrind's scheduling, not the code.
-- **Records,** proposed in this PR for the maintainer's acceptance:
+- **Records,** accepted by the maintainer on 2026-11-16 ("Accept all"):
   - ADR-0017's amendment, "`with-transaction` as built";
   - four traps: the hard heap limit lifted alone; a run count blind to a step that failed at
     entry; a lost engine; and a watchdog under Valgrind.
@@ -202,6 +202,13 @@ newest first.
     Cite a window with the text it was read at.
   - Groundwork run while the base was being built meant the maintainer's decisions were settled
     before the builder started.
+  - **Research kept only in a git-ignored scratch directory dies with its worktree.** The
+    groundwork's probes, which ADR-0017 cites, were lost when the slice 2 worktree was removed
+    after #23 merged. They were recovered from the agent's transcript, run again, and committed
+    under [research/m3-slice-4/groundwork/](research/m3-slice-4/groundwork/README.md). Before
+    removing a worktree, check whether any record cites a file only its `build/` holds.
+  - **Deleting a stacked PR's base branch closes the PR, not retargets it** ([traps.md](traps.md)).
+    #23 was closed that way, then reopened.
 
 ### 2026-11-16 — M3 slice 3: the conveniences, the counters and the cache (PR #24)
 

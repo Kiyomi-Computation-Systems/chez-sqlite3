@@ -1,0 +1,21 @@
+libversion: 3.45.1
+sourceid: 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+load: loaded
+the memory count: NOT kept: the count is 0 while a :memory: connection is open
+UNAVAILABLE S1: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S2: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S3: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S4: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R1: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R2: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R3: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R4: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE X1, X2: the same
+
+what the limit does here:
+  sqlite3_memory_used with a statement at its row: 0
+  column-value of the 100,000 bytes under a limit of that plus 1,000: (answered 100000)
+  the-limit-in-force-when-the-call-returned; once lifted: (hard 0 soft 0)
+
+the limits at the end: (hard 0 soft 0)
+the counts at the end: ((block . 0) (connection . 0) (statement . 0))

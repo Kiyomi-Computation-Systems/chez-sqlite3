@@ -103,6 +103,11 @@ under "After one section per statement", which holds the final figures:
 | O7 nested under an engine (new) | ended 1 to 187, lost 188 to 202, busy 203 to 252; completes at 253 |
 | the siblings (new) | A's first slice expires at 1 to 114, completes at 115 |
 
+## The groundwork
+
+The read-only probes the M2 session ran before the slice was built, with their outputs on both
+libraries, are in [groundwork/](groundwork/README.md).
+
 ## After one section per statement
 
 The maintainer chose, on 2026-11-16, that `with-transaction` take, step and give back each of

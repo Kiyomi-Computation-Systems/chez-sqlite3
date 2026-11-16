@@ -1,0 +1,40 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+A. the outer level: cached COMMIT and ROLLBACK
+  earlier uses: BEGIN IMMEDIATE, COMMIT; BEGIN IMMEDIATE, ROLLBACK; each reset, kept
+    the level begun, its marker written: autocommit 0, is_interrupted 0, db2 counts 3
+  H = SELECT x FROM t, step: 100
+  sqlite3_interrupt, no step running
+    after the interrupt: autocommit 0, is_interrupted 1, db2 counts 3
+  cached ROLLBACK: step 9, extended 9, "interrupted"; reset 9; finalize 0
+    after it: autocommit 0, is_interrupted 1, db2 counts 3
+  cached COMMIT: step 9, extended 9, "interrupted"; reset 9; finalize 0
+    after it: autocommit 0, is_interrupted 1, db2 counts 3
+  fresh ROLLBACK: prepare 9, extended 9, "interrupted", statement NULL
+  fresh COMMIT: prepare 9, extended 9, "interrupted", statement NULL
+    after them: autocommit 0, is_interrupted 1, db2 counts 3
+  H reset: 0
+    after H's reset: autocommit 0, is_interrupted 1, db2 counts 3
+  fresh ROLLBACK: prepare 0; step 101, extended 101; finalize 0
+    after the fresh ROLLBACK: autocommit 1, is_interrupted 0, db2 counts 3
+  H finalize 0; BEGIN finalize 0
+
+B. a nested level: cached RELEASE chez_sqlite3_1 and ROLLBACK TO chez_sqlite3_1
+  earlier uses: BEGIN IMMEDIATE; SAVEPOINT, RELEASE; SAVEPOINT, ROLLBACK TO, RELEASE; COMMIT
+    both levels begun, their markers written: autocommit 0, is_interrupted 0, db2 counts 3
+  H = SELECT x FROM t, step: 100
+  sqlite3_interrupt, no step running
+  cached RELEASE chez_sqlite3_1: step 9, extended 9, "interrupted"; reset 9; finalize 0
+    after it: autocommit 0, is_interrupted 1, db2 counts 3
+  cached ROLLBACK TO chez_sqlite3_1: step 9, extended 9, "interrupted"; reset 9; finalize 0
+    after it: autocommit 0, is_interrupted 1, db2 counts 3
+  fresh ROLLBACK TO chez_sqlite3_1: prepare 9, extended 9, "interrupted", statement NULL
+  fresh RELEASE chez_sqlite3_1: prepare 9, extended 9, "interrupted", statement NULL
+    after them: autocommit 0, is_interrupted 1, db2 counts 3
+  H reset: 0
+  fresh ROLLBACK TO chez_sqlite3_1: prepare 0; step 101, extended 101; finalize 0
+  fresh RELEASE chez_sqlite3_1: prepare 0; step 101, extended 101; finalize 0
+    after the nested level's rollback: autocommit 0, is_interrupted 0, db2 counts 3
+    after the outer COMMIT: autocommit 1, is_interrupted 0, db2 counts 4
+  H finalize 0; BEGIN, COMMIT, SAVEPOINT finalize 0 0 0

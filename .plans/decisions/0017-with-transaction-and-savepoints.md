@@ -16,7 +16,7 @@
   rollback tried once, and N following the calls' extents, the maintainer's choices that day
   ("Once", "Reuse N"); the context's `failed` and NOMEM bullets narrowed
   ([amendment](#amendment-2026-11-16-a-failed-commits-rollback-and-the-savepoints-n-m3-slice-3)).
-  Amended 2026-11-16 in M3 slice 4, proposed for the maintainer's acceptance: `with-transaction`
+  Amended 2026-11-16 in M3 slice 4, and accepted by the maintainer that day ("Accept all"): `with-transaction`
   as built, `ended` as the check-out's check, one section a statement, the builder's choices the
   maintainer confirmed that day ("Confirm, and name the SQL"; "Document it"; "One section per
   statement"), and four consequences found by the slice's review
@@ -351,10 +351,14 @@ outputs this amendment cites. The second and third bullets are the maintainer's 
 
 ## Amendment, 2026-11-16: `with-transaction` as built (M3 slice 4)
 
+Accepted by the maintainer on 2026-11-16 ("Accept all").
+
 M3 slice 4 built `with-transaction` in `(chez-sqlite3 private transaction)`, over slice 1's plan,
 and settled what the records left to it. The evidence is in
 [research/m3-slice-4/](../research/m3-slice-4/README.md) and
-[the slice's log](../m3-slice-4-mutation-log.md). Each point is held by a row, watched failing
+[the slice's log](../m3-slice-4-mutation-log.md). The groundwork's probes, `levels.c` and
+`failed-active.c` among them, are in
+[research/m3-slice-4/groundwork/](../research/m3-slice-4/groundwork/README.md). Each point is held by a row, watched failing
 against a plant.
 
 - **`ended` is the check-out's check** (slice 3's question, settled by a row). A remainder taken

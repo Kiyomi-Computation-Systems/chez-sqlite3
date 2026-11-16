@@ -1,0 +1,49 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+load: loaded
+
+W1, outer: insert into b with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select i from k
+  (the-step (raised (sqlite-interrupt step! interrupt interrupt)) interrupts-sent the-watchdog-ended)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (nothing-issued))
+  (autocommit-after 1)
+  (db-sees (answered "(none)"))
+  (db2-sees (answered "(none)"))
+  ()
+
+W1, nested: insert into b with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select i from k
+  (the-step (raised (sqlite-interrupt step! interrupt interrupt)) interrupts-sent the-watchdog-ended)
+  (autocommit-straight-after 1)
+  (finalize-statement! no-value)
+  (autocommit-after-it 1)
+  (the-exit (nothing-issued))
+  (autocommit-after 1)
+  (db-sees (answered "(none)"))
+  (db2-sees (answered "(none)"))
+  ()
+
+Q1, outer: with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select count(*) from k, src
+  (the-step (raised (sqlite-interrupt step! interrupt interrupt)) interrupts-sent the-watchdog-ended)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (rolled-back no-value))
+  (autocommit-after 1)
+  (db-sees (answered "(none)"))
+  (db2-sees (answered "(none)"))
+  ()
+
+Q1, nested: with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select count(*) from k, src
+  (the-step (raised (sqlite-interrupt step! interrupt interrupt)) interrupts-sent the-watchdog-ended)
+  (autocommit-straight-after 0)
+  (finalize-statement! no-value)
+  (autocommit-after-it 0)
+  (the-exit (rolled-back no-value no-value))
+  (autocommit-after 0)
+  (db-sees (answered "outer"))
+  (db2-sees (answered "(none)"))
+  (the-caller-commits-the-outer-level no-value db2-then (answered "outer"))
+
+the counts at the end: ((block . 0) (connection . 0) (statement . 0))

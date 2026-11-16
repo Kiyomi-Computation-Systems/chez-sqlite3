@@ -485,6 +485,15 @@ told in chez-curl's `.plans/traps.md`.
   life, and must never fail a row by itself: the latency is the scheduler's. (M3 slice 4's review,
   chez-sqlite3)
 
+- **Deleting a stacked PR's base branch closes the PR on GitHub; it doesn't retarget it.** In M3's
+  merge train, after #22 was squash-merged, `git push origin --delete m3-slice-1-core` closed #23,
+  whose base it was. GitHub retargets a dependent PR only when the merged PR's own branch is
+  deleted through its merge flow, and `delete_branch_on_merge` is off here.
+  - **Recovered** by pushing the branch back at its old SHA, `gh pr reopen 23`, `gh pr edit 23
+    --base main`, and then deleting the branch.
+  - **The order:** merge; retarget the next PR to `main`; check that no open PR still has the old
+    base; then delete. (M3's merge train, chez-sqlite3)
+
 ## Editing the records
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,

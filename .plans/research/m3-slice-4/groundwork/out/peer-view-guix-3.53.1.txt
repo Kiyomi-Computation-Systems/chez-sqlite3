@@ -1,0 +1,318 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+
+== J0: no heap limit yet in this process
+
+J0-reader-before-any-limit, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SELECT count(*), sum(length(x)) FROM src -> 0
+    after SELECT count(*), sum(length(x)) FROM src: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+A-savepoint-two-tables, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+B-no-savepoint-two-tables, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+C-savepoint-rolled-back, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: ROLLBACK TO s -> 0
+    after ROLLBACK TO s: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+D-savepoint-a-read, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: SELECT count(*) FROM src -> 0
+    after SELECT count(*) FROM src: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+A-savepoint-two-tables, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+B-no-savepoint-two-tables, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+C-savepoint-rolled-back, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: ROLLBACK TO s -> 0
+    after ROLLBACK TO s: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+D-savepoint-a-read, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: SELECT count(*) FROM src -> 0
+    after SELECT count(*) FROM src: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+A-savepoint-two-tables, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+B-no-savepoint-two-tables, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+C-savepoint-rolled-back, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: ROLLBACK TO s -> 0
+    after ROLLBACK TO s: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+D-savepoint-a-read, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: SELECT count(*) FROM src -> 0
+    after SELECT count(*) FROM src: db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+== levels.c's setup: its other tables and trigger, then foreign_keys ON as well
+
+E-levels-tables, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+F-levels-tables-and-foreign-keys, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+G-foreign-keys-alone, db2 opened before the tables were made, never read
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+== a NOMEM in another connection (step 7), then sqlite3_hard_heap_limit64(0): hard 0, soft 0
+
+H-after-a-nomem-hard-limit-lifted, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+H-after-a-nomem-hard-limit-lifted, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+== a NOMEM in another connection (step 7), then sqlite3_hard_heap_limit64(0) and sqlite3_soft_heap_limit64(0): hard 0, soft 0
+
+I-after-a-nomem-both-limits-lifted, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SAVEPOINT s -> 0
+    after SAVEPOINT s: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('inner') -> 0
+    after INSERT INTO t VALUES ('inner'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: RELEASE s -> 0
+    after RELEASE s: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 2), finalize 0
+
+I-after-a-nomem-both-limits-lifted, db2 read the schema first
+    after nothing (the warm-up): db2 step 100 (count 0), finalize 0
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: INSERT INTO b VALUES (1) -> 0
+    after INSERT INTO b VALUES (1): db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+== a NOMEM in another connection (step 7), then sqlite3_hard_heap_limit64(0): hard 0, soft 0
+
+J1-reader-after-a-nomem-hard-limit-lifted, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SELECT count(*), sum(length(x)) FROM src -> 0
+    after SELECT count(*), sum(length(x)) FROM src: db2 step 5 (count -1), finalize 5
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
+
+== a NOMEM in another connection (step 7), then sqlite3_hard_heap_limit64(0) and sqlite3_soft_heap_limit64(0): hard 0, soft 0
+
+J2-reader-after-a-nomem-both-limits-lifted, db2 fresh: never read the schema
+  db: BEGIN IMMEDIATE -> 0
+    after BEGIN IMMEDIATE: db2 step 100 (count 0), finalize 0
+  db: INSERT INTO t VALUES ('outer') -> 0
+    after INSERT INTO t VALUES ('outer'): db2 step 100 (count 0), finalize 0
+  db: SELECT count(*), sum(length(x)) FROM src -> 0
+    after SELECT count(*), sum(length(x)) FROM src: db2 step 100 (count 0), finalize 0
+  db: COMMIT -> 0
+    after COMMIT: db2 step 100 (count 1), finalize 0
