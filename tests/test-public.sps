@@ -106,9 +106,9 @@
 ;; public-names : (Listof (Pairof Symbol (Listof Symbol)))
 ;; Each public name with the private library that defines it.
 (define public-names
-  '((open-database chez-sqlite3 private connection)
+  '((open-database chez-sqlite3 private open)
     (close-database! chez-sqlite3 private connection)
-    (call-with-database chez-sqlite3 private connection)
+    (call-with-database chez-sqlite3 private open)
     (database? chez-sqlite3 private connection)
     (sqlite-version chez-sqlite3 private report)
     (sqlite-version-number chez-sqlite3 private report)
@@ -157,6 +157,10 @@
     (sqlite-invalid-text? chez-sqlite3 private conditions)
     (sqlite-invalid-text-column chez-sqlite3 private conditions)
     (sqlite-invalid-text-offset chez-sqlite3 private conditions)
+    (sqlite-setting-mismatch? chez-sqlite3 private conditions)
+    (sqlite-setting-mismatch-setting chez-sqlite3 private conditions)
+    (sqlite-setting-mismatch-expected chez-sqlite3 private conditions)
+    (sqlite-setting-mismatch-actual chez-sqlite3 private conditions)
     (execute! chez-sqlite3 private conveniences)
     (execute-script! chez-sqlite3 private conveniences)
     (query chez-sqlite3 private conveniences)
@@ -175,8 +179,8 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 62 names, counted from the library itself, not from this suite's list"
-  62
+(test-equal "(chez-sqlite3) exports 66 names, counted from the library itself, not from this suite's list"
+  66
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
@@ -185,16 +189,22 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the four public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; M3's four counters; the cache's four procedures; the suites' opener of a given capacity; and the transaction depth's two, with-transaction's"
-  (sorted-names '(open-database close-database! call-with-database database? call-with-open-handle
+(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; the cache's four procedures; and the transaction depth's two, with-transaction's"
+  (sorted-names '(close-database! database? call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
                   tracked-statements untrack-statement!
+                  prepared-open connection-outcome opened-database close-connection
                   changes total-changes last-insert-rowid in-transaction?
                   database-cache-check-out! database-cache-return! database-cache-capacity
-                  database-cache-count open-database-with-cache-capacity
+                  database-cache-count
                   database-depth set-database-depth!))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
+
+(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings!, for the suites"
+  (sorted-names '(open-database call-with-database applied-settings!))
+  (guard (e (#t (list 'raised (describe e))))
+    (sorted-names (library-exports '(chez-sqlite3 private open)))))
 
 (test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number, for the suites"
   (sorted-names '(execute! execute-script! query query-row query-fold code-number))

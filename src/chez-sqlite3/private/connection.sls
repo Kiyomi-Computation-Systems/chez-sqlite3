@@ -1,10 +1,19 @@
 #!r6rs
 ;;; (chez-sqlite3 private connection): a connection to a database, opened,
-;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its four
-;;; public procedures; call-with-open-handle, the one way to a connection's
-;;; handle, and check-database-owner are M2's statements', with the tracking
-;;; procedures below; failure-details and first-finalize-failure are exported
-;;; for the suites too.
+;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its two
+;;; public procedures, close-database! and database?, and M3's counters;
+;;; call-with-open-handle, the one way to a connection's handle, and
+;;; check-database-owner are M2's statements', with the tracking procedures
+;;; below; failure-details and first-finalize-failure are exported for the
+;;; suites too.
+;;;
+;;; The open verbs, open-database and call-with-database, are (chez-sqlite3
+;;; private open)'s since M3 slice 5: their settings run statements through
+;;; (chez-sqlite3 private statement), which imports this library, so this
+;;; one cannot (ADR-0018). Their parts are here and exported to it:
+;;; prepared-open, the checks of a filename and its options;
+;;; connection-outcome, the open's one critical section; opened-database, its
+;;; outcome raised; and close-connection, the close for a who.
 ;;;
 ;;; A connection is a database record, opaque and sealed, holding the
 ;;; sqlite3* as an integer, so Valgrind sees one never closed (the M1 plan,
@@ -67,10 +76,10 @@
 ;;; M3 adds (ADR-0016, ADR-0020):
 ;;;
 ;;;   the cache      the record holds its statement cache, slice 1's table,
-;;;                  its capacity fixed when the record is made: 32 by
-;;;                  open-database and call-with-database, or the one
-;;;                  open-database-with-cache-capacity is given, 0 to 1024,
-;;;                  for the suites until slice 5's settings reach it. The
+;;;                  its capacity fixed when the record is made: the one
+;;;                  connection-outcome is given, the settings' statement-cache,
+;;;                  0 to 1024, 32 when they give none (ADR-0018, decision
+;;;                  4; ADR-0020, decision 1). The
 ;;;                  database-cache procedures read and change it inside a
 ;;;                  verb's critical section, for (chez-sqlite3 private
 ;;;                  statement)'s check-out and return; the close empties it,
@@ -79,10 +88,11 @@
 ;;;                  in-transaction?, each one plain call through
 ;;;                  call-with-open-handle, which makes every verb's checks
 (library (chez-sqlite3 private connection)
-  (export open-database close-database! call-with-database database?
+  (export close-database! database?
+          prepared-open connection-outcome opened-database close-connection
           call-with-open-handle failure-details check-database-owner
           track-statement! untrack-statement! tracked-statements first-finalize-failure
-          open-database-with-cache-capacity database-cache-capacity database-cache-count
+          database-cache-capacity database-cache-count
           database-cache-check-out! database-cache-return!
           changes total-changes last-insert-rowid in-transaction?
           database-depth set-database-depth!)
@@ -94,16 +104,9 @@
           (only (chez-sqlite3 private constants) sqlite-open-uri sqlite-result-codes)
           (chez-sqlite3 private conditions)
           (chez-sqlite3 private open-options)
-          (only (chez-sqlite3 private settings) settings-plan raise-setting-refusal)
           (chez-sqlite3 private statement-cache))
 
   (define sqlite-ok (cdr (assq 'ok sqlite-result-codes)))
-
-  ;; default-cache-capacity : Natural
-  ;; The cache's capacity when no setting gives one: the settings' plan's,
-  ;; for a list that names none, so the default is written once, in
-  ;; (chez-sqlite3 private settings) (ADR-0020, decision 1).
-  (define default-cache-capacity (cadr (settings-plan '())))
 
   ;; database? : Any -> Boolean
   ;; Opaque, so record-rtd on a database raises, and sealed, so no type
@@ -401,7 +404,8 @@
   ;; the uri option are assertion violations from WHO, before anything is
   ;; allocated. The caller's string is copied first and the copy alone is
   ;; checked and opened, so another thread cannot change it between the two
-  ;; (ADR-0011, decision 2).
+  ;; (ADR-0011, decision 2). OPTIONS are the options alone, the settings
+  ;; list split from them (chez-sqlite3 private open).
   (define (prepared-open who filename options)
     (unless (string? filename)
       (assertion-violation who "a filename is a string" 'not-a-string (shown-value filename)))
@@ -424,9 +428,9 @@
                                   'file-uri-without-uri-option (shown-value copy)))
            (values copy flags))))))
 
-  ;; open-outcome : Symbol String Natural Natural
+  ;; connection-outcome : Symbol String Natural Natural (U (-> Any) #f)
   ;;                -> (U (List 'opened Database) (List 'failed Integer String)
-  ;;                      (List 'raised Any))
+  ;;                      (List 'raised Any) (List 'refused))
   ;; NAME, a checked copy, opened with FLAGS and owned by this thread, its
   ;; cache of CAPACITY, checked: the database; or the failure's extended
   ;; code and message, its handle closed; or what a call raised,
@@ -436,65 +440,46 @@
   ;; record, or else the failure's details and its handle's close. So no
   ;; handle is ever left uncounted, and no engine's expiry frees the string
   ;; between the open's calls. It raises nothing.
-  (define (open-outcome who name flags capacity)
+  ;;
+  ;; REFUSED?, the open's claim on its call, a procedure of no arguments or
+  ;; #f for none, is evaluated first in the section: when it answers true,
+  ;; another run of the same call has made its open already, and the section
+  ;; opens nothing and answers refused. So of the runs an engine's multi-shot
+  ;; remainder makes, or a continuation a timer's handler took, one alone
+  ;; opens: none opens a connection that nothing would return or close
+  ;; ((chez-sqlite3 private open); ADR-0018, amended in M3 slice 5).
+  (define (connection-outcome who name flags capacity refused?)
     (critical-section
-     (guard (c (#t (list 'raised c)))
-       (call-with-c-string who name
-         (lambda (c-name)
-           (let-values (((rc handle)
-                         (call-with-out-pointer who
-                           (lambda (slot) (sqlite3-open-v2 c-name slot flags 0)))))
-             (cond
-               ((eqv? handle 0) (cons 'failed (details-of rc 0)))
-               (else
-                (count-up! 'connection)
-                (if (eqv? rc sqlite-ok)
-                    (list 'opened (make-database handle (get-thread-id) capacity))
-                    (let ((details (details-of rc handle)))
-                      (when (eqv? (sqlite3-close handle) sqlite-ok)
-                        (count-down! 'connection))
-                      (cons 'failed details)))))))))))
+     (if (and refused? (refused?))
+         '(refused)
+         (guard (c (#t (list 'raised c)))
+           (call-with-c-string who name
+             (lambda (c-name)
+               (let-values (((rc handle)
+                             (call-with-out-pointer who
+                               (lambda (slot) (sqlite3-open-v2 c-name slot flags 0)))))
+                 (cond
+                   ((eqv? handle 0) (cons 'failed (details-of rc 0)))
+                   (else
+                    (count-up! 'connection)
+                    (if (eqv? rc sqlite-ok)
+                        (list 'opened (make-database handle (get-thread-id) capacity))
+                        (let ((details (details-of rc handle)))
+                          (when (eqv? (sqlite3-close handle) sqlite-ok)
+                            (count-down! 'connection))
+                          (cons 'failed details))))))))))))
 
   ;; opened-database : Symbol (U (List 'opened Database) (List 'failed Integer String)
-  ;;                             (List 'raised Any)) -> Database
+  ;;                             (List 'raised Any) (List 'refused)) -> Database
   ;; OUTCOME's database; or its failure, &sqlite-error from WHO; or what it
-  ;; caught, raised again. Called after the section that made OUTCOME.
+  ;; caught, raised again; or, for refused, &sqlite-closed from WHO. Called
+  ;; after the section that made OUTCOME.
   (define (opened-database who outcome)
     (case (car outcome)
       ((opened) (cadr outcome))
       ((failed) (raise-sqlite-error who (cadr outcome) (caddr outcome) #f #f))
+      ((refused) (raise-closed who))
       (else (raise (cadr outcome)))))
-
-  ;; open-connection : Symbol String Natural Natural -> Database
-  ;; A database opened on NAME, a checked copy, with FLAGS, owned by this
-  ;; thread, its cache of CAPACITY, checked; or &sqlite-error from WHO. NAME
-  ;; holding U+0000 is call-with-c-string's refusal, from WHO, before
-  ;; anything is allocated. Each is raised after the open's critical section.
-  (define (open-connection who name flags capacity)
-    (opened-database who (open-outcome who name flags capacity)))
-
-  ;; open-database : String Symbol ... -> Database
-  ;; FILENAME opened with OPTIONS, owned by the calling thread
-  ;; (open-options' table; ADR-0012, decision 3), its statement cache of 32.
-  (define (open-database filename . options)
-    (let-values (((name flags) (prepared-open 'open-database filename options)))
-      (open-connection 'open-database name flags default-cache-capacity)))
-
-  ;; open-database-with-cache-capacity : Natural String Symbol ... -> Database
-  ;; open-database's work, its statement cache of CAPACITY: the private way
-  ;; the suites open a connection of a given capacity until slice 5's
-  ;; statement-cache setting reaches the same field (the M3 plan, section
-  ;; 4.6). CAPACITY is checked first, by the settings' own rule for
-  ;; statement-cache, an exact integer from 0 to 1024, else an assertion
-  ;; violation, setting-out-of-domain statement-cache and the value; then
-  ;; open-database's checks; each before anything is allocated.
-  (define (open-database-with-cache-capacity capacity filename . options)
-    (let* ((who 'open-database-with-cache-capacity)
-           (plan (settings-plan (list (cons 'statement-cache capacity)))))
-      (unless (eq? (car plan) 'settings)
-        (raise-setting-refusal who plan))
-      (let-values (((name flags) (prepared-open who filename options)))
-        (open-connection who name flags (cadr plan)))))
 
   ;; --- closing -----------------------------------------------------------------------------
 
@@ -507,7 +492,9 @@
           (loop (sqlite3-next-stmt handle statement) (+ n 1)))))
 
   ;; close-connection : Symbol Any -> Void
-  ;; DB closed, for WHO; nothing when it is closed already. In one critical
+  ;; DB closed, for WHO; nothing when it is closed already: close-database!'s
+  ;; work, and (chez-sqlite3 private open)'s close of a connection whose
+  ;; settings failed, or whose call-with-database ends. In one critical
   ;; section: every tracked statement finalized, oldest first, the first
   ;; failure kept; the cache emptied, its statements among those finalized,
   ;; whether or not the connection then closes, so it never holds a freed
@@ -591,81 +578,4 @@
   ;; autocommit SELECT holds a read.
   (define (in-transaction? db)
     (call-with-open-handle 'in-transaction? db
-      (lambda (handle) (eqv? (sqlite3-get-autocommit handle) 0))))
-
-  ;; --- call-with-database ------------------------------------------------------------------
-
-  ;; split-last : (Pairof Any (Listof Any)) -> (Values (Listof Any) Any)
-  (define (split-last items)
-    (let loop ((rest items) (before '()))
-      (if (null? (cdr rest))
-          (values (reverse before) (car rest))
-          (loop (cdr rest) (cons (car rest) before)))))
-
-  ;; call-with-database : String Symbol ... (Database -> A ...) -> A ...
-  ;; PROC's answers, PROC given FILENAME opened with the options before it
-  ;; (ADR-0012, decision 8). Every check comes before anything opens: that
-  ;; PROC, the last argument, is a procedure, then open-database's. Then:
-  ;;   - PROC returns, or leaves through a continuation: the connection is
-  ;;     closed, and that close's failure raises;
-  ;;   - PROC raises: the connection is closed, and PROC's condition reaches
-  ;;     the caller unchanged; a failure of that close is not raised over it,
-  ;;     and the connection stays open and counted, for the gate to see;
-  ;;   - a continuation that re-enters PROC finds the connection closed.
-  ;; A raise is told from an escape by a handler around PROC that records it
-  ;; and hands it on in place, with raise-continuable; PROC's return, or a
-  ;; handler outside that returns, clears it. The before thunks do nothing,
-  ;; and never clear it: a guard whose clauses do not match re-enters the
-  ;; extent to raise again, and the close on the way out again must still be
-  ;; contained. The open sits in the body with the variable the after thunk
-  ;; reads, in one critical section that answers the open's outcome, raised
-  ;; after it; and the winder is Chez's critical form, so no interrupt that
-  ;; escapes falls between the open and the close. Its after thunk closes and
-  ;; records a close's failure, raising nothing; a plain winder around it
-  ;; raises that failure once the critical one is left, unless PROC is
-  ;; raising. An engine's expiry is an escape: the connection does not survive
-  ;; one. Everything raised names call-with-database.
-  (define (call-with-database filename . rest)
-    (let ((who 'call-with-database))
-      (when (null? rest)
-        (assertion-violation who "the procedure, the last argument, is missing" 'no-procedure))
-      (let-values (((options proc) (split-last rest)))
-        (unless (procedure? proc)
-          (assertion-violation who "the last argument is the procedure" 'not-a-procedure
-                               (shown-value proc)))
-        (let-values (((name flags) (prepared-open who filename options)))
-          (let ((db #f) (raising #f) (close-failure #f))
-            (dynamic-wind
-              (lambda () #f)
-              (lambda ()
-                (dynamic-wind #t
-                  (lambda () #f)
-                  (lambda ()
-                    (opened-database who
-                                     (critical-section
-                                      (let ((outcome (open-outcome who name flags
-                                                                   default-cache-capacity)))
-                                        (when (eq? (car outcome) 'opened)
-                                          (set! db (cadr outcome)))
-                                        outcome)))
-                    (with-exception-handler
-                     (lambda (c)
-                       (set! raising (list c))
-                       (call-with-values
-                        (lambda () (raise-continuable c))
-                        (lambda answers (set! raising #f) (apply values answers))))
-                     (lambda ()
-                       (call-with-values
-                        (lambda () (proc db))
-                        (lambda answers (set! raising #f) (apply values answers))))))
-                  (lambda ()
-                    (when db
-                      (set! close-failure
-                            (guard (e (#t (list e)))
-                              (close-connection who db)
-                              #f))))))
-              (lambda ()
-                (let ((failure close-failure))
-                  (set! close-failure #f)
-                  (when (and failure (not raising))
-                    (raise (car failure))))))))))))
+      (lambda (handle) (eqv? (sqlite3-get-autocommit handle) 0)))))

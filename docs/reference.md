@@ -31,6 +31,8 @@ SqliteError            a condition that sqlite-error? holds
 SqliteLibraryUnavailable  a condition that sqlite-library-unavailable? holds
 SqliteWrongThread      a condition that sqlite-wrong-thread? holds
 SqliteInvalidText      a condition that sqlite-invalid-text? holds
+SqliteSettingMismatch  a condition that sqlite-setting-mismatch? holds
+Settings               a list of pairs, each a setting's name and its value
 ```
 
 A code block marked `scheme run` is run by the tests, and its last line says
@@ -45,11 +47,12 @@ close it, or open it with `call-with-database`.
 ### `open-database`
 
 ```text
-open-database : String Symbol ... -> Database
+open-database : String (U Symbol Settings) ... -> Database
 ```
 
 Opens the database file named by the string, and gives its connection. Each
-symbol after the name is an option, given at most once, in any order.
+symbol after the name is an option, given at most once, in any order. One
+argument may be a list instead: the [settings](#settings).
 
 | Option | What it does |
 |---|---|
@@ -96,6 +99,71 @@ When SQLite cannot open the file, it raises a condition that
 ;; => cantopen
 ```
 
+Each call opens once, and sets each setting once. Going back into a call that
+has begun, through a continuation, a timer's handler, or an engine resumed a
+second time, touches nothing: it raises a condition that `sqlite-closed?`
+holds, or, from past the call's last step, ends again as the call ended. A
+continuation taken before the call began makes a new call.
+
+#### Settings
+
+A settings list sets the connection up as it opens: pairs of a setting's name
+and its value, each name at most once, in any order. `'()` sets nothing.
+
+```scheme
+(open-database "app.db" '((journal-mode . wal) (busy-timeout . 5000)))
+(open-database "app.db" 'read-only '((busy-timeout . 250)))
+```
+
+| Setting | Values | What it sets |
+|---|---|---|
+| `busy-timeout` | an exact integer, 0 to 2147483647 | How many milliseconds to wait for another connection's lock before raising busy. |
+| `foreign-keys` | `#t` or `#f` | Whether foreign keys are enforced. |
+| `journal-mode` | `delete`, `truncate`, `persist` or `wal` | How the file keeps its journal. `wal` stays with the file. |
+| `synchronous` | `off`, `normal`, `full` or `extra` | How carefully SQLite waits for a write to reach the disk. |
+| `temp-store` | `default`, `file` or `memory` | Where temporary tables and indexes are kept. |
+| `trusted-schema` | `#t` or `#f` | Whether the schema's own SQL, its views and triggers among it, may use any function. |
+| `statement-cache` | an exact integer, 0 to 1024 | How many statements the conveniences keep for reuse: 32 when absent, and 0 keeps none. SQLite never sees it. |
+
+A name not in the table, a name given twice, a value not in its row, a list
+that is not such pairs, and a second list are assertion violations, and
+nothing is opened. SQLite itself would ignore a wrong name and change a wrong
+value without a word, so the library checks them first.
+
+`busy-timeout` is set first, wherever it stands; then the others, in the
+list's order. Each is read back once it is set. When SQLite kept another
+value, the open raises a condition that `sqlite-setting-mismatch?` holds.
+`(journal-mode . wal)` on `":memory:"` is such a mismatch: an in-memory
+database keeps its journal in memory.
+
+```scheme run
+(guard (e ((sqlite-setting-mismatch? e)
+           (list (sqlite-setting-mismatch-setting e)
+                 (sqlite-setting-mismatch-expected e)
+                 (sqlite-setting-mismatch-actual e))))
+  (open-database ":memory:" '((journal-mode . wal))))
+;; => (journal-mode wal memory)
+```
+
+When a setting fails, or reads back wrong, the connection is closed, then the
+condition is raised. Nothing is set that the list does not name: without
+`busy-timeout`, a lock held by another connection raises busy at once.
+
+Beside another connection, some settings wait for its lock, up to
+`busy-timeout`, then raise busy; if it lets go meanwhile, the open goes on.
+Two fail at once, however long the timeout:
+
+| The other connection | Waits | Busy at once |
+|---|---|---|
+| is reading | `(journal-mode . wal)` | |
+| is in `begin immediate` and has written | | `(journal-mode . wal)` |
+| is in `begin exclusive` | `journal-mode`, `synchronous` | |
+| has read a WAL file, even if idle now | | `journal-mode` but `wal` |
+
+The first three rows are for a file in the default journal mode. Every other
+setting runs at once. On a file already in WAL, `(journal-mode . wal)` runs
+at once beside anything, so every connection to it can carry it.
+
 ### `close-database!`
 
 ```text
@@ -122,22 +190,32 @@ the first failure is raised after.
 ### `call-with-database`
 
 ```text
-call-with-database : String Symbol ... (Database -> A ...) -> A ...
+call-with-database : String (U Symbol Settings) ... (Database -> A ...) -> A ...
 ```
 
-Opens a database as `open-database` does, calls the procedure, last of the
-arguments, with the connection, and gives the procedure's answers. The
+Opens a database as `open-database` does, with its options and
+[settings](#settings), calls the procedure, last of the arguments, with the
+connection, and gives the procedure's answers. When a setting fails, the
+connection is closed, the setting's condition raised, and the procedure is
+never called. The
 connection is closed when the procedure returns, raises, or leaves through a
 continuation, and its live statements are finalized as `close-database!`
 does. A raise reaches the caller unchanged. A normal return can still raise
 the close's own failure, as a commit that was lost, and then you get no
 answers. Its refusals are
-`open-database`'s: a name that is not a string or holds U+0000, and a bad
-option, are assertion violations, and nothing is opened.
+`open-database`'s: a name that is not a string or holds U+0000, a bad
+option, and a bad settings list, are assertion violations, and nothing is
+opened.
 
 ```scheme run
 (call-with-database ":memory:" (lambda (db) (database? db)))
 ;; => #t
+```
+
+```scheme run
+(call-with-database ":memory:" '((foreign-keys . #t) (busy-timeout . 250))
+  (lambda (db) (query-row db "pragma foreign_keys")))
+;; => #(1)
 ```
 
 ```scheme run
@@ -150,6 +228,11 @@ It does not survive an engine's preemption: an engine that runs out of
 fuel leaves the procedure, and the connection is closed under it. If that
 close fails, its error is raised out of the engine, and the engine is
 lost. If you use engines, use `open-database` and close it yourself.
+
+Each call opens once and sets each setting once, as `open-database` does.
+Going back into its open or its settings raises a condition that
+`sqlite-closed?` holds, and the connection is closed as you leave; going
+back past them calls the procedure again.
 
 ### `database?`
 
@@ -180,8 +263,9 @@ A row is a vector of its values, in column order, each read as
 
 SQL that holds no statement, or more than one, is refused as
 `prepare-statement` refuses it; `execute-script!` is the one that runs
-several. Each connection keeps up to 32 statements, reset, to reuse when the
-same SQL comes again. Setting `foreign_keys` or `trusted_schema` makes each
+several. Each connection keeps up to 32 statements, or as many as its
+`statement-cache` setting says, reset, to reuse when the same SQL comes
+again. Setting `foreign_keys` or `trusted_schema` makes each
 kept statement prepare itself again, once, at its next use.
 
 A raise always finishes the statement. Another way out, a timer's or a
@@ -991,7 +1075,7 @@ gives a fresh list.
 
 ## Conditions
 
-Everything this library raises on purpose is one of six conditions, and
+Everything this library raises on purpose is one of seven conditions, and
 each is a `chez-sqlite3-error?`. An `sqlite-error?` can also be a busy, a
 constraint or a read-only one. Catch the family with it, or one kind with
 its own predicate:
@@ -1005,9 +1089,10 @@ its own predicate:
 | `sqlite-closed?` | A connection, or a statement, is used after it was closed or finalized. |
 | `sqlite-transaction-ended?` | `with-transaction`'s procedure returned after its transaction had already ended. |
 | `sqlite-invalid-text?` | TEXT, or a column's name, that is not well-formed UTF-8. |
+| `sqlite-setting-mismatch?` | A setting read back as other than asked, as a connection opened. |
 
 A caller's mistake is not one of these. A name that is not a string, a bad
-option, a value that is not a connection, or an accessor given the wrong
+option or setting, a value that is not a connection, or an accessor given the wrong
 kind of condition is an assertion violation, the usual `&assertion`
 condition of Scheme. Test for it with `assertion-violation?`.
 
@@ -1235,3 +1320,39 @@ sqlite-invalid-text-offset : SqliteInvalidText -> Natural
 ```
 
 The byte offset, in the text's UTF-8, of its first ill-formed part.
+
+### `sqlite-setting-mismatch?`
+
+```text
+sqlite-setting-mismatch? : Any -> Boolean
+```
+
+Whether the value says a [setting](#settings) read back as other than asked.
+It is a `chez-sqlite3-error?`, but no `sqlite-error?`: SQLite reported no
+error, and kept another value.
+
+### `sqlite-setting-mismatch-setting`
+
+```text
+sqlite-setting-mismatch-setting : SqliteSettingMismatch -> Symbol
+```
+
+The setting's name, as `journal-mode`.
+
+### `sqlite-setting-mismatch-expected`
+
+```text
+sqlite-setting-mismatch-expected : SqliteSettingMismatch -> Any
+```
+
+The value the list asked for, as it gave it, such as `wal`.
+
+### `sqlite-setting-mismatch-actual`
+
+```text
+sqlite-setting-mismatch-actual : SqliteSettingMismatch -> Any
+```
+
+The value read back, in the list's words where it has one: `memory` for an
+in-memory database's journal, `#t` or `#f` for 1 or 0. Any other value is
+given as SQLite read it, and `()` when it read none.

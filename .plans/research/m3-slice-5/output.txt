@@ -1,0 +1,185 @@
+$ $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-5/busy-probe.sps
+version "3.53.1" 
+the-holder-holds ((block . 0) (connection . 1) (statement . 3)) descriptors+ 2 
+open-database ((synchronous . full) (busy-timeout . 1500)) (sqlite-error open-database busy busy "PRAGMA synchronous = 2" #f #t) 1502 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((synchronous . full)) (sqlite-error open-database busy busy "PRAGMA synchronous = 2" #f #t) 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((busy-timeout . 200) (journal-mode . wal)) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal" #f #t) 201 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((foreign-keys . #t) (busy-timeout . 1500)) opened 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+call-with-database ((synchronous . full)) (sqlite-error call-with-database busy busy "PRAGMA synchronous = 2" #f #t) proc-not-called 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+after-the-holder-rolls-back descriptors+ 1 
+after-the-holder-closes ((block . 0) (connection . 0) (statement . 0)) descriptors+ 0 
+removed #t 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-5/busy-probe.sps
+version "3.45.1" 
+the-holder-holds ((block . 0) (connection . 1) (statement . 3)) descriptors+ 2 
+open-database ((synchronous . full) (busy-timeout . 1500)) (sqlite-error open-database busy busy "PRAGMA synchronous = 2" #f #t) 1501 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((synchronous . full)) (sqlite-error open-database busy busy "PRAGMA synchronous = 2" #f #t) 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((busy-timeout . 200) (journal-mode . wal)) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal" #f #t) 201 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+open-database ((foreign-keys . #t) (busy-timeout . 1500)) opened 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+call-with-database ((synchronous . full)) (sqlite-error call-with-database busy busy "PRAGMA synchronous = 2" #f #t) proc-not-called 0 ms ((block . 0) (connection . 1) (statement . 3)) descriptors+ 3 
+after-the-holder-rolls-back descriptors+ 1 
+after-the-holder-closes ((block . 0) (connection . 0) (statement . 0)) descriptors+ 0 
+removed #t 
+
+$ $CHEZ --program .plans/research/m3-slice-5/number-twice.sps
+number->string: completed unexpired at fuel 41; second resumes that differ: ((22 "PRAGMA busy_timeout = 1234" "PRAGMA busy_timeout = ") (23 "PRAGMA busy_timeout = 1234" "PRAGMA busy_timeout = ") (31 "PRAGMA busy_timeout = 1234" "PRAGMA busy_timeout = ") (32 "PRAGMA busy_timeout = 1234" "PRAGMA busy_timeout = "))
+string-append alone: completed unexpired at fuel 9; second resumes that differ: ()
+
+$ $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-5/locks.sps
+version "3.53.1" 
+Part 1
+delete read (journal-mode . delete) opened 0 ms 
+delete read (journal-mode . truncate) opened 0 ms 
+delete read (journal-mode . persist) opened 0 ms 
+delete read (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 1502 ms 
+delete read (synchronous . off) opened 0 ms 
+delete read (synchronous . extra) opened 0 ms 
+delete read (foreign-keys . #t) opened 0 ms 
+delete read (temp-store . memory) opened 0 ms 
+delete read (trusted-schema . #f) opened 0 ms 
+delete reserved (journal-mode . delete) opened 0 ms 
+delete reserved (journal-mode . truncate) opened 0 ms 
+delete reserved (journal-mode . persist) opened 0 ms 
+delete reserved (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 1 ms 
+delete reserved (synchronous . off) opened 0 ms 
+delete reserved (synchronous . extra) opened 0 ms 
+delete reserved (foreign-keys . #t) opened 0 ms 
+delete reserved (temp-store . memory) opened 0 ms 
+delete reserved (trusted-schema . #f) opened 0 ms 
+delete exclusive (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 1503 ms 
+delete exclusive (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 1502 ms 
+delete exclusive (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 1502 ms 
+delete exclusive (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 1502 ms 
+delete exclusive (synchronous . off) (sqlite-error open-database busy busy "PRAGMA synchronous = 0") 1502 ms 
+delete exclusive (synchronous . extra) (sqlite-error open-database busy busy "PRAGMA synchronous = 3") 1502 ms 
+delete exclusive (foreign-keys . #t) opened 0 ms 
+delete exclusive (temp-store . memory) opened 0 ms 
+delete exclusive (trusted-schema . #f) opened 0 ms 
+wal unused (journal-mode . delete) opened 3 ms 
+wal unused (journal-mode . truncate) opened 4 ms 
+wal unused (journal-mode . persist) opened 5 ms 
+wal unused (journal-mode . wal) opened 0 ms 
+wal unused (synchronous . off) opened 0 ms 
+wal idle (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal idle (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal idle (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 1 ms 
+wal idle (journal-mode . wal) opened 0 ms 
+wal idle (synchronous . off) opened 0 ms 
+wal read (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal read (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal read (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal read (journal-mode . wal) opened 0 ms 
+wal read (synchronous . off) opened 0 ms 
+wal reserved (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal reserved (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal reserved (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal reserved (journal-mode . wal) opened 0 ms 
+wal reserved (synchronous . off) opened 0 ms 
+wal exclusive (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal exclusive (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal exclusive (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal exclusive (journal-mode . wal) opened 0 ms 
+wal exclusive (synchronous . off) opened 0 ms 
+Part 2
+wal unused delete opened 3 ms once-it-has-closed opened 
+wal unused truncate opened 4 ms once-it-has-closed opened 
+wal unused persist opened 4 ms once-it-has-closed opened 
+wal idle delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms once-it-has-closed opened 
+wal idle-pragma delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle-pragma truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle-pragma persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 1 ms once-it-has-closed opened 
+wal idle-wrote delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle-wrote truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle-wrote persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms once-it-has-closed opened 
+counts ((block . 0) (connection . 0) (statement . 0)) 
+removed #t 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include $CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-slice-5/locks.sps
+version "3.45.1" 
+Part 1
+delete read (journal-mode . delete) opened 0 ms 
+delete read (journal-mode . truncate) opened 0 ms 
+delete read (journal-mode . persist) opened 0 ms 
+delete read (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 1502 ms 
+delete read (synchronous . off) opened 0 ms 
+delete read (synchronous . extra) opened 0 ms 
+delete read (foreign-keys . #t) opened 0 ms 
+delete read (temp-store . memory) opened 0 ms 
+delete read (trusted-schema . #f) opened 0 ms 
+delete reserved (journal-mode . delete) opened 0 ms 
+delete reserved (journal-mode . truncate) opened 0 ms 
+delete reserved (journal-mode . persist) opened 0 ms 
+delete reserved (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 0 ms 
+delete reserved (synchronous . off) opened 0 ms 
+delete reserved (synchronous . extra) opened 0 ms 
+delete reserved (foreign-keys . #t) opened 0 ms 
+delete reserved (temp-store . memory) opened 0 ms 
+delete reserved (trusted-schema . #f) opened 0 ms 
+delete exclusive (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 1502 ms 
+delete exclusive (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 1502 ms 
+delete exclusive (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 1502 ms 
+delete exclusive (journal-mode . wal) (sqlite-error open-database busy busy "PRAGMA journal_mode = wal") 1502 ms 
+delete exclusive (synchronous . off) (sqlite-error open-database busy busy "PRAGMA synchronous = 0") 1502 ms 
+delete exclusive (synchronous . extra) (sqlite-error open-database busy busy "PRAGMA synchronous = 3") 1502 ms 
+delete exclusive (foreign-keys . #t) opened 0 ms 
+delete exclusive (temp-store . memory) opened 0 ms 
+delete exclusive (trusted-schema . #f) opened 0 ms 
+wal unused (journal-mode . delete) opened 3 ms 
+wal unused (journal-mode . truncate) opened 5 ms 
+wal unused (journal-mode . persist) opened 5 ms 
+wal unused (journal-mode . wal) opened 1 ms 
+wal unused (synchronous . off) opened 0 ms 
+wal idle (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal idle (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal idle (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 1 ms 
+wal idle (journal-mode . wal) opened 0 ms 
+wal idle (synchronous . off) opened 1 ms 
+wal read (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal read (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal read (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal read (journal-mode . wal) opened 0 ms 
+wal read (synchronous . off) opened 0 ms 
+wal reserved (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal reserved (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms 
+wal reserved (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal reserved (journal-mode . wal) opened 1 ms 
+wal reserved (synchronous . off) opened 1 ms 
+wal exclusive (journal-mode . delete) (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms 
+wal exclusive (journal-mode . truncate) (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 1 ms 
+wal exclusive (journal-mode . persist) (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms 
+wal exclusive (journal-mode . wal) opened 0 ms 
+wal exclusive (synchronous . off) opened 0 ms 
+Part 2
+wal unused delete opened 3 ms once-it-has-closed opened 
+wal unused truncate opened 5 ms once-it-has-closed opened 
+wal unused persist opened 5 ms once-it-has-closed opened 
+wal idle delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms once-it-has-closed opened 
+wal idle-pragma delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle-pragma truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle-pragma persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms once-it-has-closed opened 
+wal idle-wrote delete (sqlite-error open-database busy busy "PRAGMA journal_mode = delete") 0 ms once-it-has-closed opened 
+wal idle-wrote truncate (sqlite-error open-database busy busy "PRAGMA journal_mode = truncate") 0 ms once-it-has-closed opened 
+wal idle-wrote persist (sqlite-error open-database busy busy "PRAGMA journal_mode = persist") 0 ms once-it-has-closed opened 
+counts ((block . 0) (connection . 0) (statement . 0)) 
+removed #t 
+$ $CHEZ --program .plans/research/m3-slice-5/gc-ticks.sps
+no gc pressure: 5238; a collection every 4 KiB: 5253; again none: 5238
+a handler that loops 50 times first: 5253, handler runs 14213
+a handler that does nothing: 5253
+back, no pressure: 5238
+default trip bytes was set; bytes allocated now 65545768
+$ $CHEZ --program .plans/research/m3-slice-5/section-end.sps
+keyboard: handled before the next expression #t; by now #t
+timer: handled before the next expression #f; by now #f; ticks left 9
+engine of fuel 10 around a section of 1000 calls: (completed done 3)
+$ $CHEZ --program .plans/research/m3-slice-5/number-interleaved.sps
+completed unexpired at fuel 41; answers other than the whole string:
+  ((4 27) ("PRAGMA busy_timeout = 12341234" "PRAGMA busy_timeout = "))
+  ((4 29) ("PRAGMA busy_timeout = 12341234" "PRAGMA busy_timeout = 1234"))
+  ((19 3) ("PRAGMA busy_timeout = 1234" "PRAGMA busy_timeout = "))
+  ((22 2) ("PRAGMA busy_timeout = " "PRAGMA busy_timeout = "))

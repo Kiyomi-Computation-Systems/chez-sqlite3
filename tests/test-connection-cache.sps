@@ -1,15 +1,17 @@
 #!r6rs
 ;;; The suite for the statement cache in its connection's record (ADR-0020;
 ;;; the M3 plan, section 4.6), through M3's internals: (chez-sqlite3 private
-;;; connection)'s record, its private opener and its close, and (chez-sqlite3
-;;; private statement)'s checked-out and returned. The pure table is slice 1's,
+;;; connection)'s record and its close, the capacity set by the settings'
+;;; statement-cache, and (chez-sqlite3 private statement)'s checked-out and
+;;; returned. The pure table is slice 1's,
 ;;; held by tests/test-statement-cache.sps; the raises' who and depth are
 ;;; tests/test-statement-who.sps's.
 ;;;
-;;;   the capacity  32 from open-database and call-with-database; the opener
-;;;                 of a given capacity takes 0, 1 and 1024 and refuses
+;;;   the capacity  32 from open-database and call-with-database; their
+;;;                 statement-cache setting takes 0, 1 and 1024 and refuses
 ;;;                 -1, 1025, 32.0, "32" and #t by the settings' rule, before
-;;;                 anything opens
+;;;                 anything opens (M3 slice 5: tests/test-open-settings.sps
+;;;                 holds the list's every rule)
 ;;;   the flags     a miss prepares SQLITE_PREPARE_PERSISTENT while the
 ;;;                 capacity is above 0, and with no flags at 0, read through
 ;;;                 lookaside (M3's research, single K1)
@@ -85,7 +87,6 @@
 (define open-database (reach '(chez-sqlite3) 'open-database))
 (define close-database! (reach '(chez-sqlite3) 'close-database!))
 (define call-with-database (reach '(chez-sqlite3) 'call-with-database))
-(define open-database-with-cache-capacity (reach connection-library 'open-database-with-cache-capacity))
 (define database-cache-capacity (reach connection-library 'database-cache-capacity))
 (define database-cache-count (reach connection-library 'database-cache-count))
 (define call-with-open-handle (reach connection-library 'call-with-open-handle))
@@ -178,10 +179,15 @@
       (lambda () (attempt (lambda () (set! db (open)) (proc db))))
       (lambda () (when db (undo! '() (list db)))))))
 
+;; open-with-capacity : Any -> Database
+;; A :memory: database whose statement-cache setting is CAPACITY.
+(define (open-with-capacity capacity)
+  (open-database ":memory:" (list (cons 'statement-cache capacity))))
+
 ;; with-capacity : Natural (Database -> Any) -> Any
 ;; with-db on a :memory: database whose cache holds CAPACITY.
 (define (with-capacity capacity proc)
-  (with-db (lambda () (open-database-with-cache-capacity capacity ":memory:")) proc))
+  (with-db (lambda () (open-with-capacity capacity)) proc))
 
 (define (with-memory-db proc) (with-db (lambda () (open-database ":memory:")) proc))
 
@@ -301,35 +307,28 @@
 
 ;; --- the capacity -----------------------------------------------------------------------
 
-(test-equal "the cache's capacity is 32 from open-database and from call-with-database, and the capacity given to the private opener: 0, 1 and 1024"
-  '(32 32 0 1 1024)
+(test-equal "the cache's capacity is 32 from open-database and from call-with-database with no setting, and their statement-cache setting's: 0, 1 and 1024 through open-database, 7 through call-with-database"
+  '(32 32 0 1 1024 7)
   (list (with-memory-db database-cache-capacity)
         (attempt (lambda () (call-with-database ":memory:" database-cache-capacity)))
         (with-capacity 0 database-cache-capacity)
         (with-capacity 1 database-cache-capacity)
-        (with-capacity 1024 database-cache-capacity)))
+        (with-capacity 1024 database-cache-capacity)
+        (attempt (lambda () (call-with-database ":memory:" '((statement-cache . 7)) database-cache-capacity)))))
 
-(test-equal "the private opener refuses a capacity outside 0 to 1024 by the settings' rule, -1, 1025, 32.0, \"32\" by its kind and #t, before anything opens; then open-database's own checks, naming the opener"
-  (list (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache -1))
-        (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache 1025))
-        (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache 32.0))
-        (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache '(kind string)))
-        (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache #t))
-        (list 'raised (refused 'open-database-with-cache-capacity 'not-a-string 42))
-        (list 'raised (refused 'open-database-with-cache-capacity 'unknown-option 'bogus))
+(test-equal "open-database refuses a statement-cache outside 0 to 1024 by the settings' rule, -1, 1025, 32.0, \"32\" by its kind and #t, before anything opens"
+  (list (list 'raised (refused 'open-database 'setting-out-of-domain 'statement-cache -1))
+        (list 'raised (refused 'open-database 'setting-out-of-domain 'statement-cache 1025))
+        (list 'raised (refused 'open-database 'setting-out-of-domain 'statement-cache 32.0))
+        (list 'raised (refused 'open-database 'setting-out-of-domain 'statement-cache '(kind string)))
+        (list 'raised (refused 'open-database 'setting-out-of-domain 'statement-cache #t))
         zero-counts)
-  (let* ((a (attempt (lambda () (open-database-with-cache-capacity -1 ":memory:"))))
-         (b (attempt (lambda () (open-database-with-cache-capacity 1025 ":memory:"))))
-         (c (attempt (lambda () (open-database-with-cache-capacity 32.0 ":memory:"))))
-         (d (attempt (lambda () (open-database-with-cache-capacity "32" ":memory:"))))
-         (e (attempt (lambda () (open-database-with-cache-capacity #t ":memory:"))))
-         (f (attempt (lambda () (open-database-with-cache-capacity 1 42))))
-         (g (attempt (lambda () (open-database-with-cache-capacity 1 ":memory:" 'bogus)))))
-    (list a b c d e f g (native-counts))))
-
-(test-equal "the private opener checks its capacity first: with a capacity and a filename both refused, the capacity's refusal is the one raised"
-  (list 'raised (refused 'open-database-with-cache-capacity 'setting-out-of-domain 'statement-cache -1))
-  (attempt (lambda () (open-database-with-cache-capacity -1 42))))
+  (let* ((a (attempt (lambda () (open-with-capacity -1))))
+         (b (attempt (lambda () (open-with-capacity 1025))))
+         (c (attempt (lambda () (open-with-capacity 32.0))))
+         (d (attempt (lambda () (open-with-capacity "32"))))
+         (e (attempt (lambda () (open-with-capacity #t)))))
+    (list a b c d e (native-counts))))
 
 (test-equal "database-cache-capacity and database-cache-count refuse no database, and database-cache-count reads 0 once the connection is closed"
   (list (list 'raised (refused 'database-cache-capacity 'not-a-database 'x))
@@ -436,8 +435,8 @@
                         (use-distinct! db 33)
                         (list (database-cache-count db) (cdr (assq 'statement (native-counts)))))))))
     (list (after-33 (lambda () (open-database ":memory:")))
-          (after-33 (lambda () (open-database-with-cache-capacity 1 ":memory:")))
-          (after-33 (lambda () (open-database-with-cache-capacity 0 ":memory:"))))))
+          (after-33 (lambda () (open-with-capacity 1)))
+          (after-33 (lambda () (open-with-capacity 0))))))
 
 (test-equal "the same SQL checked out twice, while the first is out, gives two statements; returned, the first is kept and the second, its SQL held already, finalized"
   (list 'two-statements 'ready 'finalized 1 (with-statements 1))

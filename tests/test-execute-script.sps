@@ -99,7 +99,6 @@
 (define statement-state (reach statement-library 'statement-state))
 (define column-value (reach '(chez-sqlite3 private statement-values) 'column-value))
 (define call-with-open-handle (reach connection-library 'call-with-open-handle))
-(define open-database-with-cache-capacity (reach connection-library 'open-database-with-cache-capacity))
 
 ;; --- bindings made here, after the load ------------------------------------------------
 
@@ -439,7 +438,7 @@
 ;; columns prepared with no flags fills the connection's lookaside, 123 slots
 ;; at its high-water mark, and prepared SQLITE_PREPARE_PERSISTENT takes none,
 ;; stepped and read or not (M3's research, single K1).
-(test-equal "execute-script! prepares with no flags: a script of one select of 200 columns takes lookaside, as query does at a capacity of 0, set privately, where query's miss, prepared SQLITE_PREPARE_PERSISTENT above 0, takes none"
+(test-equal "execute-script! prepares with no flags: a script of one select of 200 columns takes lookaside, as query does at a capacity of 0, set by the statement-cache setting, where query's miss, prepared SQLITE_PREPARE_PERSISTENT above 0, takes none"
   (list 'some 'some 0)
   (let* ((sql (string-append "select " two-hundred-columns))
          (high (lambda (open run)
@@ -449,7 +448,7 @@
                      (lambda () (guard (e (#t (list 'raised (what-raised e)))) (lookaside-high db run)))
                      (lambda () (undo! '() (list db)))))))
          (script (high (lambda () (open-database ":memory:")) (lambda (db) (execute-script! db sql))))
-         (at-0 (high (lambda () (open-database-with-cache-capacity 0 ":memory:")) (lambda (db) (query db sql))))
+         (at-0 (high (lambda () (open-database ":memory:" '((statement-cache . 0)))) (lambda (db) (query db sql))))
          (cached (high (lambda () (open-database ":memory:")) (lambda (db) (query db sql))))
          (some (lambda (n) (if (and (integer? n) (> n 0)) 'some n))))
     (list (some script) (some at-0) cached)))
