@@ -26,7 +26,8 @@
   [amendment](#amendment-2026-11-15-the-split-and-its-check-m2s-closing-review)). Amended
   2026-11-15, and accepted by the maintainer that day: M3's entry points and suites (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)). Amended 2026-11-16
-  by the maintainer's choice, "Split into thirds now": the halves split in three (M3 slice 2,
+  by the maintainer's choice, "Split into thirds now", and accepted that day ("Accept all"): the
+  halves split in three (M3 slice 2,
   [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job
@@ -545,7 +546,8 @@ M3 brings.
 
 ## Amendment, 2026-11-16: the halves split in three (M3 slice 2)
 
-By the maintainer's choice of 2026-11-16, "Split into thirds now", in M3 slice 2 (PR #23). It
+Accepted by the maintainer on 2026-11-16 ("Accept all"). By the maintainer's choice of that day,
+"Split into thirds now", in M3 slice 2 (PR #23). It
 replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
 `test-library-loading-real`", and the alternation ADR-0002's M3 amendment continues.
 

@@ -34,8 +34,11 @@ newest first.
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M3 slice 1, the pure core, is PR #22 on `m3-slice-1-core`.** Slice 2, the bindings, is
-  PR #23 on `m3-slice-2-bindings`, built beside it by the M2 session and stacked on it. The maintainer's
+- **M3 slice 1 is done:** the pure core, as PR #22, `d91ae72`, squash-merged with CI passing in
+  every job.
+- **Now: M3 slice 2, the bindings, is PR #23 on `m3-slice-2-bindings`,** built beside slice 1 by
+  the M2 session, rebased onto `d91ae72` and merged in turn (the maintainer, 2026-11-16: "Run all
+  four", slices 1 to 4 in order). The maintainer's
   order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
   parallel, then 6, each its own PR, stacked on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
@@ -168,7 +171,7 @@ newest first.
       - the ADR's thirds arithmetic was wrong;
       - the log's build count left out `initialize`;
       - an unused import.
-- **Records,** proposed in this PR:
+- **Records,** accepted by the maintainer on 2026-11-16 ("Accept all"):
   - ADR-0005's amendment "the halves split in three";
   - a pointer in ADR-0002's M3 amendment;
   - a trap and an AGENTS.md line on a floor run's header.
