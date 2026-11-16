@@ -24,17 +24,22 @@ newest first.
 
   ADR-0014's slice 1 amendment and ADR-0005's split record the maintainer's own choices ("Match
   SQLite"; "Split in #19, rest after").
+- **M3 slice 0 is done:** the M3 plan, ADR-0016 to ADR-0020 and the plan's amendments to the
+  older records, as PR #21, `3e2460b`, squash-merged with CI passing in every job.
 - **The maintainer accepted ADR-0016 to ADR-0020** on 2026-11-15, with the M3 plan's Q1 to Q15
   settled, and the plan's amendments to the older records (its §10), applied in M3 slice 0, the
-  same day ("Accept all").
+  same day ("Accept all"); and M3 slice 1's amendments to ADR-0016, ADR-0017, ADR-0018 and
+  ADR-0020, the same day ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
-- **Now: M3 slice 0, the plan and the records, is PR #21 on `m3-plan`.** M3's slices 1 to 6
-  follow it ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the maintainer's
-  stacked order of 2026-11-14: each opened as a PR, and the next begun on top of it. M2's Mac run
-  is done, below.
+- **Now: M3 slice 1, the pure core, is PR #22 on `m3-slice-1-core`.** Slice 2, the bindings, is
+  built beside it by the M2 session, on `m3-slice-2-bindings`, and stacks on it. The maintainer's
+  order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
+  parallel, then 6, each its own PR, stacked on the one before
+  ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
+  too, and M2's Mac run is done, below.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -80,6 +85,80 @@ newest first.
   (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-15 — M3 slice 1: the pure core (PR #22)
+
+- **Built,** in pure Scheme on synthetic inputs, with no foreign code, by two builders in parallel
+  on disjoint files. Slices 3 to 6 call much of it inside critical sections, so each procedure that
+  runs there answers data, and only the `raise-…` procedures raise.
+  - **Part A:**
+    - `(chez-sqlite3 private settings)`: open's arguments split into the options and at most one
+      settings list; ADR-0018's five refusals; each setting's set and read-back SQL, its expected
+      read-back, its reader and the comparison; `statement-cache`'s capacity, 32 when absent;
+    - `(chez-sqlite3 private transaction-plan)`: the begin from autocommit, depth and mode, and
+      each exit's plan from `begun`, `ended` and autocommit after the body;
+    - `(chez-sqlite3 private statement-cache)`: the cache's table, the least recently used out
+      first, keyed by `string=?`.
+  - **Part B:**
+    - `(chez-sqlite3 private conditions)`: `&sqlite-interrupt`, classed by primary code;
+      `&sqlite-setting-mismatch`; `&sqlite-transaction-ended`;
+    - `(chez-sqlite3 private script)`: `execute-script!`'s error offsets, in characters into the
+      whole script;
+    - `(chez-sqlite3 private interrupt)`: the interrupt's exclusion against the close, on
+      stand-ins for the foreign calls.
+- **Decided by the maintainer** (2026-11-15):
+  - the order: slices 1 and 2 in parallel, 2 by the M2 session, then 3, then 4 and 5 in parallel,
+    then 6, each its own PR stacked on the one before;
+  - a script's prepare error with no offset points at the failing statement ("Point at the
+    statement"; ADR-0016, amended);
+  - the slice's amendments, accepted ("Accept all").
+- **Watched failing:** each suite red against a stub first. 259 mutations, 249 caught, and 10
+  survivors argued equivalent. The review's fixes added 33, all caught, and the earlier ones were
+  rerun over the changed libraries ([the log](m3-slice-1-mutation-log.md)).
+- **Reviewed** (Opus, read-only): no blocker in the slice's code, 1 major and 7 minors, each
+  reproduced before it was fixed.
+  - **The major was in the records:** ADR-0017's shape reads autocommit in one section and steps
+    the `COMMIT` in another. Modelled over slice 1's plan, an engine's expiry between them rolled
+    back, and the resumed body stepped the `COMMIT` anyway. With another engine's savepoint at the
+    same depth, the call answered as committed though its insert was rolled back. The window was
+    at fuels 138 to 174, past the plan's sweep of 1 to 60
+    ([research/m3-slice-1/](research/m3-slice-1/README.md)). ADR-0017 is amended so each step
+    that ends the level reads `ended` in its own section, and every M3 engine row sweeps until the
+    call completes unexpired. `failed-commit-plan` takes `ended`.
+  - **The minors:**
+    - the interrupt row caught six mutants only by timing: a closer 1 s late let them pass;
+    - a read-back with no row matched a setting of `#f`;
+    - `equal?` keys ran a record key's own hash and equality inside the section;
+    - the very statement returned twice was handed back to be finalized while the cache kept it;
+    - the script's −1 contradicted ADR-0013's amendment, which the maintainer settled;
+    - the exit row's model copied `exit-plan` line for line;
+    - `settings-plan` reads the caller's list twice, now said in its header.
+- **Records,** accepted by the maintainer on 2026-11-15 ("Accept all"):
+  - ADR-0016, ADR-0017, ADR-0018 and ADR-0020 amended;
+  - the plan's §4.2, §4.9 and the engine rows of slices 3 to 5;
+  - a constraint and an AGENTS.md rule, on a flag read in the section of the step it guards and a
+    sweep's bound;
+  - five traps.
+- **CI:** passed in all five jobs on `7e5f40c`, before the review's fixes; `memory` took 22m45s,
+  against 22m04s on `main` at `3e2460b`.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder, part A | Opus | about 405k | 96 | 42.5 min |
+  | Builder, part B | Opus | about 438k | 142 | 38.4 min |
+  | Adversarial review | Opus | about 339k | 82 | 20.5 min |
+  | The review's fixes | Sonnet | about 179k | 56 | 14.5 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A flag checked in one section guards nothing in the next: an engine's expiry between them runs
+    the after thunk. The records had the shape, so every builder would have inherited it, and only
+    a model of the later slice, built on this one's plan, showed it.
+  - A sweep to a fixed fuel tests only the path's start. The window lay past 60.
+  - A two-thread row's bounded wait must start after the other thread says it is about to act,
+    or a late thread passes the mutant.
+  - Two builders in parallel, on disjoint files, halved the wall time, and their hand-backs merged
+    without a conflict.
 
 ### 2026-11-15 — M3 slice 0: the plan and the records (PR #21)
 

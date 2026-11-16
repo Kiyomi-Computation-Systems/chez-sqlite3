@@ -182,6 +182,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
   across a call that can block (ADR-0019).
+- **A flag that decides an exit is read inside the section of the step it guards,** never in an
+  earlier one: an engine's expiry between them runs the after thunk, and the resumed caller would
+  step what it had planned. **An engine row sweeps fuel from 1 until the call completes without
+  expiring,** not to a fixed bound (ADR-0017, amended in M3 slice 1).
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the

@@ -1,0 +1,22 @@
+=== from autocommit 1 (outer level)
+fuels issuing a statement after the after thunk's rollback: (138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174)
+(138 (raised (sqlite-error "COMMIT" "cannot commit - no transaction is active")) ("BEGIN IMMEDIATE" "INSERT" (after-thunk "ROLLBACK") "ROLLBACK" expired "COMMIT") (autocommit 1 savepoints ()))
+=== from autocommit 0 (the caller's BEGIN: a savepoint)
+fuels issuing a statement after the after thunk's rollback: (138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174)
+(138 (raised (sqlite-error "RELEASE chez_sqlite3_0" "no such savepoint")) ("SAVEPOINT chez_sqlite3_0" "INSERT" (after-thunk "ROLLBACK TO chez_sqlite3_0") "ROLLBACK TO chez_sqlite3_0" (after-thunk "RELEASE chez_sqlite3_0") "RELEASE chez_sqlite3_0" expired "RELEASE chez_sqlite3_0") (autocommit 0 savepoints ()))
+(1 (answered-after-resume 42) (expired "BEGIN IMMEDIATE" "INSERT" "COMMIT") (autocommit 1 savepoints ()))
+(5 (answered-after-resume 42) (expired "BEGIN IMMEDIATE" "INSERT" "COMMIT") (autocommit 1 savepoints ()))
+(20 (answered-after-resume 42) (expired "BEGIN IMMEDIATE" "INSERT" "COMMIT") (autocommit 1 savepoints ()))
+(40 (answered-after-resume 42) (expired "BEGIN IMMEDIATE" "INSERT" "COMMIT") (autocommit 1 savepoints ()))
+(60 (raised transaction-ended) ("BEGIN IMMEDIATE" (after-thunk "ROLLBACK") "ROLLBACK" expired "INSERT") (autocommit 1 savepoints ()))
+(80 (raised transaction-ended) ("BEGIN IMMEDIATE" (after-thunk "ROLLBACK") "ROLLBACK" expired "INSERT") (autocommit 1 savepoints ()))
+(100 (raised transaction-ended) ("BEGIN IMMEDIATE" (after-thunk "ROLLBACK") "ROLLBACK" expired "INSERT") (autocommit 1 savepoints ()))
+(120 (raised transaction-ended) ("BEGIN IMMEDIATE" "INSERT" (after-thunk "ROLLBACK") "ROLLBACK" expired) (autocommit 1 savepoints ()))
+(140 (raised (sqlite-error "COMMIT" "cannot commit - no transaction is active")) ("BEGIN IMMEDIATE" "INSERT" (after-thunk "ROLLBACK") "ROLLBACK" expired "COMMIT") (autocommit 1 savepoints ()))
+(160 (raised (sqlite-error "COMMIT" "cannot commit - no transaction is active")) ("BEGIN IMMEDIATE" "INSERT" (after-thunk "ROLLBACK") "ROLLBACK" expired "COMMIT") (autocommit 1 savepoints ()))
+(200 (answered-after-resume 42) ("BEGIN IMMEDIATE" "INSERT" "COMMIT" expired) (autocommit 1 savepoints ()))
+=== another engine's savepoint at the same depth, fuel 140
+(140 (answered-after-resume 42) ("SAVEPOINT chez_sqlite3_0" "INSERT" (after-thunk "ROLLBACK TO chez_sqlite3_0") "ROLLBACK TO chez_sqlite3_0" (after-thunk "RELEASE chez_sqlite3_0") "RELEASE chez_sqlite3_0" expired "SAVEPOINT chez_sqlite3_0" "INSERT-B" "RELEASE chez_sqlite3_0") (autocommit 0 savepoints ()))
+====
+expired; trail (before); mutex free from another thread: #t
+resumed to done; trail (before after); free: #t

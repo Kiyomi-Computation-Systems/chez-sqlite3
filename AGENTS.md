@@ -156,6 +156,12 @@
   `call-with-database`'s before thunks do. An after thunk whose work isn't
   idempotent acts once, behind a flag, and whatever runs after a re-entry
   reads that flag before it touches anything the first exit finished.
+* An engine's expiry runs `dynamic-wind`'s after thunks, `with-mutex`'s
+  release among them, and the resume runs the before thunks again. So a
+  check in one section and the act it guards in a later one can be split
+  by an expiry: read a flag inside the section of the step it guards, and
+  sweep an engine row's fuel until the call completes without expiring,
+  not to a fixed bound (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

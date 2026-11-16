@@ -8,7 +8,10 @@
   5 to 7 for the re-entry pattern and the rollback's failures, and decision 1's refusal beside a
   held row, the maintainer's answer to the plan's Q14. Revised again after the plan's second
   review: decision 7's exits decided by flags of M3's own, with the begin inside the wind, and
-  decision 1's refusal naming the states `row` and `failed`.
+  decision 1's refusal naming the states `row` and `failed`. Amended 2026-11-15 in M3 slice 1, and
+  accepted by the maintainer that day: the flags read inside the section of the step they guard, the
+  savepoints' N, and the engine row's bound
+  ([amendment](#amendment-2026-11-15-the-flags-read-where-the-step-is-taken-m3-slice-1)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
 - **Settles:** brief §4's "`with-transaction` with nested savepoints, and rollback on a raise"
@@ -239,3 +242,42 @@ Measured on Guix's 3.53.1 and at the floor, 3.45.1, alike (M3's research, "singl
   to close the connection, and `docs/reference.md` says so beside the refusal.
 - **Writes the body made after its transaction ended stand,** autocommitted; nothing at the end
   can take them back. `&sqlite-transaction-ended` tells the caller they weren't atomic.
+
+## Amendment, 2026-11-15: the flags read where the step is taken (M3 slice 1)
+
+Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 1, from its
+adversarial review, which modelled decision 7's shape over slice 1's transaction plan and a stand-in
+connection ([research/m3-slice-1/](../research/m3-slice-1/README.md), `tx-toctou.sps`).
+
+- **The hole.** Decision 6 reads autocommit after the body in one section, and decision 7 sets
+  `ended` inside the section of the step that commits: two sections, with the commit's check-out
+  and bind between them. An engine's expiry between the read and the `COMMIT`'s or `RELEASE`'s
+  step runs the critical after thunk, which finds `begun` set and `ended` not, rolls the level
+  back and sets `ended`. The resumed body then stepped the `COMMIT` or `RELEASE` it had planned:
+  - at the outer level, SQLite's "cannot commit - no transaction is active" was raised, in place
+    of `&sqlite-transaction-ended`;
+  - at a nested level, the `RELEASE` failed, "no such savepoint", and decision 6 took it for a
+    failed commit, so `ROLLBACK TO` and `RELEASE` ran again on a level already ended;
+  - with another engine's savepoint at the same depth opened meanwhile, the resumed `RELEASE`
+    released that one, and the call answered its body's value, 42, though its own insert had been
+    rolled back.
+
+  In the model the window opened at fuel 138 and closed at 174, past decision 7's sweep of 1 to 60.
+- **So every step that ends the level reads `ended` inside its own section, before it steps:** the
+  `COMMIT` or `RELEASE`, and each step of a failed commit's rollback. With `ended` set it steps
+  nothing and answers so, as data, and the wind's body raises `&sqlite-transaction-ended`, decision
+  7's rule for a later return. The check sits in the step's section because that is the one that
+  acts: the check-out and the bind before it are sections of their own.
+- **A failed commit's rollback is planned only while `ended` is unset:** slice 1's
+  `failed-commit-plan` takes the flag.
+- **The begin's read and its step are two sections too.** With one engine at a time on the
+  connection nothing runs between them, and decision 2's "no `BEGIN` is ever issued inside a
+  transaction" holds. Two engines sharing a connection can both read autocommit 1; the second's
+  `BEGIN` then answers "cannot start a transaction within a transaction", raised with `begun`
+  unset, so nothing is rolled back. Decision 2's promise is for one engine at a time.
+- **Decision 3's N is the number of `with-transaction` levels open outside the savepoint on the
+  connection, from 0.** So the first savepoint inside a caller's own `BEGIN` is `chez_sqlite3_0`.
+- **M3 slice 4's engine row sweeps fuel from 1 until a fuel at which the call completes without
+  expiring,** not to 60, at the outer level and nested, and asserts at every fuel that the call
+  commits once or raises `&sqlite-transaction-ended`, and never steps a `COMMIT`, `RELEASE` or
+  rollback after `ended` is set. A mutant that checks `ended` outside the step's section fails it.
