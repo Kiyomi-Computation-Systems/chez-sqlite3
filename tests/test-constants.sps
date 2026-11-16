@@ -876,6 +876,22 @@
                    "short" "unsigned short" "sqlite_int64" "sqlite_uint64" "void(*)(int)"
                    "void (*)(void*)" "int64_t")))
 
+;; result-type against its whole complement: the same C types, and void is
+;; mapped for "void" alone; a C result merely spelled from void (void *,
+;; void(*)(void*)) is chez-type's answer, never void.
+(test-equal "result-type: void for \"void\" alone, and chez-type's answer for every other C type of the map's list"
+  '(int unsigned-int integer-64 unsigned-64 double unsigned-8
+    uptr uptr uptr uptr uptr uptr uptr uptr uptr uptr uptr
+    #f #f #f void #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f)
+  (map result-type '("int" "unsigned int" "sqlite3_int64" "sqlite3_uint64" "double" "unsigned char"
+                     "const char *" "sqlite3 **" "sqlite3 *" "sqlite3_stmt *" "sqlite3_stmt*"
+                     "sqlite3_stmt **" "const char **" "const char*" "const void*"
+                     "const unsigned char *" "void(*)(void*)"
+                     "long" "long long" "size_t" "void" "const char" "char" "signed char"
+                     "unsigned" "unsigned long" "unsigned long long" "float" "long double"
+                     "short" "unsigned short" "sqlite_int64" "sqlite_uint64" "void(*)(int)"
+                     "void (*)(void*)" "int64_t")))
+
 ;; The C side's control: a row written as the header does not declare it must
 ;; be answered 0, by name, and written right 1. Each pair differs in the one
 ;; thing named.

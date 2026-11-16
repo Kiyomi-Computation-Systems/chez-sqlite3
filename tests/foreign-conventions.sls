@@ -58,10 +58,10 @@
   ;; Every call that can block is collect-safe: sqlite3_open_v2 and
   ;; sqlite3_close in M1, and sqlite3_prepare_v3, sqlite3_step, sqlite3_reset
   ;; and sqlite3_finalize in M2. Every other binding is plain, M3's five among
-  ;; them (ADR-0011, decision 5, amended). No binding takes a Scheme object: every argument is an integer, a flonum or
-  ;; the address of a block we allocated, SQLITE_TRANSIENT is a pointer-width
-  ;; integer, and a string or blob SQLite returns is an address we read
-  ;; ourselves (decisions 1 and 4).
+  ;; them (ADR-0011, decision 5, amended). No binding takes a Scheme object:
+  ;; every argument is an integer, a flonum or the address of a block we
+  ;; allocated, SQLITE_TRANSIENT is a pointer-width integer, and a string or
+  ;; blob SQLite returns is an address we read ourselves (decisions 1 and 4).
   (define conventions-table
     '(("sqlite3_libversion_number" ("int" ()) () int plain
        ("ADR-0011 decision 5: it cannot block, so it is plain"
@@ -200,23 +200,23 @@
         "ADR-0002 M2 amendment: a required entry point"))
       ("sqlite3_changes64" ("sqlite3_int64" ("sqlite3 *")) (uptr) integer-64 plain
        ("ADR-0011 decision 5, M3 amendment: no measurement or documentation shows it waiting, so it is plain"
-        "ADR-0016 decision 8: changes answers it, read whole as sqlite3.h's sqlite3_int64, never an int"
+        "ADR-0016 decision 8: changes answers it"
         "ADR-0002 M3 amendment: a required entry point"))
       ("sqlite3_total_changes64" ("sqlite3_int64" ("sqlite3 *")) (uptr) integer-64 plain
        ("ADR-0011 decision 5, M3 amendment: no measurement or documentation shows it waiting, so it is plain"
-        "ADR-0016 decision 8: total-changes answers it, read whole as sqlite3.h's sqlite3_int64, never an int"
+        "ADR-0016 decision 8: total-changes answers it"
         "ADR-0002 M3 amendment: a required entry point"))
       ("sqlite3_last_insert_rowid" ("sqlite3_int64" ("sqlite3 *")) (uptr) integer-64 plain
        ("ADR-0011 decision 5, M3 amendment: no measurement or documentation shows it waiting, so it is plain"
-        "ADR-0016 decision 8: last-insert-rowid answers it, read whole as sqlite3.h's sqlite3_int64, never an int"
+        "ADR-0016 decision 8: last-insert-rowid answers it"
         "ADR-0002 M3 amendment: a required entry point"))
       ("sqlite3_get_autocommit" ("int" ("sqlite3 *")) (uptr) int plain
        ("ADR-0011 decision 5, M3 amendment: no measurement or documentation shows it waiting, so it is plain"
         "ADR-0016 decision 8: in-transaction? is whether it answers 0"
         "ADR-0002 M3 amendment: a required entry point"))
       ("sqlite3_interrupt" ("void" ("sqlite3 *")) (uptr) void plain
-       ("ADR-0011 decision 5, M3 amendment: it returned in microseconds from another thread, waiting for no mutex, so it is plain"
-        "ADR-0019 decision 5: interrupt-database! calls it alone, the one binding called off the owning thread"
+       ("ADR-0011 decision 5, M3 amendment: it returned in microseconds from another thread, waiting for no mutex, so it is plain; the one binding called off the owning thread"
+        "ADR-0019 decision 5: interrupt-database! calls it alone, bound plain"
         "ADR-0002 M3 amendment: a required entry point"))))
 
   (define (row-name row) (car row))

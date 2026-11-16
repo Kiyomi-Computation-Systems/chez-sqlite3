@@ -69,7 +69,8 @@
  *
  * CHANGES is sqlite3_changes64, TOTAL sqlite3_total_changes64, ROWID
  * sqlite3_last_insert_rowid and AUTOCOMMIT sqlite3_get_autocommit, each read
- * once, in that order, after the statement's finalize.
+ * once, in that order, after the statement's finalize. Both modes refuse a
+ * statement with a tail: prepare's tail must be the end of the SQL.
  *
  * A NULL pointer is #f. --transient prints the header's SQLITE_TRANSIENT, as
  * (uintptr_t) reads it, then the valgrind line:
@@ -77,9 +78,10 @@
  *   (transient . 18446744073709551615)
  *
  * It exits 0, or 1 with a message on stderr when PATH will not load, lacks a
- * function, a CODE is no integer, the HEX is no hex, or a call of the --rows
- * mode answers other than it must. A missing header or compiler fails the
- * compile, and the suite with it: never a skip (ADR-0001).
+ * function, a CODE is no integer, the HEX is no hex, a call of the --rows
+ * mode answers other than it must, or a prepare leaves a tail. A missing
+ * header or compiler fails the compile, and the suite with it: never a skip
+ * (ADR-0001).
  */
 #include <dlfcn.h>
 #include <inttypes.h>
@@ -209,11 +211,37 @@ static int counters(const char *path, char **argv, int count)
   __typeof__(sqlite3_last_insert_rowid) *last_insert_rowid;
   __typeof__(sqlite3_get_autocommit) *get_autocommit;
   sqlite3 *db = NULL;
-  int rc, i;
+  char **sqls;
+  size_t *lengths;
+  int rc, i, j;
+
+  /* Every statement is decoded before the open, so a bad one leaks nothing. */
+  sqls = calloc((size_t)count + 1, sizeof *sqls);
+  lengths = calloc((size_t)count + 1, sizeof *lengths);
+  if (!sqls || !lengths) {
+    fprintf(stderr, "libsqlite3-oracle: out of memory\n");
+    free(sqls);
+    free(lengths);
+    return 1;
+  }
+  for (i = 0; i < count; i++) {
+    sqls[i] = decode_hex(argv[i], &lengths[i]);
+    if (!sqls[i]) {
+      for (j = 0; j < i; j++)
+        free(sqls[j]);
+      free(sqls);
+      free(lengths);
+      return 1;
+    }
+  }
 
   library = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (!library) {
     fprintf(stderr, "libsqlite3-oracle: %s\n", dlerror());
+    for (j = 0; j < count; j++)
+      free(sqls[j]);
+    free(sqls);
+    free(lengths);
     return 1;
   }
   *(void **)(&open_v2) = find(library, path, "sqlite3_open_v2");
@@ -231,14 +259,15 @@ static int counters(const char *path, char **argv, int count)
     fail("sqlite3_open_v2", rc);
   printf("(counters");
   for (i = 0; i < count; i++) {
-    size_t length;
-    char *sql = decode_hex(argv[i], &length);
+    char *sql = sqls[i];
+    const char *tail = NULL;
     sqlite3_stmt *stmt = NULL;
-    if (!sql)
-      return 1;
-    rc = prepare_v3(db, sql, (int)length, 0, &stmt, NULL);
+    rc = prepare_v3(db, sql, (int)lengths[i], 0, &stmt, &tail);
     if (rc != SQLITE_OK || !stmt)
       fail("sqlite3_prepare_v3", rc);
+    /* A tail would be SQL that never runs: refuse it. */
+    if (tail != sql + lengths[i])
+      fail("sqlite3_prepare_v3's tail, bytes short of the end,", (int)(sql + lengths[i] - tail));
     while ((rc = step(stmt)) == SQLITE_ROW)
       ;
     if (rc != SQLITE_DONE)
@@ -247,6 +276,7 @@ static int counters(const char *path, char **argv, int count)
     if (rc != SQLITE_OK)
       fail("sqlite3_finalize", rc);
     free(sql);
+    sqls[i] = NULL;
     printf(" (%lld", (long long)changes64(db));
     printf(" %lld", (long long)total_changes64(db));
     printf(" %lld", (long long)last_insert_rowid(db));
@@ -256,6 +286,8 @@ static int counters(const char *path, char **argv, int count)
   rc = close_db(db);
   if (rc != SQLITE_OK)
     fail("sqlite3_close", rc);
+  free(sqls);
+  free(lengths);
   printf("(valgrind . %s)\n", under_valgrind() ? "yes" : "no");
   return 0;
 }
@@ -279,6 +311,7 @@ static int rows(const char *path, const char *hex)
   __typeof__(sqlite3_column_bytes) *column_bytes;
   sqlite3 *db = NULL;
   sqlite3_stmt *stmt = NULL;
+  const char *tail = NULL;
   char *sql;
   size_t n = strlen(hex), i;
   int rc, columns, c;
@@ -326,9 +359,12 @@ static int rows(const char *path, const char *hex)
   rc = open_v2(":memory:", &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
   if (rc != SQLITE_OK)
     fail("sqlite3_open_v2", rc);
-  rc = prepare_v3(db, sql, (int)(n / 2), 0, &stmt, NULL);
+  rc = prepare_v3(db, sql, (int)(n / 2), 0, &stmt, &tail);
   if (rc != SQLITE_OK || !stmt)
     fail("sqlite3_prepare_v3", rc);
+  /* A tail would be SQL that never runs: refuse it. */
+  if (tail != sql + n / 2)
+    fail("sqlite3_prepare_v3's tail, bytes short of the end,", (int)(sql + n / 2 - tail));
   columns = column_count(stmt);
   printf("(rows");
   while ((rc = step(stmt)) == SQLITE_ROW) {

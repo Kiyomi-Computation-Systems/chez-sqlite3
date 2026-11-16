@@ -419,7 +419,7 @@
                                                      (with-field row 'convention flipped)))))))
        table))
 
-(test-equal "sweep: a row's result type changed fails, by name, for each of the 41 rows: int to uptr, and uptr, integer-64 and double to int"
+(test-equal "sweep: a row's result type changed fails, by name, for each of the 41 rows: int to uptr, and uptr, integer-64, double and void to int"
   (list 41
         (map (lambda (row)
                (list (list 'mismatch (row-name row) 'result (other-type (row-result row)) (row-result row))))

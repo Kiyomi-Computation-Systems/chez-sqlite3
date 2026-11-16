@@ -490,8 +490,10 @@ int sqlite3_error_offset(sqlite3 *db)
 #endif
 
 /* --- M3's five ------------------------------------------------------------
-   Each answers as a connection that has done nothing: no change, no rowid, in
-   autocommit mode, and an interrupt with nothing to interrupt. */
+   They exist for dlsym: the load binds each and calls none, so no row reads
+   what they answer. Each answers as a connection that has done nothing would:
+   no change, no rowid, in autocommit mode, and an interrupt with nothing to
+   interrupt. */
 
 #ifndef DECOY_LACKS_sqlite3_changes64
 /* 0: no row changed. */

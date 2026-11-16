@@ -27,16 +27,17 @@ Each row was written first and run against the code as it stood.
 | Suite | Red run | Against | Green run |
 |---|---|---|---|
 | `test-conventions` | 35 passed, 10 failed | the new suite, the table and native without the five (`HEAD`'s `src/`, after the table was written: the 41-form, 66-argument and written-out rows, and `no-form` for the five) | 45 |
-| `test-constants` | 37 passed, 4 failed | the new suite, `HEAD`'s constants and map: the row for `sqlite-prepare-persistent` (two rows), the 124 names, `sqlite3_interrupt`'s `void` unmapped | 43 |
+| `test-constants` | 41 passed, 2 failed | the new suite, slice 1's constants and map: the exports row (`sqlite-prepare-persistent` is no export) and the values row | 43 |
 | `test-native` | 82 passed, 18 failed | the new suite against `HEAD`'s `src/` (`HEAD`'s own suite: 82 passed): every row that calls one of the five, the exports and both body rows | 100 |
 | `test-library-loading-decoys` | 48 passed, 3 failed | the new suite and support, `HEAD`'s `src/`: `lacks-` rows of `changes64`, `last_insert_rowid` and `interrupt`, which loaded, since native did not bind them | 51 |
 | `test-library-loading-real` | 55 passed, 2 failed | the same: `total_changes64` and `get_autocommit` | 57 |
-| `test-conventions`, `test-constants` | 35/10 and 40/3 | the new suites against `HEAD`'s `src/` and `HEAD`'s support | |
 | `test-native`, both `test-library-loading` | died | the same: the support lacked `libsqlite3-oracle-counters` and `entries-at-parity`, so the import failed | |
 
-The rows that passed against a red copy are rows it can satisfy: the five rows of the alternation
-check and the oracle's own two (its read, its Valgrind line) need no binding. The alternation check
-has no earlier state to fail against; A01 to A05 watch it fail.
+Every figure above is read from a red run made after the slice: slice 1's `src/` (`0505ff5`) with
+the slice's tests as committed (`2e844f1`), the five suites run directly on Guix's 3.53.1. The rows
+that pass against that red copy are rows it can satisfy: `test-native`'s three (the oracle's read,
+its Valgrind line, and the oracle against the literal) and one alternation row per half need no
+binding. The alternation check has no earlier state to fail against; A01 to A05 watch it fail.
 
 Existing rows that had to change, by count or list only, not by what they assert: the rows that
 count the table's rows, forms and arguments (36 to 41, 61 to 66), the table's expected names, the
@@ -209,22 +210,83 @@ the hole the row closes.
 
 ## The gate, measured locally
 
-`make test-memory`, in the container, on the five changed suites, run once each way, the machine
-otherwise idle; `HEAD` is `3e2460b` in a copy. Seconds, as the gate prints them.
+`make test-memory` in the container, run once each way, this tree (after the review's fixes)
+against `0505ff5`, slice 1's head, in a copy of its own. Seconds, as the gate prints them. Other runs
+may have shared the machine, and a lone run is not a reading of the cost; CI's figures are the
+maintainer's. The floor runs set the floor's library and header.
 
 | Suite | Guix 3.53.1 before | after | floor 3.45.1 before | after |
 |---|---|---|---|---|
-| conventions | 20 | 23 | 22 | 24 |
-| constants | 9 | 8 | 9 | 10 |
-| native | 13 | 17 | 14 | 17 |
-| library-loading-decoys | 197 | 214 | 197 | 215 (a first run read 266) |
-| library-loading-real | 191 | 200 | 187 | 199 (a first run read 241) |
+| conventions | | 25 | | 25 |
+| constants | | 9 | | 9 |
+| native | | 17 | | 16 |
+| library-loading-decoys | 201 | 219 | 200 | 219 |
+| library-loading-real | 189 | 202 | 188 | 202 |
 
-Each half grew by its entries: three children for the decoys' half (18 to 21), two for the real
-one (18 to 20), each under a Valgrind of its own. **The cost is 4.5 to 6 s per child** (decoys +17
-and +18 for three, real +9 and +12 for two), the floor's first run an outlier of one run alone
-(+69 and +54, rerun +18 and +12; the rerun is the figure). A half is near 200 s of the 450 s
-limit; CI's times are the maintainer's to read.
+Only the two halves were measured before. Every suite passed, none slow.
+
+Each half grew by its entries, each child under a Valgrind of its own:
+
+| Half | children before | after | time added, Guix | time added, floor |
+|---|---|---|---|---|
+| decoys | 38 | 41 | +18 | +19 |
+| real | 38 | 40 | +13 | +14 |
+
+**The cost is 6 to 7 s per child** (decoys 6.0 and 6.3 for three, real 6.5 and 7 for two). A half
+is near 220 s of the 450 s limit.
+
+## The review's fixes
+
+The fixes of the slice's adversarial review. Suites now: `test-constants` 44 (one row added),
+`test-conventions` 45, `test-native` 100 (the same rows), the halves 51 and 57. Each mutant ran in a
+whole copy of the fixed tree, on Guix's 3.53.1, test first.
+
+| Fix | Row or check | Watched fail on | Counts |
+|---|---|---|---|
+| 2 | `test-constants`: `result-type` gives `void` for `"void"` alone and `chez-type`'s answer for every other C type of the map row's list | **RT2**: any C result spelled from `void` maps to `void` (it survived before) | constants 43 passed, 1 failed |
+| 2 | the same row, against RT1 (an unmapped result maps to `void`) | RT1 | constants 42 passed, 2 failed: the new row and the map check |
+| 3 | `run-statement` answers `(CODE tail OFFSET)` when prepare's tail is not the SQL's byte length | a copy whose `counters-script` has `"create table log(n); select 1"`, the oracle left as it was | native 97 passed, 3 failed: the oracle's read, the script against the oracle, the oracle against the literal |
+| 3 | the oracle's `--counters` refuses a tail | the same script, `run-statement` left as it was | native 98 passed, 2 failed: the script against the oracle, the written-out counters |
+| 3 | both | the same script, both new | native 96 passed, 4 failed; and with the tail in `rowid-script` instead, 93 passed, 7 failed |
+| 3 | both | the same two copies against the old code | native 100 passed, 0 failed: the insert never ran and both sides agreed |
+| 3 | `--rows` refuses a tail | `--rows LIB <select 1; select 2>` by hand: before, exit 0; after, exit 1 | no suite row reaches it |
+
+Fix 3's check also refuses `select 1; ` with a space after the semicolon: SQLite's tail points at
+the space. No row's SQL ends so.
+
+**Fix 4, the oracle's leak on bad hex.** `counters()` decoded each statement after the open. It now
+decodes every statement before the open and frees each after it runs. No row reaches the path, since
+`utf8-hex` always gives even hex, so it is shown here: under Valgrind with the gate's flags
+(`--errors-for-leak-kinds=definite --error-exitcode=9`), on `--counters LIB 73656c6563742031 abc`,
+the old oracle exited 9 with 840 bytes in 1 block definitely lost; the new one exits 1 with none. A
+good run (two statements) and a run with a tail are both clean: 0 bytes definitely lost.
+
+**Fixes with no row to watch:** the five record strings and the `sqlite3-changes64` comment
+(fix 1: strings the sweeps read as data, not what any row asserts); the decoy's five, a comment that
+says they exist for dlsym and that no row reads what they answer (fix 5); and the sweep's name,
+which now lists `void` (fix 6).
+
+## The review's own mutants
+
+Rerun in whole copies of the fixed tree, all five suites each (Guix's 3.53.1). The counts are the
+suites' failed rows.
+
+| Mutant | What it changes | Result |
+|---|---|---|
+| O1 | the oracle reads the counters before the finalize | survives: sqlite3 answers the same before and after a finalize (argued equivalent) |
+| O2 | the oracle reads changes and total through the 32-bit `sqlite3_changes` and `sqlite3_total_changes` | survives: no counter reaches 32 bits, so the two agree (argued equivalent) |
+| D1 | the decoy's five answer otherwise, and the interrupt aborts | survives by the decoy's design: the load binds them and calls none (fix 5) |
+| D2 | M2's `sqlite3_column_int64` in the decoy answers 99 | survives for the same reason |
+| RT1 | `result-type` maps an unmapped result to `void` | caught: constants 2 |
+| RT2 | `result-type` maps any result spelled from `void` to `void` | caught by the fix-2 row: constants 1 (survived before) |
+| RT3 | `chez-type` maps `void` too | caught: constants 2 (the map row, the void row) |
+| RT4 | `map-problems` maps arguments through `result-type` | caught: constants 1 (the void row) |
+| UT1 | the table writes `sqlite3_interrupt`'s argument as `void` | caught: conventions 12, constants 1 |
+| AL1 | the halves as a partition in order, 21 and 20 | caught: the alternation row, 1 in each half |
+| AL2 | the halves swapped wholesale | caught: the alternation row, 1 in each half |
+| NL1 | `sqlite3-changes64` bound without `load-step` | caught: native 2 (load steps, eagerness); decoys 1 |
+| NC1 | `sqlite3_interrupt` bound to `sqlite3_close` | caught: native 4, conventions 10, decoys 1 |
+| PG1 | `_Generic`'s default in the prototype check made 1 | caught: constants 5 of the prototype rows (39 passed, 5 failed); the review ran 38 and 5 before the fix-2 row |
 
 ## Findings
 

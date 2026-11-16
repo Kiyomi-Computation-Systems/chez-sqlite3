@@ -1064,23 +1064,31 @@
 ;; never bites here: no row feeds one a value past it. A result is another
 ;; matter, and the rows below read sqlite3_int64s past 32 bits.
 
-;; run-statement : Natural String -> (List Integer (U Integer Symbol) Integer)
+;; run-statement : Natural String -> (List Integer (U Integer Symbol) (U Integer 'null))
 ;; SQL prepared on DB, stepped to the first answer but SQLITE_ROW (a cap of
 ;; 1000 rows, past which it is too-many-rows) and finalized: the prepare's
 ;; code, the step's, the finalize's. A prepare that makes no statement
-;; answers (CODE no-statement 0).
+;; answers (CODE no-statement 0). A prepare whose tail is not the end of the
+;; SQL, a byte length in, would leave SQL that never runs: the statement is
+;; finalized, unrun, and the answer is (CODE tail OFFSET), which no row
+;; expects.
 (define (run-statement db sql)
   (let* ((prepared (prepare db sql))
          (statement (cadr prepared)))
-    (if (eqv? statement 0)
-        (list (car prepared) 'no-statement 0)
-        (let* ((stepped (let loop ((rows 0))
-                          (let ((code (sqlite3-step statement)))
-                            (cond ((not (eqv? code sqlite-row)) code)
-                                  ((= rows 1000) 'too-many-rows)
-                                  (else (loop (+ rows 1)))))))
-               (finalized (sqlite3-finalize statement)))
-          (list (car prepared) stepped finalized)))))
+    (cond
+     ((eqv? statement 0)
+      (list (car prepared) 'no-statement 0))
+     ((not (equal? (caddr prepared) (sql-length sql)))
+      (sqlite3-finalize statement)
+      (list (car prepared) 'tail (caddr prepared)))
+     (else
+      (let* ((stepped (let loop ((rows 0))
+                        (let ((code (sqlite3-step statement)))
+                          (cond ((not (eqv? code sqlite-row)) code)
+                                ((= rows 1000) 'too-many-rows)
+                                (else (loop (+ rows 1)))))))
+             (finalized (sqlite3-finalize statement)))
+        (list (car prepared) stepped finalized))))))
 
 ;; read-counters : Natural -> (List Integer Integer Integer Integer)
 ;; (CHANGES TOTAL ROWID AUTOCOMMIT): the four of M3's five that read, called in

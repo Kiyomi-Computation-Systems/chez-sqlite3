@@ -820,7 +820,7 @@
   ;; sqlite3-changes64 : Positive-Integer -> Integer
   ;; sqlite3_int64 sqlite3_changes64(sqlite3*): the rows the most recently
   ;; completed INSERT, UPDATE or DELETE changed, triggers' own not counted. 64
-  ;; bits, never an int (ADR-0016, decision 8).
+  ;; bits, as sqlite3.h declares it, never an int.
   (define sqlite3-changes64
     (load-step
      (bind-required report
