@@ -62,9 +62,12 @@ newest first.
   suites, below. **M4 pre-work's answers are merged,** as PR #28, `e590fdc`, by the M4 session: the
   maintainer's answers to Q1, Q3 to Q10 and Q13, and the Mac step's results
   ([research/m4-prework/](research/m4-prework/README.md)).
-- **Now: M3's closing review,** on `m3-closing-review`, by the M3 session, the last of M3's done
-  conditions ([the M3 plan](2026-11-15-m3-plan.md), §6). Beside it, the M4 session writes M4's
-  plan, M4's slice 0, plans and records only (the maintainer, 2026-11-17).
+- **M3's closing review is done,** the last of M3's done conditions
+  ([the M3 plan](2026-11-15-m3-plan.md), §6), as PR #32, by the M3 session, squash-merged with CI
+  passing in every job. **M3 is done.**
+- **Now: M4,** extensions and `db_config`. Its slice 0, the plan, ADR-0021 and their amendments, is
+  PR #31, by the M4 session, written beside M3's closing review, plans and records only (the
+  maintainer, 2026-11-17).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -126,6 +129,92 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M3's closing review and its fixes (PR #32)
+
+- **Reviewed** by two Opus reviewers, read-only, on `c0a5408`, all of M3, on disjoint dimensions:
+  A the code and its seams, B the tests, the gate and the records. No blocker; nine majors and
+  about fifteen minors, each reproduced by the lead before any fix was briefed
+  ([the log](m3-closing-review-mutation-log.md), "The review").
+  - **The code (A):**
+    - `execute-script!` ran statements again when a timer's continuation jumped back inside its
+      block: 629 of 2804 trials.
+    - `with-transaction`'s flags came after its plan, so a second resume committed again, at
+      fuels 9 to 11, 15 and 16. Its BEGIN's plan was read a section early, at fuels 14 to 25.
+    - A watchdog that kept interrupting stopped `with-transaction`'s own ROLLBACK and COMMIT, and
+      left the transaction open: 351 of 20,000 calls, and a later write lost.
+  - **The tests and the gate (B):**
+    - three mutants passed all 73 suites: a claim of 0 taken again after the end (N1), a failed
+      commit raised inside a critical section (B8), and a cache keyed by a 4096-character
+      prefix (N3);
+    - `test-transaction-interrupt` took 318 s on CI, past ADR-0005's 150 s line;
+    - the tell's gate, from #30, was held by nothing;
+    - the README said transactions were "not here yet".
+- **Decided by the maintainer:** "Shut the latch on exit" (2026-11-17), for the watchdog finding,
+  over documenting the race.
+- **Fixed here,** by three Opus builders in parallel, each in its own worktree, on disjoint files:
+  - **`with-transaction`:** the call's claim, made by its first expression and taken first in the
+    BEGIN's section, which also reads the plan; the exits' rollback with the interrupt latch shut,
+    `interrupt-latch-shut!`; depth rows at every raise site.
+  - **The conveniences and the open:** `execute-script!` claims each statement's byte offset;
+    `made-claim` held whole by pure rows; the sweeps bound a whole new call by a refusal they see
+    themselves; the tell held to a direct registration; the sweeps' guards counted against the
+    fuels swept.
+  - **The suites:**
+    - `test-transaction-interrupt` on the memory-mutex device: 10 to 16 s under the gate;
+    - the device's first round a handshake;
+    - the cache's rows by `let*`;
+    - the contention window;
+    - the grain read by every timed wait;
+    - NOMEM's `memory-kept` held to the memory check;
+    - a watchdog's raise letting SQLite's mutex go.
+  - **The records:**
+    - ADR-0005, ADR-0016, ADR-0017, ADR-0018, ADR-0019 and ADR-0020 amended;
+    - `global-constraints.md`, AGENTS.md and `traps.md`;
+    - `docs/reference.md`'s load, WAL, `execute-script!`, `with-transaction` and interrupt text;
+    - `README.org`, which `test-docs` now holds to no "yet";
+    - the plan's §5;
+    - the Mac log's P4b line;
+    - ten absolute local paths in seven older records, which the M4 session found.
+- **Found while the fixes ran:** `main`'s run 44087748537, on `e590fdc`, failed `memory-2`.
+  `test-interrupt-reach`'s 3 MB prepare ran unstopped, as one of 27 local gate runs had. The
+  device's first round could land before the parse cleared it. The handshake closes that window:
+  with the prepare called 200 ms late, 15 of 40 suite runs failed before, and none after.
+- **Watched failing:**
+  - every part's new or changed row, against `e590fdc` or a plant;
+  - part T's 34 plants, all caught;
+  - part C's and part S's, each caught or argued in the log;
+  - the lead's 10, all caught but K2, which is equivalent.
+- **CI:** CI_PENDING
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer A, the code | Opus | about 408k | 87 | 27 min |
+  | Reviewer B, the tests, the gate and the records | Opus | about 426k | 183 | 39 min |
+  | Reviewer B's three helpers: the docs, two of the suites' mechanics | Opus | about 1034k, its estimates | 151 | 51 min |
+  | Builder T, `with-transaction` and the latch | Opus | about 571k | 160 | 70 min |
+  | Builder C, the conveniences and the open | Opus | about 571k | 185 | 66 min |
+  | Builder S, the suites | Opus | about 497k | 210 | 52 min |
+  | Builder S, the long prepare's handshake | Opus | about 615k | 71 | 41 min |
+
+- **Learned:**
+  - **Wiring hides in more places than a stand-in.** The script's flag was read in one section of
+    several, and `with-transaction`'s claim came a section late. Both passed every engine sweep,
+    and a timer's continuation, called from inside the call, found both.
+  - **A sweep's bound computed from the code under test bounds nothing:** it moves with the
+    mutant.
+  - **A gate's `UNAVAILABLE` lines need a hold of their own:** CI prints nothing of a passing
+    suite.
+  - **One failure in 27 gate runs was a finding, not noise.** It was left as one-off until
+    `main`'s CI failed on it.
+
+### M3 is done
+
+M3's slices 1 to 6 (PRs #22 to #26 and #29), the Mac run's fixes (PR #30) and its closing review
+(PR #32) are merged, with CI passing in every job. The maintainer's Mac ran the suites on both
+libraries, and read P4 on Apple's. Next is M4, whose plan, with ADR-0021, is PR #31, by the M4
+session.
 
 ### 2026-11-17 — M3 slice 6: the interrupt, contention and the memory job's shards (PR #29)
 
