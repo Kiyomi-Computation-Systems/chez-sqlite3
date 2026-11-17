@@ -48,6 +48,10 @@ describes.
   refusals in `call-with-open-handle` come from.
 - **The conveniences** ([conveniences/](conveniences/)): `read-lookaside.sps`, the UTF-16 read's
   lookaside slots, one per read level.
+- **The builders' drivers,** as run, are in each part's `scripts/`: part T's `mutants.py` and
+  `run-mutants.sh`, part C's `plant.sh` and `runc.sh`, and part S's `plant.py`, `mkcopy.sh`,
+  `race.sh` and every plant's spec in `specs/`. Each runs from a tree's root, and writes its
+  copies and logs under that tree's git-ignored `build/`.
 - **The suites** ([suites/](suites/)): `cache-order.sps`, the near-spellings row's verdict compiled
   and interpreted; `prepare-race.sps`, the long prepare alone under the gate's Valgrind options,
   N trials a process, with the prepare called late, the old first round against the handshake.

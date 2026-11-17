@@ -1,0 +1,1 @@
+EDITS = [('tests/test-interrupt-reach.sps', '            (set! holding #t)\n            (send!)\n            (unless (eqv? (is-interrupted handle) 1)', '            (set! holding #t)\n            (unless (eqv? (is-interrupted handle) 1)')]
