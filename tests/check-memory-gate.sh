@@ -52,6 +52,24 @@
 #                   path, so a symlink's name never reaches it), by its
 #                   whole message naming the path, exit 2, running no
 #                   suite: the gate's child prefix is cut at whitespace
+#   n  shards       CI runs the gate in two jobs, memory-1 and memory-2,
+#                   one shard each (ADR-0005, amended in M3 slice 6), and
+#                   what a run ran is read from its own "=== " lines, a
+#                   stand-in for Valgrind running nothing: MEMORY_SHARD=1
+#                   and 2 each run the Makefile's own list, MEMORY_SUITES_1
+#                   or MEMORY_SUITES_2 as make itself reads it, in its
+#                   order; the two run every tests/test-*.sps once between
+#                   them, and nothing else; and each suite is handed to
+#                   Valgrind as case e's is (split). With no MEMORY_SHARD,
+#                   every suite runs: g all. test-memory refuses, each by
+#                   its whole message and running no suite, a MEMORY_SHARD
+#                   but 1 or 2 (refused), one from the environment
+#                   (environment), one beside a MEMORY_SUITES on its
+#                   command line (beside), and a shard's list set on its
+#                   command line or, under make -e, in the environment,
+#                   with a MEMORY_SHARD or without (lists), a shard whose
+#                   list the Makefile leaves empty (empty), and one whose
+#                   list holds two suites of one name (names)
 #   h  options      test-memory refuses to run while any source of options
 #                   its command line does not show is present, each in a
 #                   case of its own, planted in the case's own copy:
@@ -139,18 +157,21 @@
 #                   gate times, give or take its exit, whatever Valgrind's
 #                   start costs
 #   o  ci           tests/check-ci.sh passes on .github/workflows, with its
-#                   one line: it holds the whole workflow, and so the memory
-#                   job's two steps, "run: make check-memory-gate" then
-#                   "run: make test-memory", with no if: or
+#                   one line: it holds the whole workflow, and so the two
+#                   steps of each memory job, memory-1 and memory-2, "run:
+#                   make check-memory-gate" then "run: make test-memory
+#                   MEMORY_SHARD=1" or "=2", with no if: or
 #                   continue-on-error: on them or their job, and no variable
 #                   that steers the gate. make test runs it too, so a
-#                   workflow that drops the memory job fails CI's main job
+#                   workflow that drops a memory job fails CI's main job
 #
-# chez-curl's c, d and n are not here: c and d held its one suppression
-# file, which this gate has none of (it passes no suppression in any
-# environment), and n held its two shards, all but n all, which is g all
-# here. Its o held two jobs, one per shard, with an awk of its own; ours
-# runs check-ci, which holds the whole workflow (ADR-0005, amended).
+# chez-curl's c and d are not here: they held its one suppression file,
+# which this gate has none of (it passes no suppression in any
+# environment). Its n all is g all here. Its o held two jobs, one per
+# shard, with an awk of its own; ours runs check-ci, which holds the whole
+# workflow, both shards' jobs among it (ADR-0005, amended). And the rule
+# that the two shards hold every suite once is make test's own, through
+# make check-memory-shards; n split holds that each shard runs its list.
 #
 # Every case runs in a private copy of the tree, made under mktemp -d: the
 # working tree without .git (nor any .git below vendor/), build/ and
@@ -179,10 +200,10 @@ root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root" || exit 2
 
 # The inner make starts afresh: nothing of an outer make's flags or
-# command-line variables reaches it, nor a list of suites from the
-# environment, which test-memory reads, nor a child prefix of an outer
+# command-line variables reaches it, nor a shard or a list of suites from
+# the environment, which test-memory reads, nor a child prefix of an outer
 # test-memory's, which gated-command reads.
-unset MAKEFLAGS MFLAGS MAKELEVEL MEMORY_SUITES CHEZ_SQLITE3_GATE_CHILD
+unset MAKEFLAGS MFLAGS MAKELEVEL MEMORY_SHARD MEMORY_SUITES MEMORY_SUITES_1 MEMORY_SUITES_2 CHEZ_SQLITE3_GATE_CHILD
 
 MAKE=${MAKE:-make}
 TIMEOUT=${TIMEOUT:-timeout}
@@ -959,15 +980,21 @@ want_in "$out" "ERROR SUMMARY: 0 errors from 0 contexts" "test-memory's own outp
 verdict "b fails: test-memory names a program that exits 1 FAIL, with its exit, its FAIL lines and its last lines, and runs the suite after it"
 
 # ---- e: the commands Valgrind is handed ----
+# suite_argv SUITE: what the stand-in must write for SUITE's run: its parent,
+# timeout, then ADR-0005's flags with the suite's own --log-file, then Chez
+# on the suite. Case n holds each shard's runs to it too.
+suite_argv() {
+  printf 'parent: %s\n' "$(basename -- "$TIMEOUT")"
+  printf '%s\n' -v --command-line-only=yes "--log-file=$(vlog_of "$1")" --error-exitcode=9 \
+    --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes
+  printf '%s\n' "$CHEZ" --libdirs "$LIBDIRS" --program "$1" --
+}
 # expected_argv: what the stand-in must write. First comes the run that asks
 # Valgrind for its default.supp, whose parent this does not hold, then the
 # suite's. Neither arm has a --suppressions: the gate passes none.
 expected_argv() {
   printf '%s\n' -v --command-line-only=yes true --
-  printf 'parent: %s\n' "$(basename -- "$TIMEOUT")"
-  printf '%s\n' -v --command-line-only=yes "--log-file=$(vlog_of "$leak")" --error-exitcode=9 \
-    --leak-check=full --show-leak-kinds=definite --errors-for-leak-kinds=definite --child-silent-after-fork=yes
-  printf '%s\n' "$CHEZ" --libdirs "$LIBDIRS" --program "$leak" --
+  suite_argv "$leak"
 }
 for arm in outside inside; do
   newtree
@@ -1078,6 +1105,145 @@ for name in "with space" "with	tab"; do
   cd "$tmp" || exit 2
   verdict "g whitespace: test-memory refuses to run from a path holding whitespace ($(printf '%s' "$name" | tr '\t' 'T')), by its whole message, exit 2, running no suite"
 done
+
+# ---- n: the two shards ----
+# What a run of test-memory ran, from its "=== " lines, in order. The
+# stand-in for Valgrind runs nothing, so each suite FAILs at once, for want
+# of a log.
+runs_of_out() { sed -n 's/^=== //p' "$out"; }
+# list_of N: the Makefile's MEMORY_SUITES_N, one suite a line, asked of make
+# itself, which reads the list as test-memory's make does.
+list_of() {
+  "$MAKE" --no-print-directory --eval "print-shard-list: ; @printf '%s\\n' \$(MEMORY_SUITES_$1)" print-shard-list
+}
+# nothing_ran WHAT: no suite ran, and the stand-in for Valgrind never did.
+nothing_ran() {
+  if [ -n "$(runs_of_out)" ] || [ -e "$stub.argv" ]; then
+    problem "$1: a suite ran"
+  fi
+}
+newtree
+printf '%s\n' tests/test-*.sps | LC_ALL=C sort >"$scratch/suites"
+[ -s "$scratch/suites" ] || problem "the copy holds no tests/test-*.sps, so this case checks nothing"
+for shard in 1 2; do
+  rm -f "$stub.argv"
+  gate MEMORY_SHARD=$shard VALGRIND="$stub"
+  status=$?
+  want_status nonzero "$status"
+  runs_of_out >"$scratch/shard-$shard"
+  list_of $shard >"$scratch/list-$shard" 2>"$scratch/list-$shard.err" ||
+    problem "make could not print MEMORY_SUITES_$shard: $(cat "$scratch/list-$shard.err")"
+  n=$(grep -c '' "$scratch/shard-$shard")
+  if [ "$n" -eq 0 ]; then
+    problem "MEMORY_SHARD=$shard ran no suite"
+  fi
+  cmp -s "$scratch/list-$shard" "$scratch/shard-$shard" ||
+    problem "MEMORY_SHARD=$shard ran other suites than the Makefile's MEMORY_SUITES_$shard, in its order (wanted <, ran >):
+$(diff "$scratch/list-$shard" "$scratch/shard-$shard" | head -n 20 | sed 's/^/  /')"
+  wanted=$(while IFS= read -r t; do zero_line "$t" "$(no_log "$t")"; done <"$scratch/list-$shard")
+  want_lines "$wanted
+$(count_line "$(grep -c '' "$scratch/list-$shard")" 0 "$(grep -c '' "$scratch/list-$shard")" 0)"
+  {
+    printf '%s\n' -v --command-line-only=yes true --
+    while IFS= read -r t; do suite_argv "$t"; done <"$scratch/list-$shard"
+  } >"$scratch/argv-wanted-$shard"
+  sed '1{/^parent: /d;}' "$stub.argv" >"$scratch/argv-got-$shard" 2>/dev/null
+  cmp -s "$scratch/argv-wanted-$shard" "$scratch/argv-got-$shard" ||
+    problem "MEMORY_SHARD=$shard handed the stand-in for Valgrind other commands than case e's, suite by suite (wanted <, got >):
+$(diff "$scratch/argv-wanted-$shard" "$scratch/argv-got-$shard" | head -n 20 | sed 's/^/  /')"
+done
+# The two runs, merged and sorted as the suites are, must be the suites: a
+# suite in neither, in both or twice in one, and a path that is no suite,
+# each shows in the difference.
+cat "$scratch/shard-1" "$scratch/shard-2" | LC_ALL=C sort >"$scratch/merged"
+cmp -s "$scratch/suites" "$scratch/merged" ||
+  problem "the two shards' runs, merged, are not every tests/test-*.sps once (every suite <, the two runs >):
+$(diff "$scratch/suites" "$scratch/merged" | head -n 20 | sed 's/^/  /')"
+verdict "n split: MEMORY_SHARD=1 and 2 each run the Makefile's own list, in its order, the two run every tests/test-*.sps once between them, and nothing else, and each suite is handed to Valgrind as case e's is"
+
+for value in 0 3 '1 2' '1 ' "1'" '1"' 01 one; do
+  rm -f "$stub.argv"
+  gate MEMORY_SHARD="$value" VALGRIND="$stub"
+  status=$?
+  want_status nonzero "$status"
+  want_lines "test-memory: MEMORY_SHARD is \"$value\", and the gate has two shards: give 1 or 2, or no MEMORY_SHARD for every suite of MEMORY_SUITES (ADR-0005)"
+  nothing_ran "MEMORY_SHARD='$value'"
+done
+verdict "n refused: test-memory refuses a MEMORY_SHARD of 0, 3, \"1 2\", \"1 \", 1', 1\", 01 or one, by its whole message, running no suite"
+
+rm -f "$stub.argv"
+( MEMORY_SHARD=1; export MEMORY_SHARD; gate VALGRIND="$stub" )
+status=$?
+want_status nonzero "$status"
+want_lines "test-memory: MEMORY_SHARD is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)"
+nothing_ran "with MEMORY_SHARD in the environment"
+verdict "n environment: test-memory refuses a MEMORY_SHARD from the environment, by its whole message, running no suite"
+
+rm -f "$stub.argv"
+gate MEMORY_SHARD=1 MEMORY_SUITES="$after" VALGRIND="$stub"
+status=$?
+want_status nonzero "$status"
+want_lines "test-memory: MEMORY_SUITES is given on make's command line with MEMORY_SHARD=1, whose own list would run in its place: give one of the two (ADR-0005)"
+nothing_ran "beside a command line's MEMORY_SUITES"
+verdict "n beside: test-memory refuses a MEMORY_SHARD beside a MEMORY_SUITES on its command line, by its whole message, running no suite"
+
+# A shard's list set from outside: on the command line, with the shard that
+# runs it and with none, and from the environment, which make -e lets
+# override the Makefile's.
+for arm in shard none other environment; do
+  rm -f "$stub.argv"
+  v=MEMORY_SUITES_2; where="on make's command line"
+  case $arm in
+    shard) v=MEMORY_SUITES_1
+           gate MEMORY_SHARD=1 MEMORY_SUITES_1="$after" VALGRIND="$stub"; status=$? ;;
+    none)  gate MEMORY_SUITES_2="$after" VALGRIND="$stub"; status=$? ;;
+    other) gate MEMORY_SHARD=1 MEMORY_SUITES_2="$after" VALGRIND="$stub"; status=$? ;;
+    *)     where="in the environment"
+           ( MEMORY_SUITES_2=$after; export MEMORY_SUITES_2; gate -e MEMORY_SHARD=2 VALGRIND="$stub" ); status=$? ;;
+  esac
+  want_status nonzero "$status"
+  want_lines "test-memory: $v is set $where, but the Makefile writes each shard's list, and a shard runs that list or none; to run other suites, give MEMORY_SUITES and no MEMORY_SHARD (ADR-0005)"
+  nothing_ran "$v set $where ($arm)"
+done
+verdict "n lists: test-memory refuses a shard's list set on its command line, with its shard, another or none, or under make -e in the environment, by its whole message, running no suite"
+
+# set_list N LIST: the copy's Makefile writes MEMORY_SUITES_N as LIST, on one
+# line: its definition and the lines that continue it are replaced.
+set_list() {
+  awk -v shard="$1" -v list="$2" '
+    cont { cont = /\\$/; next }
+    index($0, "MEMORY_SUITES_" shard " :=") == 1 { n++; cont = /\\$/; print "MEMORY_SUITES_" shard " := " list; next }
+    { print }
+    END { exit (n != 1) }' Makefile >Makefile.new && mv Makefile.new Makefile ||
+    problem "could not write MEMORY_SUITES_$1 in the copy's Makefile"
+}
+
+# A shard whose list the copy's Makefile leaves empty: without its refusal,
+# test-memory would run no suite and pass.
+for shard in 1 2; do
+  newtree
+  set_list "$shard" ""
+  rm -f "$stub.argv"
+  gate MEMORY_SHARD=$shard VALGRIND="$stub"
+  status=$?
+  want_status nonzero "$status"
+  want_lines "test-memory: no suites: MEMORY_SUITES_$shard is empty"
+  nothing_ran "with MEMORY_SUITES_$shard empty"
+  verdict "n empty: test-memory refuses a shard, MEMORY_SHARD=$shard, whose list the Makefile leaves empty, by its whole message, running no suite"
+done
+
+# Two suites of one name in a shard's list, which the copy's Makefile writes:
+# refused from the list the shard runs, as l names refuses them in
+# MEMORY_SUITES, since their logs would be one.
+newtree
+set_list 2 "$after $twin"
+rm -f "$stub.argv"
+gate MEMORY_SHARD=2 VALGRIND="$stub"
+status=$?
+want_status nonzero "$status"
+want_lines "test-memory: $after and $twin share the name after, so they would share $logs/after.log and $logs/after.valgrind; rename one (ADR-0005)"
+nothing_ran "with two suites of one name in MEMORY_SUITES_2"
+verdict "n names: two suites with one name in a shard's list are refused, so one suite's logs are never another's, running no suite"
 
 # ---- h: options from outside the command line ----
 # Each source is planted in the case's own copy, never in the working tree,
@@ -1522,11 +1688,11 @@ want_in "$(log_of "$nearly")" "nearly: slept until its process was 15/2 seconds 
 verdict "r slow: under a MEMORY_TIMEOUT of 12, a suite that takes 10 s is SLOW, past 9 s, three quarters of it, and fails the run, by name; one that takes 7 s or 8 passes; each one's time line follows its outcome"
 
 # ---- o: ci.yml runs the gate, as tests/check-ci.sh holds it ----
-# check-ci holds the whole workflow, the memory job among its jobs: make
-# check-memory-gate, then make test-memory, each a step's whole run line,
-# with no if: or continue-on-error: on them or their job, and no variable
-# that steers the gate. make test runs it too, so a workflow that drops this
-# job still fails CI's main job.
+# check-ci holds the whole workflow, the two memory jobs among its jobs: in
+# each, make check-memory-gate, then make test-memory MEMORY_SHARD=1 or =2,
+# each a step's whole run line, with no if: or continue-on-error: on them or
+# their job, and no variable that steers the gate. make test runs it too, so
+# a workflow that drops either job still fails CI's main job.
 wanted="check-ci: .github/workflows/ci.yml has the one shape check-ci reads"
 got=$(cd "$root" && sh tests/check-ci.sh .github/workflows 2>&1)
 status=$?
@@ -1534,9 +1700,9 @@ if [ "$status" -ne 0 ] || [ "$got" != "$wanted" ]; then
   problem "tests/check-ci.sh exited $status, printing:
 $(printf '%s\n' "$got" | sed 's/^/  | /')"
 fi
-verdict "o ci: tests/check-ci.sh holds ci.yml, whose memory job runs make check-memory-gate, then make test-memory, with no if:, no continue-on-error: and no variable that steers the gate" plain
+verdict "o ci: tests/check-ci.sh holds ci.yml, whose jobs memory-1 and memory-2 each run make check-memory-gate, then make test-memory MEMORY_SHARD=1 or =2, with no if:, no continue-on-error: and no variable that steers the gate" plain
 
 if [ "$fail" -eq 0 ]; then
-  printf 'check-memory-gate: the memory gate failed, as it must, and its refusals held, in all %d cases\n' "$pass"
+  printf 'check-memory-gate: the memory gate failed, as it must, its refusals held, and each shard ran its own list, in all %d cases\n' "$pass"
 fi
 [ "$fail" -eq 0 ]

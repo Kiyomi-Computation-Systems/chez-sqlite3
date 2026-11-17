@@ -28,9 +28,12 @@
   [amendment](#amendment-2026-11-15-m3s-entry-points-and-suites-m3s-plan)). Amended 2026-11-16
   by the maintainer's choice, "Split into thirds now", and accepted that day ("Accept all"): the
   halves split in three (M3 slice 2,
-  [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)).
+  [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)). Amended 2026-11-16
+  by the maintainer's choice, "Shard in slice 6": the memory job split in two (M3 slice 6,
+  [amendment](#amendment-2026-11-16-the-memory-job-split-in-two-m3-slice-6)), and accepted on
+  2026-11-17 ("Accept all").
 - **Date:** 2026-11-13
-- **Scope:** every suite, and CI's `memory` job
+- **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
 - **Related:** chez-curl ADR-0014, whose Valgrind gate this copies ·
   [the harness plan](../2026-11-13-harness-plan.md) §3 ·
@@ -603,3 +606,101 @@ replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
 - **Each suite writes the pattern out in a row,** so a pattern and parts changed together, which
   the merge and the dealing rows pass, still fail.
 
+## Amendment, 2026-11-16: the memory job split in two (M3 slice 6)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"). Proposed in M3 slice 6, by the
+maintainer's choice of 2026-11-16, "Shard in slice 6". It carries
+out the M3 amendment's rule, "past 45 minutes, three quarters of its 60, the job is sharded", and
+makes decision 6's one `memory` job two. chez-curl ADR-0014's amendment "the memory job is split
+in two" is the design. Its job names are kept, so the two repositories' required checks read
+alike; none of its code is copied.
+
+- **Why now:**
+  - slice 5's `memory` job took 40m31s on a fast runner (run 43957085196, `test-check-ci` 85 s),
+    where slice 4's took 31m22s on that class and 35m07s on a slower one;
+  - the M2 session normalised six runs' suite times by each run's median suite ratio
+    ([research/m3-slice-6/memory-shard-input.md](../research/m3-slice-6/memory-shard-input.md)),
+    since `test-check-ci`'s own ratio overstates a runner's factor: 1.42 and 1.46, where the
+    median suite read 1.27 and 1.19;
+  - with slice 6's suites, one job would take about 41 min on the fast class and about 52 min at
+    the slowest factor seen, 1.27. That is past the 45 minutes, and near the job's 60.
+- **Two jobs, `memory-1` and `memory-2`,** in place of `memory`:
+  - their check names are `memory-1 (the Valgrind gate, shard 1 of 2)` and
+    `memory-2 (the Valgrind gate, shard 2 of 2)`, where the old one's was
+    `memory (the Valgrind gate)`;
+  - each runs the old job's setup, then `make check-memory-gate`, then
+    `make test-memory MEMORY_SHARD=1` or `=2`;
+  - the shard's number is the run line's argument. No `env:` names a shard or a list;
+  - decision 6, as the M0 slice 4 amendment narrowed it, holds for each: neither job nor its two
+    gate steps carries `if:` or `continue-on-error:`.
+- **The gate runs in both jobs:**
+  - each job has its own runner, with Valgrind installed there and Chez restored or built there,
+    so a proof on one runner says nothing of the other's;
+  - the jobs run side by side, so a run grows by one gate, about 5 minutes, not by two;
+  - case b's flake, seen once in slice 2's run and never reproduced, now has two chances a run. It
+    fails red, and hides nothing.
+- **The Makefile writes out both lists,** `MEMORY_SUITES_1` (35 suites) and `MEMORY_SUITES_2`
+  (38).
+  - With no `MEMORY_SHARD`, `make test-memory` runs every suite, in order, as case g all requires.
+    chez-curl ADR-0014's n held this beside its shards, and its review found it dropped with them.
+  - Before any suite runs, `make test-memory` refuses, by name:
+    - a `MEMORY_SHARD` but 1 or 2, and one from the environment, as it refuses `MEMORY_SUITES` there;
+    - a shard beside a `MEMORY_SUITES` on its command line, which the shard would ignore;
+    - a shard's list set on the command line, or from the environment under `make -e`;
+    - an empty list, and two suites of one name in the list that runs.
+  - `check-memory-gate`'s case n holds each refusal, and that each shard runs its own list.
+- **`make check-memory-shards`, which `make test` runs,** fails unless the two lists run every
+  `tests/test-*.sps` in the tree once between them.
+  - It names a suite in neither, one in both, one written twice in a list, and a path in a list
+    that is no suite.
+  - So a new suite fails `make test` until it is placed in a shard: the one whose suites take less
+    time.
+  - It reads the tree's suites, not a run's `SUITES`. So `make test SUITES=…` still narrows a run,
+    as the M1 closing review's log ran it, and a narrowed run still holds the shards to the whole
+    tree.
+  - `check-test-fails`'s cases `shards-neither`, `shards-both` and `shards-narrowed` hold that
+    `make test` runs it, on the tree's suites.
+- **`check-ci` holds six jobs.**
+  - Each memory job runs check-chez, then the gate, then its own shard, each as a step's whole run
+    line.
+  - It refuses a third shard, a job running the other's shard, a shard missing or given through an
+    `env:`, and every word `MEMORY_*`, as it refuses `VALGRIND_*`. The one exception is
+    `MEMORY_SHARD` on a memory job's own shard line.
+  - `test-check-ci` holds each rule, in 439 rows.
+- **The split** starts from the M2 session's greedy one, with the threaded suites dealt first.
+  `test-check-memory-shards` is added to shard 1, and `test-open-interleave` moved to shard 2
+  after the local runs. Slice 5's suites rest on one CI run each and slice 6's on local times, so
+  the times are estimates:
+
+  | | Shard 1 | Shard 2 |
+  |---|---|---|
+  | Suites, fast class | 1018 s; 1085 s with `test-transaction-interrupt` at its worst seen, 149 s | 1086 s |
+  | Job, fast class | 22.6–23.4 min; 24.5 at worst | 23.7–24.5 min |
+  | Job, slow class (×1.27) | 28.5–29.3 min; 30.7 at worst | 29.9–30.7 min |
+  | Measured in the container, side by side | 21m27s | 15m13s |
+
+  - Each job counts setup, 30–80 s, and the gate, about 305 s fast and 385 s slow.
+  - Local times don't predict CI's balance: suites that start many children run relatively slower
+    here.
+  - Slice 6's CI run reads every suite's `time:` line in both jobs. Shards that drift apart are
+    rebalanced in the slice that sees it.
+- **An open risk, `test-transaction-interrupt`:**
+  - under the gate here it took 434 s alone and 429 s in shard 1, of the 450 s threshold, and
+    225 s once. On CI it has taken 20 s to 149 s in four runs;
+  - its watchdog is slice 4's, a plain thread interrupting every 5 ms. Under Valgrind, which runs
+    one thread at a time, how soon it runs is the scheduler's;
+  - the remedies are slice 6's watchdog device, which takes SQLite's memory mutex each round
+    (ADR-0019's slice 6 amendment), or a split. The device binds the owner to calls that are
+    `__collect_safe` or take none of SQLite's memory while the mutex may be held, and this suite's
+    owner runs inserts that allocate, so it is no drop-in;
+  - slice 6's CI run reads the suite's time in shard 1. A time on CI past a third of the
+    threshold, 150 s, is a finding for M3's closing review.
+- **What no check holds:**
+  - an empty shard list passes `check-memory-shards` when the other holds every suite. Only its CI
+    job fails, through `test-memory`'s refusal;
+  - nothing fails when one shard grows far past the other. The `SLOW` line holds each suite, and the
+    60-minute limit each job;
+  - a change that deletes the workflow, or `main` with the memory jobs, runs no check at all, as
+    the M0 slice 4 amendment says. Branch protection, requiring both new check names, is the
+    maintainer's lever. Until it names them, the old required check, `memory (the Valgrind gate)`,
+    never reports, and no PR can merge.

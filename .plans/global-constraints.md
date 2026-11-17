@@ -147,6 +147,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   test-memory` prints each suite's time, and fails one past it as `SLOW`, so a suite is split
   before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
   562 s on a slow runner (ADR-0005, amended).
+- **CI's memory gate runs in two jobs, `memory-1` and `memory-2`, each proving the gate on its own
+  runner before its shard.** The Makefile lists each shard's suites, and every `tests/test-*.sps`
+  stands in exactly one; `make check-memory-shards`, which `make test` runs, holds it, so a new
+  suite fails `make test` until it is placed (ADR-0005, amended in M3 slice 6).
 
 ## Conveniences, transactions, settings and interrupt
 
@@ -202,7 +206,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
-  across a call that can block (ADR-0019).
+  across a call that can block. The handle is read and the call made inside the latch's one
+  section, never after it returns: an expiry or another thread between the two lets the call
+  land on a freed connection. Rows hold the record's wiring through `interrupt-database/with` on
+  a stand-in, in an engine sweep and across two threads (ADR-0019, amended in M3 slice 6).
 - **A flag that decides an exit is read inside the section of the step it guards,** never in an
   earlier one: an engine's expiry between them runs the after thunk, and the resumed caller would
   step what it had planned. **An engine row sweeps fuel from 1 until the call completes without
@@ -213,7 +220,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   record's mutex (ADR-0019).
 - **No busy handler and no retry in Scheme;** a busy wait ends at its timeout, interrupt or not.
   A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms, and under
-  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5).
+  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5). A row that reads the
+  wait's grain itself may time a shorter one, asserting only a bound that holds on either grain
+  (ADR-0019, amended in M3 slice 6).
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
   `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
 

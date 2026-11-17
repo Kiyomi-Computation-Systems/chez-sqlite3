@@ -1,0 +1,247 @@
+$ a2-run.sh plain ...
+pa test-interrupt-database: exit 1, pass 16, fail 2
+pa test-interrupt-reach: exit 0, pass 13, fail 0
+pa test-interrupt-close: exit 0, pass 8, fail 0
+pa test-interrupt: exit 0, pass 19, fail 0
+pa test-connection: exit 0, pass 63, fail 0
+pa test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+pa-verb test-interrupt-database: exit 0, pass 18, fail 0
+pa-verb test-interrupt-reach: exit 0, pass 13, fail 0
+pa-verb test-interrupt-close: exit 0, pass 8, fail 0
+pa-verb test-interrupt: exit 0, pass 19, fail 0
+pa-verb test-connection: exit 0, pass 63, fail 0
+pa-verb test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+      interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+handle-before test-interrupt-database: exit 0, pass 18, fail 0
+handle-before test-interrupt-reach: exit 0, pass 13, fail 0
+handle-before test-interrupt-close: exit 0, pass 8, fail 0
+handle-before test-interrupt: exit 0, pass 19, fail 0
+handle-before test-connection: exit 0, pass 63, fail 0
+handle-before test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+      interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+twice test-interrupt-database: exit 1, pass 16, fail 2
+twice test-interrupt-reach: exit 0, pass 13, fail 0
+twice test-interrupt-close: exit 0, pass 8, fail 0
+twice test-interrupt: exit 0, pass 19, fail 0
+twice test-connection: exit 0, pass 63, fail 0
+twice test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+section test-interrupt-database: exit 1, pass 17, fail 1
+section test-interrupt-reach: exit 0, pass 13, fail 0
+section test-interrupt-close: exit 0, pass 8, fail 0
+section test-interrupt: exit 0, pass 19, fail 0
+section test-connection: exit 0, pass 63, fail 0
+section test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 12, completed, after 11 trials resumed after a close
+      interrupt-database!: stopped at fuel 12, completed, after 11 trials resumed after a close
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+no-call test-interrupt-database: exit 1, pass 8, fail 10
+no-call test-interrupt-reach: exit 1, pass 5, fail 8
+no-call test-interrupt-close: exit 1, pass 6, fail 2
+no-call test-interrupt: exit 0, pass 19, fail 0
+no-call test-connection: exit 0, pass 63, fail 0
+no-call test-public: exit 0, pass 22, fail 0
+    FAIL from another thread, interrupt-database! makes no owner check: it answers void, where close-dat
+    FAIL the open makes the connection interruptible: open-database, open-database with a settings list,
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the clos
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its asse
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag se
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did n
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer com
+      interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database! in an engine, swept the same way: every trial answers void and raises nothi
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+no-latch test-interrupt-database: exit 1, pass 7, fail 11
+no-latch test-interrupt-reach: exit 0, pass 13, fail 0
+no-latch test-interrupt-close: exit 1, pass 7, fail 1
+no-latch test-interrupt: exit 0, pass 19, fail 0
+no-latch test-connection: exit 0, pass 63, fail 0
+no-latch test-public: exit 0, pass 22, fail 0
+    FAIL on a closed connection interrupt-database! does nothing and raises nothing, from the owner and 
+    FAIL a second close leaves the connection closed to interrupts: closed, closed again, then interrupt
+    FAIL a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from in
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the clos
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its asse
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag se
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did n
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer com
+      interrupt-database/with: stopped at fuel 32, completed, after 31 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 12, completed, after 11 trials resumed after a close
+    FAIL interrupt-database! in an engine, swept the same way: every trial answers void and raises nothi
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+p5b test-interrupt-database: exit 1, pass 10, fail 8
+p5b test-interrupt-reach: exit 0, pass 13, fail 0
+p5b test-interrupt-close: exit 0, pass 8, fail 0
+p5b test-interrupt: exit 0, pass 19, fail 0
+p5b test-connection: exit 0, pass 63, fail 0
+p5b test-public: exit 0, pass 22, fail 0
+    FAIL a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from in
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the clos
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its asse
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag se
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did n
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer com
+      interrupt-database/with: stopped at fuel 32, completed, after 31 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 12, completed, after 11 trials resumed after a close
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes:
+m08 test-interrupt-database: exit 1, pass 8, fail 10
+m08 test-interrupt-reach: exit 0, pass 13, fail 0
+m08 test-interrupt-close: exit 1, pass 7, fail 1
+m08 test-interrupt: exit 1, pass 8, fail 11
+m08 test-connection: exit 0, pass 63, fail 0
+m08 test-public: exit 0, pass 22, fail 0
+    FAIL on a closed connection interrupt-database! does nothing and raises nothing, from the owner and 
+    FAIL a second close leaves the connection closed to interrupts: closed, closed again, then interrupt
+    FAIL a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from in
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the clos
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its asse
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag se
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did n
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer com
+      interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database! in an engine, swept the same way: every trial answers void and raises nothi
+suite-no-expiry test-interrupt-database: exit 1, pass 16, fail 2
+suite-no-expiry test-interrupt-reach: exit 0, pass 13, fail 0
+suite-no-expiry test-interrupt-close: exit 0, pass 8, fail 0
+suite-no-expiry test-interrupt: exit 0, pass 19, fail 0
+suite-no-expiry test-connection: exit 0, pass 63, fail 0
+suite-no-expiry test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 100000, completed, after 0 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 100000, completed, after 0 trials resumed after a close
+    FAIL interrupt-database! in an engine, swept the same way: every trial answers void and raises nothi
+suite-collecting test-interrupt-database: exit 1, pass 16, fail 2
+suite-collecting test-interrupt-reach: exit 0, pass 13, fail 0
+suite-collecting test-interrupt-close: exit 0, pass 8, fail 0
+suite-collecting test-interrupt: exit 0, pass 19, fail 0
+suite-collecting test-connection: exit 0, pass 63, fail 0
+suite-collecting test-public: exit 0, pass 22, fail 0
+      interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each t
+      interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    FAIL interrupt-database! in an engine, swept the same way: every trial answers void and raises nothi
+
+$ a2-run.sh gate ...
+pa: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x9fba068 is 408 bytes inside a block of size 840 free'd
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
+    interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    # of expected passes      16
+    # of unexpected failures  2
+pa-verb: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x4fb15e8 is 408 bytes inside a block of size 840 free'd
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    # of expected passes      18
+handle-before: make exit 0
+    test-memory: pass tests/test-interrupt-database.sps
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    # of expected passes      18
+twice: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x97b8f08 is 408 bytes inside a block of size 840 free'd
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
+    interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    # of expected passes      16
+    # of unexpected failures  2
+section: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 1)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 12, completed, after 11 trials resumed after a close
+    interrupt-database!: stopped at fuel 12, completed, after 11 trials resumed after a close
+    # of expected passes      17
+    # of unexpected failures  1
+p5b: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 2 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x9764c28 is 408 bytes inside a block of size 840 free'd
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 32, completed, after 31 trials resumed after a close
+    interrupt-database!: stopped at fuel 12, completed, after 11 trials resumed after a close
+    # of expected passes      10
+    # of unexpected failures  8
+m08: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 1)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    # of expected passes      8
+    # of unexpected failures  10
+chez-sqlite3-wt-m3s6: make exit 0
+    test-memory: pass tests/test-interrupt-database.sps
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+    library: /gnu/store/vi2anm0x47773lg48rh77dz9myhcbgmh-sqlite-3.53.1/lib/libsqlite3.so.3.53.1
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    # of expected passes      18
+
+$ a2-run.sh gate floor ...
+pa-verb.floor: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x4f41788 is 408 bytes inside a block of size 792 free'd
+    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/a2/final/pa-verb/build/m3-floor/lib/libsqlite3.so.0
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    # of expected passes      18
+pa.floor: make exit 2
+    test-memory: FAIL tests/test-interrupt-database.sps (exit 9, Valgrind's: an error or a definite leak)
+    time: 10s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+    Invalid write of size 4
+    Address 0x9db14f8 is 408 bytes inside a block of size 792 free'd
+    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/a2/final/pa/build/m3-floor/lib/libsqlite3.so.0
+    interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
+    interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
+    # of expected passes      16
+    # of unexpected failures  2
+chez-sqlite3-wt-m3s6.floor: make exit 0
+    test-memory: pass tests/test-interrupt-database.sps
+    time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+    ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/m3-floor/lib/libsqlite3.so.0
+    interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+    interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+    # of expected passes      18

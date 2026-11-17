@@ -28,8 +28,15 @@
 #   floors-script a script under            check-floors names its line, and
 #                scripts/ci that writes       no suite runs
 #                the SQLite floor
-#   ci           job memory given a            check-ci names the key, and
+#   ci           job memory-1 given a          check-ci names the key, and
 #                continue-on-error key         no suite runs
+#   shards-neither a suite in neither of the   check-memory-shards names it,
+#                memory gate's two shards      and no suite runs
+#   shards-both  a suite in both shards        check-memory-shards names it,
+#                                              and no suite runs
+#   shards-      a suite in neither shard,     check-memory-shards names it,
+#   narrowed     with make test narrowed by    and no suite runs
+#                SUITES to another suite
 #   no-suites    every suite deleted           make test refuses to pass
 #
 # The copy holds no real suite, so no slow one can run into the 5 s
@@ -46,7 +53,8 @@
 # them included, the seam case those
 # starting "check-seam: ", the floors and floors-script cases those
 # starting "check-floors: ",
-# and the ci case those starting "check-ci: ".
+# the ci case those starting "check-ci: ", and the shards cases those
+# starting "check-memory-shards: ".
 #
 # The copy is the working tree without .git, build/ and .claude/ (Claude
 # Code's local state, which can hold whole worktrees), and with the
@@ -60,6 +68,10 @@
 # libsqlite3 (the M1 plan, §3.7; tests/test-never-loads.sps holds the
 # imports). README.org and packaging/floors.sexp are the tree's own, and
 # agree, so check-floors passes in every case but floors and floors-script.
+# Its Makefile is the tree's, but for its two shard lists, MEMORY_SUITES_1
+# and MEMORY_SUITES_2, which name the copy's own suites, the plant's in the
+# first and the after-suite's in the second, so check-memory-shards, which
+# make test runs, fails only in the two shards cases.
 #
 # The leaks plant opens a connection through (chez-sqlite3)'s open-database
 # and drops the record, as a caller that never closed it would. Its src/ is
@@ -242,6 +254,23 @@ plant=tests/test-0-plant.sps
 after=tests/test-1-after.sps
 cp "$plant_dir/after" "$copy/$after"
 
+# shards ONE TWO: the copy's Makefile becomes the tree's, with the memory
+# gate's two shard lists, MEMORY_SUITES_1 and MEMORY_SUITES_2, written as ONE
+# and TWO, each on one line, so check-memory-shards holds the copy's own
+# suites. Each definition and its continuation lines are replaced, and both
+# must be found.
+shards() {
+  awk -v one="$1" -v two="$2" '
+    cont { cont = /\\$/; next }
+    /^MEMORY_SUITES_[12] :=/ { n++; cont = /\\$/
+      if (/^MEMORY_SUITES_1 /) print "MEMORY_SUITES_1 := " one; else print "MEMORY_SUITES_2 := " two
+      next }
+    { print }
+    END { exit (n != 2) }' "$root/Makefile" >"$copy/Makefile" ||
+    { echo "check-test-fails: could not write the shard lists into the copy's Makefile" >&2; exit 2; }
+}
+shards "$plant" "$after"
+
 pass=0
 fail=0
 ok()  { pass=$((pass + 1)); printf 'check-test-fails: ok %s\n' "$1"; }
@@ -269,12 +298,13 @@ run_case() {
   judge "$@"
 }
 
-# run_make: runs make test in the copy, its output to $tmp/out and its exit
-# status to status.
+# run_make [VAR=VALUE ...]: runs make test in the copy, with any variables
+# given on its command line, its output to $tmp/out and its exit status to
+# status.
 run_make() {
   ( cd "$copy" &&
       "${TIMEOUT:-timeout}" "$make_timeout" "${MAKE:-make}" --no-print-directory test \
-        TEST_TIMEOUT="$suite_timeout" ) \
+        TEST_TIMEOUT="$suite_timeout" "$@" ) \
     >"$tmp/out" 2>&1
   status=$?
 }
@@ -357,8 +387,10 @@ judge "leaks: a suite whose tests pass, but which leaves a connection from open-
   '^(check-suites|test|suite-exit-status): '
 two_libraries
 
-# The plant is gone, so only the after-suite is left to check.
+# The plant is gone, so only the after-suite is left to check, and only the
+# after-suite is left in the shards.
 rm -f "${copy:?}/${plant:?}"
+shards "" "$after"
 
 # The seam case: a library under the copy's src/ imports a name from
 # (chezscheme) that only (chez-sqlite3 private memory) may import, so
@@ -426,25 +458,63 @@ run_case "floors-script: check-floors names a script under scripts/ci that write
   '^(check-suites|check-floors|test): '
 rm -f "${copy:?}/scripts/ci/plant.sh"
 
-# The ci case: the copy's workflow gives job memory a job-level
-# continue-on-error key, which would let the Valgrind gate fail and the run
-# pass. check-ci refuses any key outside the job's four. check-ci passes
-# before and after: the workflow is restored.
+# The ci case: the copy's workflow gives job memory-1, the Valgrind gate's
+# first shard, a job-level continue-on-error key, which would let the gate
+# fail and the run pass. check-ci refuses any key outside the job's four.
+# check-ci passes before and after: the workflow is restored.
 ci_yml=.github/workflows/ci.yml
-sed '/^  memory:$/,/^    runs-on:/ s/^    runs-on: ubuntu-24.04$/    continue-on-error: true\
+sed '/^  memory-1:$/,/^    runs-on:/ s/^    runs-on: ubuntu-24.04$/    continue-on-error: true\
     runs-on: ubuntu-24.04/' "$root/$ci_yml" >"$copy/$ci_yml"
 if cmp -s "$root/$ci_yml" "$copy/$ci_yml"; then
   bad "ci: the plant did not change $ci_yml, so it plants nothing"
 fi
 ci_line=$(grep -n '^    continue-on-error: true$' "$copy/$ci_yml" | cut -d: -f1)
-run_case "ci: check-ci names a workflow whose job memory may fail without failing the run, and no suite runs" \
+run_case "ci: check-ci names a workflow whose job memory-1 may fail without failing the run, and no suite runs" \
   "$(checked 1
-     echo "check-ci: $ci_yml:$ci_line: job memory has the key \"continue-on-error\", which is not one of name, runs-on, timeout-minutes, steps"
+     echo "check-ci: $ci_yml:$ci_line: job memory-1 has the key \"continue-on-error\", which is not one of name, runs-on, timeout-minutes, steps"
      echo 'check-ci: FAILED (problems: 1)')" \
   '^(check-suites|check-ci|test): '
 cp "$root/$ci_yml" "$copy/$ci_yml"
 
+# The shards cases: a suite the copy's shards leave out, and one they both
+# name. CI's two memory jobs run only what the shards list, so the first
+# would never run under the gate, and the second would run twice. Without
+# check-memory-shards among make test's prerequisites, or handed other lists
+# than the tree's suites and the two shards, no check sees either and make
+# test passes: the case fails then. check-memory-shards passes before and
+# after each.
+unsharded=tests/test-2-unsharded.sps
+cp "$plant_dir/after" "$copy/$unsharded"
+run_case "shards-neither: check-memory-shards names a suite in neither of the memory gate's shards, and no suite runs" \
+  "$(checked 2
+     echo "check-memory-shards: $unsharded is in neither MEMORY_SUITES_1 nor MEMORY_SUITES_2, so no memory job runs it under the gate: add it to the shard whose suites take less time (Makefile; ADR-0005)"
+     echo 'check-memory-shards: FAILED (problems: 1)')" \
+  '^(check-suites|check-memory-shards|test): '
+
+# The same suite left out, with make test narrowed by SUITES to the
+# after-suite, as a run of one suite is made. SUITES narrows the suites that
+# run, and check-suites reads only those; check-memory-shards holds the
+# tree's, every tests/test-*.sps, so it still names the one left out. Handed
+# SUITES instead, it would see only the after-suite, in a shard, and pass,
+# and so would make test.
+run_make SUITES="$after"
+judge "shards-narrowed: check-memory-shards names a suite in neither shard when make test is narrowed by SUITES to another, and no suite runs" \
+  "$(checked 1
+     echo "check-memory-shards: $unsharded is in neither MEMORY_SUITES_1 nor MEMORY_SUITES_2, so no memory job runs it under the gate: add it to the shard whose suites take less time (Makefile; ADR-0005)"
+     echo 'check-memory-shards: FAILED (problems: 1)')" \
+  '^(check-suites|check-memory-shards|test): '
+rm -f "${copy:?}/${unsharded:?}"
+
+shards "$after" "$after"
+run_case "shards-both: check-memory-shards names a suite in both of the memory gate's shards, and no suite runs" \
+  "$(checked 1
+     echo "check-memory-shards: $after is in both MEMORY_SUITES_1 and MEMORY_SUITES_2, so both memory jobs run it: keep it in one"
+     echo 'check-memory-shards: FAILED (problems: 1)')" \
+  '^(check-suites|check-memory-shards|test): '
+
+# No suite, and so none in either shard.
 rm -f "$copy"/tests/test-*.sps
+shards "" ""
 run_case "no-suites: make test refuses to pass with no suite to run" \
   "$(checked 0; echo 'test: no suites: nothing matches tests/test-*.sps')"
 

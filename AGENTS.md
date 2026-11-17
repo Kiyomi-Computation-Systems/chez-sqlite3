@@ -124,9 +124,19 @@
   as `SLOW`. CI's runners differ about two to one, so split a suite long
   before it nears the limit, and read a cost from more than one CI run
   (ADR-0005, amended).
+* CI's memory gate runs in two shards, the Makefile's `MEMORY_SUITES_1`
+  and `MEMORY_SUITES_2`. A new suite goes in the one whose suites take
+  less time on CI, and `make test` fails, naming it, until it is in one
+  (ADR-0005, amended).
 * A thread a suite forks dies on a raise it does not catch, and a waiter with
   no bound then hangs the suite, naming no test. Make whatever a thread raises
   its answer, and bound every wait for one.
+* Under Valgrind a thread running C keeps the CPU, so a watchdog may never
+  run during the call it means to interrupt. Have it take SQLite's memory
+  mutex each round, so the owner blocks inside SQLite. Every call the owner
+  makes while the mutex may be held is `__collect_safe` or takes none of
+  SQLite's memory, or another thread's collection waits on it
+  (`.plans/traps.md`).
 * Whether a failure ended a transaction can't be told from its code or its
   SQL: the same NOMEM or FULL undid one statement or the whole transaction,
   by one function call. Read `sqlite3_get_autocommit` after it
@@ -135,7 +145,9 @@
   seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
   a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms,
   and under twice the timeout, so a retry in Scheme fails it
-  (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended).
+  (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended). A row that
+  reads the grain itself may time a shorter one, asserting only a bound
+  that holds on either grain.
 * A connection's own statement held at a row stops its writes from waiting:
   under another's write lock they answered BUSY at once, where without the
   held read they waited out a 1500 ms timeout. A row that waits on a lock
@@ -194,7 +206,9 @@
   name when too few trials have both runs past the call's first section:
   one remainder reused across trials sweeps nothing past the first. An
   engine's fuel names no fixed point in the code, so sweep every pair of
-  fuels (`.plans/traps.md`).
+  fuels (`.plans/traps.md`). A stand-in a sweep reads spins before the
+  effect it notes: one that only notes may cost no tick, and then no fuel
+  splits it from the code before it (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

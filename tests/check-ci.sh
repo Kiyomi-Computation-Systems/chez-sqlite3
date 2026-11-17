@@ -22,8 +22,8 @@
 #     and a ${{ }} expression), a quoted scalar left open, and a backslash after
 #     a double quote;
 #   - the shape: the top-level keys, the three blocks `on`, `permissions` and
-#     `concurrency` line for line, the five jobs (main, memory, nothreads,
-#     floor and current) and each key in them, each
+#     `concurrency` line for line, the six jobs (main, memory-1, memory-2,
+#     nothreads, floor and current) and each key in them, each
 #     step's keys, with: and env: keys, the one if: and where it may be, the
 #     cache keys, the checks each job must run, each as one step's whole run
 #     line, in order, and the CHEZ each job runs with; in job main, ADR-0002's
@@ -54,17 +54,25 @@
 #     floor.sh is run with sh by the others, so it needs no bit and is not held;
 #   - no other line names scripts/, a comment apart: it is a step's whole run
 #     line in that form, or a cache key's hashFiles( list;
+#   - in jobs memory-1 and memory-2, the memory gate's two shards (ADR-0005,
+#     amended in M3 slice 6): make check-memory-gate, then make test-memory
+#     MEMORY_SHARD=1 in memory-1 and =2 in memory-2, each one step's whole run
+#     line, with no if: on either; so neither job runs the other's shard, and
+#     no job runs a third;
 #   - the names no line may hold: GITHUB_ENV, GITHUB_PATH, and as words the
-#     variables that would steer a check (MAKEFLAGS, VALGRIND_*, ...), the
-#     compiler's and the loader's among them (CC, C_INCLUDE_PATH, CPATH,
-#     LD_LIBRARY_PATH, LD_PRELOAD), which could steer test-constants or the
-#     load, and CHECK_CI_ROOT, which would point this check's execute-bit rule
-#     at another tree. CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH are the one exception, as
-#     an env key of floor and current, above. Job main is the one job that
-#     tests discovery, so there, in memory and in nothreads they stay refused;
-#     and
-#     check-memory-gate, test-memory and check-nothreads anywhere but as the
-#     whole run line of the step that runs them.
+#     variables that would steer a check (MAKEFLAGS, VALGRIND_*, MEMORY_*,
+#     ...), the compiler's and the loader's among them (CC, C_INCLUDE_PATH,
+#     CPATH, LD_LIBRARY_PATH, LD_PRELOAD), which could steer test-constants or
+#     the load, and CHECK_CI_ROOT, which would point this check's execute-bit
+#     rule at another tree. There are two exceptions. CHEZ_SQLITE3_LIBRARY and
+#     C_INCLUDE_PATH may stand as an env key of floor and current, above: job
+#     main is the one job that tests discovery, so there, in the memory jobs
+#     and in nothreads they stay refused. And MEMORY_SHARD may stand on the one
+#     line that runs a memory job's own shard, above, and on no other; and
+#   - check-memory-gate, test-memory and check-nothreads anywhere but as the
+#     whole run line of a step that runs them: check-memory-gate in either
+#     memory job, test-memory only as a memory job's own shard's line, and
+#     check-nothreads in job nothreads.
 #
 # A block scalar starts at a key whose value is | or > and holds every later
 # line that is blank or indented deeper than that key (a "- " counts toward the
@@ -196,13 +204,25 @@ function closeblock(k,   i, top) {
 # isl(j): whether j is one of the two SQLite lanes, floor and current.
 function isl(j) { return (j == "floor" || j == "current") }
 
+# ismem(j): whether j is one of the two memory jobs, memory-1 and memory-2.
+function ismem(j) { return (j == "memory-1" || j == "memory-2") }
+
+# gaterun(g, j): the one rest of a line that may name gate g in job j, its
+# step's whole run line, or "" where no line may name it.
+function gaterun(g, j) {
+  if (g == "check-memory-gate" && ismem(j)) return "run: make check-memory-gate"
+  if (g == "test-memory" && ismem(j)) return "run: " shardrun[j]
+  if (g == "check-nothreads" && j == "nothreads") return "run: make check-nothreads"
+  return ""
+}
+
 # nreq(j): fills rq[1..n] with the run lines job j must run, in order.
 function nreq(j) {
   if (j == "main") {
     rq[1] = CHKT; rq[2] = BUILDLINE; rq[3] = MAKELINE; rq[4] = LAUNCHER; return 4
   }
-  if (j == "memory") {
-    rq[1] = CHKT; rq[2] = "make check-memory-gate"; rq[3] = "make test-memory"; return 3
+  if (ismem(j)) {
+    rq[1] = CHKT; rq[2] = "make check-memory-gate"; rq[3] = shardrun[j]; return 3
   }
   if (isl(j)) {
     rq[1] = CHKT; rq[2] = CCLINE; rq[3] = lanebld[j]; rq[4] = lanechk[j]; rq[5] = BUILDLINE; rq[6] = TESTLINE
@@ -447,7 +467,7 @@ function endsec(   i) {
   endjob()
   if (curblk != "") { closeblock(curblk); curblk = "" }
   if (sec == "jobs")
-    for (i = 1; i <= 5; i++)
+    for (i = 1; i <= 6; i++)
       if (!(jn[i] in jobseen)) prob(jobsln, "job \"" jn[i] "\" is missing")
   sec = ""
 }
@@ -459,9 +479,9 @@ BEGIN {
   split("name on permissions concurrency jobs", tk, " ")
   for (i = 1; i <= 5; i++) topidx[tk[i]] = i
   isblock["on"] = 1; isblock["permissions"] = 1; isblock["concurrency"] = 1
-  JOBS = "main, memory, nothreads, floor, current"
-  split("main memory nothreads floor current", jn, " ")
-  for (i = 1; i <= 5; i++) wantjob[jn[i]] = 1
+  JOBS = "main, memory-1, memory-2, nothreads, floor, current"
+  split("main memory-1 memory-2 nothreads floor current", jn, " ")
+  for (i = 1; i <= 6; i++) wantjob[jn[i]] = 1
   JOBKEYS = "name, runs-on, timeout-minutes, steps"
   split("name runs-on timeout-minutes steps", jk2, " ")
   for (i = 1; i <= 4; i++) jobkey[jk2[i]] = 1
@@ -471,9 +491,9 @@ BEGIN {
   WITHKEYS = "submodules, path, key"
   split("submodules path key", wk, " ")
   for (i = 1; i <= 3; i++) withkeys[wk[i]] = 1
-  gname[1] = "check-memory-gate"; gjob[1] = "memory"
-  gname[2] = "test-memory";       gjob[2] = "memory"
-  gname[3] = "check-nothreads";   gjob[3] = "nothreads"
+  gname[1] = "check-memory-gate"; gname[2] = "test-memory"; gname[3] = "check-nothreads"
+  shardrun["memory-1"] = "make test-memory MEMORY_SHARD=1"
+  shardrun["memory-2"] = "make test-memory MEMORY_SHARD=2"
   nbw = split("MAKEFLAGS MFLAGS GNUMAKEFLAGS VALGRIND MEMORY_SUITES MEMORY_TIMEOUT TEST_TIMEOUT LIBDIRS TIMEOUT SUITES CHEZ_SQLITE3_LIBRARY CHEZ_SQLITE3_DECOY CHEZ_SQLITE3_GATE_CHILD CC C_INCLUDE_PATH CPATH LD_LIBRARY_PATH LD_PRELOAD CHECK_CI_ROOT", bw, " ")
   for (i = 1; i <= nbw; i++) banned[bw[i]] = 1
   HASHLIST = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh'"
@@ -513,10 +533,11 @@ BEGIN {
   vl[4] = "          echo \"image: ${ImageOS:-unknown} ${ImageVersion:-unknown}\""
   vl[5] = "          echo \"kernel: $(uname -r)\""
   chezpath["main"] = "${{ runner.temp }}/chez-threads/bin/scheme"
-  chezpath["memory"] = chezpath["main"]
+  chezpath["memory-1"] = chezpath["main"]; chezpath["memory-2"] = chezpath["main"]
   chezpath["nothreads"] = "${{ runner.temp }}/chez-nothreads/bin/scheme"
   chezpath["floor"] = chezpath["main"]; chezpath["current"] = chezpath["main"]
-  prefix["main"] = "chez-threads-"; prefix["memory"] = "chez-threads-"; prefix["nothreads"] = "chez-nothreads-"
+  prefix["main"] = "chez-threads-"; prefix["memory-1"] = "chez-threads-"; prefix["memory-2"] = "chez-threads-"
+  prefix["nothreads"] = "chez-nothreads-"
   prefix["floor"] = "chez-threads-"; prefix["current"] = "chez-threads-"
   HASVAL = "this key must hold a block, not a value"
   NOKEY = "is not a key line check-ci reads"
@@ -569,18 +590,22 @@ fileno == 1 {
     if (substr(rest, 1, 22) == "CHEZ_SQLITE3_LIBRARY: ") ealk = "CHEZ_SQLITE3_LIBRARY"
     else if (substr(rest, 1, 16) == "C_INCLUDE_PATH: ") ealk = "C_INCLUDE_PATH"
   }
+  # The other: MEMORY_SHARD, on the one line that runs a memory job's own
+  # shard. Its number is that line's argument, and no other line's.
+  shardok = (!content && ismem(job) && rest == "run: " shardrun[job])
   w = raw; gsub(/[^A-Za-z0-9_]+/, " ", w)
   nw = split(w, ws, " "); split("", seen)
   for (k = 1; k <= nw; k++) {
     x = ws[k]
     if (k == 1 && ealk != "" && x == ealk) continue
-    if (!(x in seen) && ((x in banned) || x ~ /^VALGRIND_/)) {
+    if (shardok && x == "MEMORY_SHARD") continue
+    if (!(x in seen) && ((x in banned) || x ~ /^VALGRIND_/ || x ~ /^MEMORY_/)) {
       seen[x] = 1
       prob(ln, "names " x ", which could steer a check or a later step")
     }
   }
   for (g = 1; g <= 3; g++)
-    if (index(raw, gname[g]) > 0 && !(!content && rest == "run: make " gname[g] && job == gjob[g]))
+    if (index(raw, gname[g]) > 0 && !(!content && (gr = gaterun(gname[g], job)) != "" && rest == gr))
       prob(ln, "names " gname[g] " other than as the whole run line of the one step that runs it")
 
   if (content) next

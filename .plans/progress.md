@@ -32,9 +32,13 @@ newest first.
   ADR-0020, the same day ("Accept all"); and M3 slice 3's amendments to ADR-0014, ADR-0016,
   ADR-0017 and ADR-0020, on 2026-11-16 ("Accept all"); and, the same day, slice 2's to ADR-0002
   and ADR-0005, slice 4's to ADR-0017, and slice 5's to ADR-0012, ADR-0016, ADR-0018 and
-  ADR-0020 ("Accept all"), and to ADR-0019's decision 11 ("Keep, amend").
+  ADR-0020 ("Accept all"), and to ADR-0019's decision 11 ("Keep, amend"); and slice 6's to
+  ADR-0005, ADR-0017 and ADR-0019, on 2026-11-17 ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
+  M3 slice 6 replaces `memory` with two jobs, so its merge needs the required checks swapped:
+  `memory (the Valgrind gate)` out, and `memory-1 (the Valgrind gate, shard 1 of 2)` and
+  `memory-2 (the Valgrind gate, shard 2 of 2)` in (the maintainer's, ADR-0005, amended).
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
 - **M3 slice 1 is done:** the pure core, as PR #22, `d91ae72`, squash-merged with CI passing in
@@ -46,14 +50,18 @@ newest first.
 - **M3 slice 4 is done:** transactions, as PR #25, `aa89dde`, by the M2 session, squash-merged
   with CI passing in every job. Slices 1 to 4 merged in order, each rebased onto the squash before
   it (the maintainer, 2026-11-16: "Run all four").
-- **Now: M3 slice 5, the settings, is PR #26 on `m3-slice-5-settings`,** by the M3 session,
-  rebased onto `aa89dde`. It carries part D, the fix of slice 3's conveniences under pending
-  resumes. Next, slice 6, interrupt and contention, where the `memory` job is also sharded (the
-  maintainer, 2026-11-16: "Shard in slice 6"). The maintainer's order, 2026-11-15: slices 1 and 2
+- **M3 slice 5 is done:** the settings, with part D's fix of slice 3's conveniences, as PR #26,
+  `cc8c60d`, squash-merged with CI passing in every job.
+- **M4's pre-work is merged:** the variadic `db_config` probe and the census, research only, as
+  PR #27, `fcc9e7c`, by the M4 session
+  ([research/m4-prework/](research/m4-prework/README.md)).
+- **Now: M3 slice 6, the interrupt, contention and the memory job's shards, is PR #29 on
+  `m3-slice-6-interrupt`,** by the M3 session, rebased onto `fcc9e7c`, CI passing in all six
+  jobs. Then the maintainer's hand run on the Mac, and M3's closing review
+  ([the M3 plan](2026-11-15-m3-plan.md), §5). The maintainer's order, 2026-11-15: slices 1 and 2
   in parallel, then 3, then 4 (the M2 session) and 5 in parallel, then 6, each its own PR, stacked
-  on the one before
-  ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
-  too, and M2's Mac run is done, below.
+  on the one before. M2's slices ran in the stacked order of 2026-11-14 too, and M2's Mac run is
+  done, below.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -94,11 +102,109 @@ newest first.
     - so what CI can't reach held on the Mac: `sqlite3_bind_text64`'s `unsigned-8` on Apple's
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
-- **Open:** the M3 plan's probes P4 and P5, in slice 6 (its §7, §8). P6 and P8 ran in M3 slice 3.
-  Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
-  (ADR-0005, amended).
+- **Open:**
+  - **P4 on Apple's library,** read from `test-contention`'s `P4:` line in the Mac's hand run. P4
+    ran in M3 slice 6 here and on CI: Guix's 3.53.1, the floor's 3.45.1, Ubuntu's 3.45.1 on the
+    `main` lane and the current lane's 3.54.1 all sleep in milliseconds. P5 ran in slice 6, and
+    P6 and P8 in slice 3.
+  - **`test-transaction-interrupt` near `SLOW` under the gate here,** 429 to 434 s of 450; 139 s
+    on slice 6's CI, under the 150 s that would make it a finding for M3's closing review
+    (ADR-0005, amended in M3 slice 6).
+  - **The Mac's hand run of M3:** its checklist adds the interrupt suites on Apple's library,
+    which keeps no memory statistics, so the suites' watchdog races the owner as plain threads
+    do.
+  - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
+    (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M3 slice 6: the interrupt, contention and the memory job's shards (PR #29)
+
+- **Built** by the M3 session on slice 5's head, then rebased onto `fcc9e7c`, by builders in turn:
+  - **Part A,** `interrupt-database!` and the close's exclusion, in
+    `(chez-sqlite3 private connection)`:
+    - the record holds slice 1's latch; the open sets its flag, and the close clears it before it
+      finalizes anything, setting it again only when the connection stays open;
+    - `interrupt-database!` and `sqlite-interrupt?` exported, 68 names;
+    - `test-interrupt-database`, `-reach` (the watchdog device under Valgrind) and `-close` (the
+      race, 20 rounds);
+  - **Part B,** contention: `test-contention`, two WAL connections on two threads, under a
+    1500 ms busy timeout, and P4's grain row; the docs' `sqlite-busy?` remedies;
+  - **Part C,** CI's memory job in two shards, `memory-1` and `memory-2`, with
+    `make check-memory-shards` in `make test`;
+  - **Follow-up 2, from the review:** `interrupt-database/with`, and rows that hold the call
+    inside the latch.
+- **Decided by the maintainer:** "Shard in slice 6" (2026-11-16); "Accept all" (2026-11-17),
+  slice 6's amendments to ADR-0005, ADR-0017 and ADR-0019.
+- **Watched failing:** every new row, red against the code before it. Part A ran 16 mutations, 15
+  caught, one equivalent; part B 15 plants, all caught; part C 53, 51 caught, two equivalent;
+  follow-up 2 9 plants, 8 caught, one of them only under the gate, one equivalent. The lead's own
+  plants:
+  - K1, K2 and J3 survived at first, and each got a row; K5 is equivalent;
+  - 9 in part C and 3 in follow-up 2 were each caught.
+
+  Every survivor is argued in [the log](m3-slice-6-mutation-log.md).
+- **Reviewed** (Opus, read-only), every finding reproduced before it was fixed:
+  - **No row held that the call is made inside the latch.** A plant that read the handle there
+    and called after the latch returned passed every suite, plain and under the gate. Yet a probe
+    closing the connection at an engine's expiry had Valgrind report the write into the freed
+    connection. The brief had asked for no engine row for this verb, and slice 1's rows hold the
+    latch alone. Fixed by follow-up 2.
+  - **The records:** a plant named two ways, a suite 16 s from `SLOW` recorded only in the log,
+    evidence only in a git-ignored `build/`, and counts that disagreed.
+- **The lead's own finds:**
+  - `make test SUITES=<suite>` failed once part C's check read the run's `SUITES`. The check reads
+    the tree's suites now, held by `check-test-fails`' `shards-narrowed`.
+  - The busy wait's row failed 2 plain runs of 30: the watchdog's first interrupt raced the
+    statement's start, and an interrupt landing there stops a statement before its wait. Its
+    watchdog now stays quiet for 200 ms, and the suite passed 60 of 60.
+- **Measured** ([research/m3-slice-6/](research/m3-slice-6/README.md)):
+  - P5: an interrupt on a freed connection is an invalid write to Valgrind, but the gate's race
+    row can't see a missing exclusion;
+  - the watchdog under Valgrind: a plain one stopped none of 15 prepares; the device stopped 3 of
+    3, each in its first round;
+  - a deferred transaction's first write waits out the timeout unless it has read, 1501 to 1502 ms
+    against 0;
+  - P4 on four libraries, each in milliseconds.
+- **Records,** accepted by the maintainer on 2026-11-17 ("Accept all"):
+  - ADR-0005, ADR-0017 and ADR-0019 amended;
+  - the plan's §4.7, §4.8, §5 item 6, §7 and §8's P4 and P5;
+  - constraints: the call inside the latch, the grain row's exception, and the memory gate's two
+    jobs;
+  - AGENTS.md rules on the watchdog, the grain exception, the shards and a sweep's stand-in; and
+    their traps.
+- **CI:** run 44064945277 on `6bae240`: all six jobs passed.
+  - `memory-1` took 23m33s and `memory-2` 23m28s, against slice 5's one job at 40m31s. Each
+    ran its gate in about 5 min and its shard in 17m37s and 17m35s. The two shards' suites
+    took 1055 s and 1054 s.
+  - The slowest suites were `test-library-loading-decoys`, 171 s of 450, and
+    `test-library-loading-missing`, 156 s. `test-transaction-interrupt` took 139 s.
+  - `test-check-ci`, at 439 rows, took 97 s.
+  - The `P4:` lines read 252 ms on the `main` lane's Ubuntu 3.45.1, 251 ms at the floor and 251 ms
+    on the current lane's 3.54.1, each for a 250 ms timeout.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder, part A | Opus | about 511k | 151 | 55 min |
+  | Part A's follow-up | Opus | about 581k | 38 | 19 min |
+  | Builder, part B | Opus | about 367k | 128 | 40 min |
+  | Part B's follow-up | Opus | about 412k | 42 | 23 min |
+  | Builder, part C | Opus | about 551k | 182 | 101 min |
+  | Adversarial review | Opus | about 368k | 91 | 25 min |
+  | Follow-up 2 | Opus | about 350k | 132 | 37 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - Under Valgrind a watchdog thread may not run at all while the owner runs C. Taking SQLite's
+    memory mutex makes the owner block inside SQLite, and the interrupt lands there.
+  - A stand-in that only notes its call may cost an engine no tick, so no fuel splits it from the
+    code before it.
+  - An interrupt sent as a statement starts stops it before its busy wait.
+  - A comma inside a make function's arguments splits them.
+  - A forked thread's uncaught raise runs the base exception handler, which removes
+    `make-process-temp-directory`'s directory.
+  - A review read the record's wiring, which every row had passed by. Rows that hold a library's
+    parts on stand-ins say nothing of how a caller hands the parts its real call.
 
 ### 2026-11-16 — M3 slice 5: the settings (PR #26)
 

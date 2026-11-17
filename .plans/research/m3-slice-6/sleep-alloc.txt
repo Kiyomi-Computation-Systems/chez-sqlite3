@@ -1,0 +1,11 @@
+;; sleep-alloc.sps, rerun by the lead on 2026-11-16 in the container, Guix's Chez,
+;; at f2bfd05: $CHEZ --libdirs src:tests:build/scheme-libs --program sleep-alloc.sps
+nothing: 0 bytes over 1000 calls
+sleep 1 ms: 0 bytes over 200 calls
+a foreign call: 0 bytes over 1000 calls
+set! of a captured flag: 0 bytes over 1000 calls
+a cons, the control: 0 bytes over 1000 calls
+a make-time, the control: 48000 bytes over 1000 calls
+a critical-section around a set!: 48000 bytes over 1000 calls
+the window outside the verb: enter, note, sleep, section of note and leave: 12800 bytes over 200 calls
+the window with disable-interrupts and enable-interrupts in place of the section: 0 bytes over 200 calls

@@ -1,0 +1,32 @@
+########## K1
+########## K2
+########## K4
+test-interrupt-database
+rc=1
+FAIL from another thread, interrupt-database! makes no owner check: it answers void, where close-database! from the same thread raises &sqlite-wrong-thread, and the probe on the ow
+FAIL on a closed connection interrupt-database! does nothing and raises nothing, from the owner and from another thread, again and again; nothing is counted
+FAIL the open makes the connection interruptible: open-database, open-database with a settings list, and call-with-database's connection each read clear, the verb answers void, the
+FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the close (set, then a statement clears it); called from inside the close's first finali
+FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion violation; the verb did nothing from inside it; after it the probe reads c
+FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: close-database! raises &sqlite-error busy; the verb did nothing from in
+FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing from inside it; it closes, and raises the setting's own condition; left o
+FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; left open by an untracked statement, the close's assertion violation is
+# of unexpected failures  8
+test-interrupt-reach
+rc=1
+FAIL a long step, stopped from another thread: step! raises &sqlite-interrupt, interrupt and interrupt; the statement is failed; the connection then runs a statement
+FAIL a long step through query-row, its statement from the cache: query-row raises &sqlite-interrupt, interrupt and interrupt; the statement whose step failed leaves the cache; the
+FAIL a prepare of three megabytes of SQL, stopped by a watchdog that repeats the interrupt until the prepare returns: prepare-statement raises &sqlite-interrupt, interrupt and inte
+FAIL a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts all through the wait, which reach SQLite, BEGIN IMMEDIAT
+FAIL a statement held at a row: an interrupt from another thread sticks, so prepare-statement, execute! and query-row each raise &sqlite-interrupt from itself, until the held state
+FAIL an interrupt that lands between statements is lost: on a fresh connection, from another thread, it reaches SQLite, and the next statement runs, clearing it
+FAIL an interrupt that lands while a statement is prepared and not yet stepped is lost: it reaches SQLite, and the statement steps to its row
+FAIL an interrupt that lands after a statement ran to its end, unreset, is lost: it reaches SQLite, and the next statement runs
+# of unexpected failures  8
+test-interrupt-close
+rc=1
+FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another thread: step! raises &sqlite-interrupt; once the statement is finalized
+FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection is stopped from another thread: step! raises &sqlite-interrupt; once 
+FAIL the race: interrupts from one thread against opens and closes of a file on another; every interrupt answers void, some land on a closed connection, the interrupter ends, and n
+# of unexpected failures  3
+########## K5

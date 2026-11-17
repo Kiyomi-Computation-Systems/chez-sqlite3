@@ -41,8 +41,9 @@ what it gives.
 ## Connections
 
 A connection belongs to the thread that opened it. Any other thread that
-uses it gets a wrong-thread condition. Nothing closes a connection for you:
-close it, or open it with `call-with-database`.
+uses it gets a wrong-thread condition, except to interrupt it. Nothing
+closes a connection for you: close it, or open it with
+`call-with-database`.
 
 ### `open-database`
 
@@ -245,6 +246,64 @@ Whether the value is a connection, open or closed.
 ```scheme run
 (list (database? 'x) (call-with-database ":memory:" database?))
 ;; => (#f #t)
+```
+
+### `interrupt-database!`
+
+```text
+interrupt-database! : Database -> Void
+```
+
+Asks SQLite to stop what the connection is running. Any thread may call
+it: it is how another thread stops a long query. The verb whose statement
+stopped raises a condition that `sqlite-interrupt?` holds.
+
+What it reaches, and what it doesn't:
+
+- a step or a prepare that is running stops at once;
+- a wait for another connection's lock doesn't: it ends only when the
+  `busy-timeout` runs out, so keep that as short as you can wait;
+- a statement on its row counts as running: the interrupt lasts, and every
+  new statement on the connection fails with it, `commit` and `rollback`
+  too, until that statement is reset or finalized;
+- one that comes while nothing runs is lost, and the next statement runs
+  as usual;
+- an interrupted write ends its transaction; an interrupted `select`
+  doesn't.
+
+Since one can come between two statements and be lost, a watchdog calls it
+again and again until the work has stopped:
+
+```scheme
+;; on the watchdog's thread, until the owner says it is done
+(let loop ()
+  (unless (done?)
+    (interrupt-database! db)
+    (sleep (make-time 'time-duration 1000000 0))
+    (loop)))
+```
+
+On a closed connection, or one closing, it does nothing.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (let ((st (prepare-statement db "select 1")))
+      (step! st)
+      (interrupt-database! db)
+      (let ((stopped (guard (e ((sqlite-interrupt? e) 'interrupted))
+                       (query-row db "select 2"))))
+        (reset! st)
+        (list stopped (query-row db "select 2"))))))
+;; => (interrupted #(2))
+```
+
+```scheme run
+(let ((db (open-database ":memory:")))
+  (close-database! db)
+  (interrupt-database! db)
+  'nothing-happened)
+;; => nothing-happened
 ```
 
 ## Conveniences and counters
@@ -498,8 +557,9 @@ back, once the transaction has committed. `Mode` is `'deferred`,
 `'immediate` or `'exclusive`, as SQLite's `begin` takes it, and
 `'immediate` when you give none: it takes the write lock first, so its
 writes don't fail as busy part way. A `'deferred` one takes the lock at its
-first write, which fails at once as busy if another connection holds it,
-without waiting.
+first write. Once it has read, that write can't wait: it fails at once as
+busy if another connection holds the lock, or has committed since the read
+([`sqlite-busy?`](#sqlite-busy) says what to do).
 
 ```scheme run
 (call-with-database ":memory:"
@@ -1083,14 +1143,14 @@ gives a fresh list.
 
 Everything this library raises on purpose is one of seven conditions, and
 each is a `chez-sqlite3-error?`. An `sqlite-error?` can also be a busy, a
-constraint or a read-only one. Catch the family with it, or one kind with
-its own predicate:
+constraint, a read-only or an interrupt one. Catch the family with it, or
+one kind with its own predicate:
 
 | Predicate | Raised when |
 |---|---|
 | `sqlite-library-unavailable?` | SQLite could not be loaded: not found, too old, not threadsafe, or missing a function. |
 | `sqlite-error?` | SQLite answered with an error code. |
-| `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?` | An `sqlite-error?` of one kind: see below. |
+| `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?`, `sqlite-interrupt?` | An `sqlite-error?` of one kind: see below. |
 | `sqlite-wrong-thread?` | A connection, or a statement of one, is used by a thread that did not open it. |
 | `sqlite-closed?` | A connection, or a statement, is used after it was closed or finalized. |
 | `sqlite-transaction-ended?` | `with-transaction`'s procedure returned after its transaction had already ended. |
@@ -1278,11 +1338,52 @@ sqlite-busy? : Any -> Boolean
 ```
 
 Whether the value is an `sqlite-error?` whose primary code is `busy` or
-`locked`: another connection holds what this one needs. A `commit` refused
-while the connection's own write is unfinished, such as an
-`insert … returning` that has answered a row, is `busy` too, and no wait
-fixes it: `reset!` or finalize that statement first. A `select` mid-row
-doesn't stop a `commit`.
+`locked`: something holds what the connection needs. Its
+`sqlite-error-extended-code` says which case it is, and each has its own
+fix:
+
+| Extended code | What happened | What to do |
+|---|---|---|
+| `busy-snapshot` | The transaction read, another connection then committed, and this one tried to write. What it read is out of date, so no wait can help. | Roll back and run it all again, or begin `'immediate`, as `with-transaction` does when given no mode. |
+| `locked` | The connection's own statement is in the way, as a `drop table` while a `select` from it is on a row. | `reset!` or finalize that statement first. |
+| `busy` | One of the four below. | |
+
+The four that are plain `busy`:
+
+- **At once, in a transaction that has read:** its first write found
+  another connection writing. Waiting could deadlock, so it doesn't wait.
+  Roll back and start again, or begin `'immediate`.
+- **After the `busy-timeout`:** another connection held its lock all that
+  time. Try again later, or wait longer. With no `busy-timeout`, it comes
+  at once.
+- **A `commit` while another connection reads,** in the default journal
+  mode. Commit again once the reader is done, or roll back. In `wal` mode a
+  reader never stops a commit.
+- **A `commit` while the connection's own write is unfinished,** such as an
+  `insert … returning` that has answered a row. `reset!` or finalize that
+  statement, then commit. A `select` on its row doesn't stop a `commit`.
+
+The two `commit`s, and a write that fails at once or as `busy-snapshot`,
+leave the transaction open: roll it back, or let `with-transaction` do it.
+`in-transaction?` says whether one is open.
+
+Keep `busy-timeout` as short as the program can wait:
+`interrupt-database!` doesn't stop a busy wait, so nothing ends one early
+but the other connection letting go.
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x)")
+    (execute! db "insert into t values (1), (2)")
+    (let* ((st (prepare-statement db "select x from t"))
+           (row (step! st))
+           (code (guard (e ((sqlite-busy? e) (sqlite-error-extended-code e)))
+                   (execute! db "drop table t"))))
+      (finalize-statement! st)
+      (list code (query-row db "select count(*) from t")))))
+;; => (locked #(2))
+```
 
 ### `sqlite-constraint?`
 
@@ -1301,6 +1402,15 @@ sqlite-read-only? : Any -> Boolean
 
 Whether the value is an `sqlite-error?` whose primary code is `readonly`:
 the database cannot be written.
+
+### `sqlite-interrupt?`
+
+```text
+sqlite-interrupt? : Any -> Boolean
+```
+
+Whether the value is an `sqlite-error?` whose primary code is `interrupt`:
+[`interrupt-database!`](#interrupt-database) stopped the statement.
 
 ### `sqlite-invalid-text?`
 

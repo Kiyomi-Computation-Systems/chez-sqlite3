@@ -20,7 +20,10 @@
   as built, `ended` as the check-out's check, one section a statement, the builder's choices the
   maintainer confirmed that day ("Confirm, and name the SQL"; "Document it"; "One section per
   statement"), and four consequences found by the slice's review
-  ([amendment](#amendment-2026-11-16-with-transaction-as-built-m3-slice-4)).
+  ([amendment](#amendment-2026-11-16-with-transaction-as-built-m3-slice-4)). Amended 2026-11-16
+  in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): a deferred transaction's first
+  write, and the default under contention
+  ([amendment](#amendment-2026-11-16-a-deferred-transactions-first-write-m3-slice-6)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
 - **Settles:** brief §4's "`with-transaction` with nested savepoints, and rollback on a raise"
@@ -420,3 +423,29 @@ against a plant.
   constraints ask. At the final text it completes at fuel 112, and slice 1's plant fails at fuels
   106 to 109, against the model's 138 to 174. A fuel is the suite's as well as the code's: rows
   added elsewhere in the suite moved every sweep by two fuels.
+
+## Amendment, 2026-11-16: a deferred transaction's first write (M3 slice 6)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"). Proposed in M3 slice 6, from part B's
+builder's report and the lead's checks (the slice's
+[mutation log](../m3-slice-6-mutation-log.md), part B;
+[research/m3-slice-6/](../research/m3-slice-6/README.md)).
+
+- **The consequences' "a deferred transaction's write under contention fails at once" holds only
+  once the transaction has read,** as the context says. Measured alike on both libraries
+  (`deferred-first-write.sps`), under a 1500 ms busy timeout, beside another connection's open
+  write:
+  - a deferred transaction's first write, with nothing read, waited 1501 to 1502 ms, then
+    answered `busy`, extended `busy`;
+  - the same write after a `select` answered `busy` in 0 ms;
+  - each left the transaction open, `in-transaction?` true.
+
+  SQLite calls the busy handler only while no read transaction is open (concurrency B2).
+  `docs/reference.md`'s `'deferred` sentence now says "once it has read".
+- **The default, `immediate`, under contention,** in `test-contention`. Two threads each run a
+  body that reads, then writes: the second's `BEGIN IMMEDIATE` waits for the first's commit, and
+  both commit. The same bodies under `'deferred` meet `busy-snapshot`.
+- **`with-transaction`'s own `BEGIN` waits out its timeout once,** with no retry in Scheme
+  (ADR-0019, decisions 8 and 11). `test-contention`'s row T waits 1502 ms under another's write
+  lock, then raises `&sqlite-busy` with nothing begun. A plant that retried the `BEGIN` once
+  waited 3004 ms, and only T failed it.
