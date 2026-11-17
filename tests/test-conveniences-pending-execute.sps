@@ -70,6 +70,12 @@
   'loaded
   public-load)
 
+;; direct : (U Integer (List 'raised Any))
+;; What sqlite3_auto_extension answered for an entry point that does
+;; nothing, registered straight through the FFI before the tell, then reset:
+;; the gate's independent reading.
+(define direct (tell-direct))
+
 ;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
 ;; The tell's registration, which every row that depends on the tell is
 ;; gated by, through tell-available! or tell-kept?.
@@ -78,6 +84,10 @@
 (test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
   'registered-or-refused
   (if (tell-answered? registration) 'registered-or-refused registration))
+
+(test-equal "the gate refuses the tell exactly when sqlite3_auto_extension, given an entry point that does nothing straight through the FFI, answers 21, and registers it exactly when that answers 0"
+  'gate-held
+  (tell-gate-held registration direct))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts
@@ -97,7 +107,7 @@
     (guard (e (#t (list 'raised (describe e))))
       (reported 'execute! (sweep 'execute! 'every) past-a-fuel both-a-fuel))))
 
-(let* ((name "a timer handler that raises, at every tick from 1 until execute! completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out; nothing is counted once each connection is closed")
+(let* ((name "a timer handler that raises, at every tick from 1 until execute! completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out, and the statement given back wherever one was counted as the handler raised, a reading that needs no tell; nothing is counted once each connection is closed")
        (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))
   (test-equal name
     (list '() 'some-raised zero-counts)

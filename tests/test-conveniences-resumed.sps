@@ -45,9 +45,16 @@
 ;;;
 ;;; A remainder taken before the call's first expression is the caller's own:
 ;;; resumed again, it makes a whole new call, with a flag of its own. The rows
-;;; tell those apart by what they touch, and the script's row, where a whole
-;;; new call touches only rows of its own, by the fuel: no later than the
-;;; fuel at which the same call shape, refused at its first check, completes.
+;;; tell those apart by what they touch, and by the fuel. Each fuel begins
+;;; with a collection, so a remainder lies further into the call at each
+;;; fuel than at the one before, and a remainder taken past the call's first
+;;; expression and before its first section is refused, &sqlite-closed: so
+;;; a whole new call, which for execute!, query and query-row answers again
+;;; as a remainder past the return does, touching nothing the rows read, must
+;;; lie below the first such refusal. A bound from the call refused at its
+;;; first check, slice 3's, was loose: its raise costs ticks of its own, and
+;;; it completed at fuel 75, the script's whole new calls ending at 7 (M3's
+;;; closing review, reviewer B).
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
@@ -58,7 +65,7 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) make-engine set-timer timer-interrupt-handler)
+        (only (chezscheme) make-engine set-timer timer-interrupt-handler collect collect-trip-bytes)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -113,6 +120,7 @@
 (define returned (reach statement-library 'returned))
 (define bind-all! (reach values-library 'bind-all!))
 (define column-value (reach values-library 'column-value))
+(define made-claim (reach conveniences 'made-claim))
 
 ;; --- helpers ------------------------------------------------------------------------------
 
@@ -187,6 +195,16 @@
                    (proc db))))
       (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))
 
+;; quieted! : -> Void
+;; A collection now, at a fuel's start, with collect-trip-bytes raised to
+;; 128 MiB, far above what one fuel's runs allocate, so no collect request
+;; falls in a fuel's runs: one costs a run up to a tick
+;; (.plans/research/m3-slice-5/, gc-ticks.sps), and the bound below reads
+;; the fuels in order.
+(define (quieted!)
+  (collect-trip-bytes (expt 2 27))
+  (collect))
+
 ;; summarized : (Listof Any) -> Any
 ;; () for no deviation; else how many, and the first three.
 (define (summarized deviations)
@@ -223,15 +241,6 @@
             ((>= n 100000) #f)
             (else (loop (cadr r) (+ n 1)))))))
 
-;; completing-fuel : (-> Any) -> Natural
-;; The first fuel at which one slice of THUNK's engine completes it, at most
-;; 100000.
-(define (completing-fuel thunk)
-  (let loop ((fuel 1))
-    (if (or (eq? (car (slice (make-engine thunk) fuel)) 'completed) (>= fuel 100000))
-        fuel
-        (loop (+ fuel 1)))))
-
 ;; sweep : (Positive-Integer -> (List Boolean Boolean (Listof Any))) -> (List Any (Listof Any) Natural)
 ;; CHECK at each fuel from 1 until the call completes without expiring, at
 ;; most 5000: that fuel, or no-completion; each fuel's deviations, in order;
@@ -260,15 +269,58 @@
   (list (if (integer? (car run)) (summarized (cadr run)) (list (car run) (summarized (cadr run))))
         (if (> (caddr run) 0) 'held-at-some-fuel 'never-held)))
 
+;; --- the claim, pure -------------------------------------------------------------------------
+;; execute!, query and query-row each hold a claim, made-claim's, made by the
+;; call's first expression. The sweeps below and (conveniences-pending)'s
+;; hold it through the calls; a claim taken again once its call has ended,
+;; position 0 above all, which any remainder taken before the check-out
+;; carries, passed them all (M3's closing review, reviewer B's N1: execute!'s
+;; remainder at fuels 8 to 14, resumed twice, inserted twice). So these rows
+;; hold it whole.
+
+;; claimed : (Listof (List (U Natural #f) Boolean)) -> (Listof Boolean)
+;; A fresh claim given each of STEPS, a position and LAST?, in order: what
+;; it answered each time.
+(define (claimed steps)
+  (let ((claim (made-claim)))
+    (let loop ((rest steps) (found '()))
+      (if (null? rest)
+          (reverse found)
+          (loop (cdr rest) (cons (claim (car (car rest)) (cadr (car rest))) found))))))
+
+;; after-the-end : (Listof (List (U Natural #f) Boolean))
+;; Every kind of claim a run can make once its call has ended: position 0,
+;; the check-out's; one the call made; one past it; none, #f, a raise's
+;; give-back; each with LAST? and without.
+(define after-the-end
+  '((0 #f) (0 #t) (1 #f) (2 #f) (3 #f) (4 #f) (4 #t) (#f #f) (#f #t) (0 #f)))
+
+(define (refusals steps) (let loop ((rest steps) (found '())) (if (null? rest) found (loop (cdr rest) (cons #f found)))))
+
+(test-equal "a call's claim, made-claim's, claims each position once, in order, the next whatever it is when given none, and ends at its last: 0, then 0 again refused, 2 refused before 1, 1, none claiming 2, 2 refused, then 3 as the last; once ended, every position is refused, 0 and none included, by a run carrying any"
+  (append '(#t #f #f #t #t #f #t) (refusals after-the-end))
+  (guard (e (#t (list 'raised (what-raised e))))
+    (claimed (append '((0 #f) (0 #f) (2 #f) (1 #f) (#f #f) (2 #f) (3 #t)) after-the-end))))
+
+(test-equal "a claim ended by a raise's give-back, a claim of none as the last, and one ended at its first section: each then refuses every position, 0 included"
+  (list (append '(#t #t) (refusals after-the-end))
+        (append '(#t) (refusals after-the-end)))
+  (guard (e (#t (list 'raised (what-raised e))))
+    (let* ((given-back (claimed (append '((0 #f) (#f #t)) after-the-end)))
+           (at-first (claimed (append '((0 #t)) after-the-end))))
+      (list given-back at-first))))
+
 ;; --- execute!, query and query-row: a remainder resumed twice ---------------------------------
 
 (define X "select x + ?1 from n order by x")
 
 ;; resumed-twice : Symbol (Database Integer -> Any) Any Any Boolean Positive-Integer
-;;                 -> (List Boolean Boolean (Listof Any))
+;;                 -> (List Boolean Boolean (Listof Any) (U 'again 'refused #f))
 ;; On a fresh database, RUN with 10 as an engine, E1, one slice of FUEL:
 ;; whether it expired; whether it then held its statement, checked out of
-;; the cache; and what deviated. Expired, its remainder is resumed to its
+;; the cache; what deviated; and, for a remainder taken while the call did
+;; not hold its statement, again when its second resume answered MINE,
+;; refused when it raised &sqlite-closed, else #f. Expired, its remainder is resumed to its
 ;; end, answering FIRST, due MINE; then, when WARM, the cache warmed by RUN
 ;; with 0 before E1, a second engine, E2, RUN with 20, is run a tick at a
 ;; time until it holds the statement at its row; then E1's remainder is
@@ -283,7 +335,7 @@
             (when warm (run db 0))
             (let ((r (slice (make-engine (lambda () (attempt (lambda () (no-value (run db 10)))))) fuel)))
               (if (eq? (car r) 'completed)
-                  (list #f #f (if (equal? (cadr r) mine) '() (list (list 'completed (cadr r)))))
+                  (list #f #f (if (equal? (cadr r) mine) '() (list (list 'completed (cadr r)))) #f)
                   (let* ((more (cadr r))
                          (held (and (= (database-cache-count db) 0) (= (length (tracked-statements db)) 1)))
                          (first (finish more))
@@ -302,19 +354,70 @@
                                       '()
                                       (list (list 'second (if held 'held 'not-held) second)))
                                   (if (or (not warm) (equal? theirs-answer theirs)) '() (list (list 'theirs theirs-answer)))
-                                  (if (equal? end (list (list (cons X 'ready)) 1 1)) '() (list (list 'end end))))))))))))
+                                  (if (equal? end (list (list (cons X 'ready)) 1 1)) '() (list (list 'end end))))
+                          (cond (held #f)
+                                ((equal? second mine) 'again)
+                                ((equal? second (closed name)) 'refused)
+                                (else #f))))))))))
     (if (and (pair? outcome) (eq? (car outcome) 'raised))
-        (list #f #f (list outcome))
+        (list #f #f (list outcome) #f)
         outcome)))
 
-;; both-ways : Symbol String (Database Integer -> Any) Any Any -> (List Any Any Any Any)
-(define (both-ways name what run mine theirs)
-  (append (named (string-append what ", warm, another engine holding its statement at a row")
-                 (sweep (lambda (fuel) (resumed-twice name run mine theirs #t fuel))))
-          (named (string-append what ", cold, alone")
-                 (sweep (lambda (fuel) (resumed-twice name run mine theirs #f fuel))))))
+;; bounded : (Positive-Integer -> (List Boolean Boolean (Listof Any) (U 'again 'refused #f)))
+;;           -> (List Any (Listof Any) Natural Any)
+;; CHECK, resumed-twice's, swept as sweep sweeps it, each fuel begun by
+;; quieted!, and the sweep's answers with one more: whether every second
+;; resume that answered again, of a remainder taken while the call did not
+;; hold its statement, lies below the first fuel whose remainder, taken
+;; before the check-out, was refused, a whole new call, or past the last
+;; fuel at which the call held its statement, past the return; and whether
+;; that refusal came before the first fuel at which the call held its
+;; statement. A claim taken again once its call had ended, by a remainder
+;; between the call's first expression and its check-out, answered again
+;; there, and passed every row of this suite (M3's closing review,
+;; reviewer B's N1).
+(define (bounded check)
+  (let ((refused-at #f) (first-held #f) (last-held #f) (again '()))
+    (let ((run (sweep (lambda (fuel)
+                        (quieted!)
+                        (let ((r (check fuel)))
+                          (when (cadr r)
+                            (unless first-held (set! first-held fuel))
+                            (set! last-held fuel))
+                          (case (cadddr r)
+                            ((refused) (unless refused-at (set! refused-at fuel)))
+                            ((again) (set! again (cons fuel again))))
+                          (list (car r) (cadr r) (caddr r)))))))
+      (display "  refused before the check-out first at fuel ")
+      (write refused-at)
+      (display "; the statement held at fuels ")
+      (write first-held)
+      (display " to ")
+      (write last-held)
+      (display "; answered again at fuels ")
+      (write (reverse again))
+      (newline)
+      (append run
+              (list (cond ((not (and refused-at first-held (< refused-at first-held)))
+                           (list 'no-refusal-before-the-check-out refused-at first-held))
+                          ((exists (lambda (f) (< refused-at f last-held)) again)
+                           (list 'answered-again-inside-the-call
+                                 (filter (lambda (f) (< refused-at f last-held)) (reverse again))
+                                 refused-at last-held))
+                          (else 'answered-again-only-before-a-refusal-or-past-the-return)))))))
 
-(define resumed-expected (list '() 'held-at-some-fuel '() 'held-at-some-fuel))
+;; both-ways : Symbol String (Database Integer -> Any) Any Any -> (List Any Any Any Any Any Any)
+(define (both-ways name what run mine theirs)
+  (let* ((warm (bounded (lambda (fuel) (resumed-twice name run mine theirs #t fuel))))
+         (cold (bounded (lambda (fuel) (resumed-twice name run mine theirs #f fuel)))))
+    (append (named (string-append what ", warm, another engine holding its statement at a row") warm)
+            (list (cadddr warm))
+            (named (string-append what ", cold, alone") cold)
+            (list (cadddr cold)))))
+
+(define resumed-expected
+  (list '() 'held-at-some-fuel 'answered-again-only-before-a-refusal-or-past-the-return
+        '() 'held-at-some-fuel 'answered-again-only-before-a-refusal-or-past-the-return))
 
 (test-begin "conveniences-resumed")
 
@@ -326,16 +429,16 @@
   zero-counts
   (native-counts))
 
-(test-equal "query, an engine's remainder resumed twice, at every fuel from 1 until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the first resume answers its rows; the second, of a remainder taken while it held its statement, raises &sqlite-closed, or re-entered inside the library's own wind, and of any other raises one of those or answers again; the other engine answers its own rows; the cache ends holding the one statement, ready"
+(test-equal "query, an engine's remainder resumed twice, at every fuel from 1 until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the first resume answers its rows; the second, of a remainder taken while it held its statement, raises &sqlite-closed, or re-entered inside the library's own wind, and of any other raises one of those or answers again, only below the first fuel at which one taken before the check-out was refused, or past the return; the other engine answers its own rows; the cache ends holding the one statement, ready"
   resumed-expected
   (both-ways 'query "query" (lambda (db v) (query db X v))
              '(#(11) #(12) #(13)) '(#(21) #(22) #(23))))
 
-(test-equal "query-row, an engine's remainder resumed twice, at every fuel until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the second resume of a remainder taken while it held its statement raises &sqlite-closed, or re-entered inside the library's own wind; the other engine answers its own first row; the cache ends holding the one statement, ready"
+(test-equal "query-row, an engine's remainder resumed twice, at every fuel until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the second resume of a remainder taken while it held its statement raises &sqlite-closed, or re-entered inside the library's own wind; one that answers again lies below the first fuel at which one taken before the check-out was refused, or past the return; the other engine answers its own first row; the cache ends holding the one statement, ready"
   resumed-expected
   (both-ways 'query-row "query-row" (lambda (db v) (query-row db X v)) '#(11) '#(21)))
 
-(test-equal "execute!, an engine's remainder resumed twice, at every fuel until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the second resume of a remainder taken while it held its statement raises &sqlite-closed, or re-entered inside the library's own wind; the other engine runs its statement to its end; the cache ends holding the one statement, ready"
+(test-equal "execute!, an engine's remainder resumed twice, at every fuel until it completes without expiring, warm while another engine holds the statement at its row, and cold alone: the second resume of a remainder taken while it held its statement raises &sqlite-closed, or re-entered inside the library's own wind; one that answers again lies below the first fuel at which one taken before the check-out was refused, or past the return; the other engine runs its statement to its end; the cache ends holding the one statement, ready"
   resumed-expected
   (both-ways 'execute! "execute!" (lambda (db v) (no-value (execute! db X v))) 'no-value 'no-value))
 
@@ -560,10 +663,11 @@
 
 (define S "insert into s values (1); insert into s values (2); insert into s values (3)")
 
-;; script-resumed-twice : Positive-Integer -> (List Boolean Boolean (Listof Any) Boolean)
+;; script-resumed-twice : Positive-Integer -> (List Boolean Boolean (Listof Any) Boolean Boolean)
 ;; On a fresh database, execute-script! of S as an engine, one slice of
-;; FUEL: whether it expired; #f; what deviated; and whether its second
-;; resume made a whole new call. Its remainder resumed to its end completes,
+;; FUEL: whether it expired; #f; what deviated; whether its second resume
+;; made a whole new call; and whether it raised &sqlite-closed, the rows as
+;; the first left them. Its remainder resumed to its end completes,
 ;; the rows (1 2 3), or is refused by the block's wind, re-entered, the
 ;; statements before the expiry standing. Resumed again, it raises
 ;; &sqlite-closed, or re-entered, or answers again past the block, each
@@ -579,7 +683,7 @@
                   (list #f #f (if (and (equal? (cadr r) 'no-value) (equal? (rows) '(1 2 3)))
                                   '()
                                   (list (list 'completed (cadr r) (rows))))
-                        #f)
+                        #f #f)
                   (let* ((more (cadr r))
                          (first (finish more))
                          (rows1 (rows))
@@ -604,36 +708,37 @@
                                     (if (equal? counts '((block . 0) (connection . 1) (statement . 0)))
                                         '()
                                         (list (list 'counts counts)))))
-                          whole-new))))))))
+                          whole-new
+                          (and (equal? second (closed 'execute-script!)) (equal? rows2 rows1))))))))))
     (if (and (pair? outcome) (eq? (car outcome) 'raised))
-        (list #f #f (list outcome) #f)
+        (list #f #f (list outcome) #f #f)
         outcome)))
 
 ;; re-entered* : Symbol -> Any
 ;; call-with-block's refusal of a re-entry, from NAME, its irritants none.
 (define (re-entered* name) (list 'raised (list 'assertion-violation name '())))
 
-(test-equal "execute-script!, an engine's remainder resumed twice, at every fuel from 1 until it completes without expiring: the first resume completes or is refused by the block's wind; the second, of a remainder taken before the block, raises &sqlite-closed rather than running the script again, and of one inside the block is refused; a whole new call comes only from a remainder taken before the call's first expression, at a fuel below the refused call's"
-  (list '() 'whole-new-calls-only-below-the-refused-call)
-  (let* ((refused-fuel (with-fresh
-                        (lambda (db)
-                          (completing-fuel (lambda () (attempt (lambda () (no-value (execute-script! 'no-database S)))))))))
-         (whole-new '())
+(test-equal "execute-script!, an engine's remainder resumed twice, at every fuel from 1 until it completes without expiring: the first resume completes or is refused by the block's wind; the second, of a remainder taken before the block, raises &sqlite-closed rather than running the script again, and of one inside the block is refused; a whole new call comes only from a remainder taken before the call's first expression, at a fuel below the first at which the second resume raised &sqlite-closed"
+  (list '() 'whole-new-calls-only-below-a-refusal)
+  (let* ((whole-new '())
+         (refused-at #f)
          (run (sweep (lambda (fuel)
+                       (quieted!)
                        (let ((r (script-resumed-twice fuel)))
                          (when (cadddr r) (set! whole-new (cons fuel whole-new)))
+                         (when (and (car (cddddr r)) (not refused-at)) (set! refused-at fuel))
                          (list (car r) (cadr r) (caddr r)))))))
     (display "  execute-script!, resumed twice, completed without expiring at fuel ")
     (display (car run))
     (display "; whole new calls at fuels ")
     (write (reverse whole-new))
-    (display "; the refused call completes at fuel ")
-    (display refused-fuel)
+    (display "; refused with &sqlite-closed first at fuel ")
+    (write refused-at)
     (newline)
     (list (if (integer? (car run)) (summarized (cadr run)) (list (car run) (summarized (cadr run))))
-          (if (and (integer? refused-fuel) (for-all (lambda (f) (< f refused-fuel)) whole-new))
-              'whole-new-calls-only-below-the-refused-call
-              (list 'whole-new-calls-at (reverse whole-new) 'refused-at refused-fuel)))))
+          (if (and refused-at (for-all (lambda (f) (< f refused-at)) whole-new))
+              'whole-new-calls-only-below-a-refusal
+              (list 'whole-new-calls-at (reverse whole-new) 'refused-first-at refused-at)))))
 
 (test-equal "every count is zero at the end"
   zero-counts

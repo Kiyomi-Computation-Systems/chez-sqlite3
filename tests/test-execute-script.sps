@@ -27,7 +27,8 @@
 ;;;                 its class from the primary code, a busy step still
 ;;;                 &sqlite-busy, its message the field
 ;;;   the checks    a database first, then the SQL: U+0000 refused before
-;;;                 anything is allocated, so nothing runs; a closed
+;;;                 any block is allocated, a timer's handler counting none
+;;;                 at any tick of the call, so nothing runs; a closed
 ;;;                 connection refused even for an empty script
 ;;;   no cache      a script's statements are never cached, nor is a cached
 ;;;                 statement of the same SQL touched; they are prepared with
@@ -46,7 +47,8 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) foreign-procedure foreign-alloc foreign-free foreign-ref foreign-set!)
+        (only (chezscheme) foreign-procedure foreign-alloc foreign-free foreign-ref foreign-set! set-timer
+              timer-interrupt-handler)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3 private conditions) sqlite-busy? sqlite-constraint?)
@@ -376,15 +378,36 @@
 
 ;; --- the checks ----------------------------------------------------------------------------
 
-(test-equal "a script holding U+0000 is refused before anything is allocated, so nothing in it runs; no database is refused before the SQL is read; a closed connection is refused even for an empty script"
-  (list (list 'raised (refused 'execute-script! 'sql-holds-nul '(kind string))) '() 0
+;; most-blocks : (-> Any) -> (List Any Natural Natural)
+;; THUNK's answer, a timer's handler run at every tick of it counting the
+;; foreign blocks held: the most it counted, and at how many ticks. The
+;; count after THUNK cannot tell a block allocated and freed on the way out
+;; from none: a script that allocated before its checks, and freed the
+;; block as the refusal left, passed a row that read it then (M3's closing
+;; review, reviewer B's N6).
+(define (most-blocks thunk)
+  (let ((most 0) (ticks 0) (old (timer-interrupt-handler)))
+    (let ((answer
+           (dynamic-wind
+             (lambda ()
+               (timer-interrupt-handler
+                (lambda ()
+                  (set! ticks (+ ticks 1))
+                  (set! most (max most (cdr (assq 'block (native-counts)))))
+                  (set-timer 1))))
+             (lambda () (set-timer 1) (let ((r (thunk))) (set-timer 0) r))
+             (lambda () (set-timer 0) (timer-interrupt-handler old)))))
+      (list answer most ticks))))
+
+(test-equal "a script holding U+0000 is refused before any block is allocated: a timer's handler, run at every tick of the call, at least 20 ticks, counts none; so nothing in it runs; no database is refused before the SQL is read; a closed connection is refused even for an empty script"
+  (list (list 'raised (refused 'execute-script! 'sql-holds-nul '(kind string))) 0 'at-least-20-ticks '()
         (list 'raised (refused 'execute-script! 'not-a-database 'x))
         (list 'raised (list 'closed 'execute-script!)))
   (let* ((r (with-script-db s-table
               (lambda (path db)
-                (let* ((a (attempt (lambda () (execute-script! db "insert into s values (1);\x0;"))))
-                       (blocks (cdr (assq 'block (native-counts)))))
-                  (list a (xs db) blocks)))))
+                (let* ((m (most-blocks (lambda () (attempt (lambda () (execute-script! db "insert into s values (1);\x0;")))))))
+                  (list (car m) (cadr m) (if (>= (caddr m) 20) 'at-least-20-ticks (list 'ticks (caddr m)))
+                        (xs db))))))
          (b (attempt (lambda () (execute-script! 'x 42))))
          (c (let ((db (open-database ":memory:")))
               (close-database! db)

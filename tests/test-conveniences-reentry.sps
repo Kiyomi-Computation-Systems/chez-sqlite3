@@ -30,6 +30,14 @@
 ;;;   its own failure a fold's own step that fails raises its own condition;
 ;;;                   and a read of its own that fails is raised, not the
 ;;;                   finish's failure beside it
+;;;   jumped back     execute-script! jumped back inside its own call: a
+;;;                   timer's handler captures a continuation at each tick
+;;;                   once the script's first row stands, and calls it once
+;;;                   another row stands. The jump stays inside the block's
+;;;                   extent, crossing no winder, so call-with-block's
+;;;                   refusal never runs; the call's claim refuses the
+;;;                   script's next prepare instead, and no statement runs
+;;;                   twice
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
@@ -40,6 +48,7 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
+        (only (chezscheme) set-timer timer-interrupt-handler)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3 private conditions) sqlite-invalid-text? sqlite-invalid-text-column
@@ -84,6 +93,7 @@
 (define execute-script! (reach conveniences 'execute-script!))
 (define open-database (reach '(chez-sqlite3) 'open-database))
 (define close-database! (reach '(chez-sqlite3) 'close-database!))
+(define total-changes (reach '(chez-sqlite3) 'total-changes))
 (define database-cache-count (reach connection-library 'database-cache-count))
 (define tracked-statements (reach connection-library 'tracked-statements))
 (define prepare-statement (reach statement-library 'prepare-statement))
@@ -131,6 +141,15 @@
       (list 'returned (thunk)))))
 
 (define (statement-count) (cdr (assq 'statement (native-counts))))
+
+;; summarized : (Listof Any) -> Any
+;; () for no deviation; else how many, and the first three.
+(define (summarized deviations)
+  (if (null? deviations)
+      '()
+      (list (length deviations)
+            (let loop ((rest deviations) (n 0) (kept '()))
+              (if (or (null? rest) (= n 3)) (reverse kept) (loop (cdr rest) (+ n 1) (cons (car rest) kept)))))))
 
 ;; states : Database -> (Listof (Pairof String Symbol))
 (define (states db)
@@ -397,6 +416,106 @@
                                           (lambda (acc row) (set! calls (+ calls 1)) acc)
                                           0)))))))
        (list r calls (tier-run db "select count(*) from t"))))))
+
+;; --- jumped back -----------------------------------------------------------------------------
+;; A timer's handler is the caller's code, run between any two critical
+;; sections, inside the script's block too. A continuation it captures there,
+;; called by a later fire of the same call, jumps back within the block's
+;; extent and crosses no winder: call-with-block never sees it. Each
+;; statement's prepare claims its byte offset, inside its section, and refuses
+;; one the call has passed, so the jump never prepares a statement again
+;; (reviewer A's script-reenter3.sps, M3's closing review: 629 of 2804 trials
+;; returned with a row twice before the claim). A jump inside one statement's
+;; own extent meets the statement tier's state, at done, which refuses a
+;; second step; one into a section's own wind, call-with-open-handle's refusal.
+
+(define jump-script "insert into j values (1); insert into j values (2)")
+
+;; jumped-at : Positive-Integer -> (U 'no-capture (List Any Any Natural Boolean))
+;; execute-script! of jump-script on a fresh :memory: connection holding j,
+;; empty, a timer's handler run at every tick. At the Ith tick at which some
+;; row of j stands it captures a continuation, noting the rows then, by the
+;; connection's total-changes; at the first later tick at which more stand,
+;; it calls it, once. Answers no-capture when the call returned before that
+;; tick; else what the call answered, j's rows in the order inserted, how
+;; many stood at the capture, and whether the jump came.
+(define (jumped-at i)
+  (let ((db (open-database ":memory:")))
+    (tier-run db "create table j (x)")
+    (let* ((base (total-changes db))
+           (seen 0) (k #f) (at-capture #f) (jumped #f)
+           (old (timer-interrupt-handler))
+           (answer
+            (dynamic-wind
+              (lambda ()
+                (timer-interrupt-handler
+                 (lambda ()
+                   (let ((now (- (total-changes db) base)))
+                     (cond ((and (not k) (> now 0))
+                            (set! seen (+ seen 1))
+                            (when (= seen i)
+                              (set! at-capture now)
+                              (call/cc (lambda (c) (set! k c)))))
+                           ((and k (not jumped) (> now at-capture))
+                            (set! jumped #t)
+                            (k #f))))
+                   (set-timer 1))))
+              (lambda ()
+                (attempt (lambda ()
+                           (set-timer 1)
+                           (let ((r (execute-script! db jump-script)))
+                             (set-timer 0)
+                             (if (eq? r (if #f #f)) 'no-value r)))))
+              (lambda ()
+                (set-timer 0)
+                (timer-interrupt-handler old))))
+           (rows (let loop ((rest (tier-run db "select x from j order by rowid")) (found '()))
+                   (if (null? rest) (reverse found) (loop (cdr rest) (cons (vector-ref (car rest) 0) found))))))
+      (close-database! db)
+      (if k (list answer rows at-capture jumped) 'no-capture))))
+
+;; jump-kind : (List Any Any Natural Boolean) -> (U Symbol (List 'deviation Any))
+;; A trial's outcome: answered, the call answering no value with the
+;; script's two rows once each; refused, &sqlite-closed from execute-script!;
+;; state-refused, a second step of a statement at done refused by the
+;; statement tier; wind-refused, call-with-open-handle's refusal of a
+;; re-entry; each of the last three with j's rows a prefix of the script's,
+;; none twice, holding those at the capture. Anything else a deviation.
+(define (jump-kind r)
+  (let ((answer (car r)) (rows (cadr r)) (at (caddr r)))
+    (let ((prefix (and (member rows '((1) (1 2))) (>= (length rows) at))))
+      (cond ((and (eq? answer 'no-value) (equal? rows '(1 2))) 'answered)
+            ((and prefix (equal? answer '(raised (closed execute-script!)))) 'refused)
+            ((and prefix (equal? answer '(raised (assertion-violation execute-script! (not-allowed-in-state done)))))
+             'state-refused)
+            ((and prefix (equal? answer '(raised (assertion-violation execute-script! (re-entered)))))
+             'wind-refused)
+            (else (list 'deviation r))))))
+
+(test-equal "execute-script! jumped back inside its own call, through a continuation a timer's handler captured at each tick from the first at which the script's first row stands until the call returns, and called at the first tick after another row stands: the jump never runs a statement again: the call answers with the script's rows once each, or is refused, with &sqlite-closed at the script's next prepare, or inside a statement's own extent by the statement tier's state or a section's own wind, the rows a prefix of the script's, none twice; at least a quarter of the captures are refused at a prepare; nothing is left counted"
+  (list '() 'a-quarter-refused-at-a-prepare zero-counts)
+  (let loop ((i 1) (kinds '()) (deviations '()))
+    (let ((r (guard (e (#t (list 'raised (what-raised e)))) (jumped-at i))))
+      (if (or (eq? r 'no-capture) (>= i 20000))
+          (begin
+            (display "  execute-script! jumped back: captures at ")
+            (write (- i 1))
+            (display " ticks; kinds ")
+            (write kinds)
+            (newline)
+            (let ((refused (let ((p (assq 'refused kinds))) (if p (cdr p) 0))))
+              (list (if (< i 20000) (summarized (reverse deviations)) (list 'no-end-by-20000 (summarized (reverse deviations))))
+                    (if (>= (* 4 refused) (- i 1))
+                        'a-quarter-refused-at-a-prepare
+                        (list 'refused refused 'of (- i 1)))
+                    (native-counts))))
+          (let ((kind (if (eq? (car r) 'raised) (list 'deviation r) (jump-kind r))))
+            (loop (+ i 1)
+                  (if (symbol? kind)
+                      (let ((p (assq kind kinds)))
+                        (if p (cons (cons kind (+ (cdr p) 1)) (remq p kinds)) (cons (cons kind 1) kinds)))
+                      kinds)
+                  (if (symbol? kind) deviations (cons (cons i (cdr kind)) deviations))))))))
 
 (test-equal "every count is zero at the end"
   zero-counts
