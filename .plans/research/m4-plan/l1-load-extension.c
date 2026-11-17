@@ -1,7 +1,7 @@
 /* L1: sqlite3_load_extension, called as a v1 verb would call it (the M4
  * plan, sections 4.4 and 8).
  *
- *   l1-load-extension DIR TIMING
+ *   l1-load-extension DIR TIMING [SUFFIX]
  *
  * DIR holds the shared objects run.sh built from ext.c and noentry.c, for
  * this library's header: ext.so, ext-named.so, libchezext.so,
@@ -10,6 +10,10 @@
  * absolute, and every path it prints, in its lines or in SQLite's messages,
  * has DIR written as "DIR", so two machines' outputs compare. TIMING gets
  * every time it reads.
+ *
+ * SUFFIX, "so" when not given, is every file's suffix in place of "so",
+ * in its names and its labels: the Mac's run gives "dylib"
+ * (.plans/research/m4-mac/). Without it the output is the same as before.
  *
  * Every connection is :memory:, opened as chez-sqlite3 opens one, and the C
  * call is turned on by db_config's ENABLE_LOAD_EXTENSION unless a case says
@@ -43,6 +47,7 @@
 #include <unistd.h>
 
 static const char *dir;
+static const char *suffix = "so";
 static FILE *timing;
 static char sentinel_byte;
 #define SENTINEL (&sentinel_byte)
@@ -124,6 +129,24 @@ static void run_text(sqlite3 *db, const char *sql, char *out, size_t n) {
   sqlite3_finalize(s);
 }
 
+/* suffixed: IN with each ".so" written "." SUFFIX, into OUT. IN is a file
+   name or a label, never a path under DIR, so DIR's own text is never
+   rewritten. */
+static void suffixed(const char *in, char *out, size_t n) {
+  size_t o = 0;
+  while (*in && o + 1 < n) {
+    if (strncmp(in, ".so", 3) == 0) {
+      int w = snprintf(out + o, n - o, ".%s", suffix);
+      if (w < 0 || (size_t)w >= n - o) break;
+      o += (size_t)w;
+      in += 3;
+    } else {
+      out[o++] = *in++;
+    }
+  }
+  out[o] = '\0';
+}
+
 /* load_path: one call, as v1's verb would make it, of PATH as given. ENTRY
    may be NULL. Prints one line; answers the code. */
 static int load_path(sqlite3 *db, const char *path, const char *entry, const char *label) {
@@ -150,11 +173,21 @@ static int load_path(sqlite3 *db, const char *path, const char *entry, const cha
   return rc;
 }
 
-/* load: load_path of FILE under DIR. */
+/* load: load_path of FILE under DIR, FILE and LABEL suffixed. */
 static int load(sqlite3 *db, const char *file, const char *entry, const char *label) {
-  char path[4096];
-  snprintf(path, sizeof path, "%s/%s", dir, file);
-  return load_path(db, path, entry, label);
+  char f[256], l[256], path[4096];
+  suffixed(file, f, sizeof f);
+  suffixed(label, l, sizeof l);
+  snprintf(path, sizeof path, "%s/%s", dir, f);
+  return load_path(db, path, entry, l);
+}
+
+/* load_here: load_path of FILE as given, FILE and LABEL suffixed. */
+static int load_here(sqlite3 *db, const char *file, const char *entry, const char *label) {
+  char f[256], l[256];
+  suffixed(file, f, sizeof f);
+  suffixed(label, l, sizeof l);
+  return load_path(db, f, entry, l);
 }
 
 static void functions(sqlite3 *db, const char *label) {
@@ -171,7 +204,7 @@ struct other { sqlite3 *db; int rc; };
 static void *load_elsewhere(void *arg) {
   struct other *o = arg;
   char path[4096];
-  snprintf(path, sizeof path, "%s/ext.so", dir);
+  snprintf(path, sizeof path, "%s/ext.%s", dir, suffix);
   char *msg = SENTINEL;
   o->rc = sqlite3_load_extension(o->db, path, NULL, &msg);
   if (msg != SENTINEL && msg != NULL) sqlite3_free(msg);
@@ -190,8 +223,12 @@ static void *open_writer(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 3) { fprintf(stderr, "usage: l1-load-extension DIR TIMING\n"); return 2; }
+  if (argc < 3 || argc > 4) {
+    fprintf(stderr, "usage: l1-load-extension DIR TIMING [SUFFIX]\n");
+    return 2;
+  }
   dir = argv[1];
+  if (argc == 4) suffix = argv[3];
   timing = fopen(argv[2], "w");
   if (!timing) { perror(argv[2]); return 2; }
   version_lines();
@@ -245,8 +282,8 @@ int main(int argc, char **argv) {
   if (chdir(dir) != 0) { perror("chdir"); return 2; }
   db = open_memory();
   c_call(db, 1);
-  load_path(db, "ext.so", NULL, "ext.so, a bare name, cwd DIR");
-  load_path(db, "./ext.so", NULL, "./ext.so, relative, cwd DIR");
+  load_here(db, "ext.so", NULL, "ext.so, a bare name, cwd DIR");
+  load_here(db, "./ext.so", NULL, "./ext.so, relative, cwd DIR");
   functions(db, "after it");
   close_or_die(db);
 
@@ -260,7 +297,7 @@ int main(int argc, char **argv) {
   printf("  after: errcode %d, extended %d, errmsg \"%s\"\n", sqlite3_errcode(db),
          sqlite3_extended_errcode(db), sqlite3_errmsg(db));
   char path[4096];
-  snprintf(path, sizeof path, "%s/nosuch.so", dir);
+  snprintf(path, sizeof path, "%s/nosuch.%s", dir, suffix);
   rc = sqlite3_load_extension(db, path, NULL, NULL);
   printf("  with pzErrMsg NULL: answered %d, errmsg \"%s\"\n", rc, sqlite3_errmsg(db));
   close_or_die(db);
@@ -297,7 +334,7 @@ int main(int argc, char **argv) {
 
   printf("\nL6. A FIFO as the path\n");
   char fifo[4096];
-  snprintf(fifo, sizeof fifo, "%s/fifo.so", dir);
+  snprintf(fifo, sizeof fifo, "%s/fifo.%s", dir, suffix);
   if (mkfifo(fifo, 0600) != 0 && errno != EEXIST) { perror("mkfifo"); return 2; }
   alarm(20);
   db = open_memory();
@@ -349,9 +386,9 @@ int main(int argc, char **argv) {
   db = open_memory();
   c_call(db, 1);
   char sql[4200], out[700];
-  snprintf(sql, sizeof sql, "select load_extension('%s/ext.so')", dir);
+  snprintf(sql, sizeof sql, "select load_extension('%s/ext.%s')", dir, suffix);
   run_text(db, sql, out, sizeof out);
-  printf("  select load_extension('DIR/ext.so'): %s\n", out);
+  printf("  select load_extension('DIR/ext.%s'): %s\n", suffix, out);
   close_or_die(db);
   fclose(timing);
   return 0;

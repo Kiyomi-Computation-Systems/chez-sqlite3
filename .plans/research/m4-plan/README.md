@@ -14,12 +14,12 @@ here twice before anything cites them.
 | File | What it is |
 |---|---|
 | [d1-db-config-open.c](d1-db-config-open.c) | `sqlite3_db_config`'s four v1 ops on a fresh connection: expiry, the error state, a lock, the connections an open makes |
-| [l1-load-extension.c](l1-load-extension.c) | `sqlite3_load_extension`, called as v1's verb would call it |
+| [l1-load-extension.c](l1-load-extension.c) | `sqlite3_load_extension`, called as v1's verb would call it; an optional last argument names the files' suffix, `so` when not given ([research/m4-mac/](../m4-mac/README.md)) |
 | [ext.c](ext.c) | The smallest loadable extension, in four variants by `-D` |
 | [noentry.c](noentry.c) | A shared object with no entry point SQLite looks for |
 | [f1-fts5-json.c](f1-fts5-json.c) | What an FTS5 suite and a JSON suite would assert |
 | [run.sh](run.sh) | Builds and runs the three C probes on each library |
-| [x1-ffi-load.sps](x1-ffi-load.sps) | The load through Chez's FFI: under the gate, and on a FIFO, plain and `__collect_safe` |
+| [x1-ffi-load.sps](x1-ffi-load.sps) | The load through Chez's FFI: under the gate, and on a FIFO, plain and `__collect_safe`; the same optional suffix |
 | [run-x1.sh](run-x1.sh) | Runs `x1-ffi-load.sps` on one library |
 | [rv1.c](rv1.c) | M4's plan review's: a failed load's error state after an earlier error; a replacing load beside a held row; ADR-0018's six PRAGMAs with the ops at their start and changed |
 | [rv2.sps](rv2.sps) | M4's plan review's: what `raise-sqlite-error` does with the connection's code after a refused set |
