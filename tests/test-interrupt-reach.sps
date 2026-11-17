@@ -12,7 +12,8 @@
 ;;;   a busy wait     not stopped: under another connection's BEGIN
 ;;;                   IMMEDIATE, with a busy timeout of 1500 ms and interrupts
 ;;;                   all through the wait, BEGIN IMMEDIATE still waits at
-;;;                   least 1000 ms and under 3000, then raises &sqlite-busy
+;;;                   least 1000 ms and under 3000, or 2000 on a whole-second
+;;;                   build, then raises &sqlite-busy
 ;;;   a held row      the interrupt sticks: every later statement fails until
 ;;;                   the held one is reset, then one runs
 ;;;   between         an interrupt that lands while no statement runs is
@@ -27,17 +28,35 @@
 ;;; 14 of 15 and 125 in the other; sleeping 1 ms a round, none in 3
 ;;; (.plans/m3-slice-6-mutation-log.md, part A, and
 ;;; .plans/research/m3-slice-6/output.txt). A thread
-;;; blocked on a mutex lets the others run. So the watchdog, each round,
-;;; takes SQLite's own memory mutex, SQLITE_MUTEX_STATIC_MEM, which
-;;; sqlite3_malloc and sqlite3_free take while memory statistics are on, as
-;;; they are on both libraries; sleeps 1 ms holding it; calls the verb; lets
-;;; it go; sleeps 1 ms. The step and the prepare allocate as they run, so
-;;; each blocks inside SQLite, and the watchdog's interrupt lands there, on
-;;; any scheduler. Its SQL is chosen for it: the step calls randomblob for
-;;; each row, and the prepare's IN list makes an expression for each item,
-;;; where comments make none. The watchdog repeats until the call has
+;;; blocked on a mutex lets the others run. So the watchdog takes SQLite's
+;;; own memory mutex, SQLITE_MUTEX_STATIC_MEM, which sqlite3_malloc and
+;;; sqlite3_free take while memory statistics are on, as they are on both
+;;; libraries. The step and the prepare allocate as they run, so each blocks
+;;; inside SQLite while the watchdog holds it. Its SQL is chosen for it: the
+;;; step calls randomblob for each row, and the prepare's IN list makes an
+;;; expression for each item, where comments make none.
+;;;
+;;; The handshake. An interrupt stops a call only from inside it: SQLite
+;;; clears a connection's interrupt at a statement's start, and at the start
+;;; of a prepare's parse, when no other statement is active; and a prepare
+;;; reads it only while its tokenizer runs, not in the code it generates
+;;; after the last token (3.45.1's and 3.54.1's source). Slice 6's first
+;;; round slept 1 ms holding the mutex, then interrupted: while the owner
+;;; was still copying the 3 MB of SQL in Scheme, that interrupt came before
+;;; the parse's clear and was lost, and a later round had to win the CPU
+;;; from Valgrind inside the parse. The long prepare ran unstopped once on
+;;; CI, in 1 of 27 gate runs here, and in 6 of 20 with the prepare called
+;;; 200 ms late (.plans/research/m3-review/suites/). So the first round,
+;;; holding the mutex, interrupts before the call starts; reads the flag
+;;; each 1 ms until it reads clear, which only the call's own start or parse
+;;; does, the owner then held at its next allocation from SQLite's heap,
+;;; which the parse of a million items and every row of the step make;
+;;; interrupts again, inside the call; and lets the mutex go. Each later
+;;; round takes the mutex, sleeps 1 ms holding it, calls the verb, lets it
+;;; go, and sleeps 1 ms. The watchdog repeats until the call has
 ;;; returned, or a deadline 120 s away has passed, which bounds its life and
-;;; never fails a row by itself. Each call the owner makes while the
+;;; never fails a row by itself. The handshake holds the mutex through the
+;;; owner's whole way into its call, so each call the owner makes while the
 ;;; watchdog may hold the mutex takes nothing of SQLite's memory, as a bind
 ;;; of an integer over a NULL does, or is __collect_safe, as the step, the
 ;;; prepare and the finalize are: so the owner never blocks on the mutex in
@@ -244,10 +263,10 @@
 ;; before THUNK starts, or from QUIET-MS milliseconds after it starts when
 ;; QUIET-MS is given, until it has returned or raised, or bound-ms have
 ;; passed since the call began. A quiet round sends nothing, and sleeps
-;; 1 ms. Each round, when HOLD?, the watchdog takes
-;; SQLite's memory mutex and sleeps 1 ms holding it, calls interrupt-database!,
-;; lets the mutex go; then it sleeps 1 ms (the suite's header). THUNK starts
-;; only once the watchdog holds the mutex for its first round. Answers what
+;; 1 ms. When HOLD?, the first round is the handshake (the suite's header),
+;; and THUNK starts only once it holds SQLite's memory mutex and has
+;; interrupted; each later round takes the mutex and sleeps 1 ms holding it,
+;; calls interrupt-database!, lets the mutex go, then sleeps 1 ms. Answers what
 ;; THUNK answered, or (raised WHAT); the milliseconds THUNK took;
 ;; interrupts-sent or no-interrupt-sent; the watchdog's end:
 ;; the-watchdog-ended, the-watchdog-did-not-end, or (the-watchdog-raised
@@ -259,8 +278,19 @@
     ((db thunk hold?) (watched db thunk hold? 0))
     ((db thunk hold? quiet-ms) (watched/quiet db thunk hold? quiet-ms))))
 
+;; A raise anywhere in a round, from mutex-enter, sleep or the bookkeeping
+;; as much as from the verb, is the watchdog's answer, never its end: the
+;; round's handler lets SQLite's mutex go if the round took it, notes the
+;; raise among the first three, counts the watchdog started, sleeps 1 ms,
+;; and the next round follows, until THUNK is done or the deadline has
+;; passed (AGENTS.md). A thread that died holding the mutex would leave
+;; THUNK blocked inside SQLite for good, and one that died before it
+;; started would leave this thread waiting answer-ms for it. The one raise
+;; the device can't answer is a mutex-leave that raises every time: the
+;; mutex is then held, and THUNK's next allocation blocks for good.
 (define (watched/quiet db thunk hold? quiet-ms)
-  (let* ((m (make-mutex))
+  (let* ((handle (call-with-open-handle 'test-interrupt-reach db (lambda (h) h)))
+         (m (make-mutex))
          (c (make-condition))
          (started #f)
          (done #f)
@@ -271,29 +301,83 @@
          (past? (lambda () (time>=? (current-time 'time-monotonic) by)))
          (t0 #f)
          (note! (lambda (what) (with-mutex m (when (< (length raises) 3) (set! raises (cons what raises))))))
+         (start! (lambda () (with-mutex m (unless started (set! started #t) (condition-broadcast c)))))
+         ;; holding: whether this round took SQLite's mutex and has not let
+         ;; it go. Only the watchdog's thread reads or sets it.
+         (holding #f)
+         ;; let-go! : -> Void
+         ;; The mutex let go, if this round took it. A mutex-leave that
+         ;; raises has not let it go, so HOLDING stays set, the handler
+         ;; tries again, and the next round takes it no second time.
+         (let-go! (lambda () (when holding (mutex-leave memory-mutex) (set! holding #f))))
+         ;; send! : -> Void
+         ;; interrupt-database! on DB, what it answers but void noted, the
+         ;; time noted once THUNK has started.
+         (send! (lambda ()
+                  (let ((verb (interrupt! db)))
+                    (unless (eq? verb 'void) (note! verb))
+                    (with-mutex m (when t0 (set! sends (cons (- (real-time) t0) sends)))))))
+         ;; handshaken: whether the first held round has been tried.
+         (handshaken #f)
+         ;; handshake! : -> 'again
+         ;; The first held round (the suite's header): SQLite's mutex taken
+         ;; and the interrupt sent before THUNK starts, so the connection's
+         ;; flag reads set; then, the mutex held, the flag read each 1 ms
+         ;; until it reads clear, which only THUNK's call does, at the start
+         ;; of its statement or of its parse; then the interrupt sent again,
+         ;; landing inside that call, and the mutex let go. Tried once,
+         ;; whatever it raises: a second try could wait, holding the mutex
+         ;; THUNK needs, for a clear that came already.
+         (handshake!
+          (lambda ()
+            (set! handshaken #t)
+            (mutex-enter memory-mutex)
+            (set! holding #t)
+            (send!)
+            (unless (eqv? (is-interrupted handle) 1) (note! 'the-first-interrupt-left-the-flag-clear))
+            (start!)
+            (let wait ()
+              (unless (or (with-mutex m done) (past?))
+                (sleep one-ms)
+                (if (eqv? (is-interrupted handle) 0)
+                    (send!)
+                    (wait))))
+            (let-go!)
+            'again))
+         ;; round! : -> (U 'again 'stop)
+         ;; One round; what it raises is raised, to the loop's handler.
+         (round!
+          (lambda ()
+            (cond
+              ((or (with-mutex m done) (past?)) 'stop)
+              ((and (> quiet-ms 0)
+                    (with-mutex m
+                      (unless started (set! started #t) (condition-broadcast c))
+                      (or (not t0) (< (- (real-time) t0) quiet-ms))))
+               (sleep one-ms)
+               'again)
+              ((and hold? (not handshaken)) (handshake!))
+              (else
+                (when (and hold? (not holding)) (mutex-enter memory-mutex) (set! holding #t))
+                (start!)
+                (when hold? (sleep one-ms))
+                (let ((verb (interrupt! db)))
+                  (let-go!)
+                  (unless (eq? verb 'void) (note! verb)))
+                (with-mutex m (when t0 (set! sends (cons (- (real-time) t0) sends))))
+                (sleep one-ms)
+                'again))))
          (watchdog
           (fork-thread
            (lambda ()
-             (let round ()
-               (cond
-                 ((or (with-mutex m done) (past?)))
-                 ((and (> quiet-ms 0)
-                       (with-mutex m
-                         (unless started (set! started #t) (condition-broadcast c))
-                         (or (not t0) (< (- (real-time) t0) quiet-ms))))
-                  (sleep one-ms)
-                  (round))
-                 (else
-                   (when hold? (mutex-enter memory-mutex))
-                   (with-mutex m
-                     (unless started (set! started #t) (condition-broadcast c)))
-                   (when hold? (sleep one-ms))
-                   (let ((verb (interrupt! db)))
-                     (when hold? (mutex-leave memory-mutex))
-                     (unless (eq? verb 'void) (note! verb)))
-                   (with-mutex m (when t0 (set! sends (cons (- (real-time) t0) sends))))
-                   (sleep one-ms)
-                   (round))))
+             (let loop ()
+               (let ((next (guard (e (#t (guard (x (#t #f)) (let-go!))
+                                         (guard (x (#t #f)) (note! (list 'a-round-raised (what-raised e))))
+                                         (guard (x (#t #f)) (start!))
+                                         (guard (x (#t #f)) (sleep one-ms))
+                                         'again))
+                             (round!))))
+                 (when (eq? next 'again) (loop))))
              (with-mutex m
                (set! started #t)
                (set! ended #t)
@@ -406,12 +490,69 @@
 
 ;; --- a busy wait ---------------------------------------------------------------------------
 
+;; grain-ms : -> Any
+;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
+;; answer busy, under another connection's BEGIN IMMEDIATE and write, both
+;; on this thread, with no watchdog: about 250 where the build sleeps in
+;; milliseconds, 0 where it sleeps whole seconds (concurrency B3;
+;; test-contention's P4 row). Else what it answered, or raised.
+(define (grain-ms)
+  (let ((path (string-append (or temp-dir "/nonexistent") "/grain.db"))
+        (holder #f) (waiter #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! holder (open-database path))
+           (execute! holder "create table t (x)")
+           (execute! holder "begin immediate")
+           (execute! holder "insert into t values (1)")
+           (set! waiter (open-database path '((busy-timeout . 250))))
+           (let* ((t0 (real-time))
+                  (r (attempt (lambda () (execute! waiter "begin immediate"))))
+                  (t1 (real-time)))
+             (execute! holder "rollback")
+             (if (equal? r '(raised (sqlite-busy execute! busy busy))) (- t1 t0) (list 'not-busy r))))))
+      (lambda ()
+        (for-each (lambda (db) (when db (close-quietly db))) (list waiter holder))))))
+
+;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
+;; The build's busy-wait grain, read once, before the busy row: milliseconds
+;; from 125 ms, half the timeout, as test-contention's P4 row tells them
+;; apart.
+(define grain
+  (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
+    (cond ((not (integer? ms)) (list 'unread ms))
+          ((>= ms 125) 'milliseconds)
+          (else 'whole-seconds))))
+
+;; retry-ms : Natural
+;; Where the busy row's wait is too long: a retry of its 1500 ms timeout
+;; waits at least 2000 ms on a whole-second build, and 3000 on any other; an
+;; unread grain takes the looser bound, and its row fails.
+(define retry-ms (if (eq? grain 'whole-seconds) 2000 3000))
+
 ;; how-long : Natural -> Symbol
-;; MS as waited, at least 1000 and under 3000; too-long, from 3000; or
-;; at-once. The wait's busy timeout is 1500 ms: a build without nanosleep
-;; sleeps whole seconds, 1000 ms of it, which still waited; a retry in Scheme
-;; waits it out twice (AGENTS.md; ADR-0019, amended).
-(define (how-long ms) (cond ((>= ms 3000) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
+;; MS as waited, at least 1000 and under retry-ms; too-long, from retry-ms;
+;; or at-once. The wait's busy timeout is 1500 ms: one wait takes 1500 ms of
+;; it on a build that sleeps in milliseconds, and 1000 on one without
+;; nanosleep, which sleeps whole seconds; a retry in Scheme waits it out
+;; twice (AGENTS.md; ADR-0019, amended).
+(define (how-long ms) (cond ((>= ms retry-ms) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
+
+(test-equal "the busy wait's grain is read before the busy row, as test-contention's P4 row reads it: a 250 ms busy timeout under another's BEGIN IMMEDIATE and write answers busy after 125 ms or more, milliseconds, or before, whole seconds; the busy row's wait is too long from 3000 ms on the first, and from 2000 on the second"
+  'read
+  (begin
+    (display "    the grain: ")
+    (write grain)
+    (display ", a wait too long from ")
+    (display retry-ms)
+    (display " ms")
+    (newline)
+    (cond ((and (eq? grain 'milliseconds) (= retry-ms 3000)) 'read)
+          ((and (eq? grain 'whole-seconds) (= retry-ms 2000)) 'read)
+          (else (list grain retry-ms)))))
 
 ;; during-the-wait : (Listof Natural) -> Symbol
 ;; Whether an interrupt was sent from 250 to 1000 ms into a wait of at
@@ -432,7 +573,7 @@
 ;; well inside it, and during-the-wait still requires one from 250 ms.
 (define quiet-ms 200)
 
-(test-equal "a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts from 200 ms into the wait to its end, which reach SQLite, BEGIN IMMEDIATE waits at least 1000 ms and under 3000, then step! raises &sqlite-busy, busy and busy"
+(test-equal "a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts from 200 ms into the wait to its end, which reach SQLite, BEGIN IMMEDIATE waits at least 1000 ms and under 3000, or 2000 on a whole-second build, then step! raises &sqlite-busy, busy and busy"
   (list '(raised (sqlite-busy step! busy busy)) 'interrupts-sent 'the-watchdog-ended 'waited
         'interrupted-during-the-wait 'set zero-counts)
   (let ((holder #f) (waiter #f) (st #f))

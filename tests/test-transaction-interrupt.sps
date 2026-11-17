@@ -6,23 +6,12 @@
 ;;;
 ;;; The body runs a long statement through execute!, while a watchdog thread
 ;;; calls native's sqlite3_interrupt on the connection's handle, read once
-;;; through call-with-open-handle, every 5 ms until the convenience has
-;;; returned, or until 120 s of wall-clock time have passed since the
-;;; interrupted call began; a raise in the watchdog is its answer, and it
-;;; keeps interrupting after it. So no row depends on how fast the step runs. The owner
-;;; waits for the watchdog's end as long, 120 s of wall-clock time from
-;;; its own return, and the row fails by name when it does not end. The body
-;;; raises what execute! raised past with-transaction, at the outer level and
+;;; through call-with-open-handle, until the convenience has returned, or
+;;; until 120 s of wall-clock time have passed since the interrupted call
+;;; began. The owner waits for the watchdog's end as long, from its own
+;;; return, and the row fails by name when it does not end. The body raises
+;;; what execute! raised past with-transaction, at the outer level and
 ;;; nested.
-;;;
-;;; The interrupt comes from a second thread, since the row is about one
-;;; landing in the middle of a write. Under the memory gate the latency is
-;;; the scheduler's: Valgrind runs one thread at a time, and the watchdog's
-;;; 5 ms wake-ups wait while the owner's sqlite3_step holds the CPU, so one
-;;; call took 57 s, and whole runs 12 s to 99 s (M3 slice 4's review and its
-;;; fix). A watchdog that first wakes after its deadline still sends its
-;;; interrupt before it ends, so the deadline bounds the watchdog's life,
-;;; never the interrupt's latency.
 ;;;
 ;;;   a long write   insert ... with recursive: the interrupt ends the
 ;;;                  transaction, autocommit 1 at once; with-transaction
@@ -30,13 +19,67 @@
 ;;;   a long read    select ... from k, src: it keeps the transaction,
 ;;;                  autocommit 0; with-transaction rolls the level back
 ;;;
+;;; The watchdog is tests/test-interrupt-reach.sps's device, copied and
+;;; adapted: a program keeps its own code. Valgrind runs one thread at a
+;;; time, and a thread running C keeps it: slice 4's watchdog, a plain thread
+;;; waking every 5 ms, sent its first interrupt 16.5 s into a step, and the
+;;; suite took 31 to 318 s on CI and 429 to 434 s under the gate here
+;;; (.plans/traps.md; ADR-0005's slice 6 amendment). A thread blocked on a
+;;; mutex lets the others run. So the watchdog takes SQLite's own memory
+;;; mutex, SQLITE_MUTEX_STATIC_MEM, which sqlite3_malloc and sqlite3_free
+;;; take while memory statistics are on, as they are on both libraries. The
+;;; statement allocates as it runs, calling randomblob for each row, so it
+;;; blocks inside SQLite while the watchdog holds it.
+;;;
+;;; An interrupt stops the step only from inside it: SQLite clears the
+;;; connection's interrupt as a statement starts with none active. So the
+;;; first round is the handshake: holding the mutex, the watchdog
+;;; interrupts before the statement starts, which it then may; reads the
+;;; flag each 1 ms until it reads clear, which only the step's start does,
+;;; the step then held at its next allocation; interrupts again, inside the
+;;; step; and lets the mutex go. Each later round takes the mutex, sleeps
+;;; 1 ms holding it, interrupts, lets it go, and sleeps 1 ms. Slice 6's
+;;; first round, without the handshake, could interrupt before the step's
+;;; clear, and a later round then had to win the CPU from Valgrind: with the
+;;; call made 200 ms late, this suite took 11 to 22 s under the gate, and
+;;; tests/test-interrupt-close.sps 10 to 45 s, four runs each, where with the
+;;; handshake each took 11 s every time (tests/test-interrupt-reach.sps's
+;;; header).
+;;;
+;;; The handshake holds the mutex through the owner's whole way into its
+;;; step, so each call the owner makes while the watchdog may hold the mutex
+;;; takes nothing of SQLite's memory, or is __collect_safe: so the owner never
+;;; blocks on the mutex in a call that keeps another thread's collection
+;;; waiting, which the watchdog, holding it, might start. execute! there is
+;;; a check-out from the cache, a bind of an integer over a NULL, the step,
+;;; the failure's reads of the code and message, and the finalize. So the
+;;; long statement takes its bound as a parameter and is run once, with a
+;;; bound of 1, before with-transaction begins: the watched execute! finds
+;;; it in the cache, with no prepare. A prepare is __collect_safe too, but
+;;; its parse clears the interrupt and its tokenizer checks it, so the
+;;; handshake would stop the prepare, leaving the write unstarted and its
+;;; transaction open. The owner touches
+;;; nothing more until the watchdog has ended, so has let the mutex go.
+;;;
+;;; A raise anywhere in a round is the watchdog's answer, never its end:
+;;; the round's handler lets the mutex go if the round took it, notes the
+;;; raise, counts the watchdog started, sleeps 1 ms, and the next round
+;;; follows, until the statement is done or the deadline has passed, for a
+;;; thread that dies on a raise leaves the statement uninterrupted, or
+;;; blocked inside SQLite for good, and the suite hung, naming no row
+;;; (AGENTS.md). The one raise it can't answer is a mutex-leave that raises
+;;; every time: the mutex is then held, and the statement's next allocation
+;;; blocks for good. The deadline bounds the watchdog's life, never the
+;;; interrupt's latency.
+;;;
 ;;; Every wait is bounded. Every computation that can raise runs under a
 ;;; guard with a sentinel of its own. Effects run in order (AGENTS.md).
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) fork-thread make-mutex make-condition with-mutex condition-wait
-              condition-signal sleep make-time current-time add-duration time>=?)
+        (only (chezscheme) foreign-procedure fork-thread thread-join make-mutex make-condition
+              with-mutex condition-wait condition-broadcast sleep make-time current-time
+              add-duration time-difference time>=?)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) sqlite-error? sqlite-error-code sqlite-error-extended-code
@@ -83,6 +126,27 @@
 (define sqlite3-interrupt (reach '(chez-sqlite3 private native) 'sqlite3-interrupt))
 (define sqlite3-get-autocommit (reach '(chez-sqlite3 private native) 'sqlite3-get-autocommit))
 
+;; --- bindings made here, after the load ------------------------------------------------
+
+(define-syntax bound
+  (syntax-rules ()
+    ((_ name form)
+     (guard (e (#t (lambda args (error name "this suite could not bind it" (describe e)))))
+       form))))
+
+;; sqlite3_mutex *sqlite3_mutex_alloc(int), void sqlite3_mutex_enter(sqlite3_mutex*),
+;; void sqlite3_mutex_leave(sqlite3_mutex*)
+(define mutex-alloc (bound 'sqlite3_mutex_alloc (foreign-procedure "sqlite3_mutex_alloc" (int) uptr)))
+(define mutex-enter (bound 'sqlite3_mutex_enter (foreign-procedure "sqlite3_mutex_enter" (uptr) void)))
+(define mutex-leave (bound 'sqlite3_mutex_leave (foreign-procedure "sqlite3_mutex_leave" (uptr) void)))
+
+;; int sqlite3_is_interrupted(sqlite3*), from 3.41.0, so at the floor
+(define is-interrupted (bound 'sqlite3_is_interrupted (foreign-procedure "sqlite3_is_interrupted" (uptr) int)))
+
+;; SQLITE_MUTEX_STATIC_MEM, sqlite3.h's 3: the mutex sqlite3_malloc takes. A
+;; static mutex is SQLite's own, never freed.
+(define memory-mutex (guard (e (#t 0)) (mutex-alloc 3)))
+
 ;; --- helpers ------------------------------------------------------------------------------
 
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
@@ -123,83 +187,152 @@
              (vector-ref (query-row db "select coalesce(group_concat(x, ','), '(none)') from (select x from t order by x)")
                          0))))
 
-(define (ms n) (make-time 'time-duration (* n 1000000) 0))
+;; --- the watchdog --------------------------------------------------------------------------
 
-;; bound-seconds : Positive-Integer
-;; The watchdog's bound, and the owner's wait for its end, in seconds of
-;; wall-clock time.
-(define bound-seconds 120)
+;; duration : Natural -> Time
+;; MS milliseconds as a time-duration, its nanoseconds below 10^9.
+(define (duration ms)
+  (make-time 'time-duration (* (mod ms 1000) 1000000) (div ms 1000)))
 
-;; deadline : -> Time
-;; bound-seconds of wall-clock time from now, by the monotonic clock.
-(define (deadline) (add-duration (current-time 'time-monotonic) (make-time 'time-duration 0 bound-seconds)))
+;; await : Mutex Condition (-> Boolean) Natural -> Boolean
+;; With MUTEX held: wait on CONDITION until READY? holds, #t, or MS
+;; milliseconds have passed, #f. Every wait is bounded by the deadline.
+(define (await mutex condition ready? ms)
+  (let ((deadline (add-duration (current-time 'time-monotonic) (duration ms))))
+    (let loop ()
+      (let ((now (current-time 'time-monotonic)))
+        (cond ((ready?) #t)
+              ((time>=? now deadline) #f)
+              (else (condition-wait condition mutex (time-difference deadline now))
+                    (loop)))))))
 
-;; past? : Time -> Boolean
-(define (past? t) (time>=? (current-time 'time-monotonic) t))
+;; How long this thread waits for the watchdog's first round.
+(define answer-ms 30000)
+;; The watchdog's bound, and the owner's wait for its end, in milliseconds.
+(define bound-ms 120000)
+(define one-ms (duration 1))
 
 ;; interrupted : Database (-> Any) -> (List Any Symbol Any)
-;; THUNK run on this thread, while a watchdog thread interrupts DB every
-;; 5 ms until THUNK has returned or raised, or its deadline, bound-seconds
-;; from this call's start, has passed, each wake sending its interrupt
-;; before it reads the deadline: what THUNK raised, kept as the object
-;; itself, or answered; whether any interrupt was sent; and whether the
-;; watchdog ended within the bound-seconds this thread then waits for it:
-;; 'the-watchdog-ended, 'the-watchdog-did-not-end, or, when the watchdog
-;; raised, (the-watchdog-raised WHAT-IT-RAISED ... ENDED?), so the row
-;; fails by name. A raise in the watchdog is its answer, not its end: it
-;; keeps interrupting, 5 ms after each raise, until THUNK is done or the
-;; deadline has passed, for a thread that dies on a raise leaves THUNK's
-;; statement uninterrupted and the suite hung, naming no row (AGENTS.md).
+;; THUNK run on this thread while a watchdog thread interrupts DB, by
+;; native's sqlite3_interrupt on its handle, from before THUNK starts until
+;; it has returned or raised, or bound-ms have passed since the call began.
+;; Each round the watchdog takes SQLite's memory mutex, sleeps 1 ms holding
+;; it, interrupts, lets the mutex go, and sleeps 1 ms, the first round the
+;; handshake; THUNK starts once that holds the mutex and has interrupted
+;; (the suite's header). Answers what
+;; THUNK raised, as (raised-object E), E the object itself, or no-raise;
+;; interrupts-sent or no-interrupt-sent; and the watchdog's end:
+;; the-watchdog-ended, the-watchdog-did-not-end, or (the-watchdog-raised
+;; WHAT ... END), the first three of its raises, which are its answer,
+;; never its end. A watchdog that never took its first round within
+;; answer-ms answers (the-watchdog-never-started R) for R.
 (define (interrupted db thunk)
   (let* ((handle (call-with-open-handle 'test-transaction-interrupt db (lambda (h) h)))
          (m (make-mutex))
          (c (make-condition))
+         (started #f)
          (done #f)
          (ended #f)
          (sent 0)
          (raises '())
-         (by (deadline))
-         ;; watch : -> Void
-         ;; Wakes every 5 ms, interrupts unless THUNK is done, and returns
-         ;; once it is, or once the deadline has passed.
-         (watch
+         (by (add-duration (current-time 'time-monotonic) (duration bound-ms)))
+         (past? (lambda () (time>=? (current-time 'time-monotonic) by)))
+         (note! (lambda (what) (with-mutex m (when (< (length raises) 3) (set! raises (cons what raises))))))
+         (start! (lambda () (with-mutex m (unless started (set! started #t) (condition-broadcast c)))))
+         ;; holding: whether this round took SQLite's mutex and has not let
+         ;; it go. Only the watchdog's thread reads or sets it.
+         (holding #f)
+         ;; let-go! : -> Void
+         ;; The mutex let go, if this round took it. A mutex-leave that
+         ;; raises has not let it go, so HOLDING stays set, the handler
+         ;; tries again, and the next round takes it no second time.
+         (let-go! (lambda () (when holding (mutex-leave memory-mutex) (set! holding #f))))
+         ;; interrupt : -> Any
+         ;; sqlite3_interrupt on the handle: void, or (raised WHAT).
+         (interrupt (lambda ()
+                      (guard (e (#t (list 'raised (what-raised e))))
+                        (sqlite3-interrupt handle)
+                        'void)))
+         ;; send! : -> Void
+         ;; The interrupt sent, counted, what it answers but void noted.
+         (send! (lambda ()
+                  (let ((verb (interrupt)))
+                    (with-mutex m (set! sent (+ sent 1)))
+                    (unless (eq? verb 'void) (note! verb)))))
+         ;; handshaken: whether the first round has been tried.
+         (handshaken #f)
+         ;; handshake! : -> 'again
+         ;; The first round, tests/test-interrupt-reach.sps's: SQLite's mutex
+         ;; taken and the interrupt sent before THUNK starts, so the flag
+         ;; reads set; then, the mutex held, the flag read each 1 ms until it
+         ;; reads clear, which only THUNK's step does, at its statement's
+         ;; start; then the interrupt sent again, landing inside the step,
+         ;; and the mutex let go. Tried once, whatever it raises: a second
+         ;; try could wait, holding the mutex, for a clear that came already.
+         (handshake!
           (lambda ()
-            (let loop ()
-              (unless (with-mutex m done)
-                (sleep (ms 5))
-                (with-mutex m
-                  (unless done
-                    (sqlite3-interrupt handle)
-                    (set! sent (+ sent 1))))
-                (unless (past? by) (loop))))))
-         (note-raise!
-          (lambda (e)
-            (let ((what (guard (x (#t 'unreadable)) (what-raised e))))
-              (with-mutex m (set! raises (cons what raises))))))
+            (set! handshaken #t)
+            (mutex-enter memory-mutex)
+            (set! holding #t)
+            (send!)
+            (unless (eqv? (is-interrupted handle) 1) (note! 'the-first-interrupt-left-the-flag-clear))
+            (start!)
+            (let wait ()
+              (unless (or (with-mutex m done) (past?))
+                (sleep one-ms)
+                (if (eqv? (is-interrupted handle) 0)
+                    (send!)
+                    (wait))))
+            (let-go!)
+            'again))
+         ;; round! : -> (U 'again 'stop)
+         ;; One round, the first a handshake; what it raises is raised, to
+         ;; the loop's handler.
+         (round!
+          (lambda ()
+            (cond
+              ((or (with-mutex m done) (past?)) 'stop)
+              ((not handshaken) (handshake!))
+              (else
+                (unless holding (mutex-enter memory-mutex) (set! holding #t))
+                (start!)
+                (sleep one-ms)
+                (let ((verb (interrupt)))
+                  (let-go!)
+                  (with-mutex m (set! sent (+ sent 1)))
+                  (unless (eq? verb 'void) (note! verb)))
+                (sleep one-ms)
+                'again))))
          (watchdog
           (fork-thread
            (lambda ()
-             (let try ()
-               (let ((outcome (guard (e (#t (note-raise! e) 'raised))
-                                (watch)
-                                'returned)))
-                 (when (and (eq? outcome 'raised) (not (with-mutex m done)) (not (past? by)))
-                   (sleep (ms 5))
-                   (try))))
-             (with-mutex m (set! ended #t) (condition-signal c)))))
+             (let loop ()
+               (let ((next (guard (e (#t (guard (x (#t #f)) (let-go!))
+                                         (guard (x (#t #f)) (note! (list 'a-round-raised (what-raised e))))
+                                         (guard (x (#t #f)) (start!))
+                                         (guard (x (#t #f)) (sleep one-ms))
+                                         'again))
+                             (round!))))
+                 (when (eq? next 'again) (loop))))
+             (with-mutex m
+               (set! started #t)
+               (set! ended #t)
+               (condition-broadcast c)))))
+         (ready (with-mutex m (await m c (lambda () started) answer-ms)))
          (r (guard (e (#t (list 'raised-object e))) (thunk) 'no-raise))
          (stopped (with-mutex m
                     (set! done #t)
-                    (let ((wait-by (deadline)))
-                      (let wait ()
-                        (cond (ended 'the-watchdog-ended)
-                              ((past? wait-by) 'the-watchdog-did-not-end)
-                              (else (condition-wait c m (ms 100)) (wait)))))))
+                    (if (await m c (lambda () ended) bound-ms)
+                        'the-watchdog-ended
+                        'the-watchdog-did-not-end)))
          (n (with-mutex m sent))
          (raised (with-mutex m (reverse raises))))
-    (list r
+    (when (eq? stopped 'the-watchdog-ended) (thread-join watchdog))
+    (list (if ready r (list 'the-watchdog-never-started r))
           (if (> n 0) 'interrupts-sent 'no-interrupt-sent)
           (if (null? raised) stopped (list 'the-watchdog-raised raised stopped)))))
+
+;; --- the cases -----------------------------------------------------------------------------
 
 (define temp-dir (guard (e (#t #f)) (make-process-temp-directory)))
 (define case-number 0)
@@ -225,24 +358,38 @@
         (when db2 (guard (e (#t #f)) (close-database! db2)))
         (when db (guard (e (#t #f)) (close-database! db)))))))
 
-(define long-write "insert into b with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select i from k")
-(define long-read "with recursive k(i) as (select 1 union all select i + 1 from k where i < 2000000000) select count(*) from k, src")
+;; long-write, long-read : String
+;; A recursive CTE of ?1 rows, each calling randomblob, which allocates, so
+;; the watchdog's hold blocks the step inside SQLite (the header): inserted
+;; into b, a write; counted beside src's three rows, a read.
+(define long-write "insert into b with recursive k(i) as (select 1 union all select i + 1 from k where i < ?1) select i from k where length(randomblob(16)) = 16")
+(define long-read "with recursive k(i) as (select 1 union all select i + 1 from k where i < ?1) select count(*) from k, src where length(randomblob(16)) = 16")
+
+;; long-rows : Positive-Integer
+;; The CTE's bound when watched: uninterrupted, about 5 s plain on the
+;; container's host each way, and 10 s beside the watchdog's holds, so a
+;; mutant that never interrupts fails its row by name; the write's file
+;; then grows by about 230 MB before the rollback.
+(define long-rows 20000000)
 
 ;; interrupted-row : String Boolean -> Any
 ;; SQL through execute!, interrupted, inside with-transaction, deferred,
 ;; after a marker; NESTED, inside an inner with-transaction after a second
-;; marker, whose raise the outer body catches before it returns. The body
-;; records what execute! raised, the watchdog's two answers and autocommit
-;; straight after, and raises execute!'s condition. Then what
-;; with-transaction raised, the inner's and the outer's when nested;
-;; in-transaction?; the markers on DB and DB2; the statements it issued.
+;; marker, whose raise the outer body catches before it returns. SQL is run
+;; once first, its bound 1, before with-transaction, so the watched call
+;; finds it in the cache (the header). The body records what execute!
+;; raised, the watchdog's two answers and autocommit straight after, and
+;; raises execute!'s condition. Then what with-transaction raised, the
+;; inner's and the outer's when nested; in-transaction?; the markers on DB
+;; and DB2; the statements it issued.
 (define (interrupted-row sql nested)
   (with-case
    (lambda (db db2)
-     (let* ((recorded #f) (inner 'not-nested)
+     (let* ((cached (execute! db sql 1))
+            (recorded #f) (inner 'not-nested)
             (body (lambda ()
-                    (let* ((i (interrupted db (lambda () (execute! db sql))))
-                           (raised (and (pair? (car i)) (cadr (car i))))
+                    (let* ((i (interrupted db (lambda () (execute! db sql long-rows))))
+                           (raised (and (pair? (car i)) (eq? (car (car i)) 'raised-object) (cadr (car i))))
                            (a (autocommit db)))
                       (set! recorded (list (if raised (what-raised raised) (car i)) (cadr i) (caddr i) a))
                       (raise (or raised 'execute!-raised-nothing)))))
@@ -277,6 +424,10 @@
 
 (test-assert "a temporary directory for the suite's databases"
   (string? temp-dir))
+
+(test-equal "SQLite's memory mutex is had"
+  'a-mutex
+  (if (and (integer? memory-mutex) (> memory-mutex 0)) 'a-mutex memory-mutex))
 
 (test-equal "an interrupted write, outer: execute! raises &sqlite-interrupt, interrupt and interrupt, and the transaction has ended, autocommit 1 straight after; with-transaction issues nothing, the body's condition reaches the caller, and the marker is gone from both connections"
   (list (cons interrupt (append watched '(1))) 'not-nested (list 'raised interrupt) 'no "(none)" "(none)"
