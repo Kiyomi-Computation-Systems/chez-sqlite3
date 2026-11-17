@@ -75,6 +75,12 @@
   'loaded
   public-load)
 
+;; direct : (U Integer (List 'raised Any))
+;; What sqlite3_auto_extension answered for an entry point that does
+;; nothing, registered straight through the FFI before the tell, then reset:
+;; the gate's independent reading.
+(define direct (tell-direct))
+
 ;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
 ;; The tell's registration, which every row that depends on the tell is
 ;; gated by, through tell-available! or tell-kept?.
@@ -83,6 +89,10 @@
 (test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
   'registered-or-refused
   (if (tell-answered? registration) 'registered-or-refused registration))
+
+(test-equal "the gate refuses the tell exactly when sqlite3_auto_extension, given an entry point that does nothing straight through the FFI, answers 21, and registers it exactly when that answers 0"
+  'gate-held
+  (tell-gate-held registration direct))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts

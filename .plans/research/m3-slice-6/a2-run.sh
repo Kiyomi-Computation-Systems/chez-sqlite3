@@ -12,7 +12,7 @@
 #                                 error summary, the freed block, the library
 #                                 Valgrind read, and the sweeps' lines
 # Logs go to build/a2/final/, beside the copies.
-root=/home/kishu/src/chez-sqlite3-wt-m3s6
+root=$(pwd)  # run from the worktree's root
 out=$root/build/a2/final
 mode=$1; shift
 case $mode in

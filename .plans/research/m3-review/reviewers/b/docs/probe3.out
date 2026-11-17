@@ -1,0 +1,3 @@
+G1-wal-on-wal-beside-exclusive-locking-mode => (raised (sqlite busy "database is locked"))
+G1b-same-with-busy-timeout-250 => (raised (sqlite busy "database is locked"))
+G2-retry-on-ended => ((raised ended) (raised ended) (#("after the end") #("after the end")))

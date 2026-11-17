@@ -88,7 +88,7 @@ they passed in full on Homebrew's library, on the same Mac.
     lane's line in these ways:
     - as it is;
     - plus every option Homebrew's lists and the lane's lacks
-      (`../m4-prework/out/census-mac-brew-3.54.1.txt`, in PR #28);
+      (`../m4-prework/out/census-mac-brew-3.54.1.txt`, merged in #28);
     - that set without `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`;
     - plus `-DSQLITE_ENABLE_MEMORY_MANAGEMENT` alone;
     - plus `-DSQLITE_ENABLE_STAT4` alone.
@@ -135,5 +135,5 @@ its review's fixes.
 - **Homebrew's library:** no `UNAVAILABLE` line, and S3 printed "the NOMEM left the transaction
   open", outer and nested.
 
-M4's pre-work probes ran on the Mac the same day. Their results are in PR #28, in
+M4's pre-work probes ran on the Mac the same day. Their results merged in #28, in
 `../m4-prework/`.

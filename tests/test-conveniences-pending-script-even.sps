@@ -62,21 +62,29 @@
         (write (test-result-ref r 'actual-value))
         (newline)))))
 
-;; past-a-fuel, both-a-fuel : Natural
+;; past-a-fuel : Natural
+;; both-a-fuel : 'none
 ;; The fewest trials a fuel on average, over the fuels up to the one at which the call
-;; completes, that interleave past the call's first section, and that are
-;; both past it, for a sweep that reaches anything: a sweep that reused one
-;; R across every G makes at most one a fuel. None is both past it: every
-;; section of the script lies inside its block, and an expiry there frees
-;; the block, so R taken past the first prepare is refused by call-with-block.
+;; completes, that interleave past the call's first section, for a sweep
+;; that reaches anything: a sweep that reused one R across every G makes at
+;; most one a fuel. None is both past it, and the row holds that none is:
+;; every section of the script lies inside its block, and an expiry there
+;; frees the block, so R taken past the first prepare is refused by
+;; call-with-block as it resumes.
 (define past-a-fuel 3)
-(define both-a-fuel 0)
+(define both-a-fuel 'none)
 
 (test-begin "conveniences-pending-script-even")
 
 (test-equal "(chez-sqlite3) loads, reached through eval"
   'loaded
   public-load)
+
+;; direct : (U Integer (List 'raised Any))
+;; What sqlite3_auto_extension answered for an entry point that does
+;; nothing, registered straight through the FFI before the tell, then reset:
+;; the gate's independent reading.
+(define direct (tell-direct))
 
 ;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
 ;; The tell's registration, which every row that depends on the tell is
@@ -86,6 +94,10 @@
 (test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
   'registered-or-refused
   (if (tell-answered? registration) 'registered-or-refused registration))
+
+(test-equal "the gate refuses the tell exactly when sqlite3_auto_extension, given an entry point that does nothing straight through the FFI, answers 21, and registers it exactly when that answers 0"
+  'gate-held
+  (tell-gate-held registration direct))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts

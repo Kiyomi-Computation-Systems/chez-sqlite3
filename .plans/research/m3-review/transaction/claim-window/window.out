@@ -1,0 +1,3 @@
+fuel 1: entries after first 0 r1 1 r2 2; claims after first 0 r1 1 r2 2
+fuel 2: entries after first 1 r1 1 r2 1; claims after first 0 r1 1 r2 2
+completes at 3

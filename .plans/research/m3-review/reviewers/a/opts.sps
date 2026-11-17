@@ -1,0 +1,5 @@
+#!r6rs
+(import (chezscheme) (chez-sqlite3))
+(printf "~a ~a\n" (sqlite-version) (sqlite-library-path))
+(for-each (lambda (o) (when (or (let ((p "TEMP")) (let loop ((i 0)) (and (<= (+ i (string-length p)) (string-length o)) (or (string=? p (substring o i (+ i (string-length p)))) (loop (+ i 1)))))) (let ((p "LOOKASIDE")) (let loop ((i 0)) (and (<= (+ i (string-length p)) (string-length o)) (or (string=? p (substring o i (+ i (string-length p)))) (loop (+ i 1)))))) (let ((p "THREAD")) (let loop ((i 0)) (and (<= (+ i (string-length p)) (string-length o)) (or (string=? p (substring o i (+ i (string-length p)))) (loop (+ i 1)))))) (let ((p "MEMORY")) (let loop ((i 0)) (and (<= (+ i (string-length p)) (string-length o)) (or (string=? p (substring o i (+ i (string-length p)))) (loop (+ i 1)))))) (let ((p "DEFAULT_")) (let loop ((i 0)) (and (<= (+ i (string-length p)) (string-length o)) (or (string=? p (substring o i (+ i (string-length p)))) (loop (+ i 1))))))) (printf "  ~a\n" o))) (sqlite-compile-options))
+(call-with-database ":memory:" '((temp-store . file)) (lambda (db) (printf "temp-store file read back: ~a\n" (query-row db "pragma temp_store"))))

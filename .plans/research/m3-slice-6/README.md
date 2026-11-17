@@ -49,7 +49,8 @@ for part C is beside them.
     fuels;
   - [a2-plants.py](a2-plants.py) makes the follow-up's plant copies under `build/a2/final/`, and
     [a2-run.sh](a2-run.sh) runs the suites on them plain and under the gate; their output is
-    [a2-plants.txt](a2-plants.txt).
+    [a2-plants.txt](a2-plants.txt). Both run from the worktree's root, and the output writes
+    that root as `<worktree>/` (M3's closing review).
 
 ## Contention (part B)
 

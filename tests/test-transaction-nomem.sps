@@ -288,6 +288,25 @@
       (close-database! db)
       (> used 0))))
 
+;; control-kept : Any
+;; What the memory check's own control says of this library: the check
+;; native registered with the counters at the load, run here, whose
+;; :memory: open and close is its positive control (ADR-0005, amended).
+;; kept when the count rose while that connection was open, its verdict
+;; pass or fail; not-kept when it did not, unavailable; else what it
+;; answered, or raised. memory-kept decides which rows run, so it answers
+;; to this, which the memory gate's own rows hold.
+(define control-kept
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((check (assq 'sqlite3_memory_used (exit-checks))))
+      (if (not check)
+          'no-memory-check-registered
+          (let ((verdict ((cdr check))))
+            (case (car verdict)
+              ((unavailable) 'not-kept)
+              ((pass fail) 'kept)
+              (else (list 'no-verdict verdict))))))))
+
 (define (available! name)
   (when (eq? memory-kept #f)
     (display "UNAVAILABLE ")
@@ -381,6 +400,10 @@
 
 (test-assert "the memory probe answers #t or #f, and does not raise"
   (boolean? memory-kept))
+
+(test-equal "the memory probe agrees with the memory check's own control: the rows run, the heap limit taken as kept, exactly where the control's :memory: open raised SQLite's count, and are skipped as UNAVAILABLE exactly where it did not"
+  control-kept
+  (cond ((eq? memory-kept #t) 'kept) ((eq? memory-kept #f) 'not-kept) (else (list 'neither memory-kept))))
 
 (test-assert "a temporary directory for the suite's databases"
   (string? temp-dir))

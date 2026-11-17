@@ -2,8 +2,10 @@
 
 A Chez Scheme library that binds SQLite through its C interface.
 
-It is in development. You can open a database, prepare and step statements,
-bind values and read columns. Transactions and the rest are not here yet.
+It is in development. You can open a database with its settings, run SQL and
+read its rows, run a transaction, and stop a long statement from another
+thread. You can also prepare and step statements yourself, bind values and
+read columns.
 
 The [[file:docs/reference.md][API reference]] lists every name the library exports.
 

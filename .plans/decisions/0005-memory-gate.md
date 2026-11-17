@@ -31,7 +31,9 @@
   [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)). Amended 2026-11-16
   by the maintainer's choice, "Shard in slice 6": the memory job split in two (M3 slice 6,
   [amendment](#amendment-2026-11-16-the-memory-job-split-in-two-m3-slice-6)), and accepted on
-  2026-11-17 ("Accept all").
+  2026-11-17 ("Accept all"). Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open risk met and
+  closed, the watchdog's handshake, and the gates no row read
+  ([amendment](#amendment-2026-11-17-the-open-risk-met-and-the-gates-no-row-read-m3s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -704,3 +706,31 @@ alike; none of its code is copied.
     the M0 slice 4 amendment says. Branch protection, requiring both new check names, is the
     maintainer's lever. Until it names them, the old required check, `memory (the Valgrind gate)`,
     never reports, and no PR can merge.
+
+## Amendment, 2026-11-17: the open risk met, and the gates no row read (M3's closing review)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer B's findings and the fixes' measurements
+([the review's log](../m3-closing-review-mutation-log.md)).
+
+- **The open risk was met.** `test-transaction-interrupt` took 318 s in `memory-1` on `main` at
+  `c0a5408` (run 44083802043), past the slice 6 amendment's 150 s, and 71% of `SLOW`. Over seven
+  two-shard runs it took 31 to 318 s.
+  - **The cause:** its watchdog was still slice 4's plain thread, interrupting every 5 ms, which
+    under Valgrind runs only when the scheduler lets it. Locally its time was the host's: 18 to
+    77 s on 18 cores, 11 to 15 s pinned to two, and 429 to 434 s in slice 6.
+  - **The fix:** the suite now uses the memory-mutex device (ADR-0019, amended the same day), with
+    its statements prepared before the watched call. It took 10 to 16 s under the gate in every
+    local run, on both libraries, so no split was needed. On PR #32's CI, run 44112097972, it
+    took 11 s.
+- **The device's first round is a handshake.** `main`'s run 44087748537, on `e590fdc`, failed
+  `memory-2` on `test-interrupt-reach`'s 3 MB prepare, which ran unstopped: the first round's
+  interrupt landed before the parse cleared it (ADR-0019, amended the same day). The handshake
+  closes that window in the three suites that use the device.
+- **A gate's `UNAVAILABLE` lines need a hold of their own.** `make test-memory` prints nothing of a
+  passing suite but its verdict and time, so a suite's `UNAVAILABLE` lines are read only in
+  `build/memory/<suite>.log`. The memory check's availability was held all along: by
+  `test-memory-check`'s rows, `check-test-fails`' leaks case, and the lanes' compile-option
+  lists. PR #30's tell, and `test-transaction-nomem`'s `memory-kept`, were held by nothing:
+  either could have skipped its rows on every Linux lane, and passed.
+  - **The tell** is now held to an idle entry point registered straight through the FFI.
+  - **`memory-kept`** is now held to the memory check's own control.

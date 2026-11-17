@@ -21,9 +21,11 @@
 ;;;                          leading semicolons and comments belong to it
 ;;;                          (M3 slice 0's research, P11)
 ;;;
-;;; Both are total and raise nothing, for any arguments: slice 3 calls them
-;;; inside the section that answers a prepare's or a step's outcome, where
-;;; nothing may raise. Each byte offset is read as a character by
+;;; Both are total and raise nothing, for any arguments. execute-script!
+;;; calls them once call-with-c-string has returned, outside any critical
+;;; section, as it rebuilds the failure its loop answered into its
+;;; &sqlite-error: a raise from either would put its own condition in that
+;;; error's place. Each byte offset is read as a character by
 ;;; utf8-offset->index, and each first token found by sql-tail-statement,
 ;;; the scan that agrees with SQLite's tokenizer on every short input.
 (library (chez-sqlite3 private script)

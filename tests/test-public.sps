@@ -191,9 +191,9 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!, and interrupt-database/with, the verb's procedure that takes the foreign call, for the suites; the cache's four procedures; and the transaction depth's two, with-transaction's"
+(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!, and interrupt-database/with, the verb's procedure that takes the foreign call, for the suites; the cache's four procedures; the transaction depth's two, with-transaction's; and call-with-latch-shut, with-transaction's exits' shut"
   (sorted-names '(close-database! database? interrupt-database! interrupt-database/with
-                  call-with-open-handle
+                  call-with-latch-shut call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
                   tracked-statements untrack-statement!
                   prepared-open connection-outcome opened-database close-connection
@@ -204,13 +204,13 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
 
-(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings!, for the suites"
-  (sorted-names '(open-database call-with-database applied-settings!))
+(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings! and made-claim, for the suites"
+  (sorted-names '(open-database call-with-database applied-settings! made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private open)))))
 
-(test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number, for the suites"
-  (sorted-names '(execute! execute-script! query query-row query-fold code-number))
+(test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number and made-claim, for the suites"
+  (sorted-names '(execute! execute-script! query query-row query-fold code-number made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private conveniences)))))
 

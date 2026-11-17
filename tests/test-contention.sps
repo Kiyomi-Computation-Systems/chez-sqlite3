@@ -8,7 +8,8 @@
 ;;;
 ;;;   waits out      BEGIN IMMEDIATE, under the other's BEGIN IMMEDIATE and
 ;;;                  write, waits out the 1500 ms timeout, at least 1000 ms
-;;;                  and under 3000, then raises &sqlite-busy, busy and busy,
+;;;                  and under 3000, or 2000 on a whole-second build, then
+;;;                  raises &sqlite-busy, busy and busy,
 ;;;                  and leaves the waiter in autocommit (B3, B6)
 ;;;   the default    the same through with-transaction with no mode, so
 ;;;   waits out      BEGIN IMMEDIATE: it waits the timeout out once, raises
@@ -37,10 +38,12 @@
 ;;;                  prints whether the library sleeps in milliseconds or in
 ;;;                  whole seconds
 ;;;
-;;; A wait is told from none by 1000 ms, and from a retry by 3000, twice its
-;;; 1500 ms timeout: a build without nanosleep sleeps whole seconds, so waits
-;;; 1000 of it, and a retry in Scheme waits it out again (AGENTS.md;
-;;; concurrency B3; ADR-0019, amended). A wait the other ends mid-wait is
+;;; A wait is told from none by 1000 ms, and from a retry by twice what one
+;;; wait of its 1500 ms timeout takes: 3000 ms on a build that sleeps in
+;;; milliseconds; 2000 on one without nanosleep, which sleeps whole seconds,
+;;; so waits 1000 of it (AGENTS.md; concurrency B3; ADR-0019, amended). The
+;;; suite reads the grain before any row, the short wait's way, on one
+;;; thread, and bounds the waits by it. A wait the other ends mid-wait is
 ;;; asserted only as before its timeout's end. The short wait asserts only
 ;;; what holds on either grain: busy, under twice its timeout, which a
 ;;; whole-second build answers at once and a millisecond one after about
@@ -59,9 +62,10 @@
 ;;; for each answer, and one not given by then is unfinished, so a row fails
 ;;; by name and never hangs (AGENTS.md). The one wait meant to run out is the
 ;;; default row's: its first body waits window-ms for the second's read,
-;;; which immediate never lets happen. With 'deferred the second reads at
-;;; once, a with-transaction's BEGIN and one query-row on a thread of its
-;;; own, while the first waits on a condition. Each row's file is in a
+;;; which immediate never lets happen, from the second's word that it runs,
+;;; so the window holds no wake-up of the second's. With 'deferred the second
+;;; reads at once, a with-transaction's BEGIN and one query-row on a thread
+;;; of its own, while the first waits on a condition. Each row's file is in a
 ;;; directory of its own, removed after it: a thread that dies on a raise
 ;;; runs the base exception handler, where make-process-temp-directory's
 ;;; hook removes the directory it made, so a directory the rows shared would
@@ -213,12 +217,54 @@
 (define (counted path)
   (connected path '() rows))
 
+;; grain-ms : -> Any
+;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
+;; answer busy, under another connection's BEGIN IMMEDIATE and write on a
+;; fresh WAL file, both on this thread: about 250 where the build sleeps in
+;; milliseconds, 0 where it sleeps whole seconds (B3). Else what it
+;; answered, or raised.
+(define (grain-ms)
+  (attempt
+   (lambda ()
+     (call-with-temp-directory
+      (lambda (dir)
+        (let ((path (wal-file dir "grain.db")))
+          (connected path wal-1500
+            (lambda (holder)
+              (execute! holder "begin immediate")
+              (execute! holder "insert into t values (4)")
+              (let ((ms (connected path wal-250
+                          (lambda (waiter)
+                            (let* ((t0 (real-time))
+                                   (r (attempt (lambda () (execute! waiter "begin immediate"))))
+                                   (t1 (real-time)))
+                              (if (equal? r (busy 'busy "begin immediate"))
+                                  (- t1 t0)
+                                  (list 'not-busy r)))))))
+                (execute! holder "rollback")
+                ms)))))))))
+
+;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
+;; The build's busy-wait grain, read once, before any row: milliseconds from
+;; 125 ms, half the timeout, as the grain row tells them apart.
+(define grain
+  (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
+    (cond ((not (integer? ms)) (list 'unread ms))
+          ((>= ms 125) 'milliseconds)
+          (else 'whole-seconds))))
+
+;; retry-ms : Natural
+;; Where a 1500 ms timeout's wait is too long: a retry waits at least 2000
+;; ms on a whole-second build, and 3000 on any other; an unread grain takes
+;; the looser bound, and its row fails.
+(define retry-ms (if (eq? grain 'whole-seconds) 2000 3000))
+
 ;; how-long : Natural -> Symbol
-;; MS as waited, at least 1000 and under 3000; too-long, from 3000; or
-;; at-once. A busy timeout of 1500 ms waits 1000 of it on a build without
+;; MS as waited, at least 1000 and under retry-ms; too-long, from retry-ms;
+;; or at-once. A busy timeout of 1500 ms waits 1000 of it on a build without
 ;; nanosleep and 1500 on one with it; a retry in Scheme waits it out twice,
-;; at least 3000, which is too long.
-(define (how-long ms) (cond ((>= ms 3000) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
+;; at least 2000 or 3000, which is too long.
+(define (how-long ms) (cond ((>= ms retry-ms) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
 
 ;; timed : (-> Any) -> Natural
 ;; THUNK run; the milliseconds it took. What it raises is raised.
@@ -503,13 +549,18 @@
 ;; contended : String (Database (-> Any) -> Any) -> (List Any Any Any)
 ;; Two threads, first and second, each open PATH and say so, and each runs
 ;; RUN, with-transaction in some mode, on a body that counts the rows, says
-;; it read, and writes a row. The first's body, once its read is said, waits
-;; up to window-ms for the second's read, then writes, answering the rows
-;; and whether it saw that read. The second runs RUN once told the first
-;; read; its body, once its read is said, waits for the first's RUN to end,
-;; then writes, answering the rows. Each says its premise, and its mode as
-;; its RUN unwinds. Answers each thread's answer; each premise and mode;
-;; and the milliseconds from the second's RUN to its read.
+;; it read, and writes a row. The second, once told the first read, says it
+;; runs, and runs RUN; its body, once its read is said, waits for the first's
+;; RUN to end, then writes, answering the rows. The first's body, once its
+;; read is said, waits for the second to say it runs, then up to window-ms
+;; for the second's read, then writes, answering the rows and whether it saw
+;; that read. The window starts where the second says it acts, so it holds
+;; no thread's wake-up: a second woken late, its window started on the
+;; first's read, met a deferred default only once the first had committed,
+;; and read and wrote as immediate's does (.plans/traps.md, M3 slice 1's
+;; review). Each says its premise, and its mode as its RUN unwinds. Answers
+;; each thread's answer; each premise and mode; and the milliseconds from
+;; the second's RUN to its read.
 (define (contended path run)
   (let* ((b (make-board))
          (first (start-thread
@@ -522,13 +573,14 @@
                          (lambda () #f)
                          (lambda ()
                            (run db (lambda ()
-                                     (let ((n (rows db)))
-                                       (say! b 'first-read #t)
-                                       (let ((saw (if (said-within? b 'second-read window-ms)
-                                                      'saw-the-second-read
-                                                      'no-second-read)))
-                                         (execute! db "insert into t values ('first')")
-                                         (list n saw))))))
+                                     (let* ((n (rows db))
+                                            (told (begin (say! b 'first-read #t)
+                                                         (hear b 'second-runs)))
+                                            (saw (if (said-within? b 'second-read window-ms)
+                                                     'saw-the-second-read
+                                                     'no-second-read)))
+                                       (execute! db "insert into t values ('first')")
+                                       (list n saw)))))
                          (lambda () (say! b 'first-ended (mode-of db)))))))))
          (second (start-thread
                   (lambda ()
@@ -537,6 +589,7 @@
                         (say! b 'second-premise (premise db))
                         (say! b 'second-open #t)
                         (hear b 'first-read)
+                        (say! b 'second-runs #t)
                         (let ((t0 (real-time)))
                           (dynamic-wind
                             (lambda () #f)
@@ -580,9 +633,22 @@
   zero-counts
   (native-counts))
 
+(test-equal "the busy wait's grain is read before any row, on one thread: a 250 ms busy timeout under another's BEGIN IMMEDIATE and write answers busy after 125 ms or more, milliseconds, or before, whole seconds; a 1500 ms timeout's wait is too long from 3000 ms on the first, and from 2000 on the second"
+  'read
+  (begin
+    (display "    the grain: ")
+    (write grain)
+    (display ", a wait too long from ")
+    (display retry-ms)
+    (display " ms")
+    (newline)
+    (cond ((and (eq? grain 'milliseconds) (= retry-ms 3000)) 'read)
+          ((and (eq? grain 'whole-seconds) (= retry-ms 2000)) 'read)
+          (else (list grain retry-ms)))))
+
 ;; --- waits out -----------------------------------------------------------------------------
 
-(test-equal "BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE and write waits out the 1500 ms busy timeout, at least 1000 ms and under 3000, then raises &sqlite-busy, busy and busy, from execute!; the waiter is left in autocommit, and only the holder's row is committed"
+(test-equal "BEGIN IMMEDIATE under the other's BEGIN IMMEDIATE and write waits out the 1500 ms busy timeout, at least 1000 ms and under 3000, or 2000 on a whole-second build, then raises &sqlite-busy, busy and busy, from execute!; the waiter is left in autocommit, and only the holder's row is committed"
   (list (busy 'busy "begin immediate") '("wal" 1500) 'waited 'autocommit
         '(("wal" 1500) committed) '#(4) zero-counts)
   (in-dir
@@ -596,7 +662,7 @@
 
 ;; --- the default waits out -----------------------------------------------------------------
 
-(test-equal "with-transaction with no mode, so BEGIN IMMEDIATE, under the other's BEGIN IMMEDIATE and write, waits out the 1500 ms busy timeout once, at least 1000 ms and under 3000, then raises &sqlite-busy, busy and busy, from with-transaction, naming its BEGIN IMMEDIATE; nothing is begun, in-transaction? false and the depth 0, and its body never runs"
+(test-equal "with-transaction with no mode, so BEGIN IMMEDIATE, under the other's BEGIN IMMEDIATE and write, waits out the 1500 ms busy timeout once, at least 1000 ms and under 3000, or 2000 on a whole-second build, then raises &sqlite-busy, busy and busy, from with-transaction, naming its BEGIN IMMEDIATE; nothing is begun, in-transaction? false and the depth 0, and its body never runs"
   (list (list 'raised (list 'sqlite-error 'with-transaction 'busy 'busy "BEGIN IMMEDIATE" 'sqlite-busy))
         '("wal" 1500) 'waited 'autocommit 0 'not-said
         '(("wal" 1500) committed) '#(4) zero-counts)

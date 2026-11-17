@@ -135,7 +135,12 @@
   run during the call it means to interrupt. Have it take SQLite's memory
   mutex each round, so the owner blocks inside SQLite. Every call the owner
   makes while the mutex may be held is `__collect_safe` or takes none of
-  SQLite's memory, or another thread's collection waits on it
+  SQLite's memory, or another thread's collection waits on it. SQLite
+  clears the interrupt as a statement or a parse starts, and a prepare
+  reads it only while it tokenizes, so the first round is a handshake:
+  holding the mutex, interrupt, wait until the flag reads clear, then
+  interrupt again, inside the call. A watched call doesn't prepare unless
+  the prepare is the point, and a round's raise lets the mutex go
   (`.plans/traps.md`).
 * Whether a failure ended a transaction can't be told from its code, its
   SQL or its version: the same NOMEM or FULL undid one statement or the
@@ -146,7 +151,9 @@
 * A busy wait's length is the build's: one without `nanosleep` sleeps whole
   seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
   a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms,
-  and under twice the timeout, so a retry in Scheme fails it
+  and under twice the timeout. On whole seconds the wait is 1000 ms and a
+  retry 2000 ms, so the row reads the grain first and asserts under 2000 ms
+  there: then a retry in Scheme fails it on either grain
   (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended). A row that
   reads the grain itself may time a shorter one, asserting only a bound
   that holds on either grain.
@@ -223,6 +230,21 @@
   it. `c-string->string` keeps it too but replaces invalid bytes, so it
   reads SQLite's own text and messages, never a value or a name. Never
   `utf8->string` outside `utf8` and `native`: `check-seam` refuses it
+  (`.plans/traps.md`).
+* A handler's jump back within a wind's extent crosses no winder, so a
+  `dynamic-wind` before thunk refuses only a jump in from outside. A call
+  that must run each step once claims each step's position inside that
+  step's section. Hold such a claim with a timer's continuation called from
+  inside the call too: engine sweeps passed a check made outside its
+  section, since every run they reached met a flag the first run had set
+  (ADR-0016, ADR-0017, amended in M3's closing review; `.plans/traps.md`).
+* A sweep bounds a whole new call by a refusal it sees itself: a remainder
+  taken before the call's first section has its second resume refused, and
+  every whole new call comes below the first such fuel. Never bound it by a
+  refused call's fuel, which can pass the whole call's; nor by a control run
+  on the code under test, which moves with a mutant; nor by a caller's own
+  count, since each procedure entry before the call's first expression costs
+  a tick. Count a guard against the fuels swept, never one trial
   (`.plans/traps.md`).
 
 ## Closing ritual

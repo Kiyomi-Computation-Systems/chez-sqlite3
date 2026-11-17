@@ -1,7 +1,7 @@
 # M1 slice 4: the docs' mutation log
 
-Each mutation ran in its own copy of the worktree (no `.git`), under
-`/tmp/claude-1000/-home-kishu-src-chez-sqlite3/2a34ce20-2ac8-4a34-9128-3ab6746e1074/scratchpad/s4docs/NAME/`,
+Each mutation ran in its own copy of the worktree (no `.git`), in the
+lead's scratch directory, under `s4docs/NAME/`,
 with `scripts/guix-env make test` run from the copy. Each ran after the
 unmutated tree passed `make test` (22 suites, 0 failed). `tests/test-docs.sps`
 holds 45 passing tests and `tests/test-reference.sps` 16.

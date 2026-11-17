@@ -374,8 +374,10 @@
     (let* ((filled (filter pair? (fill! c 1024)))
            (n (count c))
            (e (ret! c (key-name 1024) (key-name 1024)))
-           (m (count c)))
-      (list filled n e m (out! c (key-name 0)) (out! c (key-name 1))))))
+           (m (count c))
+           (first-out (out! c (key-name 0)))
+           (second-out (out! c (key-name 1))))
+      (list filled n e m first-out second-out))))
 
 ;; --- keys and statements are opaque -----------------------------------------------------------
 
@@ -390,13 +392,25 @@
            (f (out! c "")))
       (list a b d e f))))
 
-(test-equal "string keys of other shapes: the empty string, one with a NUL, a long one and non-ASCII text, each its own key, told apart from its near spellings"
-  '((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))
+;; Each near spelling is tried while the table holds all four keys, its own
+;; among them, and the exact keys after: a check-out removes what it hits,
+;; so a near spelling tried after its key's check-out misses even in a table
+;; that would match it. let*, since Chez fixes no order for a call's
+;; arguments (AGENTS.md).
+(test-equal "string keys of other shapes: the empty string, one with a NUL, a long one and non-ASCII text, each its own key, told apart from its near spellings, each tried while the table holds all four"
+  '((miss) (miss) (miss) 4 (hit "e") (hit "nul") (hit "long") (hit "uni") 0)
   (let* ((c (make 8)) (long (make-string 5000 #\a)))
     (ret! c "" "e") (ret! c "a\x0;b" "nul") (ret! c long "long") (ret! c "caf\xe9;" "uni")
-    (list (out! c "") (out! c (string-copy "a\x0;b")) (out! c (string-copy long))
-          (out! c (string-copy "caf\xe9;"))
-          (out! c "a") (out! c "cafe") (out! c (string-append (make-string 4999 #\a) "b")))))
+    (let* ((near-nul (out! c "a"))
+           (near-uni (out! c "cafe"))
+           (near-long (out! c (string-append (make-string 4999 #\a) "b")))
+           (held (count c))
+           (empty (out! c ""))
+           (nul (out! c (string-copy "a\x0;b")))
+           (long-hit (out! c (string-copy long)))
+           (uni (out! c (string-copy "caf\xe9;")))
+           (left (count c)))
+      (list near-nul near-uni near-long held empty nul long-hit uni left))))
 
 (test-equal "a key that is no string is outside the table's domain and raises, whatever it is, at a check-out and at a return: the table's keys are the SQL's text"
   '(raised raised raised raised raised raised)

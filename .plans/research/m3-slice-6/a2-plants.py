@@ -5,7 +5,7 @@
 # applied, each checked to match its file's text exactly once. With no NAME,
 # every plant. a2-run.sh runs the suites in the copies.
 import os, subprocess, sys
-root = '/home/kishu/src/chez-sqlite3-wt-m3s6'
+root = os.getcwd()  # run from the worktree's root
 conn = 'src/chez-sqlite3/private/connection.sls'
 correct = """    (interrupt-latch-interrupt! (unchecked-database-latch db)
                                 (lambda () (interrupt (unchecked-database-handle db))))

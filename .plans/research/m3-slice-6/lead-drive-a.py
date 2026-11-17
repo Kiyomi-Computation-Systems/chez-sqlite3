@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # drive-a.py NAME...: the lead's part A mutants, each written into
 # build/lead-mut/A, the suites run there, the file put back.
-import subprocess, sys
-WT = '/home/kishu/src/chez-sqlite3-wt-m3s6'
+import os, subprocess, sys
+WT = os.getcwd()  # run from the worktree's root
 COPY = WT + '/build/lead-mut/A'
 CONN = 'src/chez-sqlite3/private/connection.sls'
 MUT = {

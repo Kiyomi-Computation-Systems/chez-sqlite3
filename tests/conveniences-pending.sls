@@ -51,7 +51,12 @@
 ;;; SIGINT from the authorizer, goes through tell-available!, which prints
 ;;; UNAVAILABLE and skips it; a row with one check that reads the notes
 ;;; goes through tell-kept?, which prints UNAVAILABLE for that check, and
-;;; the row runs its others.
+;;; the row runs its others. The gate itself is held by an independent
+;;; reading: before the tell registers, tell-direct registers an entry point
+;;; that does nothing, straight through the FFI, and resets the list; a row
+;;; requires the gate to refuse exactly when that registration answered 21.
+;;; A gate forced to refuse passed every suite, printing UNAVAILABLE, with
+;;; nothing to say it was wrong (M3's closing review, reviewer B).
 ;;;
 ;;; The control: at each fuel, on a connection whose statement cache holds
 ;;; none, so every call prepares its statement, R is taken and resumed to its
@@ -67,13 +72,17 @@
 ;;; its fuel or the one before, a tick's room besides.
 ;;;
 ;;; The control cannot tell a whole new call from the same call run again,
-;;; which is what a call that lost its claim or its flag would do: so every
-;;; whole new call it makes must come below the fuel at which the same call,
-;;; refused at its first check, completes, since that check follows the
-;;; claim or the flag (slice 3's test-conveniences-resumed). The bound is
-;;; loose, the refusal's raise costing ticks of its own: no reference call
-;;; places a first expression to the tick, since where a slice's remainder
-;;; is taken depends on the code after the point as well as before it.
+;;; which is what a call that lost its claim or its flag would do. So it is
+;;; bounded by what it can tell: a remainder taken past the call's first
+;;; expression and before its first section, nothing noted at its expiry,
+;;; is refused the second time, &sqlite-closed from the verb, preparing
+;;; nothing. Each fuel begins with a collection, so a remainder lies further
+;;; into the call at each fuel than at the one before; the control must meet
+;;; such a refusal, and every whole new call it makes must come at a fuel
+;;; below the first. A claim taken again once its call had ended made the
+;;; whole window new calls, and passed the bound slice 5 used, the fuel at
+;;; which the call refused at its first check completes, 72 for execute!,
+;;; past the whole call's 42 (M3's closing review, reviewer B's N1).
 ;;;
 ;;; Which trials count: a trial interleaves when R1 exists. It is past the
 ;;; first section when the call had made its first section, the check-out's
@@ -110,9 +119,9 @@
 ;;; sqlite3_auto_extension, sqlite3_reset_auto_extension, sqlite3_trace_v2 and
 ;;; C's raise after the load, each under a guard of its own.
 (library (conveniences-pending)
-  (export public-load tell-registered tell-answered? tell-available! tell-kept? tell-noted
-          tell-reset zero-counts clean-call sweep reported timer-sweep timer-reported
-          taken-sweep keyboard-in)
+  (export public-load tell-direct tell-registered tell-answered? tell-gate-held tell-available!
+          tell-kept? tell-noted tell-reset zero-counts clean-call sweep reported timer-sweep
+          timer-reported taken-sweep keyboard-in)
   (import (rnrs)
           (rnrs eval)
           (only (srfi :64) test-skip)
@@ -283,10 +292,45 @@
   ;; sqlite3_initialize failed with, is a failure, which nothing gates.
   (define sqlite-misuse 21)
 
+  ;; int (*xEntryPoint)(sqlite3 *db, const char **pzErrMsg, const sqlite3_api_routines *pThunk)
+  ;; An entry point that does nothing, for tell-direct.
+  (define idle-entry-point
+    (foreign-callable __collect_safe
+      (lambda (db message api) 0)
+      (uptr uptr uptr) int))
+
+  ;; tell-direct : -> (U Integer (List 'raised Any))
+  ;; What sqlite3_auto_extension answers for idle-entry-point, an entry
+  ;; point that does nothing, registered straight through the FFI, with no
+  ;; procedure of the tell's between, then unregistered by
+  ;; sqlite3_reset_auto_extension, which frees SQLite's list: an
+  ;; independent reading of whether this libsqlite3 refuses a registration.
+  ;; The callable is locked while registered, and unlocked once, after the
+  ;; reset. Call it before tell-registered: the reset unregisters every
+  ;; entry point. Raises nothing.
+  (define (tell-direct)
+    (guard (e (#t (list 'raised (describe e))))
+      (lock-object idle-entry-point)
+      (let ((rc (auto-extension (foreign-callable-entry-point idle-entry-point))))
+        (reset-auto-extension)
+        (unlock-object idle-entry-point)
+        rc)))
+
   ;; tell-refused? : Any -> Boolean
   ;; Whether ANSWER, tell-registered's, is the refusal.
   (define (tell-refused? answer)
     (equal? answer (list 'auto-extension-answered sqlite-misuse)))
+
+  ;; tell-gate-held : Any Any -> Any
+  ;; gate-held when the gate's decision on REGISTRATION, tell-registered's,
+  ;; matches DIRECT, tell-direct's: refused exactly when the direct
+  ;; registration answered 21, and registered exactly when it answered 0;
+  ;; else both, to be read.
+  (define (tell-gate-held registration direct)
+    (if (or (and (tell-refused? registration) (eqv? direct sqlite-misuse))
+            (and (eq? registration 'registered) (eqv? direct 0)))
+        'gate-held
+        (list 'gate registration 'direct direct)))
 
   ;; tell-answered? : Any -> Boolean
   ;; Whether ANSWER, tell-registered's, is registered, or the refusal: not
@@ -500,32 +544,6 @@
   ;; thunk-of : Call Database -> (-> Any)
   (define (thunk-of c db) (lambda () (attempt (lambda () ((call-run c) db)))))
 
-  ;; refused-of : Symbol -> (-> Any)
-  ;; VERB's call with no database in its place: refused at its first check,
-  ;; which follows its claim or its flag, an assertion violation.
-  (define (refused-of verb)
-    (case verb
-      ((execute!) (lambda () (attempt (lambda () (no-value (execute! 'no-database insert-sql 9))))))
-      ((query) (lambda () (attempt (lambda () (query 'no-database select-sql 0)))))
-      ((query-row) (lambda () (attempt (lambda () (query-row 'no-database select-sql 0)))))
-      ((query-fold) (lambda () (attempt (lambda () (query-fold 'no-database select-sql sum 0 0)))))
-      ((query-failing) (lambda () (attempt (lambda () (query 'no-database failing-sql least-integer)))))
-      (else (lambda () (attempt (lambda () (no-value (execute-script! 'no-database script-sql))))))))
-
-  ;; refused-fuel : Symbol -> Natural
-  ;; The first fuel at which one slice of VERB's refused call completes it,
-  ;; at most 20000: past the call's first expression, so no remainder taken
-  ;; at it or after makes a whole new call (slice 3's
-  ;; test-conveniences-resumed, the script's row). A bound, not the place:
-  ;; the refusal's raise costs ticks of its own.
-  (define (refused-fuel verb)
-    (let ((thunk (refused-of verb)))
-      (let loop ((fuel 1))
-        (quieted!)
-        (if (or (eq? (car (slice (make-engine thunk) fuel)) 'completed) (>= fuel 20000))
-            fuel
-            (loop (+ fuel 1))))))
-
   ;; --- engines ------------------------------------------------------------------------------
 
   ;; quieted! : -> Void
@@ -580,22 +598,31 @@
 
   ;; --- the control --------------------------------------------------------------------------
 
-  ;; control : Call Positive-Integer -> (U 'completed Boolean)
+  ;; Controlled = (U 'completed (List Boolean Boolean))
+  ;; control : Call Positive-Integer -> Controlled
   ;; C as an engine on a connection whose statement cache holds none, one
   ;; slice of FUEL: completed, when it completed; else whether its
   ;; remainder, resumed to its end, then to its end again, made a whole new
-  ;; call the second time: the authorizer saw the call's SQL prepared again.
+  ;; call the second time, the authorizer seeing the call's SQL prepared
+  ;; again; and whether it was refused then, before the call's first
+  ;; section: nothing noted at the expiry, and the second resume answering
+  ;; &sqlite-closed from the verb, preparing nothing.
   (define (control c fuel)
     (let* ((db (fresh '((statement-cache . 0))))
            (r (slice (make-engine (thunk-of c db)) fuel))
            (made (if (eq? (car r) 'completed)
                      'completed
-                     (let* ((first (finish (cadr r)))
+                     (let* ((before (= (noted-count (call-kind c)) 0))
+                            (first (finish (cadr r)))
                             (n (noted-count (call-kind c)))
-                            (second (finish (cadr r))))
-                       (> (noted-count (call-kind c)) n)))))
+                            (second (finish (cadr r)))
+                            (new (> (noted-count (call-kind c)) n)))
+                       (list new (and before (not new) (equal? second (cadr (call-answers c)))))))))
       (guard (e (#t #f)) (close-database! db))
       made))
+
+  ;; made-new? : Controlled -> Boolean
+  (define (made-new? made) (and (pair? made) (car made)))
 
   ;; --- one trial ----------------------------------------------------------------------------
 
@@ -743,13 +770,14 @@
 
   ;; --- the sweep ----------------------------------------------------------------------------
 
-  ;; Sweep = (List Any Natural Natural Natural (Listof Any) Natural Counts Natural)
+  ;; Sweep = (List Any Natural Natural Natural (Listof Any) Natural Counts (U Natural #f))
   ;; The fuel at which the call completes without expiring, or
   ;; no-completion-by-20000; how many trials interleaved, R1 existing; how
   ;; many of those were past the call's first section, and how many both
   ;; past it; each trial's deviations, with its fuels; the last fuel at which
   ;; the control made a whole new call, 0 for none; the counts once the
-  ;; sweep is done; and the refused call's fuel, by refused-fuel.
+  ;; sweep is done; and the first fuel at which the control was refused
+  ;; before the call's first section, #f for none.
 
   ;; sweep : Symbol (U 'every 'odd 'even) -> Sweep
   ;; VERB's call swept: at every fuel from 1 until the call completes
@@ -763,10 +791,12 @@
     (let ((c (call-of verb)))
       (define (every-g? fuel)
         (case parity ((odd) (odd? fuel)) ((even) (even? fuel)) (else #t)))
-      (let floop ((fuel 1) (trials 0) (past 0) (both 0) (deviations '()) (last-new 0) (was-new #f))
+      (let floop ((fuel 1) (trials 0) (past 0) (both 0) (deviations '()) (last-new 0) (was-new #f)
+                  (refused-at #f))
         (let* ((made (begin (quieted!) (control c fuel)))
-               (new? (or (eq? made #t) was-new))
-               (last-new (if (eq? made #t) fuel last-new)))
+               (new? (or (made-new? made) was-new))
+               (last-new (if (made-new? made) fuel last-new))
+               (refused-at (or refused-at (and (pair? made) (cadr made) fuel))))
           (let gloop ((g 1) (trials trials) (past past) (both both) (deviations deviations))
             (let* ((t (trial c fuel g new?))
                    (kind (car t))
@@ -778,12 +808,12 @@
                    (both (if (and interleaved (caddr t)) (+ both 1) both)))
               (cond ((eq? kind 'completed)
                      (list fuel trials past both (reverse deviations) last-new (native-counts)
-                           (refused-fuel verb)))
+                           refused-at))
                     ((>= fuel 20000)
                      (list 'no-completion-by-20000 trials past both (reverse deviations) last-new
-                           (native-counts) (refused-fuel verb)))
+                           (native-counts) refused-at))
                     ((or (eq? kind 'last) (not (every-g? fuel)))
-                     (floop (+ fuel 1) trials past both deviations last-new (eq? made #t)))
+                     (floop (+ fuel 1) trials past both deviations last-new (made-new? made) refused-at))
                     (else (gloop (+ g 1) trials past both deviations)))))))))
 
   ;; tallied : (Listof (List Natural Natural (Listof Any))) -> (Listof (Pairof Symbol Natural))
@@ -808,19 +838,21 @@
           ((eq? (car (car kinds)) k) (cons (cons k (+ (cdr (car kinds)) 1)) (cdr kinds)))
           (else (cons (car kinds) (counted-up k (cdr kinds))))))
 
-  ;; reported : Symbol Sweep Natural Natural -> (List Any Any Counts)
+  ;; reported : Symbol Sweep Natural (U Natural 'none) -> (List Any Any Counts)
   ;; RUN's deviations, summarized; whether its interleaved trials past the
-  ;; call's first section reached PAST a fuel on average, and those both past
-  ;; it BOTH, over the fuels up to the one at which the call completes, and its
-  ;; control made every whole new call below the fuel at which the refused
-  ;; call completes: a second resume of the same call that ran again would
-  ;; look like one to the control; and the counts once it was done. Its fuels and counts printed, naming VERB. A
-  ;; sweep that reused one R across every G, its every trial after G = 1
-  ;; refused at once, makes at most one trial a fuel (the lead's, slice 5's
-  ;; part D).
+  ;; call's first section reached PAST-A-FUEL a fuel on average, and those
+  ;; both past it BOTH-A-FUEL, or none at all where it is none, over the
+  ;; fuels up to the one at which the call completes; and whether its
+  ;; control was refused before the call's first section at some fuel, and
+  ;; made every whole new call below the first: a second resume of the same
+  ;; call that ran again would look like one to the control; and the counts
+  ;; once it was done. Its fuels and counts printed, naming VERB. A sweep
+  ;; that reused one R across every G, its every trial after G = 1 refused
+  ;; at once, makes at most one trial a fuel (the lead's, slice 5's part D).
   (define (reported verb run past-a-fuel both-a-fuel)
     (let ((fuel (list-ref run 0)) (trials (list-ref run 1)) (past (list-ref run 2))
-          (both (list-ref run 3)) (deviations (list-ref run 4)) (last-new (list-ref run 5)))
+          (both (list-ref run 3)) (deviations (list-ref run 4)) (last-new (list-ref run 5))
+          (refused-at (list-ref run 7)))
       (display "  ")
       (display verb)
       (display ": completed without expiring at fuel ")
@@ -833,18 +865,19 @@
       (write both)
       (display "; the last fuel at which the control made a whole new call ")
       (write last-new)
-      (display ", below the refused call's ")
-      (write (list-ref run 7))
+      (display ", below the first at which it was refused before the call's first section, ")
+      (write refused-at)
       (newline)
       (unless (null? deviations)
         (display "    deviations by kind: ")
         (write (tallied deviations))
         (newline))
       (list (if (integer? fuel) (summarized deviations) (list fuel (summarized deviations)))
-            (cond ((not (and (integer? fuel) (>= past (* past-a-fuel fuel)) (>= both (* both-a-fuel fuel))))
+            (cond ((not (and (integer? fuel) (>= past (* past-a-fuel fuel))
+                             (if (eq? both-a-fuel 'none) (= both 0) (>= both (* both-a-fuel fuel)))))
                    (list 'too-few-interleavings 'past past 'both both 'fuel fuel))
-                  ((>= last-new (list-ref run 7))
-                   (list 'whole-new-calls-past-the-first-expression last-new (list-ref run 7)))
+                  ((not (and refused-at (< last-new refused-at)))
+                   (list 'whole-new-calls-not-below-a-refusal last-new refused-at))
                   (else 'interleavings-reached))
             (list-ref run 6))))
 
@@ -869,17 +902,28 @@
   ;; only where PREPARES?, its effect made at most once; no
   ;; statement is tracked outside the cache, none at a row, the cache holding
   ;; the call's statement, ready, or none, the raise before its check-out;
-  ;; nothing is counted once the connection is closed.
+  ;; nothing is counted once the connection is closed. The handler notes
+  ;; the statements counted as it raises, the counters' own reading, which
+  ;; needs no tell: for a call that survives a preemption, one counted then
+  ;; is the call's, and the raise gives it back, so the cache holds it. A
+  ;; give-back that finalized it instead passed every row that read only
+  ;; the end, where the tell was refused (M3's closing review, reviewer B's
+  ;; N2).
   (define (timer-trial c ticks prepares?)
     (let* ((start (native-counts))
            (db (fresh '()))
            (fired #f)
+           (made-at-raise #f)
            (old (timer-interrupt-handler))
            (answer
             (dynamic-wind
               (lambda ()
                 (timer-interrupt-handler
-                 (lambda () (unless fired (set! fired #t) (raise 'timer)))))
+                 (lambda ()
+                   (unless fired
+                     (set! fired #t)
+                     (set! made-at-raise (cdr (assq 'statement (native-counts))))
+                     (raise 'timer)))))
               (lambda ()
                 (guard (e ((eq? e 'timer) 'timer)
                           (#t (list 'raised (what-raised e))))
@@ -906,8 +950,9 @@
                                         (cons '() (made-by-one c))))
         (deviate! (list 'rows rows)))
       (unless (or (and (equal? tracked (clean-tracked c)) (eqv? cached (length tracked)))
-                  (and (equal? tracked '()) (eqv? cached 0)))
-        (deviate! (list 'left tracked cached)))
+                  (and (equal? tracked '()) (eqv? cached 0)
+                       (not (and (call-survives? c) (eq? answer 'timer) (eqv? made-at-raise 1)))))
+        (deviate! (list 'left tracked cached 'made-at-the-raise made-at-raise)))
       (unless (eq? closed 'closed) (deviate! (list 'close closed)))
       (unless (equal? counts start) (deviate! (list 'counts start counts)))
       (list fired (reverse deviations))))

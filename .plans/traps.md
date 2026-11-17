@@ -177,6 +177,51 @@ told in chez-curl's `.plans/traps.md`.
     callable didn't move.
   - Unlock exactly what was locked, once. (M3's Mac run, PR #30's review, chez-sqlite3)
 
+- **A jump back within one wind's extent crosses no winder.** A `dynamic-wind` before thunk runs
+  only on a jump in from outside its extent. `execute-script!` relied on `call-with-block`'s before
+  thunk to refuse a re-entry, and read its flag at the first prepare alone. A timer's handler that
+  captured a continuation between two statements, and called it from a later fire of the same
+  call, jumped back inside the block: the statements after it ran again, and the call returned
+  normally, in 629 of 2804 trials of reviewer A's `script-reenter3.sps`. The fix claims each
+  statement's byte offset inside its prepare's section. (M3's closing review, chez-sqlite3)
+- **A sweep's bound on a whole new call can bound nothing.** Three ways it failed in M3:
+  - **A refused call's fuel:** `with-transaction` refused at its first check completed at fuel
+    65, and the whole call at 72, so a bound read from the refusal says nothing of where the call
+    begins.
+  - **A control run on the code under test** moves with the mutant: under reviewer B's N1, a
+    claim of 0 taken again after the end, the pending sweeps' last whole new call went from fuel
+    8 to 15, and all 73 suites passed.
+  - **A caller's own count:** each procedure entry between the count and the callee's first
+    expression costs a tick. In the transaction suite the count first lands at fuel 7, and whole
+    new calls run through fuel 8 (`transaction/claim-window/window.sps`).
+
+  A sweep now bounds it by a refusal it sees itself, of a remainder taken before the call's first
+  section. (M3's closing review, chez-sqlite3)
+- **A flag the first run sets can hide a misplaced check from every engine sweep.** Two mutants
+  that took `with-transaction`'s claim just before the BEGIN's section, or in a section of its own,
+  passed every engine row: under any schedule the second run met the shared `ended`, set by the
+  first run's end or by its expiry's rollback. Only a timer's continuation called from inside the
+  body told them apart. (M3's closing review, chez-sqlite3)
+- **One connection across an engine row's fuels sweeps whatever path the last fuel left.**
+  `test-conveniences-engines` reused a connection for every fuel, so after the first trial each
+  ran warm, from the cache. A mutant whose cache hit handed its statement over after its section
+  passed it; with a fresh connection per fuel, run cold then warm, it fails. (M3's closing review,
+  chez-sqlite3)
+- **A count of expiries can't tell one section per value from one section for all.** A row held
+  that binding takes a section per value by counting expiries: "at least 49" for 50 values.
+  Binding outside any per-value section cost 249 more, and passed it (reviewer B's
+  `q15-binds.sps`). Rows now read what each section did: `sqlite3_expanded_sql` sees every bound
+  count, from 0 to 50. (M3's closing review, chez-sqlite3)
+- **A suite's own text moves its fuels.** Adding rows to `test-conveniences-engines`, with the
+  library unchanged, moved P6's fuels from 43, 82 and 47 to 41, 80 and 45. A row may not assert a
+  fuel as a constant, nor that two verbs' fuels are equal. (M3's closing review, chez-sqlite3)
+- **A `list` of effectful checks is an order of effects too.** `test-statement-cache`'s
+  near-spellings row checked out seven keys as the arguments of one `list`. Under `--program` they
+  ran left to right, so the exact keys left the table before any near spelling was tried, and a
+  cache that compared keys by their first 4096 characters passed all 73 suites. Its verdict also
+  flipped between compiled code and `interpret`. Now `let*` (`suites/cache-order.sps`).
+  (M3's closing review, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -383,6 +428,23 @@ told in chez-curl's `.plans/traps.md`.
   - So the case is the build's, not the SQL's or the version's. Read autocommit after the
     failure, as AGENTS.md says. (M3's Mac run, chez-sqlite3)
 
+- **A watchdog that keeps interrupting stops `with-transaction`'s own ROLLBACK and COMMIT.** The
+  trap above at a statement's start reaches every statement, the library's own exits among them.
+  A watchdog that called `interrupt-database!` in a tight loop left the transaction open in 351 of
+  20,000 calls on 3.53.1, and 623 of 8,000 at the floor. A later `with-transaction`, then only a
+  savepoint inside the leftover transaction, answered normally, and its write was gone after a
+  reopen (reviewer A's `watchdog-loss.sps`). `with-transaction` now rolls back with the latch shut
+  (ADR-0017, amended). (M3's closing review, chez-sqlite3)
+- **SQLite's statement trace runs inside the step, after the interrupt is cleared.** A
+  `SQLITE_TRACE_STMT` callback that calls `sqlite3_interrupt` stops the statement as it starts,
+  every time, so a row can interrupt an exit's ROLLBACK deterministically. The callback must be
+  `__collect_safe`, and locked while SQLite holds it. (M3's closing review, chez-sqlite3)
+- **A busy wait on whole seconds lets a Scheme retry pass a 3000 ms bound.** On a build without
+  `nanosleep`, a 1500 ms timeout waits 1000 ms, so one retry waits 2000. The closing review built
+  the floor with `-DHAVE_NANOSLEEP=0` and planted a retry: every timed row passed, each wait 2000
+  to 2001 ms. The rows now read the grain, and bound the wait under 2000 ms there.
+  (M3's closing review, chez-sqlite3)
+
 ## Checks and environment
 
 - **A check passes whenever something else produces what it looks for.** M0 slice 1's review
@@ -583,7 +645,10 @@ told in chez-curl's `.plans/traps.md`.
   reached the close's work within the stand-in's 200 ms wait: with a 1 s sleep put in the closer
   before its close, the mutant without the mutex passed. The fix starts the bounded wait only
   after the other thread has noted that it is about to act, so the window holds no thread's
-  wake-up. (M3 slice 1's review, chez-sqlite3)
+  wake-up. (M3 slice 1's review, chez-sqlite3) `test-contention`'s default-mode row had the same
+  shape, and failed on correct code: with the second thread 700 ms late, its deferred half failed
+  with no fault in the library. Its window now starts when the second thread says it runs.
+  (M3's closing review, chez-sqlite3)
 
 - **A floor run that sets only the library compiles its C against another header.**
   - **What goes wrong:** `CHEZ_SQLITE3_LIBRARY` chooses the library the suites load. The C they
@@ -622,6 +687,20 @@ told in chez-curl's `.plans/traps.md`.
     collection waits on.
   - **A critical section around the hold breaks it:** the owner's collections then wait for the
     section's end, which lets the mutex go.
+  - **The first round can be lost before the call begins.** SQLite clears the interrupt at a
+    statement's start and at a prepare's parse, when no other statement is active, and a prepare
+    reads it only while its tokenizer runs, never in the code it generates after the last token
+    (3.45.1's and 3.54.1's source). Slice 6's first round interrupted while the owner was still
+    copying 3 MB of SQL in Scheme, so the parse's clear erased it, and a later round had to win
+    the CPU from Valgrind inside the short tokenizing window. The long prepare ran unstopped
+    once on CI (run 44087748537, on `main`), and in 1 of 27 gate runs here. With the prepare
+    called 200 ms late, it ran unstopped in 13 of 70 probe trials and 15 of 40 suite runs
+    (`research/m3-review/suites/prepare-race.sps`).
+  - **So the first round is a handshake:** holding the mutex, interrupt before the call; read
+    `sqlite3_is_interrupted` each 1 ms until it reads clear, which only the call's own start or
+    parse does, the owner then held at its next allocation; interrupt again, inside the call; let
+    go. None of 95 trials and none of 40 suite runs left it unstopped. A step reads the flag until
+    it returns, so there a lost first round costs only time. (M3's closing review, chez-sqlite3)
 
   ([research/m3-slice-6/](research/m3-slice-6/README.md); ADR-0019, amended in M3 slice 6.)
   (M3 slice 6, chez-sqlite3)
@@ -669,6 +748,25 @@ told in chez-curl's `.plans/traps.md`.
   message inside a make function's arguments with no comma, or take the test into the shell, as
   `test-memory` now reads the lists' origins.
   (M3 slice 6's part C, chez-sqlite3)
+
+- **A gate's `UNAVAILABLE` line on Linux is read by no one unless something holds the gate.**
+  PR #30's tell gate skipped its 33 rows when `sqlite3_auto_extension` answered 21. Planted to
+  answer 21, the main and floor lanes passed 73 of 73, and `make test-memory` printed nothing:
+  a passing suite's lines stay in `build/memory/<suite>.log`. The memory check was held all along,
+  by `test-memory-check`'s rows, `check-test-fails`' leaks case and the lanes' compile-option
+  lists; the tell by nothing. The suites now register an idle entry point straight through the
+  FFI, and require the gate to agree with it. So does NOMEM's `memory-kept`, with the memory
+  check's control. (M3's closing review, chez-sqlite3)
+- **A watchdog that dies holding SQLite's memory mutex hangs the owner for good.** In
+  `test-interrupt-reach` and `test-interrupt-close`, a raise from the hold's `sleep` killed the
+  thread with the mutex taken: each suite hung to its 400 s timeout. A raise from `mutex-enter`
+  killed it before it started, and the long step ran uninterrupted. A round's raise now goes to a
+  handler that lets the mutex go and notes it. (M3's closing review, chez-sqlite3)
+- **A suite's time under the gate can be the host's, not the code's.**
+  `test-transaction-interrupt`'s plain watchdog took 18 to 77 s under the gate on 18 cores, and 11
+  to 15 s pinned to two; slice 6 had measured 429 to 434 s, and CI 31 to 318 s. Valgrind runs one
+  thread at a time, so a watchdog's turn is the scheduler's. With the memory-mutex device it took
+  10 to 16 s in every run. (M3's closing review, chez-sqlite3)
 
 ## Editing the records
 

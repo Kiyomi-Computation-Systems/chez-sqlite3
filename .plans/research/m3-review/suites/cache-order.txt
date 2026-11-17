@@ -1,0 +1,15 @@
+== against N3, keys compared by their first 4096 characters
+near spellings, compiled: ((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))  -- the row passes
+near spellings, interpret: ((hit "e") (hit "nul") (miss) (hit "uni") (miss) (miss) (hit "long"))  -- the row fails
+capacity 1024, compiled: (1024 (miss) (hit "select 1"))  -- the row passes
+capacity 1024, interpret: (1024 (miss) (hit "select 1"))  -- the row passes
+== against nmiss, a check-out that misses evicts the least recently used
+near spellings, compiled: ((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))  -- the row passes
+near spellings, interpret: ((miss) (miss) (miss) (hit "uni") (miss) (miss) (miss))  -- the row fails
+capacity 1024, compiled: (1024 (miss) (miss))  -- the row fails
+capacity 1024, interpret: (1024 (miss) (hit "select 1"))  -- the row passes
+== against the real table, e590fdc
+near spellings, compiled: ((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))  -- the row passes
+near spellings, interpret: ((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))  -- the row passes
+capacity 1024, compiled: (1024 (miss) (hit "select 1"))  -- the row passes
+capacity 1024, interpret: (1024 (miss) (hit "select 1"))  -- the row passes

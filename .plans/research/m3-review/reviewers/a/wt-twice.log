@@ -1,0 +1,17 @@
+a call refused at its first check completes at fuel 65
+(1 (42) (42) rows 2 open #f)
+(2 (42) (42) rows 2 open #f)
+(3 (42) (42) rows 2 open #f)
+(4 (42) (42) rows 2 open #f)
+(5 (42) (42) rows 2 open #f)
+(6 (42) (42) rows 2 open #f)
+(7 (42) (42) rows 2 open #f)
+(8 (42) (42) rows 2 open #f)
+(9 (42) (42) rows 2 open #f)
+(10 (42) (42) rows 2 open #f)
+(11 (42) (42) rows 2 open #f)
+(15 (42) (42) rows 2 open #f)
+(16 (42) (42) rows 2 open #f)
+(27 ((raised transaction-ended)) ((raised transaction-ended)) rows 2 open #f)
+(28 ((raised transaction-ended)) ((raised transaction-ended)) rows 2 open #f)
+completed unexpired at fuel 72; fuels whose second resume committed again: 15

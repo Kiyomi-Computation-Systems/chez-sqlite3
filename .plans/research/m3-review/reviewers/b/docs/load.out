@@ -1,0 +1,23 @@
+== build/m3cr-b/docs/load0.sps
+started
+(no-sqlite load-failed)
+exit=0
+== build/m3cr-b/docs/load-changes.sps
+Exception in chez-sqlite3: the loader refused this libsqlite3; name one this Chez can load with CHEZ_SQLITE3_LIBRARY, an absolute path with irritant "/nonexistent/libsqlite3.so.0"
+exit=0
+== build/m3cr-b/docs/load-execute.sps
+Exception in chez-sqlite3: the loader refused this libsqlite3; name one this Chez can load with CHEZ_SQLITE3_LIBRARY, an absolute path with irritant "/nonexistent/libsqlite3.so.0"
+exit=0
+== build/m3cr-b/docs/load-interrupt-database.sps
+Exception in chez-sqlite3: the loader refused this libsqlite3; name one this Chez can load with CHEZ_SQLITE3_LIBRARY, an absolute path with irritant "/nonexistent/libsqlite3.so.0"
+exit=0
+== build/m3cr-b/docs/load-prepare-statement.sps
+Exception in chez-sqlite3: the loader refused this libsqlite3; name one this Chez can load with CHEZ_SQLITE3_LIBRARY, an absolute path with irritant "/nonexistent/libsqlite3.so.0"
+exit=0
+== build/m3cr-b/docs/load-sqlite-interrupt.sps
+started
+(no-sqlite load-failed)
+exit=0
+== build/m3cr-b/docs/load-with-transaction.sps
+Exception in chez-sqlite3: the loader refused this libsqlite3; name one this Chez can load with CHEZ_SQLITE3_LIBRARY, an absolute path with irritant "/nonexistent/libsqlite3.so.0"
+exit=0

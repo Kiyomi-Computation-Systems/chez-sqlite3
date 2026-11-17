@@ -1,0 +1,15 @@
+The copy window-probe.sps ran against: src/chez-sqlite3/private/connection.sls
+with call-with-open-handle's window marked, and the mark exported.
+
+-          database-depth set-database-depth!)
++          database-depth set-database-depth! probe-in-window)
+...
++  (define in-window #f)
++  (define (probe-in-window) in-window)
+   (define (call-with-open-handle who db proc)
+...
+                   (set! finished #t)
++                  (set! in-window #t)
+                   outcome))
+-              (lambda () #f))))
++              (lambda () (set! in-window #f) #f))))

@@ -24,6 +24,10 @@
   in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): a deferred transaction's first
   write, and the default under contention
   ([amendment](#amendment-2026-11-16-a-deferred-transactions-first-write-m3-slice-6)).
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the call's claim, the BEGIN's plan read in its own
+  section, and the exits' rollback with the interrupt latch shut, the maintainer's "Shut the latch
+  on exit"
+  ([amendment](#amendment-2026-11-17-the-claim-the-begins-section-and-the-shut-latch-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
 - **Settles:** brief §4's "`with-transaction` with nested savepoints, and rollback on a raise"
@@ -449,3 +453,55 @@ builder's report and the lead's checks (the slice's
   (ADR-0019, decisions 8 and 11). `test-contention`'s row T waits 1502 ms under another's write
   lock, then raises `&sqlite-busy` with nothing begun. A plant that retried the `BEGIN` once
   waited 3004 ms, and only T failed it.
+
+## Amendment, 2026-11-17: the claim, the BEGIN's section and the shut latch (M3's closing review)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer A's three findings and reviewer B's, each
+reproduced by the lead ([the review's log](../m3-closing-review-mutation-log.md)). The third is
+the maintainer's choice, "Shut the latch on exit" (2026-11-17), over documenting the race.
+
+- **The call's claim is made by its first expression.**
+  - **What failed:** `with-transaction` made its flags in `run-level`, after the plan's section.
+    An engine remainder taken between `transaction`'s first expression and those flags, resumed
+    a second time after the call had ended, got fresh flags: it issued BEGIN, ran the body and
+    committed again. Reviewer A's `verbs-twice.sps` saw it at fuels 9 to 11, 15 and 16 on
+    3.53.1, so slice 4's "an engine resumed a second time commits nothing again" was false there.
+  - **Now:** the claim is made before any check, and taken first in the BEGIN's section. A run
+    that finds it taken steps nothing and raises `&sqlite-transaction-ended`. The flags are made
+    after it, so every run past the BEGIN shares one set.
+- **The BEGIN's plan is read in the BEGIN's own section.**
+  - **What failed:** the refusal's check for a statement on its row, autocommit and the depth
+    were read one section before the BEGIN stepped. So another engine on the thread could open a
+    transaction in between, and the BEGIN was issued inside it. Reviewer A's
+    `wt-stale-plan.sps`, at fuels 14 to 25: "cannot start a transaction within a transaction",
+    and a second connection's BEGIN IMMEDIATE then answered busy.
+  - **Now:** one section holds the claim, the refusal's pass, autocommit and the depth for
+    `begin-plan`, and the BEGIN's or SAVEPOINT's check-out, step and return. The refusal is
+    raised after that section, still before anything reaches C. This supersedes slice 1's two
+    sections "for one engine at a time": decision 2 now holds with engines sharing a connection.
+  - **Slice 4's failed-begin row** relied on that window. It now holds a select prepared through
+    the raw binding, untracked, and finds the failed begins again.
+- **The exits' rollback runs with the interrupt latch shut.**
+  - **What failed:** SQLite clears an interrupt as a statement starts, when none is running, and
+    checks it during the run. So a watchdog that kept interrupting stopped `with-transaction`'s
+    own ROLLBACK and COMMIT, and the transaction outlived the call:
+    - 351 of 20,000 calls on 3.53.1 in the lead's run, 787 in the reviewer's;
+    - 623 of 8,000 at the floor;
+    - in `watchdog-loss.sps`, a later `with-transaction`, only a savepoint inside the leftover
+      transaction, answered normally, and its write was gone after a reopen.
+
+    The reference's pattern, with a 1 ms sleep between rounds, hit it in none of 86,000.
+  - **Now:** `rolled-back!`, the one path to ROLLBACK and to ROLLBACK TO then RELEASE, on the
+    raise path and after a failed commit, runs inside the latch's shut (ADR-0019, amended the
+    same day). An `interrupt-database!` sent meanwhile does nothing. COMMIT, and the RELEASE that
+    commits, stay interruptible: one that is stopped is rolled back under the shut, and its
+    interrupt raised. On the fix, none of 20,000 calls, and none of 8,000 at the floor.
+  - **The case that stays:** an interrupt sent before the shut, while a statement of the
+    connection is on its row, still stops the rollback, since SQLite keeps the interrupt while a
+    statement runs. The sticky interrupt's consequence stands.
+- **Every raise site answers outside any critical section.** A mutant that raised a failed
+  commit's error from inside one (reviewer B's B8) passed all 73 suites. Depth rows now hold each
+  site: a BEGIN's failure, a commit's, a rollback's, the ended condition and each refusal.
+- **A nested RELEASE that fails beside its own held write** is rolled back but stays open: a
+  later `release chez_sqlite3_1` answers ok. The slice 3 amendment's "A second way a failed
+  commit's rollback fails" accepts this already, and `test-transaction`'s [C] O7 rows hold it.

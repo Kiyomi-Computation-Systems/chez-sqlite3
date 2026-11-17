@@ -20,6 +20,9 @@
   in M3 slice 5's part D, and accepted by the maintainer that day: the claim of `execute!`,
   `query` and `query-row`, and P6's fuels again
   ([amendment](#amendment-2026-11-16-the-conveniences-claim-m3-slice-5-part-d)).
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the script's claim on its byte offsets, `made-claim`
+  held whole, and the sweeps' bound on a whole new call
+  ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -474,3 +477,36 @@ maintainer's choice, 2026-11-16 ("In slice 5's PR").
   | `execute-script!` | 640 | 640 |
   | two engines on one connection | 259 | 126 |
   | each remainder resumed twice | 101 to 156; the script's, 640 | 46 to 150; the script's, 638 |
+
+## Amendment, 2026-11-17: the script's claim, and the sweeps' bound (M3's closing review)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer A's finding and reviewer B's, each reproduced by
+the lead ([the review's log](../m3-closing-review-mutation-log.md)).
+
+- **`execute-script!` claims each statement's byte offset.**
+  - **What failed:** slice 3's flag, `begun`, was read by the first prepare alone. The later
+    prepares took no check, since `call-with-block` refuses a re-entry into the block's extent.
+    But a jump from a later point inside the block to an earlier one crosses no winder, so
+    nothing refused it. A timer's handler that captured a continuation between two statements,
+    and called it from a later fire of the same call, ran the statements after it again, and the
+    call returned normally: 629 of 2804 trials of reviewer A's `script-reenter3.sps`, which the
+    lead reproduced exactly.
+  - **Now:** the call's claim, `claimed`, -1 at first, is made by its first expression. Each
+    prepare's section claims its statement's offset, through `prepared-at`'s check, inside the
+    section: refused unless the offset lies past `claimed`. A refusal prepares nothing and
+    raises `&sqlite-closed`. A script's offsets only grow, so each statement is prepared once a
+    call. On the fix, no trial runs a statement twice.
+  - **Superseded:** decision 7's line that the one re-entry left is an engine's resume, and the
+    slice 3 and part D amendments' lines that the script keeps the flag.
+- **`made-claim` is exported** from `(chez-sqlite3 private conveniences)`, for the suites alone,
+  which hold it whole: once a call has ended, no position is claimed again, 0 included. A mutant
+  that claimed 0 again after the end (reviewer B's N1) passed all 73 suites, and fails the new
+  rows.
+- **The sweeps bound a whole new call by a refusal they see themselves,** not by a refused call's
+  fuel.
+  - **What failed:** slice 5's control ran on the code under test, so it moved with the mutant:
+    under N1 the last whole new call went from fuel 8 to 15. And the fixed bound could never fire
+    for `execute!`, `query-row` and `query`, which complete at fuels 42, 46 and 72, against the
+    refused call's 72.
+  - **Now:** a remainder taken before the call's first section must have its second resume
+    refused with `&sqlite-closed`, and every whole new call must come below the first such fuel.

@@ -1,0 +1,5 @@
+D4-memory => (inner (raised boom) next-step (ok 2) finalize (ok #<void>) release-chez_sqlite3_1-after (ok #<void>) outer (ok (#(0))) in #f rows (#(0)))
+D4-file => (inner (raised boom) next-step (ok 2) finalize (ok #<void>) release-chez_sqlite3_1-after (ok #<void>) outer (ok (#(0))) in #f rows (#(0)))
+D4c-memory => (inner (raised (sqlite busy "cannot release savepoint - SQL statements in progress")) finalize (ok #<void>) release-chez_sqlite3_1-after (ok #<void>) outer (ok (#(0))) in #f rows (#(0)))
+D4c-file => (inner (raised (sqlite busy "cannot release savepoint - SQL statements in progress")) finalize (ok #<void>) release-chez_sqlite3_1-after (ok #<void>) outer (ok (#(0))) in #f rows (#(0)))
+D3c-outer-commit-beside-held-write => ((raised (sqlite busy "cannot commit transaction - SQL statements in progress")) in #f finalize (ok #<void>) count #(0))

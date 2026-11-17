@@ -94,8 +94,10 @@
   ;; before M3. So a string, a number or a boolean is still an unknown option,
   ;; and an improper pair is a settings list for settings-plan to refuse. The
   ;; settings list is the caller's own, not a copy; with none, (). A second
-  ;; list is refused. ARGS is never changed, and is read more than once: it is
-  ;; called before any critical section, on a list no other thread changes.
+  ;; list is refused. ARGS is never changed, and is read more than once: the
+  ;; open verbs call it inside the one critical section that holds their
+  ;; checks (open.sls's checked), on a list no other thread changes, so no
+  ;; handler of this thread runs between the reads either.
   (define (split-open-arguments args)
     (let loop ((rest args) (options '()) (settings #f))
       (cond ((not (pair? rest)) (list 'split (reverse options) (if settings (car settings) '())))
@@ -151,8 +153,10 @@
   ;; settings given, busy-timeout's first, then the rest in the list's order.
   ;; A step is the setting's name, the SQL that sets it, the SQL that reads it
   ;; back, PRAGMA and its name, and the Scheme value expected back, the value
-  ;; given. SETTINGS is never changed, and is read more than once: it is
-  ;; called before any critical section, on a list no other thread changes.
+  ;; given. SETTINGS is never changed, and is read more than once: the open
+  ;; verbs call it inside the one critical section that holds their checks
+  ;; (open.sls's checked), on a list no other thread changes, so no handler
+  ;; of this thread runs between the reads either.
   (define (settings-plan settings)
     (let ((bad-shape (shape-refusal settings)))
       (if bad-shape

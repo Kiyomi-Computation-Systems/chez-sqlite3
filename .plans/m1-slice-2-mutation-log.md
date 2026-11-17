@@ -211,7 +211,7 @@ In a scratch tree of the launcher, `channels.scm` and `manifest.scm`, SQLite 3.5
 The convention suite (`tests/test-conventions.sps`, with `tests/foreign-conventions.sls` and
 `tests/fixtures/conventions/`) and the prototype rows of `tests/test-constants.sps` (ADR-0011,
 decision 6; [M1 plan](2026-11-13-m1-plan.md) §4). Each mutation ran in its own copy of the tree
-under `/tmp/claude-1000/-home-kishu-src-chez-sqlite3/2a34ce20-2ac8-4a34-9128-3ab6746e1074/scratchpad/conv/`,
+in the lead's scratch directory, under `conv/`,
 without `.git` or `build/`, through that copy's `scripts/guix-env`, on the one suite named. Counts are
 read from the suite's output. Unmutated: `test-conventions` passes 34, `test-constants` 39 (9 of them
 the prototype rows).
@@ -261,8 +261,8 @@ table with one row changed in turn, so any real fault in `src/` or the table bre
 ## The review's fixes
 
 An adversarial review of this slice found its test findings, and these are the fixes. Each reviewer
-mutant ran again, in a copy of the fixed tree under
-`/tmp/claude-1000/-home-kishu-src-chez-sqlite3/2a34ce20-2ac8-4a34-9128-3ab6746e1074/scratchpad/s2-fix/`
+mutant ran again, in a copy of the fixed tree in the lead's scratch
+directory, under `s2-fix/`
 (`R1` to `R11`, `N11`, `N16`; each has its `.old`, `.new` and `.log`, and `R11` and `R10` are built by a
 script and have their own copy only), through that copy's `scripts/guix-env`, on the suites named.
 Counts are read from the outputs. The reviewer's copies, with the "before" logs, are in `s2-review/`.

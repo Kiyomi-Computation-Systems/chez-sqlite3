@@ -1,0 +1,3 @@
+transaction left open by with-transaction at trial 194; in-transaction? #t
+a later with-transaction answered committed?; in-transaction? after it #t
+after close and reopen, rows of 999: #(0)

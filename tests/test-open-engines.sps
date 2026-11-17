@@ -73,7 +73,8 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) make-engine set-timer timer-interrupt-handler foreign-procedure)
+        (only (chezscheme) make-engine set-timer timer-interrupt-handler foreign-procedure collect
+              collect-trip-bytes)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -196,6 +197,16 @@
 
 ;; --- engines ------------------------------------------------------------------------------
 
+;; quieted! : -> Void
+;; A collection now, at a fuel's or a tick's start, with collect-trip-bytes
+;; raised to 128 MiB, far above what one fuel's runs allocate, so no collect
+;; request falls in them: one costs a run up to a tick
+;; (.plans/research/m3-slice-5/, gc-ticks.sps), and the rows that bound a
+;; whole new call read the fuels, or the ticks, in order.
+(define (quieted!)
+  (collect-trip-bytes (expt 2 27))
+  (collect))
+
 ;; slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
 (define (slice e fuel)
   (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) (list 'expired more))))
@@ -229,17 +240,24 @@
             (else (loop (+ fuel 1) deviations held))))))
 
 ;; named : String (List Any (Listof Any) Natural) -> (List Any Any)
-;; RUN's deviations, summarized, and whether a statement was held at some
-;; expiry; its completing fuel printed, naming WHAT.
+;; RUN's deviations, summarized, and whether a statement was held at the
+;; expiry of at least as many fuels as the settings prepare statements, two
+;; a setting: so the sweep reached into the settings' statements, not one
+;; fuel by chance. Its completing fuel and those fuels printed, naming WHAT.
 (define (named what run)
   (display "  ")
   (display what)
   (if (integer? (car run))
       (begin (display " completed without expiring at fuel ") (display (car run)))
       (begin (display ": ") (write (car run))))
+  (display "; a statement held at the expiry at ")
+  (write (caddr run))
+  (display " fuels")
   (newline)
   (list (if (integer? (car run)) (summarized (cadr run)) (list (car run) (summarized (cadr run))))
-        (if (> (caddr run) 0) 'held-at-some-expiry 'never-held)))
+        (if (and (integer? (car run)) (>= (caddr run) (* 2 (length pragma-names))))
+            'held-at-a-fuel-a-statement
+            (list 'held-at (caddr run) 'of (car run)))))
 
 ;; --- the settings ---------------------------------------------------------------------------
 
@@ -293,8 +311,8 @@
           (append (if (equal? read as-asked) '() (list (list 'readings read)))
                   (if (equal? (native-counts) zero-counts) '() (list (list 'counts (native-counts))))))))
 
-(test-equal "open-database with the six settings and statement-cache on a file, as an engine, at every fuel from 1 until it completes without expiring: each fuel's open, resumed at its fuel until it completes, answers a connection whose every setting reads back as asked, its cache's capacity the list's; some expiries fall while a setting's statement is held; nothing is left counted"
-  (list '() 'held-at-some-expiry zero-counts)
+(test-equal "open-database with the six settings and statement-cache on a file, as an engine, at every fuel from 1 until it completes without expiring: each fuel's open, resumed at its fuel until it completes, answers a connection whose every setting reads back as asked, its cache's capacity the list's; a setting's statement is held at as many expiries as the settings prepare statements, at least; nothing is left counted"
+  (list '() 'held-at-a-fuel-a-statement zero-counts)
   (let ((r (in-dir (lambda (dir)
                      (let ((path (string-append dir "/e.db")))
                        (named "open-database with settings, resumed at its fuel"
@@ -312,9 +330,9 @@
       (execute! db (car rest))
       (loop (cdr rest)))))
 
-;; twice : String Positive-Integer -> (List Boolean Symbol (Listof Any))
+;; twice : String Positive-Integer -> (List Boolean Symbol (Listof Any) Boolean)
 ;; open-database on PATH with settings, as an engine, one slice of FUEL.
-;; Completed, it is closed: (#f none ()). Expired, its remainder is resumed
+;; Completed, it is closed: (#f none () #f). Expired, its remainder is resumed
 ;; to its end, FIRST, a database whose readings are as-asked; the suite sets
 ;; each of the six otherwise on it; and the same remainder is resumed again,
 ;; SECOND. Answers #t, what SECOND was, and what deviated:
@@ -324,16 +342,18 @@
 ;;   new      another database, a whole new call: its readings as-asked;
 ;; and in each case FIRST still open, its readings as the suite set them,
 ;; and the statement count and FIRST's tracked statements as they were.
-;; Once both are closed, nothing is counted.
+;; Once both are closed, nothing is counted. Last, whether a connection was
+;; counted at the expiry: the remainder lay past the open's section.
 (define (twice path fuel)
   (let ((r (slice (make-engine (open-thunk path)) fuel)))
     (if (eq? (car r) 'completed)
-        (begin (close-answer (cadr r)) (list #f 'none '()))
+        (begin (close-answer (cadr r)) (list #f 'none '() #f))
         (let* ((more (cadr r))
+               (open-at-expiry (> (connection-count) 0))
                (first (finish more))
                (first-read (if (a-database? first) (readings first) (list 'not-a-database first))))
           (if (not (a-database? first))
-              (list #t 'none (list (list 'first first-read)))
+              (list #t 'none (list (list 'first first-read)) open-at-expiry)
               (let* ((set (attempt (lambda () (set-otherwise! first) 'set)))
                      (statements (statement-count))
                      (tracked (length (tracked-statements first)))
@@ -362,60 +382,58 @@
                               (if (equal? tracked-after tracked) '()
                                   (list (list 'tracked tracked tracked-after)))
                               (if (equal? (native-counts) zero-counts) '()
-                                  (list (list 'counts (native-counts))))))))))))
+                                  (list (list 'counts (native-counts)))))
+                      open-at-expiry)))))))
 
-;; completing-fuel : (-> Any) -> Natural
-;; The first fuel at which one slice of THUNK's engine completes it, at most
-;; 20000; what it answered is dropped.
-(define (completing-fuel thunk)
-  (let loop ((fuel 1))
-    (let ((r (slice (make-engine thunk) fuel)))
-      (if (or (eq? (car r) 'completed) (>= fuel 20000))
-          fuel
-          (begin (finish (cadr r)) (loop (+ fuel 1)))))))
-
-;; twice-sweep : String -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)))
+;; twice-sweep : String -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)) (U Natural #f))
 ;; twice at every fuel from 1 until the open completes without expiring, at
-;; most 20000: that fuel; each fuel's deviations; and how many fuels each
-;; kind of second resume came at. A whole new call comes only from a
-;; remainder taken before the call's first expression: so only at a fuel
-;; below the one at which the same call, refused at its first check, a
-;; filename that is no string, completes; at any other it is a deviation.
+;; most 20000, each fuel begun by quieted!, so a remainder lies further into
+;; the call at each fuel than at the one before: that fuel; each fuel's
+;; deviations; how many fuels each kind of second resume came at; and the
+;; first fuel at which a remainder taken before the open's section, no
+;; connection counted at its expiry, was refused, #f for none. A whole new
+;; call comes only from a remainder taken before the call's first
+;; expression, and one taken past it and before the open is refused: so a
+;; new one at a fuel past that refusal is a deviation. A bound from the
+;; call refused at its first check, a filename that is no string, was
+;; loose: it completed at fuel 68, the whole new calls ending at 9 (M3's
+;; closing review, reviewer B).
 (define (twice-sweep path)
-  (let ((limit (completing-fuel (lambda () (attempt (lambda () (open-database 42)))))))
-    (display "  the refused call completes at fuel ")
-    (display limit)
-    (newline)
-    (twice-loop path limit)))
-
-(define (twice-loop path limit)
-  (let loop ((fuel 1) (deviations '()) (refused 0) (same 0) (new 0))
+  (let loop ((fuel 1) (deviations '()) (refused 0) (same 0) (new 0) (refused-at #f))
+    (quieted!)
     (let* ((r (twice path fuel))
-           (late-new (and (eq? (cadr r) 'new) (>= fuel limit)))
-           (found (if late-new (cons (list 'new-at-or-past limit) (caddr r)) (caddr r)))
-           (deviations (if (null? found) deviations (cons (cons fuel found) deviations)))
            (kind (cadr r))
+           (late-new (and (eq? kind 'new) refused-at))
+           (found (if late-new (cons (list 'new-past-a-refusal refused-at) (caddr r)) (caddr r)))
+           (deviations (if (null? found) deviations (cons (cons fuel found) deviations)))
+           (refused-at (or refused-at (and (eq? kind 'refused) (not (cadddr r)) fuel)))
            (refused (if (eq? kind 'refused) (+ refused 1) refused))
            (same (if (eq? kind 'same) (+ same 1) same))
            (new (if (eq? kind 'new) (+ new 1) new)))
       (cond ((not (car r))
-             (list fuel (reverse deviations) (list (cons 'refused refused) (cons 'same same) (cons 'new new))))
-            ((>= fuel 20000) (list 'no-completion-by-20000 (reverse deviations) '()))
-            (else (loop (+ fuel 1) deviations refused same new))))))
+             (list fuel (reverse deviations) (list (cons 'refused refused) (cons 'same same) (cons 'new new))
+                   refused-at))
+            ((>= fuel 20000) (list 'no-completion-by-20000 (reverse deviations) '() refused-at))
+            (else (loop (+ fuel 1) deviations refused same new refused-at))))))
 
-(test-equal "open-database's remainder resumed twice, at every fuel from 1 until it completes without expiring: resumed to its end it answers a connection as asked; the suite sets each of the six otherwise there; resumed again, it raises &sqlite-closed, refused at the open's section or a setting's, or, past its last section, answers that connection again; only a remainder taken before the call's first expression makes a whole new call, its own connection as asked; none applies a setting to the first connection again, closes it, or touches its statements, and nothing is left counted"
-  (list '() 'some-refused zero-counts)
+(test-equal "open-database's remainder resumed twice, at every fuel from 1 until it completes without expiring: resumed to its end it answers a connection as asked; the suite sets each of the six otherwise there; resumed again, it raises &sqlite-closed, refused at the open's section or a setting's, at half the fuels at least and at some before the open, or, past its last section, answers that connection again; only a remainder taken before the call's first expression makes a whole new call, its own connection as asked, below every refusal before the open; none applies a setting to the first connection again, closes it, or touches its statements, and nothing is left counted"
+  (list '() 'refused-before-the-open-and-at-half-the-fuels zero-counts)
   (let ((r (in-dir (lambda (dir) (twice-sweep (string-append dir "/t.db"))))))
     (if (and (pair? r) (eq? (car r) 'raised))
         r
-        (let ((kinds (caddr r)))
+        (let ((kinds (caddr r)) (refused-at (cadddr r)))
           (display "  open-database resumed twice: completed without expiring at fuel ")
           (write (car r))
           (display "; second resumes ")
           (write kinds)
+          (display "; refused before the open first at fuel ")
+          (write refused-at)
           (newline)
           (list (summarized (cadr r))
-                (if (and (assq 'refused kinds) (> (cdr (assq 'refused kinds)) 0)) 'some-refused 'none-refused)
+                (let ((refused (let ((p (assq 'refused kinds))) (if p (cdr p) 0))))
+                  (if (and refused-at (integer? (car r)) (>= (* 2 refused) (car r)))
+                      'refused-before-the-open-and-at-half-the-fuels
+                      (list 'refused refused 'of (car r) 'before-the-open-first-at refused-at)))
                 (native-counts))))))
 
 ;; --- call-with-database, re-entered through a timer's continuation ------------------------------
@@ -462,42 +480,48 @@
         (set-timer 0)
         (timer-interrupt-handler old)))))
 
-;; ticks-of : (-> Any) -> Natural
-;; How many ticks THUNK takes, a timer's handler counting them, its answer
-;; dropped.
-(define (ticks-of thunk)
-  (let ((ticks 0) (old (timer-interrupt-handler)))
-    (dynamic-wind
-      (lambda ()
-        (timer-interrupt-handler (lambda () (set! ticks (+ ticks 1)) (set-timer 1))))
-      (lambda () (set-timer 1) (thunk) (set-timer 0) ticks)
-      (lambda () (set-timer 0) (timer-interrupt-handler old)))))
-
-;; reentry-sweep : String -> (List Natural (Listof Any) (Listof (Pairof Symbol Natural)))
+;; reentry-sweep : String -> (List Natural (Listof Any) (Listof (Pairof Symbol Natural)) (U Natural #f))
 ;; reentered-at at each tick from 1 until one falls after the procedure
-;; starts, at most 20000: that tick; each tick's deviations, with the counts
-;; after its call; and how many re-entries were refused, how many called the
-;; procedure again past the settings, and how many made a whole new call. A
-;; whole new call, its own connection as asked, comes only from a
-;; continuation taken before the call's first expression: so only at a tick
-;; below the count at which the same call, refused at its first check, a
-;; filename that is no string, completes.
+;; starts, at most 20000, each tick begun by quieted!, so a continuation
+;; lies further into the call at each tick than at the one before: that
+;; tick; each tick's deviations, with the counts after its call; how many
+;; re-entries were refused, how many called the procedure again past the
+;; settings, and how many made a whole new call; and the first tick at
+;; which one taken before the open, no connection counted at the capture,
+;; was refused, #f for none. A whole new call, its own connection as asked,
+;; comes only from a continuation taken before the call's first expression,
+;; and one taken past it and before the open is refused: so a new one at a
+;; tick past that refusal is a deviation. A bound from the call refused at
+;; its first check was loose: it took 71 ticks, the whole new calls ending
+;; at 8 (M3's closing review, reviewer B).
 (define (reentry-sweep path)
-  (let ((limit (ticks-of (lambda () (attempt (lambda () (call-with-database 42 settings (lambda (db) #f))))))))
-    (display "  the refused call takes ")
-    (display limit)
-    (display " ticks")
-    (newline)
-    (reentry-loop path limit)))
+  (let loop ((i 1) (deviations '()) (refused 0) (again 0) (new 0) (refused-at #f))
+    (quieted!)
+    (let* ((r (reentered-at path i))
+           (counts (native-counts))
+           (kind (reentry-kind r))
+           (found (append (if (eq? kind 'deviation) (list r) '())
+                          (if (and (eq? kind 'new) refused-at) (list (list 'new-past-a-refusal refused-at)) '())
+                          (if (equal? counts zero-counts) '() (list (list 'counts counts)))))
+           (deviations (if (null? found) deviations (cons (cons i found) deviations)))
+           (refused-at (or refused-at (and (eq? kind 'refused) (eqv? (car r) 0) i))))
+      (cond ((or (eq? kind 'done) (>= i 20000))
+             (list i (reverse deviations)
+                   (list (cons 'refused refused) (cons 'again again) (cons 'new new))
+                   refused-at))
+            (else (loop (+ i 1) deviations
+                        (if (eq? kind 'refused) (+ refused 1) refused)
+                        (if (eq? kind 'again) (+ again 1) again)
+                        (if (eq? kind 'new) (+ new 1) new)
+                        refused-at))))))
 
-;; reentry-kind : Positive-Integer (U 'no-capture (List Natural Any Natural)) Natural
-;;                 -> (U 'done 'refused 'again 'new 'deviation)
-;; R, what reentered-at answered at tick I, as a kind: done, no capture;
-;; refused, &sqlite-closed and the procedure not called again; again, the
-;; procedure called again, finding the six as the suite set them; new, below
-;; LIMIT, the procedure called again on a whole new call's connection, as
-;; asked; else a deviation.
-(define (reentry-kind i r limit)
+;; reentry-kind : (U 'no-capture (List Natural Any Natural)) -> (U 'done 'refused 'again 'new 'deviation)
+;; R, what reentered-at answered, as a kind: done, no capture; refused,
+;; &sqlite-closed and the procedure not called again; again, the procedure
+;; called again, finding the six as the suite set them; new, the procedure
+;; called again on a whole new call's connection, as asked; else a
+;; deviation.
+(define (reentry-kind r)
   (cond ((eq? r 'no-capture) 'done)
         ((and (list? r) (= (length r) 3)
               (equal? (cadr r) '(raised (closed call-with-database)))
@@ -507,41 +531,30 @@
               (equal? (cadr r) (list 'nested-call as-set-otherwise))
               (eqv? (caddr r) 1))
          'again)
-        ((and (< i limit) (list? r) (= (length r) 3)
+        ((and (list? r) (= (length r) 3)
               (equal? (cadr r) (list 'nested-call as-asked))
               (eqv? (caddr r) 1))
          'new)
         (else 'deviation)))
 
-(define (reentry-loop path limit)
-  (let loop ((i 1) (deviations '()) (refused 0) (again 0) (new 0))
-    (let* ((r (reentered-at path i))
-           (counts (native-counts))
-           (kind (reentry-kind i r limit))
-           (found (append (if (eq? kind 'deviation) (list r) '())
-                          (if (equal? counts zero-counts) '() (list (list 'counts counts)))))
-           (deviations (if (null? found) deviations (cons (cons i found) deviations))))
-      (cond ((or (eq? kind 'done) (>= i 20000))
-             (list i (reverse deviations)
-                   (list (cons 'refused refused) (cons 'again again) (cons 'new new))))
-            (else (loop (+ i 1) deviations
-                        (if (eq? kind 'refused) (+ refused 1) refused)
-                        (if (eq? kind 'again) (+ again 1) again)
-                        (if (eq? kind 'new) (+ new 1) new)))))))
-
-(test-equal "call-with-database re-entered through a continuation a timer's handler took at each tick from 1 until its procedure starts, the procedure re-entering it once the suite has set each of the six otherwise: taken before the settings were done, it raises &sqlite-closed, refused at the open's section or a setting's, and the procedure is not called again; taken past their last section, it calls the procedure again, which finds the six as the suite set them; only one taken before the call's first expression makes a whole new call; none applies a setting again to the first connection or leaves a connection open, and nothing is left counted"
-  (list '() 'some-refused zero-counts)
+(test-equal "call-with-database re-entered through a continuation a timer's handler took at each tick from 1 until its procedure starts, the procedure re-entering it once the suite has set each of the six otherwise: taken before the settings were done, it raises &sqlite-closed, refused at the open's section or a setting's, and the procedure is not called again; taken past their last section, it calls the procedure again, which finds the six as the suite set them; refused at half the ticks at least and at some before the open; only one taken before the call's first expression makes a whole new call, below every refusal before the open; none applies a setting again to the first connection or leaves a connection open, and nothing is left counted"
+  (list '() 'refused-before-the-open-and-at-half-the-ticks zero-counts)
   (let ((r (in-dir (lambda (dir) (reentry-sweep (string-append dir "/c.db"))))))
     (if (and (pair? r) (eq? (car r) 'raised))
         r
-        (let ((kinds (caddr r)))
+        (let ((kinds (caddr r)) (refused-at (cadddr r)))
           (display "  call-with-database re-entered: its procedure started at tick ")
           (write (car r))
           (display "; re-entries ")
           (write kinds)
+          (display "; refused before the open first at tick ")
+          (write refused-at)
           (newline)
           (list (summarized (cadr r))
-                (if (> (cdr (assq 'refused kinds)) 0) 'some-refused 'none-refused)
+                (let ((refused (cdr (assq 'refused kinds))))
+                  (if (and refused-at (>= (* 2 refused) (car r)))
+                      'refused-before-the-open-and-at-half-the-ticks
+                      (list 'refused refused 'of (car r) 'before-the-open-first-at refused-at)))
                 (native-counts))))))
 
 ;; --- call-with-database under an engine ---------------------------------------------------------

@@ -573,9 +573,10 @@
   ;; start-out-of-range. Then DB open, in the section, else &sqlite-closed
   ;; from WHO, raised after it; then LEFT?, a call's check, when a
   ;; procedure: true, the section prepares nothing, and &sqlite-closed is
-  ;; raised from WHO after it. execute-script! passes its first prepare a
-  ;; check that marks the call's run begun, and answers whether it had begun
-  ;; already, so a call re-entered before its block runs no statement again.
+  ;; raised from WHO after it. execute-script! passes every prepare a check
+  ;; that claims the statement's byte offset, and refuses one the call has
+  ;; passed, so no run of a call, re-entered before its block or jumped back
+  ;; inside it, prepares a statement again (M3's closing review).
   ;; The section holds the out-parameters, the prepare, the reads after a
   ;; failure, the count and the tracking (ADR-0014, decisions 4 and 10).
   (define (prepared-at who db sql bytes block start flags on-made left?)
