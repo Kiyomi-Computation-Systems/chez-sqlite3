@@ -16,6 +16,8 @@
   2026-11-16 in M3 slice 5's part D, and accepted by the maintainer that day: the check-out and
   the return claim
   ([amendment](#amendment-2026-11-16-the-check-out-and-the-return-claim-m3-slice-5-part-d)).
+  Amended 2026-11-17 in M3's closing review: decision 7's check of the SQL is inside the section
+  ([amendment](#amendment-2026-11-17-where-the-sql-is-checked-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
 - **Settles:** brief D3 (the maintainer, 2026-11-14: in M3), and its leaning, "bounded and cleared
@@ -252,3 +254,19 @@ Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5'
 - **The statement is noted inside the check-out's section,** by `checked-out`'s on-made, so a
   raise just after the section still gives it back.
 - **`query-fold` still passes its flag** to `checked-out`, as slice 3 built it.
+
+## Amendment, 2026-11-17: where the SQL is checked (M3's closing review)
+
+Proposed in M3's closing review, from reviewer A's reading, which the lead checked against the
+code.
+
+- **Decision 7 says the SQL is checked to be a string, and copied, before the section.** That held
+  until slice 5's part D. Since then, for `execute!`, `query` and `query-row`, the check-out and a
+  miss's prepare are one section, the call's first claimed (the part D amendment, above).
+  `checked-out`, and `checked-sql` within it, now run inside that section.
+- **So the check, the copy and its UTF-8 run inside the section,** where the thread's engines,
+  timers and interrupts wait on them. A refusal raised there is caught inside the section and
+  raised after it, as every raise in the conveniences is (ADR-0016). For a long SQL, `execute!`
+  holds its thread for the copy and its encoding as well as the prepare, where
+  `prepare-statement` holds it for the prepare alone.
+- **Nothing changes in the code.** The decision's text now says what is built.

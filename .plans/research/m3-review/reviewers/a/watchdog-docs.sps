@@ -1,0 +1,40 @@
+#!r6rs
+;; Probe: the reference's watchdog exactly (interrupt, sleep 1 ms, until the
+;; owner is done) against with-transaction whose body runs a long read that
+;; the watchdog stops. Counts calls after which the transaction is open.
+(import (chezscheme) (chez-sqlite3))
+(define dir "build/m3cr-a/probes/tmp")
+(system (string-append "mkdir -p " dir))
+(define path (string-append dir "/wd2.db"))
+(system (string-append "rm -f " path " " path "-journal " path "-wal " path "-shm"))
+(define db (open-database path '((journal-mode . wal))))
+(execute! db "create table if not exists t(x)")
+(define done #f)
+(define m (make-mutex)) (define c (make-condition)) (define finished #f)
+(fork-thread (lambda ()
+               (let loop ()
+                 (unless done
+                   (interrupt-database! db)
+                   (sleep (make-time 'time-duration 1000000 0))
+                   (loop)))
+               (with-mutex m (set! finished #t) (condition-signal c))))
+(define tally (make-hashtable equal-hash equal?))
+(define (note! k) (hashtable-update! tally k (lambda (n) (+ n 1)) 0))
+(define trials (string->number (cadr (command-line))))
+(let loop ((i 0))
+  (when (< i trials)
+    (let* ((r (guard (e ((sqlite-interrupt? e) 'interrupt) ((sqlite-error? e) (sqlite-error-code e)) (#t 'other))
+                (with-transaction db 'deferred
+                  (lambda ()
+                    (execute! db "insert into t values (1)")
+                    (query-row db "with recursive c(n) as (select 1 union all select n+1 from c where n < 200000) select count(*) from c")
+                    'ok))))
+           (open (in-transaction? db)))
+      (note! (list r 'left-open open))
+      (when open
+        (let retry ((n 0)) (unless (or (> n 100000) (guard (e (#t #f)) (execute! db "rollback") #t)) (retry (+ n 1))))))
+    (loop (+ i 1))))
+(set! done #t)
+(with-mutex m (let w () (unless finished (condition-wait c m) (w))))
+(let-values (((ks vs) (hashtable-entries tally))) (vector-for-each (lambda (k v) (write (list k v)) (newline)) ks vs))
+(close-database! db)

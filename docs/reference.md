@@ -163,7 +163,9 @@ Two fail at once, however long the timeout:
 
 The first three rows are for a file in the default journal mode. Every other
 setting runs at once. On a file already in WAL, `(journal-mode . wal)` runs
-at once beside anything, so every connection to it can carry it.
+at once beside any other connection, so every connection to it can carry it.
+The exception is a connection that has set `locking_mode` to `exclusive`:
+while it holds the file, no other connection can read it at all.
 
 ### `close-database!`
 
@@ -1055,13 +1057,15 @@ Whether the value is `sql-null`.
 
 ## The library
 
-These report on the SQLite library that was found and loaded. The load runs
-once, when the first of them, or `open-database` or `call-with-database`, is
-first used. If no library can be loaded, the load raises a condition that
+These report on the SQLite library that was found and loaded. It is loaded
+once, by the first procedure that needs it: every procedure of this library
+but the conditions' predicates and accessors, `sql-null` and `sql-null?`. If
+no library can be loaded, the load raises a condition that
 `sqlite-library-unavailable?` holds.
 
-That load runs when your program starts, or when the form that names one of
-those procedures is evaluated: before any `guard` in that form is in place.
+That load runs when your program starts, if the program names such a
+procedure, or when the form that names one is evaluated: before any `guard`
+in that form is in place.
 So a `guard` around a direct call cannot catch it, and the program dies. To
 catch it, call through `eval` inside the `guard`, which needs `(rnrs eval)`:
 

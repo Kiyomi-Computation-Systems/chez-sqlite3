@@ -13,8 +13,8 @@
 ;;;   and an Org link to a place on its own page, fail: nothing here could
 ;;;   check them. No link points into .plans/, and no page says so;
 ;;; - README.org links every page of docs/, so none is orphaned;
-;;; - no page says ADR- or TODO, "not yet", "unreleased", "slice", a path in
-;;;   .plans, or a date written YYYY-MM-DD, in any case;
+;;; - no page says ADR- or TODO, "not yet" or any other "yet", "unreleased",
+;;;   "slice", a path in .plans, or a date written YYYY-MM-DD, in any case;
 ;;; - every code span of a page's prose that is one name beginning sqlite- or
 ;;;   chez-sqlite3- is an export of (chez-sqlite3).
 ;;;
@@ -539,7 +539,7 @@
   (let ((flat (ascii-downcase (list->string (map (lambda (c) (if (char=? c #\newline) #\space c))
                                                  (string->list text))))))
     (append (filter (lambda (p) (search flat p 0))
-                    '("adr-" "todo" "not yet" "unreleased" "slice" ".plans"))
+                    '("adr-" "todo" "not yet" " yet" "unreleased" "slice" ".plans"))
             (if (dated? flat) '("a date") '()))))
 
 ;; name-like? : String -> Boolean
@@ -693,10 +693,11 @@
           (go '(";; => 3"))
           (go '("(define x 1)" "(list x x)" "" ";; => (1 1)" "")))))
 
-(test-equal "forbidden: each banned phrase, in any case across a line's end, and a date"
-  '(("adr-" "todo" "not yet" "slice" ".plans" "a date") ())
+(test-equal "forbidden: each banned phrase, in any case across a line's end, and a date; a yet without its not"
+  '(("adr-" "todo" "not yet" " yet" "slice" ".plans" "a date") () (" yet"))
   (list (forbidden "see ADR-0001, TODO: Not\nyet, a Slice of .plans/x on 2026-11-14")
-        (forbidden "Nothing to see: 2026-1-14 or 20261114.")))
+        (forbidden "Nothing to see: 2026-1-14 or 20261114.")
+        (forbidden "The rest is not here\nYet.")))
 
 (test-equal "unknown-names: only the name-like spans that are no export, sorted, each once"
   '("chez-sqlite3-nope" "sqlite-nope")

@@ -34,11 +34,10 @@ newest first.
   and ADR-0005, slice 4's to ADR-0017, and slice 5's to ADR-0012, ADR-0016, ADR-0018 and
   ADR-0020 ("Accept all"), and to ADR-0019's decision 11 ("Keep, amend"); and slice 6's to
   ADR-0005, ADR-0017 and ADR-0019, on 2026-11-17 ("Accept all").
-- **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
-  required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
-  M3 slice 6 replaces `memory` with two jobs, so its merge needs the required checks swapped:
-  `memory (the Valgrind gate)` out, and `memory-1 (the Valgrind gate, shard 1 of 2)` and
-  `memory-2 (the Valgrind gate, shard 2 of 2)` in (the maintainer's, ADR-0005, amended).
+- **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All six jobs are
+  required: `main`, `memory-1`, `memory-2` and `nothreads`, and, since slice 5 merged, `floor` and
+  `current`. M3 slice 6 replaced `memory` with `memory-1` and `memory-2`, and the required checks
+  were swapped as it merged, 2026-11-17 (the maintainer's, ADR-0005, amended).
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
 - **M3 slice 1 is done:** the pure core, as PR #22, `d91ae72`, squash-merged with CI passing in
@@ -55,13 +54,17 @@ newest first.
 - **M4's pre-work is merged:** the variadic `db_config` probe and the census, research only, as
   PR #27, `fcc9e7c`, by the M4 session
   ([research/m4-prework/](research/m4-prework/README.md)).
-- **Now: M3 slice 6, the interrupt, contention and the memory job's shards, is PR #29 on
-  `m3-slice-6-interrupt`,** by the M3 session, rebased onto `fcc9e7c`, CI passing in all six
-  jobs. Then the maintainer's hand run on the Mac, and M3's closing review
-  ([the M3 plan](2026-11-15-m3-plan.md), §5). The maintainer's order, 2026-11-15: slices 1 and 2
-  in parallel, then 3, then 4 (the M2 session) and 5 in parallel, then 6, each its own PR, stacked
-  on the one before. M2's slices ran in the stacked order of 2026-11-14 too, and M2's Mac run is
-  done, below.
+- **M3 slice 6 is done:** the interrupt, contention and the memory job's shards, as PR #29,
+  `988cf2b`, squash-merged with CI passing in all six jobs. The maintainer's order, 2026-11-15:
+  slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in parallel, then 6, each its
+  own PR, stacked on the one before.
+- **The Mac run's fixes are merged,** as PR #30, `c0a5408`, by the M4 session: two faults in the
+  suites, below. **M4 pre-work's answers are merged,** as PR #28, `e590fdc`, by the M4 session: the
+  maintainer's answers to Q1, Q3 to Q10 and Q13, and the Mac step's results
+  ([research/m4-prework/](research/m4-prework/README.md)).
+- **Now: M3's closing review,** on `m3-closing-review`, by the M3 session, the last of M3's done
+  conditions ([the M3 plan](2026-11-15-m3-plan.md), §6). Beside it, the M4 session writes M4's
+  plan, M4's slice 0, plans and records only (the maintainer, 2026-11-17).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -87,6 +90,19 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run for M3** (macOS 26.7.1, arm64, Chez 10.4.1, 2026-11-17), on PR #29's
+  branch ([research/m3-mac/](research/m3-mac/README.md)):
+  - **With Apple's 3.51.0,** `make test` ran 73, passed 66 and failed 7: the six
+    `test-conveniences-pending-*` suites and `test-open-interleave`. Apple's library refuses
+    `sqlite3_auto_extension` (21), so the suites' tell never noted a prepare.
+  - **With Homebrew's 3.54.1,** 72 of 73 passed. `test-transaction-nomem`'s S3 expected its NOMEM
+    to end the transaction; under `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`, Homebrew's build among
+    them, it leaves the transaction open. The M4 session reproduced that on Linux.
+  - Both were faults in the suites, fixed in PR #30: where the tell is refused, 33 rows report
+    what they can't check, and S3 takes the case its autocommit shows. The maintainer's rerun of
+    the eight suites from #30's branch passed with both libraries.
+  - Slice 6's suites passed with both libraries. **P4,** the busy wait's grain, read 284 ms on
+    Apple's library and 288 ms on Homebrew's, for a 250 ms timeout: both sleep in milliseconds.
 - **The maintainer's Mac run for M2** (macOS, arm64, 2026-11-15):
   - **On `m2-slice-4-values` at `7f9225f`, with Apple's 3.51.0,** 36 of 37 suites passed.
     `test-statement`'s row for a refused SQL's prepare-time effect expected `cache_size` to start at
@@ -103,16 +119,9 @@ newest first.
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
 - **Open:**
-  - **P4 on Apple's library,** read from `test-contention`'s `P4:` line in the Mac's hand run. P4
-    ran in M3 slice 6 here and on CI: Guix's 3.53.1, the floor's 3.45.1, Ubuntu's 3.45.1 on the
-    `main` lane and the current lane's 3.54.1 all sleep in milliseconds. P5 ran in slice 6, and
-    P6 and P8 in slice 3.
-  - **`test-transaction-interrupt` near `SLOW` under the gate here,** 429 to 434 s of 450; 139 s
-    on slice 6's CI, under the 150 s that would make it a finding for M3's closing review
-    (ADR-0005, amended in M3 slice 6).
-  - **The Mac's hand run of M3:** its checklist adds the interrupt suites on Apple's library,
-    which keeps no memory statistics, so the suites' watchdog races the owner as plain threads
-    do.
+  - **`test-transaction-interrupt`** took 318 s on CI on `main` at `c0a5408` (run 44083802043),
+    past the 150 s that ADR-0005's slice 6 amendment made a finding: M3's closing review takes
+    it up. Over seven two-shard runs it took 31 to 318 s.
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
@@ -182,6 +191,9 @@ newest first.
   - `test-check-ci`, at 439 rows, took 97 s.
   - The `P4:` lines read 252 ms on the `main` lane's Ubuntu 3.45.1, 251 ms at the floor and 251 ms
     on the current lane's 3.54.1, each for a 250 ms timeout.
+  - **The rerun,** 44069173851 on `721a698`, passed all six. `memory-1` took 27m44s on a slower
+    runner, its suites 1270 s, `test-check-ci` 140 s and `test-transaction-interrupt` 87 s;
+    `memory-2` took 23m32s.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

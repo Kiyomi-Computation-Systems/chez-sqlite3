@@ -222,7 +222,7 @@ pa-verb.floor: make exit 2
     ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
     Invalid write of size 4
     Address 0x4f41788 is 408 bytes inside a block of size 792 free'd
-    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/a2/final/pa-verb/build/m3-floor/lib/libsqlite3.so.0
+    library: <worktree>/build/a2/final/pa-verb/build/m3-floor/lib/libsqlite3.so.0
     interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
     interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
     # of expected passes      18
@@ -232,7 +232,7 @@ pa.floor: make exit 2
     ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
     Invalid write of size 4
     Address 0x9db14f8 is 408 bytes inside a block of size 792 free'd
-    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/a2/final/pa/build/m3-floor/lib/libsqlite3.so.0
+    library: <worktree>/build/a2/final/pa/build/m3-floor/lib/libsqlite3.so.0
     interrupt-database/with: stopped at fuel 34, completed, after 33 trials resumed after a close
     interrupt-database!: stopped at fuel 14, completed, after 13 trials resumed after a close
     # of expected passes      16
@@ -241,7 +241,7 @@ chez-sqlite3-wt-m3s6.floor: make exit 0
     test-memory: pass tests/test-interrupt-database.sps
     time: 11s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
     ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
-    library: /home/kishu/src/chez-sqlite3-wt-m3s6/build/m3-floor/lib/libsqlite3.so.0
+    library: <worktree>/build/m3-floor/lib/libsqlite3.so.0
     interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
     interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
     # of expected passes      18

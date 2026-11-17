@@ -1,0 +1,42 @@
+#!r6rs
+;; Probe: two engines on one connection. A runs with-transaction (immediate),
+;; expiring at fuel F before its BEGIN; B then runs (execute! db "begin") to
+;; its end; then A resumes. Does A issue BEGIN IMMEDIATE inside B's
+;; transaction, and does that take the write lock (db2's BEGIN IMMEDIATE
+;; busy, with nothing written)?
+(import (chezscheme) (chez-sqlite3))
+(define (run-engine e fuel)
+  (e fuel (lambda (ticks . vals) (cons 'completed vals)) (lambda (r) (list 'expired r))))
+(define (describe e)
+  (cond ((sqlite-closed? e) 'closed) ((sqlite-transaction-ended? e) 'ended)
+        ((sqlite-error? e) (list 'sqlite-error (sqlite-error-code e) (sqlite-error-message e)))
+        ((assertion-violation? e) (list 'assertion (condition-irritants e)))
+        ((and (condition? e) (message-condition? e)) (list 'other (condition-message e))) (else (list 'other e))))
+(define (guarded thunk) (lambda () (guard (e (#t (list 'raised (describe e)))) (thunk))))
+(define dir "build/m3cr-a/probes/tmp")
+(system (string-append "mkdir -p " dir))
+(define (trial f)
+  (let ((path (string-append dir "/stale-" (number->string f) ".db")))
+    (system (string-append "rm -f " path "*"))
+    (let ((db (open-database path)) (db2 (open-database path '((busy-timeout . 0)))))
+      (execute! db "create table t(x)")
+      (let* ((ran #f)
+             (a (make-engine (guarded (lambda () (with-transaction db 'immediate (lambda () (set! ran #t) 42))))))
+             (first (run-engine a f)))
+        (if (eq? (car first) 'completed)
+            (begin (close-database! db) (close-database! db2) 'completed)
+            (if (in-transaction? db)
+                (begin (close-database! db) (close-database! db2) 'past-begin)
+                (let* ((b ((make-engine (guarded (lambda () (execute! db "begin")))) 1000000
+                            (lambda (t . v) v) (lambda (r) 'b-expired)))
+                       (resumed (run-engine (cadr first) 1000000))
+                       (db2-begin (guard (e ((sqlite-busy? e) 'busy) (#t (describe e)))
+                                    (execute! db2 "begin immediate") (execute! db2 "rollback") 'began))
+                       (open (in-transaction? db)))
+                  (guard (e (#t #f)) (execute! db "rollback"))
+                  (close-database! db) (close-database! db2)
+                  (list f 'a (cdr resumed) 'body-ran ran 'db2-begin-immediate db2-begin 'open open))))))))
+(let loop ((f 1))
+  (let ((r (trial f)))
+    (cond ((memq r '(completed past-begin)) (printf "stopped at fuel ~a: ~a\n" f r))
+          (else (write r) (newline) (loop (+ f 1))))))

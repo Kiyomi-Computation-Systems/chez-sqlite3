@@ -1,0 +1,12 @@
+#!r6rs
+(import (rnrs) (rnrs eval) (only (chezscheme) printf))
+(define env (environment '(chez-sqlite3)))
+(define open-database (eval 'open-database env))
+(define close-database! (eval 'close-database! env))
+(define query (eval 'query env))
+(let* ((db (open-database ":memory:"))
+       (pad (make-string 4100 #\a))
+       (a (query db (string-append "select '" pad "' = '" pad "', 1")))
+       (b (query db (string-append "select '" pad "' = '" pad "', 2"))))
+  (printf "first ~s, second ~s\n" (vector-ref (car a) 1) (vector-ref (car b) 1))
+  (close-database! db))

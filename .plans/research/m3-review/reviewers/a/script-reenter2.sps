@@ -1,0 +1,33 @@
+#!r6rs
+(import (chezscheme) (chez-sqlite3))
+(define n-stmts 8)
+(define script
+  (let loop ((i 1) (acc ""))
+    (if (> i n-stmts) acc
+        (loop (+ i 1) (string-append acc "insert into t values(" (number->string i) ");")))))
+(define (trial t1 t2)
+  (let ((db (open-database ":memory:")))
+    (execute! db "create table t(x)")
+    (let* ((k1 #f) (fired 0) (used #f) (trace '())
+           (base (total-changes db))
+           (outcome
+            (guard (e (#t (list 'raised (and (condition? e) (who-condition? e) (condition-who e)) (sqlite-closed? e))))
+              (timer-interrupt-handler
+               (lambda ()
+                 (set! fired (+ fired 1))
+                 (set! trace (cons (- (total-changes db) base) trace))
+                 (cond ((= fired 1)
+                        (call/cc (lambda (k) (set! k1 k)))
+                        (set-timer t2))
+                       ((and (>= fired 2) (not used))
+                        (set! used #t)
+                        (k1 #f)))))
+              (set-timer t1)
+              (execute-script! db script)
+              (set-timer 0)
+              'returned)))
+      (set-timer 0)
+      (let ((rows (map (lambda (r) (vector-ref r 0)) (query db "select x from t order by rowid"))))
+        (close-database! db)
+        (list t1 t2 fired (reverse trace) outcome rows)))))
+(for-each (lambda (t1) (for-each (lambda (t2) (write (trial t1 t2)) (newline)) '(5 50 200 600))) '(1 20 100 300 600 1000))

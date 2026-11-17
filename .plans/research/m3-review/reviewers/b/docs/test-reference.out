@@ -1,0 +1,3 @@
+%%%% Starting test reference
+# of expected passes      20
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close

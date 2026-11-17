@@ -1,0 +1,3 @@
+bind-all! (one section) of 50 values at fuel 1: (bound 275)
+bind-all! (one section) of 1 value at fuel 1:   (bound 26)
+difference: 249  -- meets the row's at-least-49-more criterion

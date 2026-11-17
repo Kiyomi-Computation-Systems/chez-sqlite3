@@ -1,0 +1,17 @@
+a call refused at its first check completes at fuel 65
+(1 first-slice-reached () (42) (42) rows 2 open #f)
+(2 first-slice-reached () (42) (42) rows 2 open #f)
+(3 first-slice-reached () (42) (42) rows 2 open #f)
+(4 first-slice-reached () (42) (42) rows 2 open #f)
+(5 first-slice-reached () (42) (42) rows 2 open #f)
+(6 first-slice-reached () (42) (42) rows 2 open #f)
+(7 first-slice-reached () (42) (42) rows 2 open #f)
+(8 first-slice-reached () (42) (42) rows 2 open #f)
+(9 first-slice-reached () (42) (42) rows 2 open #f)
+(10 first-slice-reached (entered) (42) (42) rows 2 open #f)
+(11 first-slice-reached (entered) (42) (42) rows 2 open #f)
+(15 first-slice-reached (entered) (42) (42) rows 2 open #f)
+(16 first-slice-reached (entered) (42) (42) rows 2 open #f)
+(27 first-slice-reached (entered flags) ((raised transaction-ended)) ((raised transaction-ended)) rows 2 open #f)
+(28 first-slice-reached (entered flags) ((raised transaction-ended)) ((raised transaction-ended)) rows 2 open #f)
+completed unexpired at fuel 72; fuels whose second resume committed again: 15

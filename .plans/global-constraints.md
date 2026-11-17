@@ -273,7 +273,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
-  five jobs and their keys; each check as a step's whole run line; only the checkout and cache
+  six jobs and their keys; each check as a step's whole run line; only the checkout and cache
   actions, each cache restored before its build and saved before its check; every script a step
   runs by its path there and executable, and no other line naming `scripts/`, a comment or a
   cache key's `hashFiles(` list apart, so no spelling runs a script the rule hasn't read

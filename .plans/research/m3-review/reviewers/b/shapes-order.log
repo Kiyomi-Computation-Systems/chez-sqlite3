@@ -1,0 +1,8 @@
+((hit "e") (hit "nul") (hit "long") (hit "uni") (miss) (miss) (miss))
+("" count-before 4 (hit "e"))
+("a\x0;b" count-before 3 (hit "nul"))
+((long-key #\a) count-before 2 (hit "long"))
+("café" count-before 1 (hit "uni"))
+("a" count-before 0 (miss))
+("cafe" count-before 0 (miss))
+((long-key #\b) count-before 0 (miss))

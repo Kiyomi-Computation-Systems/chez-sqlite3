@@ -517,7 +517,7 @@ and `build-chez.sh:57`'s pin key, `10.4.0)` (Q1's).
 
 ## Part A: `check-floors` reads `scripts/ci/` (ADR-0008, amended)
 
-Built test first in `/home/kishu/src/chez-sqlite3-wt-s5a` (branch `m1-s5-part-a`), through its own
+Built test first in its own worktree, `chez-sqlite3-wt-s5a` (branch `m1-s5-part-a`), through its own
 `scripts/guix-env`. Counts are read from the suite's own output (`# of expected passes`,
 `# of unexpected failures`); each mutation was applied by a one-shot edit that died unless its old
 text occurred exactly once, its landing checked with `diff` against a snapshot of the three files it
