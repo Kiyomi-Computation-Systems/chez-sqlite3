@@ -14,7 +14,7 @@
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the latch's shut, its third user, and the busy wait's
   grain in the suites
   ([amendment](#amendment-2026-11-17-the-latchs-shut-and-the-busy-waits-grain-m3s-closing-review)).
-  Amended 2026-11-17 in M4's close fix, proposed: decision 2's two left-open paths in the close's new order
+  Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): decision 2's two left-open paths in the close's new order
   ([amendment](#amendment-2026-11-17-the-left-open-paths-m4s-close-fix)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `interrupt-database!`, the close's part in it, and the busy timeout
@@ -357,7 +357,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
 
 ## Amendment, 2026-11-17: the left-open paths (M4's close fix)
 
-Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 2's two paths that leave the connection open, and set the latch's flag again, are
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 2's two paths that leave the connection open, and set the latch's flag again, are
 now both `sqlite3_close` refusing: with statements left to count, or none
 ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The flag is set again on both, as
 before, and `test-connection-close` holds an interrupt reaching a step after each. The citations

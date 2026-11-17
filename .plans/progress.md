@@ -87,8 +87,9 @@ newest first.
   - **The close fix is PR #36, below:** slice 5's FTS5 suite found `close-database!` refusing
     every connection that had used an FTS5 table, FTS5's own statements counted as untracked. The
     maintainer chose "Close first, count on failure", in a PR of its own before slice 5, then
-    "Document it, with a row" and "Vouch only for ours" (2026-11-17). Slice 5 rebases onto it and
-    drops its workaround.
+    "Document it, with a row" and "Vouch only for ours" (2026-11-17), and accepted its amendments
+    to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept all"). Slice 5 rebases onto
+    it and drops its workaround.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -191,8 +192,9 @@ newest first.
 - **Reviewed** (Opus, read-only): one major, the autocommit corruption, decided above; seven
   minors fixed: the docs' text, three log claims, the refusal rows' prepare and step, a row that
   writes after a refused close, and the comments.
-- **The records:** ADR-0012's amendment, with notes in ADR-0005, ADR-0014, ADR-0019, ADR-0020 and
-  ADR-0021; the global constraints' two close rules and the boundary; six traps.
+- **The records,** accepted by the maintainer, 2026-11-17 ("Accept all"): ADR-0012's amendment,
+  with notes in ADR-0005, ADR-0014, ADR-0019, ADR-0020 and ADR-0021; the global constraints' two
+  close rules and the boundary; six traps.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

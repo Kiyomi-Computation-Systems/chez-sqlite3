@@ -16,7 +16,7 @@
   ([amendment](#amendment-2026-11-16-the-open-verbs-library-m3-slice-5)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the record holds the opt-in
   ([amendment](#amendment-2026-11-17-the-record-holds-the-opt-in-m4s-plan)).
-  Amended 2026-11-17 in M4's close fix, proposed: the close's order, and the boundary it vouches for
+  Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): the close's order, and the boundary it vouches for
   ([amendment](#amendment-2026-11-17-close-first-and-vouch-only-for-ours-m4s-close-fix)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
@@ -385,7 +385,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: close first, and vouch only for ours (M4's close fix)
 
-Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). The maintainer's choices, 2026-11-17: "Close first, count on failure"; "Document it, with a row"; and, after the busy rule's measurement, "Vouch only for ours".
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). The maintainer's choices, 2026-11-17: "Close first, count on failure"; "Document it, with a row"; and, after the busy rule's measurement, "Vouch only for ours".
 
 - **Decision 5's order changes.** The close finalizes the tracked statements and empties the
   cache, then calls `sqlite3_close`. On `SQLITE_OK` its outcomes are as before. On any other

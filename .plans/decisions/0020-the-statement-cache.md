@@ -18,7 +18,7 @@
   ([amendment](#amendment-2026-11-16-the-check-out-and-the-return-claim-m3-slice-5-part-d)).
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: decision 7's check of the SQL is inside the section
   ([amendment](#amendment-2026-11-17-where-the-sql-is-checked-m3s-closing-review)).
-  Amended 2026-11-17 in M4's close fix, proposed: decision 9's two paths in the close's new order
+  Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): decision 9's two paths in the close's new order
   ([amendment](#amendment-2026-11-17-the-closes-order-m4s-close-fix)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
@@ -275,7 +275,7 @@ code.
 
 ## Amendment, 2026-11-17: the close's order (M4's close fix)
 
-Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 9's "on a statement found untracked (`connection.sls:417`) or `sqlite3_close` failing
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 9's "on a statement found untracked (`connection.sls:417`) or `sqlite3_close` failing
 (`connection.sls:428`)" is now `sqlite3_close` refusing, with or without a statement left
 ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The cache is still emptied in the
 close's section, before `sqlite3_close`, whether or not the connection closes.
