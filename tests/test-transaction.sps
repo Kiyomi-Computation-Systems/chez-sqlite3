@@ -22,6 +22,9 @@
 ;;;                 begins a transaction, rolled back with the body's, unless
 ;;;                 the call had already ended its level
 ;;;   the plants    the M3 plan's section 4.8, each by its row
+;;;   the depths    each raise site's handler at interrupt depth 1: the
+;;;                 refusals, the BEGIN's failure, the commit's, the
+;;;                 rollback's, the ended condition and the body's own raise
 ;;;
 ;;; Each row builds its base from values other than the defaults: a marker
 ;;; row, a second connection's view, a mode other than immediate where the
@@ -42,7 +45,7 @@
         (rnrs eval)
         (srfi :64)
         (only (chezscheme) fork-thread make-mutex make-condition with-mutex condition-wait
-              condition-signal make-time foreign-procedure)
+              condition-signal make-time foreign-procedure disable-interrupts enable-interrupts)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -1475,6 +1478,132 @@
                                        (list inner (extended db)))))))))
                (list r (markers db2) (issued db)))))))
     (list resumed continued nested)))
+
+;; --- raised outside any critical section -----------------------------------------------------
+;;
+;; A raise made inside a critical section reaches a with-exception-handler
+;; handler with interrupts still disabled, where an engine never expires and
+;; another thread's collection waits (M1's closing review; AGENTS.md). Each
+;; of with-transaction's raise sites is held here by the depth a handler of
+;; it runs at, 1 outside any section, as test-public's rows hold
+;; sqlite-compile-option?'s: each refusal, the BEGIN's failure, the
+;; commit's, the rollback's, the ended condition, and the body's own raise
+;; handed on. The claim's refusal of a second resume is
+;; tests/test-transaction-engine.sps's.
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, as depth-N, and what it raised,
+;; as what-raised names it. The handler escapes, so nothing returns into the
+;; raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let ((depth (interrupt-depth)))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   (what-raised c)))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+;; on-another-thread : (-> Any) -> Any
+;; THUNK's answer, run on a thread of its own, which answers whatever it
+;; raises; the wait for it bounded at 5 s.
+(define (on-another-thread thunk)
+  (let* ((m (make-mutex)) (c (make-condition)) (answer #f))
+    (fork-thread
+     (lambda ()
+       (let ((r (attempt thunk)))
+         (with-mutex m (set! answer (list r)) (condition-signal c)))))
+    (with-mutex m
+      (let wait ((tries 0))
+        (cond (answer (car answer))
+              ((>= tries 50) 'the-thread-did-not-answer-in-5-s)
+              (else (condition-wait c m (make-time 'time-duration 100000000 0))
+                    (wait (+ tries 1))))))))
+
+(test-equal "with-transaction raises its refusals outside any critical section: a handler of a body that is no procedure, a mode that is none, what is no database, a connection of another thread's, a closed connection, and a statement at its row runs at depth 1"
+  (list '(raised-at-depth depth-1 (assertion-violation with-transaction (not-a-procedure 7)))
+        '(raised-at-depth depth-1 (assertion-violation with-transaction (unknown-mode IMMEDIATE)))
+        '(raised-at-depth depth-1 (assertion-violation with-transaction (not-a-database x)))
+        '(raised-at-depth depth-1 (wrong-thread with-transaction))
+        '(raised-at-depth depth-1 (closed with-transaction))
+        '(raised-at-depth depth-1 (assertion-violation with-transaction (statement-not-finished row "select x from src")))
+        zero-counts)
+  (let* ((cases
+          (with-case
+           (lambda (db db2)
+             (let* ((body (handler-depth (lambda () (with-transaction db 7))))
+                    (mode (handler-depth (lambda () (with-transaction db 'IMMEDIATE (lambda () 'ran)))))
+                    (no-db (handler-depth (lambda () (with-transaction 'x 'deferred (lambda () 'ran)))))
+                    (wrong (on-another-thread
+                            (lambda () (handler-depth (lambda () (with-transaction db 'deferred (lambda () 'ran)))))))
+                    (other (open-database ":memory:"))
+                    (closing (close-database! other))
+                    (closed (handler-depth (lambda () (with-transaction other 'deferred (lambda () 'ran)))))
+                    (st (hold! (prepare-statement db "select x from src")))
+                    (stepped (step! st))
+                    (held (handler-depth (lambda () (with-transaction db 'deferred (lambda () 'ran))))))
+               (release-held!)
+               (list body mode no-db wrong closed held)))))
+         (counts (native-counts)))
+    (if (and (list? cases) (= (length cases) 6)) (append cases (list counts)) cases)))
+
+(test-equal "with-transaction raises its failures outside any critical section: a handler of the BEGIN's busy, the commit's deferred foreign key, the ended condition, the rollback's interrupt on an escape, and the body's own raise handed on runs at depth 1"
+  (list '(raised-at-depth depth-1 (sqlite-busy with-transaction busy busy))
+        '(raised-at-depth depth-1 (sqlite-constraint with-transaction constraint constraint-foreignkey))
+        '(raised-at-depth depth-1 (transaction-ended with-transaction))
+        '(raised-at-depth depth-1 (sqlite-interrupt with-transaction interrupt interrupt))
+        '(raised-at-depth depth-1 (value the-body-raised))
+        'no zero-counts)
+  (let* ((cases
+          (with-case
+           (lambda (db db2)
+             (let* ((lock (execute! db2 "begin immediate"))
+                    (begin-failed (handler-depth (lambda () (with-transaction db 'immediate (lambda () 'ran)))))
+                    (unlock (execute! db2 "rollback"))
+                    (commit-failed (handler-depth
+                                    (lambda ()
+                                      (with-transaction db 'deferred
+                                        (lambda () (execute! db "insert into c values (7)") 'returned)))))
+                    (ended (handler-depth
+                            (lambda ()
+                              (with-transaction db 'deferred
+                                (lambda ()
+                                  (attempt (lambda () (execute! db "insert or rollback into u values (1)")))
+                                  'returned)))))
+                    (held #f)
+                    (rollback-failed (handler-depth
+                                      (lambda ()
+                                        (call/cc
+                                         (lambda (out)
+                                           (with-transaction db 'deferred
+                                             (lambda ()
+                                               (execute! db "insert into t values ('inner')")
+                                               (set! held (prepare-statement db "select x from t"))
+                                               (step! held)
+                                               (interrupt! db)
+                                               (out 'escaped-and-nothing-raised))))))))
+                    (reset (reset! held))
+                    (rolled (execute! db "rollback"))
+                    (finalized (finalize-statement! held))
+                    (body-raised (handler-depth
+                                  (lambda ()
+                                    (with-transaction db 'deferred
+                                      (lambda () (raise 'the-body-raised))))))
+                    (in (if (in-transaction? db) 'yes 'no)))
+               (list begin-failed commit-failed ended rollback-failed body-raised in)))))
+         (counts (native-counts)))
+    (if (and (list? cases) (= (length cases) 6)) (append cases (list counts)) cases)))
 
 (test-equal "every count is zero at the end"
   zero-counts

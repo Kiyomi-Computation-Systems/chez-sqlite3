@@ -29,6 +29,14 @@
 ;;;                  when the close begins ends before the close's work
 ;;;                  starts, an interrupt tried during the work calls
 ;;;                  nothing and does not wait for the work to end
+;;;   the shut       with-transaction's, around its own ROLLBACK and the
+;;;                  savepoint exits of its failure path (the maintainer's
+;;;                  "Shut the latch on exit", 2026-11-17): the flag clear
+;;;                  while its work runs, then put back as the shut found
+;;;                  it, after a raise too; the work's answer; a raise after
+;;;                  the section, at depth 1, never resumed; at every fuel,
+;;;                  never left clear by an expiry; and across threads, the
+;;;                  close's race
 ;;;
 ;;; Every wait is bounded: condition-wait with a timeout against a deadline,
 ;;; and a thread is joined only once it has answered. A thread's raise is its
@@ -145,8 +153,9 @@
 
 (test-begin "interrupt")
 
-(test-equal "(chez-sqlite3 private interrupt) exports exactly the latch's four procedures"
-  '(interrupt-latch-close! interrupt-latch-interrupt! interrupt-latch-open! make-interrupt-latch)
+(test-equal "(chez-sqlite3 private interrupt) exports exactly the latch's five procedures: slice 1's four and the shut"
+  '(interrupt-latch-close! interrupt-latch-interrupt! interrupt-latch-open! interrupt-latch-shut!
+    make-interrupt-latch)
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private interrupt)))))
 
@@ -513,6 +522,172 @@
 (test-equal "two threads against a close on a third: the interrupt in flight when the close began ended before the close's work started; the one tried during the work called nothing and ended before the work did; the latch ends not interruptible"
   '((interrupt-start interrupt-end work-start work-end) #t closed none not-interruptible)
   (race))
+
+;; --- the shut: with-transaction's exits, the latch shut and restored --------------------------
+;;
+;; interrupt-latch-shut! takes the latch and a WORK, with-transaction's
+;; ROLLBACK, or ROLLBACK TO then RELEASE. In one critical section: the flag
+;; read and cleared, holding the mutex; the work, with the mutex released;
+;; the flag set back to what was read, holding the mutex. So an interrupt
+;; tried during the work calls nothing, one in flight as the shut begins
+;; ends first, and the connection is as interruptible after as before.
+
+;; shut-noting : Interrupt-Latch -> (List Symbol Symbol)
+;; Whether LATCH is interruptible from inside a shut's work, and after it.
+(define (shut-noting latch)
+  (let* ((during #f)
+         (answer (interrupt-latch-shut! latch (lambda () (set! during (interruptible? latch)) 'worked))))
+    (list during (interruptible? latch))))
+
+(test-equal "the shut clears the flag while its work runs and puts back the one it found: on an opened latch an interrupt tried inside the work calls nothing, and after it the latch is interruptible; on a latch never opened, and on one whose close closed, the work finds it clear and it stays clear"
+  '((not-interruptible interruptible) (not-interruptible not-interruptible)
+    (not-interruptible not-interruptible))
+  (let* ((opened (shut-noting (an-opened-latch)))
+         (never (shut-noting (make-interrupt-latch)))
+         (closed (let ((latch (an-opened-latch)))
+                   (interrupt-latch-close! latch (lambda () '(closed)) left-open?)
+                   (shut-noting latch))))
+    (list opened never closed)))
+
+(test-equal "a shut inside a shut's work puts back what it found, clear, and the outer one then puts back interruptible: inside the inner work, between the two, and after both"
+  '(not-interruptible not-interruptible interruptible)
+  (let* ((latch (an-opened-latch))
+         (inside #f)
+         (between #f))
+    (interrupt-latch-shut! latch
+                           (lambda ()
+                             (interrupt-latch-shut! latch (lambda () (set! inside (interruptible? latch))))
+                             (set! between (interruptible? latch))))
+    (list inside between (interruptible? latch))))
+
+(test-equal "the shut answers its work's answer, the very object, and calls the work once"
+  '(the-very-object 1)
+  (let-values (((work calls) (counter)))
+    (let* ((latch (an-opened-latch))
+           (outcome (list 'stepped))
+           (answer (interrupt-latch-shut! latch (lambda () (work) outcome))))
+      (list (if (eq? answer outcome) 'the-very-object answer) (calls)))))
+
+(test-equal "a shut's work's raise reaches the caller's handler at interrupt depth 1, the very object, and the latch is put back as the shut found it: interruptible on an opened latch, not on one never opened"
+  '(((raised-at-depth depth-1 the-very-object) interruptible)
+    ((raised-at-depth depth-1 the-very-object) not-interruptible))
+  (let ((raised-from (lambda (latch)
+                       (let* ((c (make-error))
+                              (raised (handler-depth (lambda () (interrupt-latch-shut! latch (lambda () (raise c))))
+                                                     c)))
+                         (list raised (interruptible? latch))))))
+    (let* ((opened (raised-from (an-opened-latch)))
+           (never (raised-from (make-interrupt-latch))))
+      (list opened never))))
+
+(test-equal "a shut's work's raise-continuable, whose handler returns, gets the &non-continuable R6RS raises for it: the shut resumes nothing"
+  'non-continuable
+  (resumed? (lambda ()
+              (interrupt-latch-shut! (an-opened-latch) (lambda () (raise-continuable (make-warning)))))))
+
+(test-equal "inside a caller's critical section, as with-transaction's exits call it, the shut does the same and leaves the caller's depth as it was"
+  '((not-interruptible interruptible) 2)
+  (critical-section
+   (let* ((latch (an-opened-latch))
+          (noted (shut-noting latch)))
+     (list noted (interrupt-depth)))))
+
+;; shut-abandoned-at : Positive-Integer -> (List (Listof Symbol) Symbol)
+;; A shut of an opened latch, its work noting its start, spinning, noting
+;; its end, run in an engine of FUEL ticks, abandoned at its first expiry:
+;; the notes, and whether the latch is interruptible then.
+(define (shut-abandoned-at fuel)
+  (let* ((latch (an-opened-latch))
+         (notes '())
+         (note! (lambda (n) (set! notes (cons n notes)))))
+    ((make-engine (lambda ()
+                    (interrupt-latch-shut! latch
+                                           (lambda ()
+                                             (note! 'work-start)
+                                             (spin 200)
+                                             (note! 'work-end)
+                                             'worked))))
+     fuel
+     (lambda (left . answers) 'completed)
+     (lambda (next) 'abandoned))
+    (list (reverse notes) (interruptible? latch))))
+
+(test-equal "a shut in an engine abandoned at its first expiry, at every fuel from 1 to 10: nothing ran and the latch is interruptible, or the whole shut ran and it is interruptible again; never left clear; both are seen"
+  '(() #t #t)
+  (let* ((runs (map (lambda (fuel) (cons fuel (shut-abandoned-at fuel))) (iota-from 1 10)))
+         (whole '((work-start work-end) interruptible))
+         (none '(() interruptible)))
+    (list (filter (lambda (run) (not (or (equal? (cdr run) whole) (equal? (cdr run) none)))) runs)
+          (exists (lambda (run) (equal? (cdr run) whole)) runs)
+          (exists (lambda (run) (equal? (cdr run) none)) runs))))
+
+;; shut-race : -> (List (Listof Symbol) Any Any Any Symbol)
+;; race's three threads, the closer's close replaced by a shut whose work
+;; notes as the close's does and answers shut. The notes; the three
+;; answers, #f as none; and whether the latch is interruptible after them.
+(define (shut-race)
+  (let* ((latch (an-opened-latch))
+         (m (make-mutex))
+         (c (make-condition))
+         (notes '())
+         (in-flight #f)
+         (calling-shut #f)
+         (work-started #f)
+         (try-now #f)
+         (try-ended #f)
+         (note! (lambda (n) (set! notes (cons n notes))))
+         (interrupter
+          (start-thread
+           (lambda ()
+             (interrupt-latch-interrupt!
+              latch
+              (lambda ()
+                (with-mutex m
+                  (note! 'interrupt-start)
+                  (set! in-flight #t)
+                  (condition-broadcast c)
+                  (await m c (lambda () calling-shut) long-ms)
+                  (await m c (lambda () work-started) in-flight-ms)
+                  (note! 'interrupt-end)))))))
+         (shutter
+          (start-thread
+           (lambda ()
+             (with-mutex m (await m c (lambda () in-flight) long-ms))
+             (with-mutex m
+               (set! calling-shut #t)
+               (condition-broadcast c))
+             (interrupt-latch-shut!
+              latch
+              (lambda ()
+                (with-mutex m
+                  (note! 'work-start)
+                  (set! work-started #t)
+                  (set! try-now #t)
+                  (condition-broadcast c)
+                  (note! (if (await m c (lambda () try-ended) long-ms)
+                             'work-end
+                             'work-end-with-the-try-unended)))
+                'shut)))))
+         (late
+          (start-thread
+           (lambda ()
+             (with-mutex m (await m c (lambda () try-now) long-ms))
+             (let ((answer (interrupt-latch-interrupt!
+                            latch
+                            (lambda () (with-mutex m (note! 'late-interrupt))))))
+               (with-mutex m
+                 (set! try-ended #t)
+                 (condition-broadcast c))
+               answer))))
+         (interrupted (interrupter answer-ms))
+         (shut (shutter answer-ms))
+         (late-answer (late answer-ms)))
+    (list (with-mutex m (reverse notes)) (none-if-false interrupted) (none-if-false shut)
+          (none-if-false late-answer) (interruptible? latch))))
+
+(test-equal "two threads against a shut on a third: the interrupt in flight when the shut began ended before its work started; the one tried during the work called nothing and ended before the work did, the mutex free meanwhile; the latch ends interruptible, as the shut found it"
+  '((interrupt-start interrupt-end work-start work-end) #t shut none interruptible)
+  (shut-race))
 
 (test-end "interrupt")
 
