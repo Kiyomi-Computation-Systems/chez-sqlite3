@@ -271,7 +271,10 @@ What it reaches, and what it doesn't:
 - one that comes while nothing runs is lost, and the next statement runs
   as usual;
 - an interrupted write ends its transaction; an interrupted `select`
-  doesn't.
+  doesn't;
+- while `with-transaction` rolls back, it does nothing, so the rollback
+  runs; a `commit` it stops is rolled back. A statement left on its row
+  still stops the rollback, as above.
 
 Since one can come between two statements and be lost, a watchdog calls it
 again and again until the work has stopped:
@@ -475,9 +478,10 @@ It does not survive an engine's preemption: an engine that runs out of fuel
 inside it frees the script's copy, and its resume is refused. If you use
 engines, use the statement verbs.
 
-Going back into a script that has begun, through a continuation or an engine
-resumed a second time, never runs it again: it raises a condition that
-`sqlite-closed?` holds, or, inside the script, an assertion violation.
+Going back into a script, through a continuation or an engine resumed a
+second time, never runs any of its statements again, whether from before the
+first or from between two of them: it raises a condition that
+`sqlite-closed?` holds, or, inside a statement, an assertion violation.
 
 ### `changes`
 
@@ -601,6 +605,10 @@ and rolls back only what is still there.
 When it can't commit, as when a deferred foreign key is missing, it rolls
 back and raises the commit's error.
 
+While it rolls back, `interrupt-database!` does nothing, so a watchdog can't
+stop the rollback and leave the transaction open. It can stop the commit,
+which is then rolled back, and the interrupt raised.
+
 If the procedure catches an error that ended the transaction, and returns,
 there is nothing left to commit: it raises a condition that
 `sqlite-transaction-ended?` holds. Writes the procedure made after the end
@@ -625,9 +633,11 @@ that never came back can't be reset, and makes every later
 ```
 
 Rolling back works beside a statement on its row, which goes on answering
-rows. But if the connection is interrupted while such a statement is on its
-row, the rollback fails and the transaction stays open; `in-transaction?`
-says so. Reset the statement, then roll back with `execute!`.
+rows, unless the transaction changed the schema: then the statement's next
+step raises SQLite's abort, `abort-rollback`. And if the connection is
+interrupted while such a statement is on its row, the rollback fails and the
+transaction stays open; `in-transaction?` says so. Reset the statement, then
+roll back with `execute!`.
 
 A `with-exception-handler` handler runs before the call unwinds, so it is
 part of the procedure: a transaction it begins and leaves open is committed
@@ -636,11 +646,11 @@ ended its level itself, as when it raises the ended condition, there is
 nothing left to roll back, and the handler's transaction stays. A `guard`
 clause runs after the unwind, and is not affected.
 
-Each call runs once. Going back into a finished call, through a
-continuation or a handler that resumes it, commits nothing again: a return
-raises the ended condition. An engine resumed a second time commits nothing
-again either: it may answer as the first resume did, raise the ended
-condition, or refuse the re-entry with an assertion violation.
+Each call begins and commits at most once. Going back into a call, through
+a continuation, a handler that resumes it or an engine resumed a second
+time, commits nothing again: it answers as before, raises the ended
+condition, or refuses the re-entry with an assertion violation. Only an
+engine stopped before the call started makes a new call when resumed.
 
 It does not survive an engine's preemption: an engine that runs out of fuel
 inside it rolls the transaction back. If that rollback fails, as a nested
@@ -658,7 +668,9 @@ sqlite-transaction-ended? : Any -> Boolean
 ```
 
 Whether the value says `with-transaction`'s procedure returned after its
-transaction had already ended. Nothing was committed by that call.
+transaction had already ended. That call committed nothing more: what its
+procedure wrote after the end was saved at once, so running the call again
+writes it again.
 
 ```scheme run
 (call-with-database ":memory:"

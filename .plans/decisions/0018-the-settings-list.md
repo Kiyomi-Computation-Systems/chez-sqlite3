@@ -13,6 +13,8 @@
   the checks' section, decision 7's failed close, the maintainer's "Setting's error wins", a
   claim on every call, the engine rows' fuels, the lock rows, and the context's leaving WAL
   ([amendment](#amendment-2026-11-16-what-m3-slice-5-built)).
+  Amended 2026-11-17 in M3's closing review: the open's claim held whole, and its sweeps' bound
+  ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -283,3 +285,21 @@ builders' reports and its adversarial review
     Context's and the Consequences' "beside any other open connection" mean that.
   - **Under another's exclusive lock, in rollback-journal mode, every `journal-mode` value
     waits,** and every `synchronous`, not only those P2 measured. Under a read, only `wal` waits.
+
+## Amendment, 2026-11-17: the open's claim, held whole (M3's closing review)
+
+Proposed in M3's closing review, from reviewer B's findings
+([the review's log](../m3-closing-review-mutation-log.md)).
+
+- **`made-claim` is exported** from `(chez-sqlite3 private open)`, for the suites alone. A pure
+  row holds it whole, as ADR-0016's amendment of the same day holds the conveniences' copy.
+- **The open sweeps bound a whole new call by a refusal they see themselves.** Their bounds were
+  a refused call's fuel and ticks, 68 and 71, against true boundaries at 10 and 9. Now a
+  remainder taken before the open must have its second resume refused, and every whole new call
+  must come below the first such fuel. A mutant claiming 0 again after the end (N1o) was caught
+  already, and fails the new bounds too.
+- **The single-trial guards count against the fuels swept:** a statement held at 12 or more
+  fuels, one per settings statement; refusals at half the fuels or ticks, and at some before the
+  open.
+- **`settings.sls`'s comments** said the plan and the split run before any critical section.
+  They run inside `checked`'s.

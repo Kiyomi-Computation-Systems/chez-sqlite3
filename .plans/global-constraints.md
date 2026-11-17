@@ -170,12 +170,15 @@ Proposed record is marked *(provisional)* until that record is accepted.
   (below), claimed inside each section of the call: the check-out and a miss's prepare, one
   section; each bind, step and read; and the return. A run the call has passed is refused there,
   touching nothing, and raises `&sqlite-closed`. A raise no section caught gives the statement
-  back by a claim of whatever position is next. **Every call of `query-fold` and
-  `execute-script!` holds a flag,** set once its statement leaves the call, given back or
-  finalized, and read first in every critical section that touches the statement; an expiry
-  inside their winds finishes it. Chez's engine remainders are multi-shot, and a timer's handler
-  is the caller's code between any two sections (ADR-0016, ADR-0020, amended in M3 slices 3 and
-  5).
+  back by a claim of whatever position is next. **Every call of `query-fold` holds a flag,** set
+  once its statement leaves the call, given back or finalized, and read first in every critical
+  section that touches the statement; an expiry inside its wind finishes it. **Every call of
+  `execute-script!` holds a claim on its statements' byte offsets,** made by its first
+  expression and claimed inside each prepare's section: a statement the call has passed is
+  refused, touching nothing, and raises `&sqlite-closed`. A handler's jump back inside the
+  script's block crosses no winder, so the block's own refusal never sees it. Chez's engine
+  remainders are multi-shot, and a timer's handler is the caller's code between any two sections
+  (ADR-0016, ADR-0020, amended in M3 slices 3 and 5 and in M3's closing review).
 - **Every call of an open verb holds a claim,** made by its first expression: the position of
   the next section any run of the call may make. Each run carries its own position, and each
   section claims it inside the section: the open's, each setting's prepare, step, read and
@@ -183,6 +186,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   nothing, and raises `&sqlite-closed`. One remainder can be resumed again while an earlier
   resume of it is pending, so a flag set only once a call ends lets both runs act (ADR-0018,
   amended in M3 slice 5).
+- **Every call of `with-transaction` holds a claim,** made by its first expression and taken
+  first in the BEGIN's section, which also reads the refusal's pass, autocommit and the depth. A
+  run that finds it taken steps nothing and raises `&sqlite-transaction-ended` (ADR-0017, amended
+  in M3's closing review).
 - **Text for SQL built by Chez's own procedures, as the settings' PRAGMAs, is built in a
   critical section:** `number->string`, resumed again from inside, answered `""` or the
   digits twice (ADR-0018, amended in M3 slice 5).
@@ -210,6 +217,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   section, never after it returns: an expiry or another thread between the two lets the call
   land on a freed connection. Rows hold the record's wiring through `interrupt-database/with` on
   a stand-in, in an engine sweep and across two threads (ADR-0019, amended in M3 slice 6).
+  `with-transaction`'s ROLLBACK, and its failure path's ROLLBACK TO and RELEASE, run with the
+  latch shut: the flag cleared under the same mutex, held for constant time, and put back as it
+  was found. COMMIT, and the RELEASE that commits, stay interruptible (ADR-0017, ADR-0019,
+  amended in M3's closing review).
 - **A flag that decides an exit is read inside the section of the step it guards,** never in an
   earlier one: an engine's expiry between them runs the after thunk, and the resumed caller would
   step what it had planned. **An engine row sweeps fuel from 1 until the call completes without
@@ -220,7 +231,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   record's mutex (ADR-0019).
 - **No busy handler and no retry in Scheme;** a busy wait ends at its timeout, interrupt or not.
   A row times a wait with a timeout of at least 1500 ms and asserts at least 1000 ms, and under
-  twice the timeout, so a retry fails it (ADR-0019, amended in M3 slice 5). A row that reads the
+  twice the timeout, so a retry fails it on a millisecond grain (ADR-0019, amended in M3 slice
+  5). On a whole-second build a 1500 ms timeout waits 1000 ms and a retry 2000 ms, so the row
+  reads the grain first and asserts under 2000 ms there (ADR-0019, amended in M3's closing
+  review). A row that reads the
   wait's grain itself may time a shorter one, asserting only a bound that holds on either grain
   (ADR-0019, amended in M3 slice 6).
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and

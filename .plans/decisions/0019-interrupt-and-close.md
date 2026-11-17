@@ -11,6 +11,9 @@
   2026-11-16 in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): the interrupt and
   contention as built, and probes P4 and P5
   ([amendment](#amendment-2026-11-16-the-interrupt-and-contention-as-built-m3-slice-6)).
+  Amended 2026-11-17 in M3's closing review: the latch's shut, its third user, and the busy wait's
+  grain in the suites
+  ([amendment](#amendment-2026-11-17-the-latchs-shut-and-the-busy-waits-grain-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `interrupt-database!`, the close's part in it, and the busy timeout
 - **Settles:** ADR-0010, decision 1: "M3's `sqlite3_interrupt` … M3 designs it with
@@ -307,3 +310,45 @@ slice's [mutation log](../m3-slice-6-mutation-log.md), parts A and B, and part A
   its log, and the maintainer's Mac run reads Apple's.
 - **The docs give each busy case's remedy** in `sqlite-busy?`'s entry (decision 9): `busy-snapshot`,
   `locked`, and the four plain `busy`s, with which leave the transaction open.
+
+## Amendment, 2026-11-17: the latch's shut, and the busy wait's grain (M3's closing review)
+
+Proposed in M3's closing review ([the review's log](../m3-closing-review-mutation-log.md)).
+
+- **The latch gains a third user, the shut,** for `with-transaction`'s exits: the maintainer's
+  "Shut the latch on exit", 2026-11-17 (ADR-0017, amended the same day).
+  - **How it works:** `interrupt-latch-shut!`, in `(chez-sqlite3 private interrupt)`, takes its
+    work as an argument, as the latch's other procedures take their foreign calls. In one
+    critical section:
+    - it reads and clears the flag, holding the mutex;
+    - it runs the work, with the mutex released;
+    - it puts back the flag it found, holding the mutex, after a raise too, which is raised
+      after the section.
+  - **The flag it puts back is the one it read, never set:** a shut of a connection not
+    interruptible, closed, closing, or inside another shut, leaves it so.
+  - **Who calls it:** `call-with-latch-shut`, in `(chez-sqlite3 private connection)`, gives it
+    to `with-transaction`'s rollback.
+  - **Decision 3 holds:** the mutex is held only for constant time, across one read or write of
+    the flag. A mutant that held it across the work fails the two-thread row. Decision 3's
+    "every other section guards owner-only state" gains one exception: the shut touches the
+    shared flag, under the mutex, as the open, the interrupt and the close do.
+- **Its cost is the close's:** an interrupt sent while `with-transaction` rolls back is dropped.
+  That is the point. A watchdog stopped the rollback, and left the transaction open, in 351 of
+  20,000 calls before, and in none after.
+- **Decision 11, and the upper bound the suites added:** "so a retry in Scheme fails it" held
+  only on a millisecond grain.
+  - **What failed:** on a build without `nanosleep`, a 1500 ms timeout waits 1000 ms, and a
+    retry 2000 ms, under the rows' 3000 ms bound. The closing review built the floor with
+    `-DHAVE_NANOSLEEP=0` and planted a retry: the old rows passed, each wait 2000 to 2001 ms.
+  - **Now:** each suite that times a 1500 ms wait reads the grain first, and bounds the wait
+    under 2000 ms on whole seconds and under 3000 ms otherwise. Those suites are
+    `test-open-locks`, `test-open-settings`, `test-contention` and `test-interrupt-reach`. Each
+    prints the grain in a row that fails when the grain is unread.
+- **The suites' watchdog device begins with a handshake,** in `test-interrupt-reach`,
+  `test-interrupt-close` and `test-transaction-interrupt`, which now uses the device too.
+  - **Why:** the slice 6 amendment's device lost its first round when it landed before the
+    call's own clear. `test-interrupt-reach`'s 3 MB prepare then ran unstopped: once on CI, on
+    `main` (run 44087748537), and in 15 of 40 suite runs with the prepare called 200 ms late.
+  - **Now:** holding SQLite's memory mutex, the first round interrupts, waits until the flag reads
+    clear, and interrupts again, inside the call. With the late prepare, none of 40 runs failed.
+    Its wait ends when the call returns, or at the watchdog's 120 s deadline.
