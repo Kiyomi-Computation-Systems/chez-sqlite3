@@ -117,7 +117,7 @@
 
 ;; The jobs, in the file's order. A job's text runs from its header line to the
 ;; next job's, so a lane's text can be told from the other lanes' copies of it.
-(define job-order '("main" "memory" "nothreads" "floor" "current"))
+(define job-order '("main" "memory-1" "memory-2" "nothreads" "floor" "current"))
 
 ;; job-bounds : String String -> (Pair Natural Natural)
 (define (job-bounds text job)
@@ -189,7 +189,7 @@
 (define (block-extra k got)
   (string-append "the \"" k "\" block has a line it must not: \"" got "\""))
 
-(define jobs "main, memory, nothreads, floor, current")
+(define jobs "main, memory-1, memory-2, nothreads, floor, current")
 (define (job-unknown j) (string-append "job \"" j "\" is not one of " jobs))
 (define (job-missing j) (string-append "job \"" j "\" is missing"))
 (define (job-key j k)
@@ -428,7 +428,9 @@
   '("MAKEFLAGS" "MFLAGS" "GNUMAKEFLAGS" "VALGRIND" "VALGRIND_OPTS" "VALGRIND_LIB"
     "MEMORY_SUITES" "MEMORY_TIMEOUT" "TEST_TIMEOUT" "LIBDIRS" "TIMEOUT" "SUITES"
     "CHEZ_SQLITE3_LIBRARY" "CHEZ_SQLITE3_DECOY" "CHEZ_SQLITE3_GATE_CHILD"
-    "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD" "CHECK_CI_ROOT"))
+    "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD" "CHECK_CI_ROOT"
+    ;; the shard and its lists, and the pattern that holds them, MEMORY_*
+    "MEMORY_SHARD" "MEMORY_SUITES_1" "MEMORY_SUITES_2" "MEMORY_LOGS"))
 
 (define make-words
   '("check-help" "check-suites" "check-pins" "check-floors" "check-ci" "test"
@@ -446,12 +448,6 @@
   '("'packaging/floors.sexp', " ", 'scripts/ci/floor.sh'" ", 'scripts/ci/build-chez.sh'"
     ", 'scripts/ci/check-chez.sh'"))
 
-(define gate-step
-  (lambda ()
-    (span "      - name: The gate must fail on planted defects" "run: make check-memory-gate\n")))
-(define valgrind-step
-  (lambda ()
-    (span "      - name: Every suite under Valgrind" "run: make test-memory\n")))
 
 ;; --- the lanes: floor and current ----------------------------------------------------
 
@@ -924,6 +920,129 @@
          (list (list (here) (job-no-key j "timeout-minutes")))))))
 
 
+;; --- the memory jobs: memory-1 and memory-2, one shard each ------------------------
+;; Each job runs make check-memory-gate, then make test-memory MEMORY_SHARD=N
+;; for its own N (ADR-0005, amended in M3 slice 6). Its rows: the job, either
+;; step, or check-chez deleted; the steps out of order or guarded; the shard's
+;; number another shard's, a third's, or none, or given beside a list or
+;; through env; the job's keys; and the Chez it runs.
+
+(define h-gate "The gate must fail on planted defects")
+(define (h-shard n) (string-append "Shard " n "'s suites under Valgrind"))
+(define gate-run "make check-memory-gate")
+(define (shard-run n) (string-append "make test-memory MEMORY_SHARD=" n))
+(define (other-shard n) (if (string=? n "1") "2" "1"))
+
+;; gate-env-gains : String String -> Edit
+;; In job J's gate step, LINE after the env's CHEZ line.
+(define (gate-env-gains j line)
+  (se j h-gate (string-append "          CHEZ: " chez-t "\n")
+      (string-append "          CHEZ: " chez-t "\n" line "\n")))
+
+;; third-shard-job : -> String
+;; Job memory-2's text, renamed memory-3, running a third shard.
+(define (third-shard-job)
+  (let* ((t (job-text real "memory-2"))
+         (t (replace-first t "\n  memory-2:\n" "\n  memory-3:\n"))
+         (t (replace-first t "memory-2 (the Valgrind gate, shard 2 of 2)"
+                           "memory-3 (the Valgrind gate, shard 3 of 3)"))
+         (t (replace-first t (hdr-line (h-shard "2")) (hdr-line (h-shard "3")))))
+    (replace-first t (shard-run "2") (shard-run "3"))))
+
+;; memory-rows : String String -> (Listof Row)
+;; The rows of memory job J, which runs shard N.
+(define (memory-rows j n)
+  (define (here) (string-append "  " j ":"))
+  (define (pfx x) (string-append j ": " x))
+  (define (step h) (lane-step j h))
+  (define (run-line x) (string-append "        run: " x))
+  (define (insert-line h line)
+    (le j (string-append (hdr-line h) "\n") (string-append (hdr-line h) "\n" line "\n")))
+  (define (shard-is new) (se j (h-shard n) (run-line (shard-run n)) (run-line new)))
+  (define (at-shard text) (A j (hdr-line (h-shard n)) text))
+  (define (at-gate text) (A j (hdr-line h-gate) text))
+  ;; The job's check-chez step, from its header to the gate step's comment.
+  (define (check-chez-step)
+    (let* ((jt (job-text real j))
+           (s (find-sub jt "      - name: Check the Chez this job runs\n" 0))
+           (c (and s (find-sub jt "      # The gate proves nothing" s))))
+      (unless c (error 'memory-rows "no check-chez step before the gate's comment" j))
+      (substring jt s c)))
+  (define (guard-rows h run)
+    (list
+     (row (pfx (string-append "an if: always() on the step that runs " run))
+          (list (insert-line h "        if: always()"))
+          (let ((at (A j (hdr-line h) "        if: always()")))
+            (list (list at if-bad) (list at if-wrong) (list at (step-has-if j run)))))
+     (row (pfx (string-append "continue-on-error on the step that runs " run))
+          (list (insert-line h "        continue-on-error: true"))
+          (list (list (A j (hdr-line h) "        continue-on-error: true")
+                      (step-key "continue-on-error"))))))
+  (define (shard-number-row name new)
+    (row (pfx name)
+         (list (shard-is new))
+         (list (list (at-shard (run-line new)) (names-msg "MEMORY_SHARD"))
+               (list (at-shard (run-line new)) (gate-msg "test-memory"))
+               (list (here) (n-steps j (shard-run n) 0)))))
+  (append
+   (list
+    (row (pfx "the job deleted")
+         (list (le j (job-text real j) ""))
+         (list (list "jobs:" (job-missing j))))
+    (row (pfx "the gate step deleted")
+         (list (le j (string-append (step h-gate) "\n") ""))
+         (list (list (here) (n-steps j gate-run 0))))
+    (row (pfx "the shard's step deleted")
+         (list (le j (string-append "\n" (step (h-shard n))) ""))
+         (list (list (here) (n-steps j (shard-run n) 0))))
+    (row (pfx "the check-chez step deleted")
+         (list (le j (check-chez-step) ""))
+         (list (list (here) (n-steps j chk-t 0))))
+    (row (pfx "the shard's step before the gate step")
+         (list (le j (string-append (step h-gate) "\n" (step (h-shard n)))
+                   (string-append (step (h-shard n)) "\n" (step h-gate))))
+         (list (list (at-shard (run-line (shard-run n))) (out-of-order j (shard-run n) gate-run)))))
+   (guard-rows h-gate gate-run)
+   (guard-rows (h-shard n) (shard-run n))
+   (list
+    (shard-number-row "the shard's step runs the other job's shard, so both jobs run it"
+                      (shard-run (other-shard n)))
+    (shard-number-row "the shard's step runs a third shard" (shard-run "3"))
+    (row (pfx "the shard's step runs every suite, no shard")
+         (list (shard-is "make test-memory"))
+         (list (list (at-shard (run-line "make test-memory")) (gate-msg "test-memory"))
+               (list (here) (n-steps j (shard-run n) 0))))
+    (let ((new (string-append (shard-run n) " MEMORY_SUITES=tests/test-counters.sps")))
+      (row (pfx "the shard's step names suites of its own too")
+           (list (shard-is new))
+           (list (list (at-shard (run-line new)) (names-msg "MEMORY_SHARD"))
+                 (list (at-shard (run-line new)) (names-msg "MEMORY_SUITES"))
+                 (list (at-shard (run-line new)) (gate-msg "test-memory"))
+                 (list (here) (n-steps j (shard-run n) 0)))))
+    (let ((line (string-append "          MEMORY_SHARD: " n)))
+      (row (pfx "the shard's step takes its number from env as well")
+           (list (se j (h-shard n) (string-append "          CHEZ: " chez-t "\n")
+                     (string-append "          CHEZ: " chez-t "\n" line "\n")))
+           (list (list (at-shard line) (names-msg "MEMORY_SHARD"))
+                 (list (at-shard line) (env-key "MEMORY_SHARD")))))
+    (let* ((name (string-append "MEMORY_SUITES_" n))
+           (line (string-append "          " name ": x")))
+      (row (pfx "the gate step's env names the shard's list")
+           (list (gate-env-gains j line))
+           (list (list (at-gate line) (names-msg name))
+                 (list (at-gate line) (env-key name)))))
+    (row (pfx "the shard's CHEZ is the nothreads Chez")
+         (list (se j (h-shard n) (string-append "          CHEZ: " chez-t) (string-append "          CHEZ: " chez-n)))
+         (list (list (at-shard (string-append "          CHEZ: " chez-n)) (env-chez j chez-t))))
+    (row (pfx "its cache key takes nothreads's prefix")
+         (list (se j h-restore-chez "key: chez-threads-" "key: chez-nothreads-"))
+         (list (list (A j (hdr-line h-restore-chez) nt-restore-key) (cache-key j "chez-threads-")))))
+   (map (lambda (k)
+          (row (pfx (string-append "a job key " k))
+               (list (le j "    runs-on: ubuntu-24.04\n" (string-append "    runs-on: ubuntu-24.04\n    " k ": x\n")))
+               (list (list (A j #f (string-append "    " k ": x")) (job-key j k)))))
+        job-keys)))
+
 (define (env-ln k v) (string-append "          " k ": " v))
 
 ;; The rows that are not a lane's: the job list, and the two names in the jobs
@@ -936,7 +1055,7 @@
    (row "the current job deleted"
         (list (e (string-append "\n" (span "  # SQLite at the current release" "run: make test\n")) ""))
         (list (list "jobs:" (job-missing "current"))))
-   (row "a sixth job"
+   (row "a seventh job"
         (list (le "current" "        run: make test\n"
                   (string-append "        run: make test\n\n"
                                  (lines "  extra:" "    name: x" "    runs-on: ubuntu-24.04"
@@ -953,19 +1072,17 @@
                             (string-append (env-ln "C_INCLUDE_PATH" (sql-inc "floor")) "\n")))
         (list (list (A "main" install-hdr (env-ln "C_INCLUDE_PATH" (sql-inc "floor"))) (names-msg "C_INCLUDE_PATH"))
               (list (A "main" install-hdr (env-ln "C_INCLUDE_PATH" (sql-inc "floor"))) (env-key "C_INCLUDE_PATH"))))
-   (row "memory's gate step gains C_INCLUDE_PATH, with floor's exact value"
-        (list (insert-after (string-append "      - name: The gate must fail on planted defects\n        env:\n          CHEZ: " chez-t "\n")
-                            (string-append (env-ln "C_INCLUDE_PATH" (sql-inc "floor")) "\n")))
-        (list (list (A "memory" "      - name: The gate must fail on planted defects" (env-ln "C_INCLUDE_PATH" (sql-inc "floor")))
+   (row "memory-1's gate step gains C_INCLUDE_PATH, with floor's exact value"
+        (list (gate-env-gains "memory-1" (env-ln "C_INCLUDE_PATH" (sql-inc "floor"))))
+        (list (list (A "memory-1" (hdr-line h-gate) (env-ln "C_INCLUDE_PATH" (sql-inc "floor")))
                     (names-msg "C_INCLUDE_PATH"))
-              (list (A "memory" "      - name: The gate must fail on planted defects" (env-ln "C_INCLUDE_PATH" (sql-inc "floor")))
+              (list (A "memory-1" (hdr-line h-gate) (env-ln "C_INCLUDE_PATH" (sql-inc "floor")))
                     (env-key "C_INCLUDE_PATH"))))
-   (row "memory's gate step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value"
-        (list (insert-after (string-append "      - name: The gate must fail on planted defects\n        env:\n          CHEZ: " chez-t "\n")
-                            (string-append (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor")) "\n")))
-        (list (list (A "memory" "      - name: The gate must fail on planted defects" (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor")))
+   (row "memory-2's gate step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value"
+        (list (gate-env-gains "memory-2" (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor"))))
+        (list (list (A "memory-2" (hdr-line h-gate) (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor")))
                     (names-msg "CHEZ_SQLITE3_LIBRARY"))
-              (list (A "memory" "      - name: The gate must fail on planted defects" (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor")))
+              (list (A "memory-2" (hdr-line h-gate) (env-ln "CHEZ_SQLITE3_LIBRARY" (sql-lib "floor")))
                     (env-key "CHEZ_SQLITE3_LIBRARY"))))
    (row "nothreads's step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value"
         (list (insert-after (string-append "      - name: Every library must be refused, by name\n        env:\n          CHEZ: " chez-n "\n")
@@ -1040,29 +1157,29 @@
 
     ;; --- the spellings a text reader cannot see ---
     (row "a quoted key, \"if\": false"
-         (list (e "        run: make test-memory\n"
-                  "        \"if\": false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        \"if\": false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        \"if\": false" quoted-msg)))
     (row "a single-quoted key, 'if': false"
-         (list (e "        run: make test-memory\n"
-                  "        'if': false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        'if': false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        'if': false" quoted-msg)))
     (row "white space between a key and its colon, if : false"
-         (list (e "        run: make test-memory\n"
-                  "        if : false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        if : false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        if : false" space-msg)))
     (row "an explicit key, ? if"
-         (list (e "        run: make test-memory\n"
-                  "        ? if\n        : false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        ? if\n        : false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        ? if" explicit-msg)
                (list "        : false" (step-key ""))))
     (row "an anchor where a key goes"
-         (list (e "        run: make test-memory\n"
-                  "        &a if: false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        &a if: false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        &a if: false" alias-msg)))
     (row "an alias where a key goes"
-         (list (e "        run: make test-memory\n"
-                  "        *a if: false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        *a if: false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        *a if: false" alias-msg)))
     (row "an anchor on a step's key, - &a uses: x"
          (list (insert-after "        run: scripts/ci/check-action-pins.sh .github/workflows\n"
@@ -1074,19 +1191,19 @@
          (list (list "      - ? uses" explicit-msg)
                (list "        : owner/action@main" (step-key ""))))
     (row "a flow mapping in a name"
-         (list (e "    name: memory (the Valgrind gate)\n"
-                  "    name: memory {the Valgrind gate}\n"))
-         (list (list "    name: memory {the Valgrind gate}" flow-msg)))
+         (list (e "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n"
+                  "    name: memory-1 {the Valgrind gate, shard 1 of 2}\n"))
+         (list (list "    name: memory-1 {the Valgrind gate, shard 1 of 2}" flow-msg)))
     (row "a { inside a quoted scalar passes"
-         (list (e "    name: memory (the Valgrind gate)\n"
-                  "    name: \"memory {the Valgrind gate}\"\n"))
+         (list (e "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n"
+                  "    name: \"memory-1 {the Valgrind gate, shard 1 of 2}\"\n"))
          '())
     (row "a backslash after a double quote"
-         (list (e "    name: memory (the Valgrind gate)\n"
+         (list (e "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n"
                   "    name: \"memory\\x2D\"\n"))
          (list (list "    name: \"memory\\x2D\"" bsq-msg)))
     (row "a quoted scalar left open"
-         (list (e "    name: memory (the Valgrind gate)\n"
+         (list (e "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n"
                   "    name: \"memory\n"))
          (list (list "    name: \"memory" openq-msg)))
     (row "a tab in a structural line"
@@ -1099,8 +1216,8 @@
          (list (e "main (checks and suites" "ma\x131;n (checks and suites"))
          (list (list "    name: ma\x131;n (checks and suites, Chez built from source)" odd-msg)))
     (row "a key spelled with a dotless i"
-         (list (e "        run: make test-memory\n"
-                  "        \x131;f: false\n        run: make test-memory\n"))
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n"
+                  "        \x131;f: false\n        run: make test-memory MEMORY_SHARD=1\n"))
          (list (list "        \x131;f: false" odd-msg)))
     (row "a character beyond ASCII in a block scalar's content"
          (list (in-id-block (lambda (old) (replace-first old "id=$" "id=\xe9;$"))))
@@ -1129,7 +1246,7 @@
          (list (list "env:" (top-unknown "env"))
                (list "  CHEZ_SQLITE3_LIBRARY: /x" (names-msg "CHEZ_SQLITE3_LIBRARY"))))
     (row "CHEZ_SQLITE3_LIBRARY in a step's env"
-         (list (insert-after (string-append "      - name: Every suite under Valgrind\n        env:\n          CHEZ: " chez-t "\n")
+         (list (insert-after (string-append (hdr-line (h-shard "1")) "\n        env:\n          CHEZ: " chez-t "\n")
                              "          CHEZ_SQLITE3_LIBRARY: /x\n"))
          (list (list "          CHEZ_SQLITE3_LIBRARY: /x" (names-msg "CHEZ_SQLITE3_LIBRARY"))
                (list "          CHEZ_SQLITE3_LIBRARY: /x" (env-key "CHEZ_SQLITE3_LIBRARY")))))
@@ -1184,8 +1301,12 @@
          ;; With no jobs key no job is known, so no lane's env may name the two
          ;; names: each of the six lines is refused.
          (append (list (list "jobz:" (top-unknown "jobz"))
-                       (list "        run: make check-memory-gate" (gate-msg "check-memory-gate"))
-                       (list "        run: make test-memory" (gate-msg "test-memory"))
+                       (list '("        run: make check-memory-gate" 1) (gate-msg "check-memory-gate"))
+                       (list "        run: make test-memory MEMORY_SHARD=1" (names-msg "MEMORY_SHARD"))
+                       (list "        run: make test-memory MEMORY_SHARD=1" (gate-msg "test-memory"))
+                       (list '("        run: make check-memory-gate" 2) (gate-msg "check-memory-gate"))
+                       (list "        run: make test-memory MEMORY_SHARD=2" (names-msg "MEMORY_SHARD"))
+                       (list "        run: make test-memory MEMORY_SHARD=2" (gate-msg "test-memory"))
                        (list "        run: make check-nothreads" (gate-msg "check-nothreads")))
                  (lane-name-problems "floor")
                  (lane-name-problems "current")
@@ -1214,79 +1335,49 @@
                   "    name: main (checks and suites, Chez built from source)\n    runs-on: ubuntu-24.04\n"))
          (list (list "  main:" (job-no-key "main" "timeout-minutes"))))
     (row "a job key twice"
-         (list (e "    name: memory (the Valgrind gate)\n"
-                  "    name: memory (the Valgrind gate)\n    runs-on: ubuntu-24.04\n"))
-         (list (list '("    runs-on: ubuntu-24.04" 3) (job-key-twice "memory" "runs-on"))))
+         (list (e "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n"
+                  "    name: memory-1 (the Valgrind gate, shard 1 of 2)\n    runs-on: ubuntu-24.04\n"))
+         (list (list '("    runs-on: ubuntu-24.04" 3) (job-key-twice "memory-1" "runs-on"))))
     (row "a job key with a value where a block goes, steps: x"
          (list (e "    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n\n      - name: Install the packages in packaging/debian-prereqs.txt\n"
                   "    steps: x\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n\n      - name: Install the packages in packaging/debian-prereqs.txt\n"))
          (list (list "    steps: x" hasval-msg))))
 
-   (map (lambda (k)
-          (row (string-append "a job key " k)
-               (list (e "    name: memory (the Valgrind gate)\n"
-                        (string-append "    name: memory (the Valgrind gate)\n    " k ": x\n")))
-               (list (list (string-append "    " k ": x") (job-key "memory" k)))))
-        job-keys)
-
    (list
-    (row "O1: continue-on-error on job memory"
-         (list (e "    name: memory (the Valgrind gate)\n"
-                  "    name: memory (the Valgrind gate)\n    continue-on-error: true\n"))
-         (list (list "    continue-on-error: true" (job-key "memory" "continue-on-error"))))
-    (row "O2: an if on the test-memory step"
-         (list (e "      - name: Every suite under Valgrind\n        env:\n"
-                  "      - name: Every suite under Valgrind\n        if: always()\n        env:\n"))
-         (list (list "        if: always()" if-bad)
-               (list "        if: always()" if-wrong)
-               (list "        if: always()" (step-has-if "memory" "make test-memory"))))
-    (row "O3: continue-on-error on the check-memory-gate step"
-         (list (e "      - name: The gate must fail on planted defects\n        env:\n"
-                  "      - name: The gate must fail on planted defects\n        continue-on-error: true\n        env:\n"))
-         (list (list "        continue-on-error: true" (step-key "continue-on-error"))))
-    (row "O4: test-memory with an argument"
-         (list (e "        run: make test-memory\n"
-                  "        run: make test-memory MEMORY_SUITES=tests/test-counters.sps\n"))
-         (list (list "        run: make test-memory MEMORY_SUITES=tests/test-counters.sps"
-                     (names-msg "MEMORY_SUITES"))
-               (list "        run: make test-memory MEMORY_SUITES=tests/test-counters.sps"
-                     (gate-msg "test-memory"))
-               (list "  memory:" (n-steps "memory" "make test-memory" 0))))
-    (row "O5: check-memory-gate never runs"
-         (list (e (span "      # The gate proves nothing unless it can fail"
-                        "run: make check-memory-gate\n\n")
-                  ""))
-         (list (list "  memory:" (n-steps "memory" "make check-memory-gate" 0))))
-    (row "O6: test-memory runs before check-memory-gate"
-         (list (e (string-append (gate-step) "\n" (valgrind-step))
-                  (string-append (valgrind-step) "\n" (gate-step))))
-         (list (list "        run: make test-memory"
-                     (out-of-order "memory" "make test-memory" "make check-memory-gate"))))
-    (row "O7: MAKEFLAGS in the gate step's env"
-         (list (insert-after (string-append "      - name: The gate must fail on planted defects\n        env:\n          CHEZ: " chez-t "\n")
-                             "          MAKEFLAGS: -i\n"))
+    (row "O7: MAKEFLAGS in memory-1's gate step's env"
+         (list (gate-env-gains "memory-1" "          MAKEFLAGS: -i"))
          (list (list "          MAKEFLAGS: -i" (names-msg "MAKEFLAGS"))
                (list "          MAKEFLAGS: -i" (env-key "MAKEFLAGS"))))
     (row "O8: a run block that names the gate"
-         (list (e "      # The gate proves nothing unless it can fail"
-                  "      - name: sneak\n        run: |\n          make check-memory-gate\n\n      # The gate proves nothing unless it can fail"))
+         (list (le "memory-1" "      # The gate proves nothing unless it can fail"
+                   "      - name: sneak\n        run: |\n          make check-memory-gate\n\n      # The gate proves nothing unless it can fail"))
          (list (list "          make check-memory-gate" (gate-msg "check-memory-gate"))))
     (row "O9: VALGRIND_OPTS written through GITHUB_ENV"
          (list (after-id "echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\""))
          (list (list "          echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\"" (names-msg "GITHUB_ENV"))
                (list "          echo VALGRIND_OPTS=--x >> \"$GITHUB_ENV\"" (names-msg "VALGRIND_OPTS"))))
-    (row "a trailing comment on a gate's run line"
-         (list (e "        run: make test-memory\n" "        run: make test-memory # x\n"))
-         (list (list "        run: make test-memory # x" (gate-msg "test-memory"))
-               (list "  memory:" (n-steps "memory" "make test-memory" 0))))
-    (row "a gate's run line as a block scalar"
-         (list (e "        run: make test-memory\n" "        run: |\n          make test-memory\n"))
-         (list (list "          make test-memory" (gate-msg "test-memory"))
-               (list "  memory:" (n-steps "memory" "make test-memory" 0))))
-    (row "a gate's run line in the wrong job"
-         (list (e "        run: make check-nothreads\n" "        run: make test-memory\n"))
-         (list (list '("        run: make test-memory" 2) (gate-msg "test-memory"))
-               (list "  nothreads:" (n-steps "nothreads" "make check-nothreads" 0)))))
+    (row "a trailing comment on a shard's run line"
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n" "        run: make test-memory MEMORY_SHARD=1 # x\n"))
+         (list (list "        run: make test-memory MEMORY_SHARD=1 # x" (names-msg "MEMORY_SHARD"))
+               (list "        run: make test-memory MEMORY_SHARD=1 # x" (gate-msg "test-memory"))
+               (list "  memory-1:" (n-steps "memory-1" (shard-run "1") 0))))
+    (row "a shard's run line as a block scalar"
+         (list (e "        run: make test-memory MEMORY_SHARD=1\n" "        run: |\n          make test-memory MEMORY_SHARD=1\n"))
+         (list (list "          make test-memory MEMORY_SHARD=1" (names-msg "MEMORY_SHARD"))
+               (list "          make test-memory MEMORY_SHARD=1" (gate-msg "test-memory"))
+               (list "  memory-1:" (n-steps "memory-1" (shard-run "1") 0))))
+    (row "a shard's run line in the wrong job"
+         (list (e "        run: make check-nothreads\n" "        run: make test-memory MEMORY_SHARD=1\n"))
+         (list (list '("        run: make test-memory MEMORY_SHARD=1" 2) (names-msg "MEMORY_SHARD"))
+               (list '("        run: make test-memory MEMORY_SHARD=1" 2) (gate-msg "test-memory"))
+               (list "  nothreads:" (n-steps "nothreads" "make check-nothreads" 0))))
+    (row "a third shard, in a job of its own, memory-3"
+         (list (le "memory-2" (job-text real "memory-2")
+                   (string-append (job-text real "memory-2") (third-shard-job))))
+         (list (list "  memory-3:" (job-unknown "memory-3"))
+               (list '("        run: make check-memory-gate" 3) (gate-msg "check-memory-gate"))
+               (list "        run: make test-memory MEMORY_SHARD=3" (names-msg "MEMORY_SHARD"))
+               (list "        run: make test-memory MEMORY_SHARD=3" (gate-msg "test-memory")))))
 
    ;; --- steps ---
    (map (lambda (k)
@@ -1409,10 +1500,6 @@
                              "          CC: gcc\n"))
          (list (list "          CC: gcc" (names-msg "CC"))
                (list "          CC: gcc" (env-key "CC"))))
-    (row "memory's check-chez step deleted"
-         (list (let ((hdr "      # The gate proves nothing unless it can fail, so the planted defects run\n"))
-                 (e (span-after "  memory:\n" "      - name: Check the Chez this job runs\n" hdr) hdr)))
-         (list (list "  memory:" (n-steps "memory" chk-t 0))))
     (row "nothreads's check-chez without --nothreads"
          (list (e (string-append "run: " chk-n "\n")
                   (string-append "run: " "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\"" "\n")))
@@ -1536,12 +1623,11 @@
                  (e old (replace-first old ", 'scripts/ci/check-chez.sh'" ""))))
          (list (list (string-append "          key: chez-threads-${{ hashFiles('packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh') }}-${{ steps.image.outputs.id }}")
                      (cache-key "main" "chez-threads-"))))
-    (row "memory's cache key takes nothreads's prefix"
-         (list (let ((old (span-after "  memory:\n" "          key: chez-threads-${{"
-                                      "      # The gate proves nothing unless it can fail")))
-                 (e old (replace-first old "chez-threads-" "chez-nothreads-"))))
-         (list (list (list 'in "memory" "      - name: Restore Chez" nt-restore-key)
-                     (cache-key "memory" "chez-threads-")))))
+    )
+
+   ;; --- the memory jobs: memory-1 and memory-2 ---
+   (memory-rows "memory-1" "1")
+   (memory-rows "memory-2" "2")
 
    ;; --- the lanes: floor and current ---
    lane-global-rows
@@ -1628,9 +1714,13 @@
          "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
    (list "report-sqlite.sh" "main" "      - name: Report the runner's SQLite"
          "        run: scripts/ci/report-sqlite.sh")
-   (list "build-chez.sh" "memory" "      - name: Build Chez"
+   (list "build-chez.sh" "memory-1" "      - name: Build Chez"
          "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
-   (list "check-chez.sh" "memory" "      - name: Check the Chez this job runs"
+   (list "check-chez.sh" "memory-1" "      - name: Check the Chez this job runs"
+         "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "build-chez.sh" "memory-2" "      - name: Build Chez"
+         "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-threads\"")
+   (list "check-chez.sh" "memory-2" "      - name: Check the Chez this job runs"
          "        run: scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\"")
    (list "build-chez.sh" "nothreads" "      - name: Build Chez without threads"
          "        run: scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")

@@ -2,8 +2,9 @@
 
 Evidence that each rule slice 6's suites claim to guard fails through the property it names
 ([M3 plan](2026-11-15-m3-plan.md) §5, slice 6, §4.4, §4.8 and probe P5). Format of
-[the M3 slice 5 log](m3-slice-5-mutation-log.md). The slice is built in two parts, each keeping
-its own part of this log: A, `interrupt-database!` and the close's exclusion; B, contention.
+[the M3 slice 5 log](m3-slice-5-mutation-log.md). The slice is built in three parts, each keeping
+its own part of this log: A, `interrupt-database!` and the close's exclusion; B, contention; C,
+the memory job in two shards.
 
 ## Part A: `interrupt-database!` and the close's exclusion
 
@@ -595,3 +596,305 @@ Run by the lead on part B's hand-back, in the worktree and in a copy under its g
     no row had `with-transaction` wait out a full timeout.
   - **Row T,** added in the follow-up, does: it failed alone under J3, waiting 3004 ms, and
     passes on the real code at 1502 ms.
+
+## Part C: the memory job in two shards
+
+An Opus agent built part C from the lead's brief, in the slice's worktree, on
+`m3-slice-6-interrupt` over parts A's and B's records, `edecfff`. ADR-0005's consequence, and its
+M3 amendment's rule: past 45 minutes the `memory` job is sharded. Slice 5's ran 40m31s on a fast
+runner (run 43957085196), and slice 6 adds four suites. The maintainer chose "Shard in slice 6".
+The precedent is chez-curl ADR-0014's amendment "the memory job is split in two". Its design is
+followed, and its job names, so the two repositories' required checks read alike. None of its
+code is copied: the refusals, their messages, case n and the check are written here.
+
+### What part C adds
+
+- **The Makefile:**
+  - `MEMORY_SHARD`, empty by default, and the two shards written out, `MEMORY_SUITES_1` (35 suites)
+    and `MEMORY_SUITES_2` (38);
+  - `make test-memory MEMORY_SHARD=1` or `=2` runs that list; with no `MEMORY_SHARD`, every
+    suite, as before. It refuses, by name and before any suite runs:
+    - a `MEMORY_SHARD` but 1 or 2;
+    - one from the environment, as it refuses `MEMORY_SUITES` there;
+    - one beside a `MEMORY_SUITES` on its command line;
+    - a shard's list set on its command line, or under `make -e` in the environment, with a shard or
+      without;
+    - a shard whose list is empty, and one holding two suites of one name;
+  - `make check-memory-shards`, a prerequisite of `make test` after `check-ci`, runs
+    `tests/check-memory-shards.sh` on the two lists and, after the lead's fix below, the tree's
+    suites, every `tests/test-*.sps` (as built, `SUITES`);
+  - the `help` lines of `test-memory` and `check-memory-shards`, and the comments of `test`,
+    `check-ci`, `test-memory` and `check-memory-gate`.
+- **`tests/check-memory-shards.sh`, new:** fails `make test` on a suite in neither list, one in
+  both, one written twice in a list, and a path in a list that is no suite, each by name; and on an
+  awk that fails, prints nothing, or prints no verdict.
+- **`tests/test-check-memory-shards.sps`, new:** 28 rows, each the script's exit status, whole
+  stdout and whole stderr, written by hand.
+- **`.github/workflows/ci.yml`:** jobs `memory-1` and `memory-2` in place of `memory`. Each is the
+  old job's setup, then `make check-memory-gate`, then `make test-memory MEMORY_SHARD=1` or
+  `=2`, the number the run line's argument. No `if:`, `continue-on-error:`, `needs:` or
+  `strategy:`, and no `env:` names a shard or a list.
+- **`tests/check-ci.sh`:** six jobs. In `memory-1` and `memory-2`, check-chez, then
+  `make check-memory-gate`, then the job's own shard, each a step's whole run line, with no `if:`.
+  `test-memory` may stand only on a memory job's own shard's line, and `check-memory-gate` only as
+  the run line of a memory job's step. Every word `MEMORY_*` is refused, as `VALGRIND_*` is, but
+  `MEMORY_SHARD` on that one line.
+- **`tests/test-check-ci.sps`:** 397 rows to 439. Each memory job's rows come from one procedure,
+  `memory-rows`, and the old `memory` rows are aimed at `memory-1`.
+- **`tests/check-memory-gate.sh`:** case n, eight verdicts (59 cases to 67), and `suite_argv`, case
+  e's per-suite command, which n holds each shard's runs to.
+- **`tests/check-test-fails.sh`:** the copy's Makefile names the copy's own suites in its two
+  shards. Cases `shards-neither` and `shards-both` are new (13 to 15; the lead's
+  `shards-narrowed` makes 16), and case `ci` plants its key in `memory-1`.
+
+### The split
+
+The split starts from the M2 session's
+([research/m3-slice-6/memory-shard-input.md](research/m3-slice-6/memory-shard-input.md)). It
+balances six CI runs' times, each suite's normalised to the fast class, with the threaded suites
+dealt first. Taken whole, it partitioned the 72 suites at `edecfff`, parts A's and B's among them.
+Part C's new suite went to shard 1, the lighter. Then one suite moved, after the local runs:
+
+- **`test-open-interleave`, 40 s, from shard 1 to shard 2.** Shard 1 holds
+  `test-transaction-interrupt`, whose time is the widest of any suite's. On CI, four runs of
+  today's code took 20 s to 149 s, normalised median 82 s, and slice 5's run 138 s. Here it took
+  225 s beside shard 2's run, then 434 s alone, 16 s short of `SLOW`, and 429 s in the final
+  split's run. Its shard is left 68 s lighter at the median, so it stays the lighter at slice 5's
+  138 s and at the 149 s seen. Without it, the final split's runs here took 854 s and 908 s.
+- **Local times are no guide to CI's balance.** Against the input's times, shard 2's suites ran at
+  0.84 here, but shard 1's, `test-transaction-interrupt` left out, at 0.93. The suites that start
+  many children run slower here than on CI: `test-ci-sqlite` at 1.23, `test-check-ci` at 1.06,
+  `test-check-floors` at 1.04, `test-library-loading-real` at 1.01. So the split follows CI's
+  numbers.
+
+The predictions use the input's normalised times. Two suites changed and are estimated:
+`test-check-ci` at 106 s, its 96 s scaled from 397 rows to 439, and `test-check-memory-shards` at
+8 s, 7 s here. Each job adds setup, 30 to 80 s, and `check-memory-gate`, about 305 s on the fast
+class: run 43957085196's 293 s, and case n's 13 s or so. On the slow class, the slowest runner seen
+(factor 1.27), the gate takes about 385 s. These are estimates: slice 5's suites rest on one CI run
+each, and slice 6's on local runs.
+
+| | Shard 1, `memory-1` | Shard 2, `memory-2` |
+|---|---|---|
+| suites | 35 | 38 |
+| the suites, fast class | 1018 s; 1085 s with `test-transaction-interrupt` at 149 s | 1086 s |
+| the job, fast class | 22.6 to 23.4 min; to 24.5 min at 149 s | 23.7 to 24.5 min |
+| the job, slow class | 28.5 to 29.3 min; to 30.7 min at 149 s | 29.9 to 30.7 min |
+| every suite at its worst seen | 29.0 to 29.9 min | 29.4 to 30.2 min |
+| here, beside each other, first split | 18m43s, its suites 1120 s | 14m48s, 883 s |
+| here, beside each other, final split | 21m27s, 1283 s, `test-transaction-interrupt` 429 s of it | 15m13s, 908 s |
+
+One job would take about 41 minutes on the fast class and 52 on the slow, the input's projection.
+
+### The gate in both jobs
+
+Both jobs run `make check-memory-gate` before their shard, as chez-curl's two do.
+
+- **The proof is per runner.** The gate proves nothing unless it can fail where the suites run.
+  Each job is a runner of its own, with its own Valgrind from apt and its own Chez, restored from
+  the cache or built there. A shard whose job skipped the gate would trust a proof made on another
+  machine.
+- **`check-ci` keeps one rule a job:** the job that runs `test-memory` runs `check-memory-gate`
+  first, as it held of `memory`. With the gate in one job only, the other's shape would be a second
+  rule, and deleting the gate's job would leave the other shard unproven.
+- **What it costs:** one gate a job, about 290 s on the fast class and 370 s on the slow, and case
+  n's 10 s more, locally. The jobs run side by side, so the run's wall time grows by one gate, not
+  two. With the gate in one job only, moving suites to balance would save about half a gate,
+  2.5 minutes, from the longer job.
+- **Case b's unreproduced flake** now runs twice a run. A flake fails red; it never hides a
+  defect. It stays out of scope, as the brief says.
+
+### The red runs
+
+| Check | Red run | Green run |
+|---|---|---|
+| `test-check-memory-shards`, before the script existed | 0 of 28 passed: `sh` found no `tests/check-memory-shards.sh`, exit 127 | 28 of 28 |
+| `check-test-fails`, with the Makefile's lists but no `check-memory-shards` | `shards-neither` and `shards-both` failed, "make test exited 0"; the 11 old cases passed (`ci` waited on the workflow) | 15 of 15 |
+| `check-memory-gate`'s n, against the Makefile with its lists, whose `test-memory` ignored `MEMORY_SHARD` | 7 of 7 verdicts failed: each shard, each refused value and each empty shard ran every suite | 7 of 7; `n names`, added after, fails only G14 (below) |
+| `test-check-ci`, the new workflow and rows against the old `check-ci.sh` | 6 of 439 passed: the unedited file failed, `job "memory-1" is not one of main, memory, nothreads, floor, current` | 439 of 439 |
+
+The check itself had a red run of its own before any plant: the input's split, taken whole,
+partitioned the 72 suites at `edecfff`, parts A's and B's among them, and `check-memory-shards`
+named the one suite it lacked, the new `test-check-memory-shards`, in neither list. It went to
+shard 1, the lighter.
+
+Green, at the end: `make test` ran 73, passed 73; `make check-test-fails` held in all 15 cases;
+`make check-memory-gate` failed, as it must, in all 67 cases; and each shard passed under the gate
+(above), each `ran 35, passed 35` and `ran 38, passed 38`, with no `SLOW`.
+
+### How the mutants ran
+
+Every mutant ran in a copy of the worktree of its own, `mut-NAME/` under the session's scratchpad,
+made without `.git` and `build/`, through the copy's own `scripts/guix-env`, after `make deps`
+there. A mutant is a list of edits, each checked to match its file's text exactly once before it is
+written. Each kind runs one check: C, the script, `test-check-memory-shards`; W, the Makefile's
+wiring, `make check-test-fails`; G, `test-memory`'s shards, `make check-memory-gate` cut to its
+cases e, g and n, which hold every rule of the shards; K, `check-ci.sh`, `test-check-ci`. Rows are
+read from the suites' `FAIL` lines and counts, and cases from the checks' `FAILED` lines, never by
+eye. The driver (`mutants.py`, `trim-gate.py`, `mktree.sh`) and every log are in the session's
+scratchpad, not the repository. Eight ran at once; none died or hung. The G mutants ran twice,
+before and after the refusals were reworded in part C's own words, and the same cases failed.
+
+### The mutations
+
+Baselines: `test-check-memory-shards` 28 rows, `test-check-ci` 439, `check-test-fails` 15 cases,
+and check-memory-gate's cases e, g and n, 16 verdicts. Each row names what failed.
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| C01 | a suite in neither list is told (the rule dropped) | 8 rows |
+| C02 | a suite in both is told | 4 rows |
+| C03 | a suite twice in `MEMORY_SUITES_1` is told | 3 rows |
+| C04 | a suite twice in `MEMORY_SUITES_2` is told | 2 rows |
+| C05 | a path that is no suite is told (no stray told) | 8 rows |
+| C06 | a stray is told once (told at each place) | 1 row, "one named twice is told once" |
+| C07 | `MEMORY_SUITES_2`'s strays are told (list 1's only) | 4 rows |
+| C08 | the lists reach awk as they are (through `awk -v`, which reads `\b` as an escape) | 1 row, the backslash's |
+| C09 | awk's exit status is read | 1 row, the failing awk's |
+| C10 | an awk that prints nothing fails | 1 row, the silent awk's |
+| C11 | a verdict must hold a count | 1 row, the garbled awk's |
+| C12 | paths are compared whole (by their file names instead) | 18 rows |
+| C13 | the second list is the third argument (the second's) | 19 rows |
+| C14 | exactly three arguments (three or more) | 1 row, four arguments |
+| C15 | neither means in no list (`a == 0 \|\| b == 0`) | 18 rows |
+| C16 | the pass line counts the suites (the lists' entries) | **survived**, equivalent |
+| C17 | the suites' problems before the strays (strays first) | 3 rows |
+| C18 | any white space splits a list (single spaces only) | 1 row, the white space's |
+| C19 | the FAILED line counts the problems (always 1) | 6 rows |
+| W01 | `make test` runs `check-memory-shards` (the prerequisite dropped) | `shards-neither`, `shards-both` |
+| W02 | the recipe hands both lists (list 1 twice) | `fails`, `no-tests`, `hangs`, `leaks`, `shards-neither` |
+| W03 | the recipe hands `SUITES` (`MEMORY_SUITES` instead) | **survived**, equivalent in `make test` |
+| W04 | the recipe hands `SUITES` (the lists' union instead) | `shards-neither`, `shards-both` |
+| W05 | the check's status fails `make test` (`@-sh`) | `shards-neither`, `shards-both` |
+| G01 | shard 1 runs `MEMORY_SUITES_1` (list 2 instead) | n split, n empty (1) |
+| G02 | each shard runs its own list (the two swapped) | n split, n empty (1 and 2), n names |
+| G03 | shard 2 runs `MEMORY_SUITES_2` (every suite instead) | n split, n empty (2), n names |
+| G04 | a `MEMORY_SHARD` but 1 or 2 is refused (the refusal dropped) | n refused |
+| G05 | only 1 and 2 (any value starting with a digit) | n refused |
+| G06 | a quote in `MEMORY_SHARD` reaches the refusal (not escaped) | n refused |
+| G07 | a `MEMORY_SHARD` from the environment is refused | n environment |
+| G08 | a shard beside a `MEMORY_SUITES` is refused | n beside |
+| G09 | a shard's list from outside is refused (every origin let through) | n lists |
+| G10 | from the environment too (only the command line's refused) | n lists |
+| G11 | without a shard too (only with one) | n lists |
+| G12 | an empty list is refused | g none, n empty (1 and 2) |
+| G13 | the refusal names the empty list (always `MEMORY_SUITES`) | n empty (1 and 2) |
+| G14 | two suites of one name are refused in the list that runs (`MEMORY_SUITES` read instead) | n names |
+| G15 | the run reads the shard's list (`MEMORY_SUITES` instead) | n split |
+| G16 | `MEMORY_SHARD ?=`, so the environment's reaches the refusal (`:=`) | n environment |
+| G17 | `MEMORY_SUITES_2 :=` (`?=`) | n empty (2), n names: by structure, argued below |
+| K01 | job `memory-2` is a job check-ci knows | 432 rows, the unedited file's among them |
+| K02 | every job missing is told (the loop stops at five) | 1 row, "the current job deleted" |
+| K03 | a memory job runs `make check-memory-gate` | 6 rows: each job's gate deleted, its order, its `if` |
+| K04 | a memory job runs its shard | 16 rows |
+| K05 | memory-2 runs shard 2 (shard 1's line) | 431 rows |
+| K06 | `MEMORY_SHARD` only on a shard's own line (on any line) | 14 rows |
+| K07 | every `MEMORY_*` word is refused (the pattern dropped) | 19 rows, `MEMORY_LOGS`'s among them |
+| K08 | the shard line's job is held (any memory job, either number) | 4 rows: each job running the other's shard, the wrong job, no jobs key |
+| K09 | `check-memory-gate` only in a memory job (in any job) | 2 rows: memory-3, no jobs key |
+| K10 | a memory job's step carries no `if:` | 4 rows, each step's `if: always()` |
+| K11 | memory-2's Chez cache key is held (its prefix unset) | 431 rows |
+| K12 | `test-memory` stands only with its shard (plain `make test-memory`) | 432 rows |
+
+### The survivors, argued
+
+**51 of 53 mutants were caught; two survived, both equivalent.**
+
+- **C16, the pass line counting the lists' entries instead of the suites,** is equivalent. The line
+  prints only when there is no problem. Then every suite stands once in one list, and no other path
+  stands in either, so the lists' entries number exactly the suites.
+- **W03, the recipe handing `MEMORY_SUITES` as the suites,** argued here as built, no longer
+  applies: the lead's fix below hands the tree's suites, neither `SUITES` nor `MEMORY_SUITES`. As
+  built, it was equivalent in every `make test`
+  that names no `MEMORY_SUITES`. `MEMORY_SUITES ?= $(SUITES)` gives the two the same value, and no
+  run of `check-test-fails` names one. CI names none: `check-ci` refuses the word in the workflow. A
+  `make test MEMORY_SUITES=…` run locally would check the shards against that list instead. That
+  run is the caller's own choice, and `test-memory` never sees it.
+- **G17, `MEMORY_SUITES_2 ?=`, was caught by structure, not by behaviour.** Case n's `set_list`
+  found no `MEMORY_SUITES_2 :=` definition in the copy's Makefile to rewrite, so `n empty` and
+  `n names` failed. Its behaviour is refused anyway: with `?=`, a list exported without `make -e`
+  would stand with origin `environment`, and the refusal lets only the origin `file` through, so it
+  refuses that list, as "set in the environment".
+
+**What no check here holds:**
+
+- **An empty shard** fails CI's job, not `make test`. `test-memory` refuses it by name, `n empty`,
+  but `check-memory-shards` holds only the partition: a check that each list holds a suite could
+  never pass with one suite, or with `check-test-fails`' copies, which hold one or two.
+- **The balance.** Nothing fails when one shard grows far past the other. The `SLOW` check holds
+  each suite, and the job's own 60 minutes hold each shard.
+- **Branch protection.** A change that deletes both memory jobs fails `make test`, through
+  `check-ci`, but only a required check stops a merge whose workflow skips `main`. That lever is
+  the maintainer's.
+
+### The trap the part found
+
+- **A comma inside a make function's arguments splits them, and the recipe's shell then fails.**
+  As first written, the refusal of a shard's list from outside read "to run other suites, give
+  MEMORY_SUITES and no MEMORY_SHARD" inside `$(foreach … $(if …,echo "…",))`. Make read the comma
+  as the end of `$(if)`'s then-part, so the recipe's shell got an `echo` with its quote left open.
+  `test-memory` then failed for every run, a shard or none, with `syntax error near unexpected
+  token '('`: cases e, g none, g all and n failed with it, before any suite ran.
+- **Reproduced** with GNU Make 4.3 on the host: a makefile of `X := 1` and a recipe
+  `$(if $(X),echo "one, two" >&2; exit 1;) echo after` fails with `/bin/sh: 1: Syntax error:
+  Unterminated quoted string`; with "one and two" the recipe prints it and fails on its own
+  `exit 1`.
+- **The refusal now reads the two lists' origins in the shell,** `for v in 'MEMORY_SUITES_1
+  $(origin MEMORY_SUITES_1)' …`, where a comma is text. A message written inside a make function's
+  arguments holds no comma, or takes one through a variable, `$(comma)`.
+
+### For the records
+
+- **`test-transaction-interrupt` nears `SLOW` under the gate here:** 434 s alone and 429 s in its
+  shard, of the 450 s threshold, and 225 s once. On CI it has taken 20 s to 149 s. Its watchdog is
+  slice 4's, a plain thread every 5 ms, whose latency under Valgrind is the scheduler's (its
+  header: one call 57 s). Part A's watchdog, which takes SQLite's memory mutex each round, bounds
+  that. Part C only places suites, so the suite is unchanged. Reproduce with
+  `scripts/guix-env make test-memory MEMORY_SUITES=tests/test-transaction-interrupt.sps`.
+- **ADR-0005** needs its amendment: the memory job split in two, its shape in `check-ci`, the
+  refusals, `check-memory-shards` in `make test`, the gate in both jobs and why, and the split's
+  predicted and measured times. Its decision 6 and its scope name "CI's memory job" and should name
+  the two jobs.
+- **Branch protection:** the required check `memory (the Valgrind gate)` gives way to
+  `memory-1 (the Valgrind gate, shard 1 of 2)` and `memory-2 (the Valgrind gate, shard 2 of 2)`.
+  The ledger's line naming the five required jobs needs the same change.
+- **The trap above** is `traps.md`'s, and perhaps an AGENTS.md line beside the Makefile's `help`
+  rule.
+- **AGENTS.md's line on `SLOW`** could add: a new suite goes in one of the Makefile's two shards,
+  the lighter by its CI time, and `make test` fails until it is in one.
+- **The shards' times** are estimates until slice 6's own CI run, and slice 5's suites rest on one
+  CI run each. Read every suite's `time:` line in both jobs' logs then, and rebalance if one job
+  runs more than a few minutes past the other.
+
+### The lead's checks of part C
+
+Run by the lead on part C's hand-back, in the worktree and in fresh copies of it under the
+session's scratch directory, one plant a copy.
+
+- **Rerun:** `make test` ran 73, passed 73; `make check-memory-gate` passed all 67 cases; and
+  `make check-test-fails` passed all 15, then all 16 with the case below.
+- **The lead's plants,** each caught:
+
+  | Plant | What it changes | Caught by |
+  |---|---|---|
+  | P1 | `memory-2`'s shard step given `continue-on-error: true` | `check-ci`, the step key |
+  | P2 | `memory-2` deleted, and `memory-1` running plain `make test-memory` | `check-ci`: `memory-2` missing, `memory-1` running no shard 1, and `test-memory` off its line |
+  | P4 | a job-level `env:` in `memory-2`, `MEMORY_SHARD: '1'` | `check-ci`: the job key, the word, the line |
+  | P5 | `memory-2`'s shard run under the nothreads Chez | `check-ci`, its `CHEZ` |
+  | P6 | `test-utf8` dropped from shard 2 | `check-memory-shards`: in neither |
+  | P7 | `test-utf8` written in shard 1 as well | `check-memory-shards`: in both |
+  | P8 | `test-utf8` misspelt `test-utf-8` in shard 2 | `check-memory-shards`: in neither, and the stray |
+  | P9 | with no `MEMORY_SHARD`, `test-memory` running shard 1's list | `check-memory-gate`, from case b on: every case that names its suites ran shard 1's instead, and failed. Stopped there |
+  | P15 | a new suite, in no shard | `check-memory-shards`: in neither, by name |
+
+- **A regression, found and fixed.** As built, the recipe handed `check-memory-shards` the run's
+  `SUITES`. So `make test SUITES=<suite>`, the narrowed run the M1 closing review's log made,
+  failed with 72 problems, every other suite in the lists read as a stray. And a narrowed run
+  passed with a suite in neither shard, since the check saw only the one suite. The recipe now
+  hands the tree's suites, `$(sort $(wildcard tests/test-*.sps))`.
+  - **Case `shards-narrowed`,** new in `check-test-fails`, runs `make test SUITES=` the
+    after-suite with a suite left out of both shards, and requires the check to name it.
+  - **It failed before the fix:** `make test` exited 0, having run the after-suite alone. It
+    passes after.
+  - After the fix, `make test SUITES=tests/test-utf8.sps` runs that suite alone and passes.
+- **The comma trap reproduced** on the host's GNU Make 4.3, as the part reports.

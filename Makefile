@@ -59,13 +59,100 @@ MEMORY_TIMEOUT ?= 600
 # The suites make test-memory runs: every suite, unless a run names others.
 MEMORY_SUITES ?= $(SUITES)
 
+# The memory gate's two shards, CI's jobs memory-1 and memory-2 (ADR-0005,
+# amended in M3 slice 6): make test-memory MEMORY_SHARD=1 runs the first
+# list, 2 the second, and with no MEMORY_SHARD it runs MEMORY_SUITES. Each is
+# written out, and the two are balanced by each suite's time under the gate
+# on CI, its "time:" line (.plans/research/m3-slice-6/memory-shard-input.md),
+# the first a little lighter: its test-transaction-interrupt has taken 20 s
+# to 149 s on CI, and 434 s here.
+# make check-memory-shards, which make test runs, fails unless the two run
+# every tests/test-*.sps once between them, so a new suite fails make test
+# until it is put in one: the shard whose suites take less time.
+MEMORY_SHARD ?=
+MEMORY_SUITES_1 := \
+  tests/test-change-counters.sps \
+  tests/test-check-ci.sps \
+  tests/test-check-floors.sps \
+  tests/test-check-memory-shards.sps \
+  tests/test-check-seam.sps \
+  tests/test-chez-sqlite3-testing.sps \
+  tests/test-ci-sqlite.sps \
+  tests/test-constants.sps \
+  tests/test-conveniences-counters.sps \
+  tests/test-conveniences-pending-execute.sps \
+  tests/test-conveniences-pending-fold.sps \
+  tests/test-conveniences-pending-query-row.sps \
+  tests/test-conveniences-reentry.sps \
+  tests/test-counters.sps \
+  tests/test-docs.sps \
+  tests/test-execute-script.sps \
+  tests/test-interrupt-database.sps \
+  tests/test-library-loading-missing.sps \
+  tests/test-library-loading-real.sps \
+  tests/test-load-state.sps \
+  tests/test-memory-check.sps \
+  tests/test-native.sps \
+  tests/test-never-loads.sps \
+  tests/test-open-engines.sps \
+  tests/test-open-settings.sps \
+  tests/test-require-threaded.sps \
+  tests/test-script.sps \
+  tests/test-settings.sps \
+  tests/test-statement-sections.sps \
+  tests/test-statement-values-nomem.sps \
+  tests/test-statement-who.sps \
+  tests/test-transaction-interrupt.sps \
+  tests/test-transaction-nomem.sps \
+  tests/test-values.sps \
+  tests/test-verify.sps
+MEMORY_SUITES_2 := \
+  tests/test-blocks.sps \
+  tests/test-check-nothreads.sps \
+  tests/test-conditions.sps \
+  tests/test-connection-cache.sps \
+  tests/test-connection.sps \
+  tests/test-contention.sps \
+  tests/test-conveniences-engines.sps \
+  tests/test-conveniences-pending-query.sps \
+  tests/test-conveniences-pending-script-even.sps \
+  tests/test-conveniences-pending-script-odd.sps \
+  tests/test-conveniences-resumed.sps \
+  tests/test-conveniences-who.sps \
+  tests/test-conveniences.sps \
+  tests/test-conventions.sps \
+  tests/test-discovery.sps \
+  tests/test-interrupt-close.sps \
+  tests/test-interrupt-reach.sps \
+  tests/test-interrupt.sps \
+  tests/test-library-loading-decoys.sps \
+  tests/test-libsqlite3-info.sps \
+  tests/test-manifest.sps \
+  tests/test-open-interleave.sps \
+  tests/test-open-locks.sps \
+  tests/test-open-options.sps \
+  tests/test-public.sps \
+  tests/test-reference.sps \
+  tests/test-sql-tail.sps \
+  tests/test-statement-block.sps \
+  tests/test-statement-cache.sps \
+  tests/test-statement-state.sps \
+  tests/test-statement-tail.sps \
+  tests/test-statement-values-sections.sps \
+  tests/test-statement-values.sps \
+  tests/test-statement.sps \
+  tests/test-transaction-engine.sps \
+  tests/test-transaction-plan.sps \
+  tests/test-transaction.sps \
+  tests/test-utf8.sps
+
 # Where make test-memory writes each suite's logs: <suite>.log, the suite's
 # own output, and <suite>.valgrind, Valgrind's.
 MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps build dev check-dev check-pins test check-suites check-seam check-floors check-ci check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps build dev check-dev check-pins test check-suites check-seam check-floors check-ci check-memory-shards check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -234,9 +321,9 @@ check-pins: ## Fail unless Akku.lock, the gitlink and the checkout name one chez
 # failed or hung, or if none matched. --foreground keeps a suite in make's
 # process group, so Ctrl-C at a terminal reaches it at once, and does not
 # wait out the timeout. `make check-test-fails` proves the loop fails. The
-# checks come first: check-help, check-suites, check-seam, check-floors and check-ci each
-# stop it.
-test: deps check-help check-suites check-seam check-floors check-ci ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
+# checks come first: check-help, check-suites, check-seam, check-floors,
+# check-ci and check-memory-shards each stop it.
+test: deps check-help check-suites check-seam check-floors check-ci check-memory-shards ## Run every tests/test-*.sps under timeout; fail if one fails or hangs, or none exists
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@case '$(TEST_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
@@ -296,7 +383,7 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 
 # Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
 # (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its
-# five jobs and every key in them, each check as a step's whole run line, no
+# six jobs and every key in them, each check as a step's whole run line, no
 # if: but the cache's own, no variable that steers a check, and no key
 # spelled so that a text check would miss it. make test runs it, so every
 # make test, the container's self-test and CI's main job among them, holds
@@ -306,6 +393,20 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 # value never points the execute-bit rule at another tree.
 check-ci: ## Fail unless .github/workflows/ci.yml has the one shape tests/check-ci.sh reads
 	@CHECK_CI_ROOT= sh tests/check-ci.sh .github/workflows
+
+# Holds the memory gate's two shards, MEMORY_SUITES_1 and MEMORY_SUITES_2,
+# which CI's jobs memory-1 and memory-2 run, to the tree's suites, every
+# tests/test-*.sps (ADR-0005, amended in M3 slice 6): each suite in exactly
+# one of them, and nothing else in either. So a new suite fails make test
+# here, by name, until it is put in a shard. It reads the tree, not SUITES:
+# make test SUITES=... narrows the suites that run, and must not narrow the
+# shards' check with them (check-test-fails' case shards-narrowed). tests/check-memory-shards.sh names each suite
+# in neither or in both, each written twice in one, and each path in one that
+# is no suite; tests/test-check-memory-shards.sps holds each rule, and
+# tests/check-test-fails.sh holds that make test runs it. It reads text with
+# sh and awk, and needs no deps.
+check-memory-shards: ## Fail unless the memory gate's two shards, MEMORY_SUITES_1 and MEMORY_SUITES_2, run every tests/test-*.sps once between them
+	@sh tests/check-memory-shards.sh '$(sort $(wildcard tests/test-*.sps))' '$(MEMORY_SUITES_1)' '$(MEMORY_SUITES_2)'
 
 # Imports every library under src/, private ones too, and requires each
 # import to be refused, by name, as (chez-sqlite3 private require-threaded)
@@ -324,16 +425,23 @@ check-nothreads: ## Fail unless every library under src/ refuses to import, by n
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --program tests/check-nothreads.sps src
 
-# Plants bad suites, a leaking one among them, and a README that disagrees
-# with the floors file, one at a time, in a copy of the tree, and requires
-# make test to fail on each by name. tests/check-test-fails.sh lists the
-# plants. The copy has no .git, so nothing in it runs git.
-check-test-fails: ## Plant bad suites, none at all, a stale README and a bad workflow, in a copy; make test must fail on each, by name
+# Plants bad suites, a leaking one among them, a README that disagrees with
+# the floors file, and a suite in neither of the memory gate's shards or in
+# both, one at a time, in a copy of the tree, and requires make test to fail
+# on each by name. tests/check-test-fails.sh lists the plants. The copy has
+# no .git, so nothing in it runs git.
+check-test-fails: ## Plant bad suites, none at all, a stale README, a bad workflow and bad shards, in a copy; make test must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' sh tests/check-test-fails.sh
 
 # Runs every MEMORY_SUITES suite under Valgrind, in order, each under
-# timeout, and goes on after a failure (ADR-0005). timeout wraps Valgrind
+# timeout, and goes on after a failure (ADR-0005); with MEMORY_SHARD 1 or 2,
+# that shard's list instead, MEMORY_SUITES_1 or MEMORY_SUITES_2, as CI's
+# jobs memory-1 and memory-2 run it. It refuses any other MEMORY_SHARD, one
+# from the environment, one beside a MEMORY_SUITES on its command line, which
+# the shard would ignore, and a shard's list set on its command line or,
+# under make -e, from the environment, with a shard or without: so a shard
+# runs the Makefile's list or nothing. timeout wraps Valgrind
 # and never sits between it and Chez: Valgrind checks only the command it
 # is handed. A suite's own output goes to build/memory/<suite>.log, and
 # Valgrind writes its report to build/memory/<suite>.valgrind (--log-file),
@@ -386,7 +494,7 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 # each, its expected and actual values, every one, then its last 10 lines,
 # each line once and no other, so a CI log says why, and names the tests
 # that failed. It fails if any suite failed, hung or was slow, or if none
-# was named.
+# was named: an empty MEMORY_SUITES, or an empty shard's list.
 #
 # Valgrind also takes options and files that its command line does not
 # show, and one of them can hide a leak (measured in chez-curl: a
@@ -430,7 +538,7 @@ check-test-fails: ## Plant bad suites, none at all, a stale README and a bad wor
 #   - two runs in one tree remove each other's logs, and fail, naming the
 #     wrong reason: run one at a time in a tree, as check-memory-gate runs
 #     each of its cases in a copy of its own.
-test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its time; fail on any error or definite leak, a hang, a suite past three quarters of MEMORY_TIMEOUT, or no suite
+test-memory: deps ## Run every MEMORY_SUITES suite, or MEMORY_SHARD=1's or 2's list, under Valgrind, printing its time; fail on any error or definite leak, a hang, a suite past three quarters of MEMORY_TIMEOUT, or no suite
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@case '$(MEMORY_TIMEOUT)' in \
 	  '' | *[!0-9]* | 0*) \
@@ -447,10 +555,40 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its 
 	    echo "test-memory: MEMORY_SUITES is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)" >&2; \
 	    exit 1 ;; \
 	esac
-	@if [ -z "$(strip $(MEMORY_SUITES))" ]; then \
-	  echo "test-memory: no suites: MEMORY_SUITES is empty" >&2; \
+	@case '$(origin MEMORY_SHARD)' in \
+	  environment*) \
+	    echo "test-memory: MEMORY_SHARD is set in the environment, where one left exported would narrow every run unseen; give it on make's command line, or unset it (ADR-0005)" >&2; \
+	    exit 1 ;; \
+	esac
+	@shard='$(subst ','"'"',$(MEMORY_SHARD))'; \
+	case $$shard in \
+	  '' | 1 | 2) ;; \
+	  *) printf 'test-memory: MEMORY_SHARD is "%s", and the gate has two shards: give 1 or 2, or no MEMORY_SHARD for every suite of MEMORY_SUITES (ADR-0005)\n' "$$shard" >&2; \
+	     exit 1 ;; \
+	esac; \
+	for v in 'MEMORY_SUITES_1 $(origin MEMORY_SUITES_1)' 'MEMORY_SUITES_2 $(origin MEMORY_SUITES_2)'; do \
+	  case $${v#* } in \
+	    file) continue ;; \
+	    'command line') where="on make's command line" ;; \
+	    *) where="in the environment" ;; \
+	  esac; \
+	  echo "test-memory: $${v%% *} is set $$where, but the Makefile writes each shard's list, and a shard runs that list or none; to run other suites, give MEMORY_SUITES and no MEMORY_SHARD (ADR-0005)" >&2; \
+	  exit 1; \
+	done; \
+	if [ -n "$$shard" ] && [ '$(origin MEMORY_SUITES)' != file ]; then \
+	  echo "test-memory: MEMORY_SUITES is given on make's command line with MEMORY_SHARD=$$shard, whose own list would run in its place: give one of the two (ADR-0005)" >&2; \
 	  exit 1; \
 	fi; \
+	case $$shard in \
+	  1) list=MEMORY_SUITES_1; suites='$(subst ','"'"',$(MEMORY_SUITES_1))' ;; \
+	  2) list=MEMORY_SUITES_2; suites='$(subst ','"'"',$(MEMORY_SUITES_2))' ;; \
+	  *) list=MEMORY_SUITES; suites='$(subst ','"'"',$(MEMORY_SUITES))' ;; \
+	esac; \
+	case $$suites in \
+	  *[![:space:]]*) ;; \
+	  *) echo "test-memory: no suites: $$list is empty" >&2; \
+	     exit 1 ;; \
+	esac; \
 	refused=0; \
 	for v in $$(env | sed -n 's/^\(VALGRIND_[A-Za-z0-9_]*\)=.*/\1/p'); do \
 	  case $$v in \
@@ -468,7 +606,7 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its 
 	  fi; \
 	done; \
 	seen=; \
-	for t in $(MEMORY_SUITES); do \
+	for t in $$suites; do \
 	  name=$$(basename "$$t" .sps); \
 	  for u in $$seen; do \
 	    if [ "$$(basename "$$u" .sps)" = "$$name" ]; then \
@@ -540,7 +678,7 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its 
 	case $$((limit4 % 4)) in 1) limit=$$limit.25 ;; 2) limit=$$limit.5 ;; 3) limit=$$limit.75 ;; esac; \
 	mkdir -p $(MEMORY_LOGS); \
 	passed=0; failed=0; hung=0; slow=0; \
-	for t in $(MEMORY_SUITES); do \
+	for t in $$suites; do \
 	  name=$$(basename "$$t" .sps); \
 	  log=$(MEMORY_LOGS)/$$name.log; \
 	  vlog=$(MEMORY_LOGS)/$$name.valgrind; \
@@ -651,11 +789,14 @@ test-memory: deps ## Run every MEMORY_SUITES suite under Valgrind, printing its 
 # them unread; and an awk that fails, or prints no "ok", and requires a
 # clean program to fail, naming the evidence check. It requires a run with
 # no MEMORY_SUITES to run every suite, in order, and one with MEMORY_SUITES
-# in the environment to be refused. Under a MEMORY_TIMEOUT of 12, it requires
-# a suite that takes 10 s named SLOW, and one that takes 7 or 8 to pass, each
-# with its time line.
-# tests/check-memory-gate.sh lists the cases. CI's memory job runs it
-# before test-memory (ADR-0005).
+# in the environment to be refused. It requires MEMORY_SHARD=1 and 2 each to
+# run the Makefile's own list, the two every suite once, and every other
+# MEMORY_SHARD, one from the environment, one beside a MEMORY_SUITES, a
+# shard's list from outside and an empty one to be refused. Under a
+# MEMORY_TIMEOUT of 12, it requires a suite that takes 10 s named SLOW, and
+# one that takes 7 or 8 to pass, each with its time line.
+# tests/check-memory-gate.sh lists the cases. CI's jobs memory-1 and
+# memory-2 each run it before their shard (ADR-0005, amended).
 check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' VALGRIND='$(VALGRIND)' LIBDIRS='$(LIBDIRS)' sh tests/check-memory-gate.sh
