@@ -107,7 +107,10 @@
 ;;;                  the record and its handle do, and the handle's one
 ;;;                  accessor, call-with-open-handle, makes the owner check
 ;;;                  this verb must not (ADR-0012, decision 2; ADR-0010,
-;;;                  amended)
+;;;                  amended). call-with-latch-shut runs with-transaction's
+;;;                  exits through interrupt-latch-shut!, which clears the
+;;;                  flag around them and puts it back after (the
+;;;                  maintainer's "Shut the latch on exit", 2026-11-17)
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
@@ -116,7 +119,7 @@
           database-cache-capacity database-cache-count
           database-cache-check-out! database-cache-return!
           changes total-changes last-insert-rowid in-transaction?
-          interrupt-database! interrupt-database/with
+          interrupt-database! interrupt-database/with call-with-latch-shut
           database-depth set-database-depth!)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
@@ -206,10 +209,16 @@
   ;; is set once the section is over and its outcome in hand, never by an
   ;; after thunk: an engine's expiry before that unwinds the wind and its
   ;; resume enters it again, and must go on.
-  ;; A few instructions lie between FINISHED's set! and the wind's exit, where
-  ;; an expiry would make its resume refused; no engine reached them over
-  ;; fuel 1 to 3000, 20 calls each (M1's closing review), as call-with-block's
-  ;; like window is unreached.
+  ;; A few instructions lie between FINISHED's set! and the wind's exit.
+  ;; An expiry there would make its resume refused, re-entered: harmless,
+  ;; the section's work done, and the refused run touching nothing. None was
+  ;; seen there: no engine over fuel 1 to 3000, 20 calls each (M1's closing
+  ;; review), and no timer's handler in M3's closing review's
+  ;; script-reenter4.sps, 2804 trials re-entering execute-script! from
+  ;; continuations the handler took, read by a copy that marked the window
+  ;; (.plans/research/m3-review/transaction/). The 212 to 218 of them that
+  ;; were refused, re-entered, had taken theirs inside the wind before the
+  ;; section: the re-entry this before thunk exists to refuse.
   (define (call-with-open-handle who db proc)
     (check-who 'call-with-open-handle who)
     (unless (procedure? proc)
@@ -628,6 +637,22 @@
     (interrupt-latch-interrupt! (unchecked-database-latch db)
                                 (lambda () (interrupt (unchecked-database-handle db))))
     (if #f #f))
+
+  ;; call-with-latch-shut : Database (-> A) -> A
+  ;; WORK's answer, run with DB's interrupt latch shut by
+  ;; interrupt-latch-shut!: in one critical section, the flag cleared
+  ;; holding the latch's mutex, WORK with the mutex released, then the flag
+  ;; put back as it was found. So interrupt-database!, from any thread,
+  ;; calls nothing while WORK runs, and one in flight as the shut begins
+  ;; ends first. WORK is with-transaction's ROLLBACK, or ROLLBACK TO then
+  ;; RELEASE, which answers data; a raise from it is raised after the
+  ;; section, the same object, with the flag put back. DB is a database,
+  ;; checked by with-transaction; for any other value WORK runs with nothing
+  ;; shut. No other check: it is private.
+  (define (call-with-latch-shut db work)
+    (if (database? db)
+        (interrupt-latch-shut! (unchecked-database-latch db) work)
+        (work)))
 
   ;; --- the counters (ADR-0016, decision 8) ---------------------------------------------------
   ;;

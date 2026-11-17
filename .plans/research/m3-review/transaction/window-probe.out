@@ -1,0 +1,6 @@
+timer fires inside the window: 0
+(((raised execute-script! #f "the statement's state does not allow this verb" (not-allowed-in-state done)) #f) 88)
+((returned unset) 204)
+(((raised execute-script! #t "the connection or statement is closed" #f) #f) 825)
+((returned #f) 1471)
+(((raised execute-script! #f "re-entered after it finished" (re-entered)) #f) 216)

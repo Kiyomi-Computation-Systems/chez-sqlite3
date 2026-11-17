@@ -49,6 +49,13 @@
 ;;;                  test-memory Valgrind reads every call it makes to C
 ;;;   two threads    a stand-in in flight on another thread, through the
 ;;;                  record: the close's work starts only once it has ended
+;;;   the shut       with-transaction's ROLLBACK, and the ROLLBACK TO and
+;;;                  RELEASE of its failure path, drop an interrupt sent as
+;;;                  each starts, from SQLite's statement trace; its COMMIT
+;;;                  and the RELEASE that commits do not, and are rolled back
+;;;                  under the shut; the flag is put back after; and an
+;;;                  interrupt sent before the shut, beside a held row, still
+;;;                  stops the ROLLBACK
 ;;;
 ;;; tests/test-interrupt-reach.sps holds what the verb reaches, and
 ;;; tests/test-interrupt-close.sps a running step after a failed close and the
@@ -66,7 +73,8 @@
         (only (chezscheme) foreign-procedure fork-thread thread-join make-mutex with-mutex
               make-condition condition-wait condition-broadcast make-time current-time
               time-difference add-duration time>=? make-engine collect collect-trip-bytes
-              collections parameterize)
+              collections parameterize foreign-callable foreign-callable-entry-point
+              lock-object unlock-object)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -116,12 +124,16 @@
 (define step! (public 'step!))
 (define query-row (public 'query-row))
 (define execute! (public 'execute!))
+(define with-transaction (public 'with-transaction))
+(define in-transaction? (public 'in-transaction?))
+(define reset! (public 'reset!))
 (define call-with-open-handle (reach '(chez-sqlite3 private connection) 'call-with-open-handle))
 (define interrupt-database/with (reach '(chez-sqlite3 private connection) 'interrupt-database/with))
 (define track-statement! (reach '(chez-sqlite3 private connection) 'track-statement!))
 (define applied-settings! (reach '(chez-sqlite3 private open) 'applied-settings!))
 (define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
 (define call-with-out-pointer (reach '(chez-sqlite3 private native) 'call-with-out-pointer))
+(define c-string->string (reach '(chez-sqlite3 private native) 'c-string->string))
 
 ;; --- bindings made here, after the load ------------------------------------------------
 ;; foreign-procedure resolves its entry when it is evaluated, so each is made
@@ -144,6 +156,10 @@
 (define backup-init (bound 'sqlite3_backup_init (foreign-procedure "sqlite3_backup_init" (uptr uptr uptr uptr) uptr)))
 ;; int sqlite3_backup_finish(sqlite3_backup*)
 (define backup-finish (bound 'sqlite3_backup_finish (foreign-procedure "sqlite3_backup_finish" (uptr) int)))
+;; int sqlite3_trace_v2(sqlite3*, unsigned uMask,
+;;                      int (*xCallback)(unsigned, void *pCtx, void *P, void *X), void *pCtx),
+;; from 3.14.0, so at the floor
+(define trace-v2 (bound 'sqlite3_trace_v2 (foreign-procedure "sqlite3_trace_v2" (uptr unsigned-32 uptr uptr) int)))
 
 ;; --- helpers ------------------------------------------------------------------------------
 
@@ -872,6 +888,192 @@
 (test-equal "a stand-in in flight on another thread, through interrupt-database/with, when the owner closes: the close's work starts only once the stand-in has ended; the interrupter answers void, the close closes, nothing is counted"
   (list '(interrupt-start interrupt-end work-start) 'void 'closed zero-counts)
   (race-through-the-record))
+
+;; --- with-transaction's exits: the latch shut ---------------------------------------------
+;;
+;; with-transaction steps its own ROLLBACK, and the ROLLBACK TO and RELEASE
+;; of its failure path, with the connection's latch shut, so an
+;; interrupt-database! sent while one runs is dropped; its COMMIT, and the
+;; RELEASE that commits a savepoint, stay interruptible, and an interrupted
+;; commit is rolled back under the shut. The flag the shut found is put back
+;; after (the maintainer's "Shut the latch on exit", 2026-11-17). Before, a
+;; watchdog that kept interrupting stopped the ROLLBACK as it started, and
+;; the transaction outlived the call (M3's closing review).
+;;
+;; SQLite's statement trace, SQLITE_TRACE_STMT, calls this suite's callback
+;; as each statement starts its program, after SQLite has cleared any
+;; earlier interrupt, inside the step: the callback calls
+;; interrupt-database! there, on the real record, for each statement it is
+;; set to, and reads the probe straight after. So each row reads, on one
+;; thread with nothing timed, whether the verb reached SQLite during that
+;; statement, through with-transaction's own wiring, never a stand-in's.
+;; Reached, the interrupt stops the statement at its first jump, as a
+;; watchdog's would.
+
+;; sqlite-trace-stmt : Natural
+;; SQLITE_TRACE_STMT, the trace's mask for a statement's start.
+(define sqlite-trace-stmt 1)
+
+;; The callback's state: the connection it interrupts, the SQL it
+;; interrupts, and its notes, newest first.
+(define trace-db #f)
+(define trace-targets '())
+(define trace-notes '())
+
+;; tracer : int (*)(unsigned, void *pCtx, void *P, void *X)
+;; As a statement of trace-targets starts, X its SQL and pCtx the
+;; connection's handle: interrupt-database! on trace-db, then the probe on
+;; the handle, noted (SQL VERB PROBE). Whatever it raises is noted too, and
+;; nothing reaches C.
+(define tracer
+  (foreign-callable __collect_safe
+    (lambda (mask ctx p x)
+      (guard (e (#t (set! trace-notes (cons (list 'raised (describe e)) trace-notes))))
+        (let ((sql (c-string->string x)))
+          (when (member sql trace-targets)
+            (let* ((verb (interrupt! trace-db))
+                   (probe (flag-of ctx)))
+              (set! trace-notes (cons (list sql verb probe) trace-notes))))))
+      0)
+    (unsigned-32 uptr uptr uptr) int))
+
+;; traced : Database (Listof String) (-> Any) -> (List Any (Listof Any))
+;; THUNK's answer, by attempt, with the callback set on DB for TARGETS, and
+;; its notes, in order. The callback is locked while SQLite holds it, and
+;; let go, once, after the trace is cleared.
+(define (traced db targets thunk)
+  (let ((handle (with-handle db (lambda (h) h))))
+    (dynamic-wind
+      (lambda ()
+        (set! trace-db db)
+        (set! trace-targets targets)
+        (set! trace-notes '())
+        (lock-object tracer)
+        (trace-v2 handle sqlite-trace-stmt (foreign-callable-entry-point tracer) handle))
+      (lambda ()
+        (let* ((r (attempt thunk))
+               (notes (reverse trace-notes)))
+          (list r notes)))
+      (lambda ()
+        (trace-v2 handle 0 0 0)
+        (unlock-object tracer)
+        (set! trace-targets '())
+        (set! trace-db #f)))))
+
+;; yes-no : Any -> Any
+(define (yes-no x) (cond ((eq? x #t) 'yes) ((eq? x #f) 'no) (else x)))
+
+;; markers : Database -> Any
+;; t's rows, in order, joined by commas, or (none).
+(define (markers db)
+  (attempt (lambda ()
+             (vector-ref (query-row db "select coalesce(group_concat(x, ','), '(none)') from (select x from t order by x)")
+                         0))))
+
+;; shut-case : (Listof String) (Database -> Any) -> Any
+;; On a fresh connection holding t: CALL, traced for TARGETS, and the
+;; notes; then in-transaction?, t's rows, and the verb and the probe once
+;; the call is over, with no statement running: with the latch put back,
+;; the verb reaches SQLite and the probe reads set. Then the counts, the
+;; connection closed.
+(define (shut-case targets call)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (execute! db "create table t (x)")
+           (let* ((r (traced db targets (lambda () (call db))))
+                  (in (yes-no (in-transaction? db)))
+                  (rows (markers db))
+                  (verb (interrupt! db))
+                  (probe (flag db))
+                  (closed (begin (close-database! db) (set! db #f) 'closed)))
+             (list (car r) (cadr r) in rows (list verb probe) (native-counts))))))
+      (lambda () (when db (close-quietly db))))))
+
+(define interrupted-by-the-verb '(raised (sqlite-error with-transaction interrupt interrupt)))
+
+(test-equal "with-transaction's ROLLBACK runs with the latch shut: the body raises, and an interrupt-database! sent as the ROLLBACK starts is dropped, the probe clear; the ROLLBACK succeeds, the body's condition reaches the caller, nothing is open or written, and after the call the verb reaches SQLite again"
+  (list 'the-body-raised '(("ROLLBACK" void clear)) 'no "(none)" '(void set) zero-counts)
+  (shut-case '("ROLLBACK")
+             (lambda (db)
+               (guard (e ((eq? e 'the-body-raised) e))
+                 (with-transaction db 'deferred
+                   (lambda ()
+                     (execute! db "insert into t values ('inner')")
+                     (raise 'the-body-raised)))))))
+
+(test-equal "nested, with-transaction's ROLLBACK TO and RELEASE run with the latch shut: the inner body raises, and the verb sent as each starts is dropped; the inner level is rolled back and released, and the outer commits its own marker alone"
+  (list 'outer-returned
+        '(("ROLLBACK TO chez_sqlite3_1" void clear) ("RELEASE chez_sqlite3_1" void clear))
+        'no "outer" '(void set) zero-counts)
+  (shut-case '("ROLLBACK TO chez_sqlite3_1" "RELEASE chez_sqlite3_1")
+             (lambda (db)
+               (with-transaction db 'deferred
+                 (lambda ()
+                   (execute! db "insert into t values ('outer')")
+                   (guard (e ((eq? e 'the-body-raised) e))
+                     (with-transaction db
+                       (lambda ()
+                         (execute! db "insert into t values ('inner')")
+                         (raise 'the-body-raised))))
+                   'outer-returned)))))
+
+(test-equal "with-transaction's COMMIT stays interruptible, and an interrupted COMMIT is rolled back with the latch shut: the verb sent as the COMMIT starts reaches SQLite, the probe set, and the COMMIT answers interrupt; the ROLLBACK after it drops the verb, and succeeds; &sqlite-interrupt from with-transaction, nothing open or written"
+  (list interrupted-by-the-verb '(("COMMIT" void set) ("ROLLBACK" void clear)) 'no "(none)" '(void set)
+        zero-counts)
+  (shut-case '("COMMIT" "ROLLBACK")
+             (lambda (db)
+               (with-transaction db 'deferred
+                 (lambda () (execute! db "insert into t values ('inner')") 42)))))
+
+(test-equal "nested, the RELEASE that commits stays interruptible, and its rollback runs with the latch shut: the verb reaches SQLite as the first RELEASE starts, which answers interrupt; ROLLBACK TO and the RELEASE after it drop the verb; the inner raises &sqlite-interrupt, and the outer commits its own marker alone"
+  (list (list interrupted-by-the-verb 'outer-returned)
+        '(("RELEASE chez_sqlite3_1" void set) ("ROLLBACK TO chez_sqlite3_1" void clear)
+          ("RELEASE chez_sqlite3_1" void clear))
+        'no "outer" '(void set) zero-counts)
+  (shut-case '("RELEASE chez_sqlite3_1" "ROLLBACK TO chez_sqlite3_1")
+             (lambda (db)
+               (let* ((inner #f)
+                      (outer (with-transaction db 'deferred
+                               (lambda ()
+                                 (execute! db "insert into t values ('outer')")
+                                 (set! inner (attempt (lambda ()
+                                                        (with-transaction db
+                                                          (lambda () (execute! db "insert into t values ('inner')") 42)))))
+                                 'outer-returned))))
+                 (list inner outer)))))
+
+(test-equal "the case the shut leaves: an interrupt-database! sent from the body before the shut, while the body's own statement holds a row, still stops the ROLLBACK, since SQLite keeps an interrupt while a statement is active; the body's condition reaches the caller, the transaction stays open, and once the statement is reset a plain rollback ends it"
+  '(the-body-raised yes void void no)
+  (let ((db #f) (held #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (execute! db "create table t (x)")
+           (execute! db "insert into t values (1), (2)")
+           (let* ((r (guard (e ((eq? e 'the-body-raised) e))
+                       (with-transaction db 'deferred
+                         (lambda ()
+                           (execute! db "insert into t values (3)")
+                           (set! held (prepare-statement db "select x from t"))
+                           (step! held)
+                           (interrupt-database! db)
+                           (raise 'the-body-raised)))))
+                  (in (yes-no (in-transaction? db)))
+                  (reset (answered (lambda () (reset! held))))
+                  (rolled (answered (lambda () (execute! db "rollback"))))
+                  (after (yes-no (in-transaction? db))))
+             (list r in reset rolled after)))))
+      (lambda ()
+        (when held (guard (e (#t #f)) (finalize-statement! held)))
+        (when db (close-quietly db))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

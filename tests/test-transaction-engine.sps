@@ -8,15 +8,16 @@
 ;;;
 ;;;   the sweeps     an engine around with-transaction, at the outer level
 ;;;                  and nested, at every fuel from 1 until the call
-;;;                  completes without expiring, resumed to the end after
-;;;                  each expiry: it commits once, or raises
-;;;                  &sqlite-transaction-ended, never anything else; its
-;;;                  level begins once; it never commits what an expiry
-;;;                  rolled back, and never steps a COMMIT, RELEASE or
-;;;                  rollback once ENDED is set, read by each statement's
-;;;                  runs, sqlite3_stmt_status's count, and the extended code.
-;;;                  The fuels are printed: where each outcome begins, and
-;;;                  the fuel that completes
+;;;                  completes without expiring, on a fresh connection each
+;;;                  fuel, resumed to the end after each expiry: it commits
+;;;                  once, or raises &sqlite-transaction-ended, never
+;;;                  anything else; its level begins once; it never commits
+;;;                  what an expiry rolled back, and never steps a COMMIT,
+;;;                  RELEASE or rollback once ENDED is set, read by each
+;;;                  statement's runs, sqlite3_stmt_status's count, and the
+;;;                  extended code. The fuels are printed: where each outcome
+;;;                  begins, and the fuel that completes; each outcome must be
+;;;                  seen, and the completing fuel's must commit
 ;;;   before begun   an expiry before the BEGIN's step answers rolls nothing
 ;;;                  back, and the resume begins and commits
 ;;;   a second resume
@@ -43,6 +44,23 @@
 ;;;   the siblings   an engine taken inside an outer call and resumed inside a
 ;;;                  sibling level: the resume leaves the sibling, which rolls
 ;;;                  back and raises the ended condition
+;;;   the claim      every fuel's first remainder resumed to its end, then
+;;;                  again: a second level only from a whole new call, the
+;;;                  call's claim, made by its first expression, refusing a
+;;;                  second run at the BEGIN (M3's closing review)
+;;;   the plan       another engine's BEGIN at the call's first expiry: the
+;;;                  resumed call plans its level in the BEGIN's own section,
+;;;                  so it makes a savepoint, never a refused BEGIN that takes
+;;;                  its lock (M3's closing review)
+;;;   the refusal    a timer that steps the caller's tracked select to its
+;;;                  row at any tick: the inner call is refused, or begins,
+;;;                  never a SAVEPOINT failed beside the row, the refusal's
+;;;                  pass sharing the BEGIN's section; and with an untracked
+;;;                  select, a begin that failed rolls nothing back
+;;;
+;;; Every sweep takes a fresh connection, and a fresh engine, at every fuel,
+;;; and fails by name when too few of its trials reached past the call's
+;;; first section (AGENTS.md).
 ;;;
 ;;; Reached through eval under a guard. Every computation that can raise
 ;;; runs under a guard with a sentinel of its own. Effects run in order,
@@ -50,7 +68,8 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) make-engine foreign-procedure timer-interrupt-handler set-timer)
+        (only (chezscheme) make-engine foreign-procedure timer-interrupt-handler set-timer list-head
+              disable-interrupts enable-interrupts)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -271,6 +290,42 @@
   (newline)
   (if (integer? (car run)) (cadr run) (cons (car run) (cadr run))))
 
+;; named-kinds : String (List Any (Listof Any) (Listof Any)) -> (List (Listof Any) (Listof Symbol) Any)
+;; named's deviations; then the kinds the sweep saw, each once, sorted;
+;; and the kind at the fuel that completed, the last the sweep saw.
+(define (named-kinds what run)
+  (let* ((deviations (named what run))
+         (kinds (let loop ((rest (caddr run)) (seen '()))
+                  (cond ((null? rest) (list-sort (lambda (a b) (string<? (symbol->string a) (symbol->string b))) seen))
+                        ((memq (cadr (car rest)) seen) (loop (cdr rest) seen))
+                        (else (loop (cdr rest) (cons (cadr (car rest)) seen))))))
+         (last (if (null? (caddr run)) 'none (cadr (list-ref (caddr run) (- (length (caddr run)) 1))))))
+    (list deviations kinds last)))
+
+;; checked-trial : Positive-Integer Any -> (List Boolean Any Any)
+;; R, a sweep's check's answer at FUEL, made on a connection of its own; a
+;; trial that raised, so answering no such list, as a deviation of no kind
+;; that ends the sweep there, so a broken call costs one trial, not one a
+;; fuel to the cap.
+(define (checked-trial fuel r)
+  (if (and (list? r) (= (length r) 3))
+      r
+      (list #f (list fuel 'the-trial-raised r) 'no-kind)))
+
+;; with-memory : (Database -> Any) -> Any
+;; PROC's answer, or what it raised, given a connection to a fresh in-memory
+;; database holding t; closed after.
+(define (with-memory proc)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt (lambda ()
+                   (set! db (open-database ":memory:"))
+                   (execute! db "create table t (x)")
+                   (proc db))))
+      (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))
+
 ;; --- the sweeps -------------------------------------------------------------------------------
 
 ;; outcome-kind : Any Integer -> Symbol
@@ -322,12 +377,13 @@
 (test-assert "a temporary directory for the suite's databases"
   (string? temp-dir))
 
-(test-equal "the outer sweep: an engine around with-transaction, deferred, whose body inserts the fuel and answers 42, at every fuel from 1 until it completes without expiring, resumed after each expiry: it commits once, its row seen once by db2, BEGIN, then COMMIT, run once each; or raises &sqlite-transaction-ended, BEGIN and ROLLBACK run once each and COMMIT never, the row absent, or present when the rollback fell before the insert, which autocommitted; never another outcome; with-transaction's statements all ready, in-transaction? #f and the extended code 0 after every fuel"
-  '()
-  (with-files
-   (lambda (db db2)
-     (named "the outer sweep"
+(test-equal "the outer sweep: an engine around with-transaction, deferred, whose body inserts the fuel and answers 42, at every fuel from 1 until it completes without expiring, on a fresh file and connections each fuel, resumed after each expiry: it commits once, its row seen once by db2, BEGIN, then COMMIT, run once each; or raises &sqlite-transaction-ended, BEGIN and ROLLBACK run once each and COMMIT never, the row absent, or present when the rollback fell before the insert, which autocommitted; never another outcome; with-transaction's statements all ready, in-transaction? #f and the extended code 0 after every fuel; all three outcomes seen, the completing fuel's a commit"
+  '(() (committed ended-after-a-later-write rolled-back) committed)
+  (named-kinds "the outer sweep"
             (sweep (lambda (fuel)
+                    (checked-trial fuel
+                     (with-files
+                      (lambda (db db2)
                      (let* ((before (own-runs db))
                             (r (engine-run (lambda ()
                                              (attempt (lambda ()
@@ -347,15 +403,16 @@
                              (and (or (eq? kind 'no-kind)
                                       (not (equal? whole (list kind expected-runs '() #f 0))))
                                   (list (car r) seen whole))
-                             kind)))
-                   5000)))))
+                             kind))))))
+                   5000)))
 
-(test-equal "the nested sweep: inside an outer with-transaction, an engine around a nested one whose body inserts the fuel and answers 42: at every fuel it commits once, SAVEPOINT and RELEASE run once each and ROLLBACK TO never; or raises &sqlite-transaction-ended, SAVEPOINT, ROLLBACK TO and RELEASE run once each; never another outcome; the outer level stays open throughout and commits, so db2 then sees the row once, or not, by the same rule"
-  '()
-  (with-files
-   (lambda (db db2)
-     (named "the nested sweep"
+(test-equal "the nested sweep: inside an outer with-transaction, an engine around a nested one whose body inserts the fuel and answers 42, on a fresh file and connections each fuel: at every fuel it commits once, SAVEPOINT and RELEASE run once each and ROLLBACK TO never; or raises &sqlite-transaction-ended, SAVEPOINT, ROLLBACK TO and RELEASE run once each; never another outcome; the outer level stays open throughout and commits, so db2 then sees the row once, or not, by the same rule; all three outcomes seen, the completing fuel's a commit"
+  '(() (committed ended-after-a-later-write rolled-back) committed)
+  (named-kinds "the nested sweep"
             (sweep (lambda (fuel)
+                    (checked-trial fuel
+                     (with-files
+                      (lambda (db db2)
                      (let* ((inside #f)
                             (before (own-runs db))
                             (r (with-transaction db 'deferred
@@ -381,8 +438,8 @@
                              (and (or (eq? kind 'no-kind)
                                       (not (equal? whole (list kind expected-runs '() #t #f 0))))
                                   (list (car r) seen whole))
-                             kind)))
-                   5000)))))
+                             kind))))))
+                   5000)))
 
 ;; --- an expiry before begun ----------------------------------------------------------------
 
@@ -414,33 +471,35 @@
                  (attempt (lambda () (vector-ref (query-row db2 "select count(*) from t where x = ?" row) 0)))
                  (cadr r)))))
 
-;; before-sweep : Database Database Boolean String String String -> (List Natural (Listof Any))
-;; before-begun at every fuel from 1 until a first slice begins the level:
-;; how many fuels expired before it, and those whose outcome differs from
-;; 42, the row seen once, and the runs (1 1 0).
-(define (before-sweep db db2 nested begin-sql commit-sql rollback-sql)
+;; before-sweep : Boolean String String String -> (List Natural (Listof Any))
+;; before-begun at every fuel from 1 until a first slice begins the level,
+;; on a fresh file and connections each fuel: how many fuels expired before
+;; it, and those whose outcome differs from 42, the row seen once, and the
+;; runs (1 1 0).
+(define (before-sweep nested begin-sql commit-sql rollback-sql)
   (let loop ((fuel 1) (found '()))
-    (let ((r (before-begun db db2 fuel nested begin-sql commit-sql rollback-sql)))
-      (cond ((not r) (list (- fuel 1) (reverse found)))
+    (let ((r (with-files
+              (lambda (db db2)
+                (list (before-begun db db2 fuel nested begin-sql commit-sql rollback-sql))))))
+      (cond ((not (and (pair? r) (null? (cdr r)))) (list 'the-trial-raised (reverse (cons (list fuel r) found))))
+            ((not (car r)) (list (- fuel 1) (reverse found)))
             ((>= fuel 5000) (list 'no-begin-by-5000 (reverse found)))
-            ((equal? r '(42 1 (1 1 0))) (loop (+ fuel 1) found))
-            (else (loop (+ fuel 1) (cons (list fuel r) found)))))))
+            ((equal? (car r) '(42 1 (1 1 0))) (loop (+ fuel 1) found))
+            (else (loop (+ fuel 1) (cons (list fuel (car r)) found)))))))
 
-(test-equal "an expiry before the BEGIN's step answers rolls nothing back: at every fuel from 1 until a first slice begins the level, that slice expiring before begun is set and the call then resumed with fuel to spare, it begins once and commits: 42, the row seen once, BEGIN and COMMIT run once each, ROLLBACK never; nested, SAVEPOINT and RELEASE once, ROLLBACK TO never"
+(test-equal "an expiry before the BEGIN's step answers rolls nothing back: at every fuel from 1 until a first slice begins the level, on a fresh file and connections each fuel, that slice expiring before begun is set and the call then resumed with fuel to spare, it begins once and commits: 42, the row seen once, BEGIN and COMMIT run once each, ROLLBACK never; nested, SAVEPOINT and RELEASE once, ROLLBACK TO never"
   '((many ()) (many ()))
-  (with-files
-   (lambda (db db2)
-     (let* ((outer (before-sweep db db2 #f "BEGIN DEFERRED" "COMMIT" "ROLLBACK"))
-            (nested (before-sweep db db2 #t "SAVEPOINT chez_sqlite3_1" "RELEASE chez_sqlite3_1"
-                                  "ROLLBACK TO chez_sqlite3_1"))
-            (shown (lambda (what r)
-                     (display "  ")
-                     (display what)
-                     (display ": first slices that expired before begun: ")
-                     (write (car r))
-                     (newline)
-                     (list (if (and (integer? (car r)) (> (car r) 1)) 'many (car r)) (cadr r)))))
-       (list (shown "the outer level" outer) (shown "nested" nested))))))
+  (let* ((outer (before-sweep #f "BEGIN DEFERRED" "COMMIT" "ROLLBACK"))
+         (nested (before-sweep #t "SAVEPOINT chez_sqlite3_1" "RELEASE chez_sqlite3_1"
+                               "ROLLBACK TO chez_sqlite3_1"))
+         (shown (lambda (what r)
+                  (display "  ")
+                  (display what)
+                  (display ": first slices that expired before begun: ")
+                  (write (car r))
+                  (newline)
+                  (list (if (and (integer? (car r)) (> (car r) 1)) 'many (car r)) (cadr r)))))
+    (list (shown "the outer level" outer) (shown "nested" nested))))
 
 ;; --- a remainder resumed a second time ------------------------------------------------------
 
@@ -457,8 +516,10 @@
 ;; back, or the commit had set it. Then the call is resumed one tick a slice
 ;; to its end, and every remainder it made is answered, the first slice's
 ;; first. completed when the first slice completed the call. Otherwise
-;; none, the call finished with fuel to spare: a remainder taken before the call bound its flags
-;; makes a whole new call when resumed (.plans/traps.md).
+;; none, the call finished with fuel to spare: a remainder taken before
+;; the call's first expression makes a whole new call when resumed, and one
+;; taken after it, before the BEGIN, is refused by the call's claim
+;; (.plans/traps.md).
 (define (after-ended db thunk fuel begin-sql)
   (let* ((before (own-runs db))
          (first ((make-engine thunk) fuel complete expire))
@@ -505,60 +566,86 @@
     (raised (assertion-violation with-transaction (re-entered)))
     (raised (transaction-ended with-transaction))))
 
-;; twice : String Database (-> (-> Any)) String -> (Listof Any)
-;; At every fuel from 1 until the call completes without expiring, each
-;; remainder after-ended answers, resumed again: the fuels and remainders
-;; that touched a statement of with-transaction's. Prints how many fuels
-;; began their level in the first slice, how many remainders were resumed
-;; twice, and the answers they gave.
-(define (twice what db thunk-of begin-sql)
-  (let loop ((fuel 1) (found '()) (checked 0) (remainders 0) (answers '()))
-    (let* ((rs (after-ended db (thunk-of) fuel begin-sql))
-           (completes (eq? rs 'completed)))
-      (if (or completes (>= fuel 5000))
-          (begin
-            (display "  ")
-            (display what)
-            (display ": fuels 1 to ")
-            (write fuel)
-            (display "; first slices that began the level: ")
-            (write checked)
-            (display "; remainders resumed twice: ")
-            (write remainders)
-            (display "; their second answers: ")
-            (write answers)
-            (display "; that touched a statement: ")
-            (write (length found))
-            (newline)
-            (let ((bad (filter (lambda (a) (not (member a allowed-second-answers))) answers))
-                  (found* (reverse found)))
-              (append (if completes found* (cons 'no-completion-by-5000 found*))
-                      (if (null? bad) '() (list (list 'second-answers-outside-the-allowed bad))))))
-          (let inner ((rest rs) (k 0) (found found) (answers answers))
-            (if (null? rest)
-                (loop (+ fuel 1) found (if (null? rs) checked (+ checked 1)) (+ remainders (length rs))
-                      answers)
-                (let ((d (resumed-again db (car rest))))
-                  (inner (cdr rest) (+ k 1)
-                         (if (and (pair? d) (eq? (car d) 'answered)) found (cons (list fuel k d) found))
-                         (if (and (pair? d) (eq? (car d) 'answered))
-                             (if (member (cadr d) answers) answers (cons (cadr d) answers))
-                             answers)))))))))
+;; twice-at : Boolean Positive-Integer -> (U 'completed (List (Listof Any) Boolean Natural (Listof Any)))
+;; At FUEL, on a fresh in-memory connection whose cache an earlier call has
+;; primed with both levels' statements, nested inside an outer
+;; with-transaction, deferred, when NESTED: each remainder after-ended
+;; answers, resumed again. 'completed when the first slice completed the
+;; call; else the remainders that touched a statement of
+;; with-transaction's, whether the first slice began the level, how many
+;; remainders were resumed twice, and the answers they gave, each once.
+(define (twice-at nested? fuel)
+  (with-memory
+   (lambda (db)
+     (with-transaction db 'deferred (lambda () (with-transaction db (lambda () 'primed))))
+     (let ((go (lambda ()
+                 (let ((rs (after-ended db
+                                        (lambda ()
+                                          (attempt (lambda ()
+                                                     (if nested?
+                                                         (with-transaction db (lambda () 42))
+                                                         (with-transaction db 'deferred (lambda () 42))))))
+                                        fuel
+                                        (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))))
+                   (if (eq? rs 'completed)
+                       'completed
+                       (let inner ((rest rs) (k 0) (found '()) (answers '()))
+                         (if (null? rest)
+                             (list (reverse found) (pair? rs) (length rs) answers)
+                             (let* ((d (resumed-again db (car rest)))
+                                    (answered (and (pair? d) (eq? (car d) 'answered))))
+                               (inner (cdr rest) (+ k 1)
+                                      (if answered found (cons (list fuel k d) found))
+                                      (if (and answered (not (member (cadr d) answers)))
+                                          (cons (cadr d) answers)
+                                          answers))))))))))
+       (if nested? (with-transaction db 'deferred go) (go))))))
 
-(test-equal "a remainder captured once ENDED is set, resumed a second time once its call has ended, checks out, steps and returns none of with-transaction's statements: at every fuel until the call completes unexpired whose first slice began the level, each remainder from that expiry on, resumed again one tick a slice, leaves the cache's count unchanged between every slice, and each statement's state and runs, and the extended code, at its end, and answers 42, the re-entry's refusal or &sqlite-transaction-ended, never an &sqlite-error; at the outer level and nested"
+;; twice : String Boolean -> (Listof Any)
+;; twice-at at every fuel from 1 until the call completes without
+;; expiring: the fuels and remainders that touched a statement of
+;; with-transaction's, and any answer outside the allowed. Prints how many
+;; fuels began their level in the first slice, how many remainders were
+;; resumed twice, and the answers they gave. Fewer than one fuel in five
+;; beginning its level, or fewer than two remainders a fuel swept, is itself
+;; a deviation, the sweep having reached nothing past the BEGIN.
+(define (twice what nested?)
+  (let loop ((fuel 1) (found '()) (checked 0) (remainders 0) (answers '()))
+    (let* ((r (twice-at nested? fuel))
+           (completes (eq? r 'completed)))
+      (cond
+        ((or completes (>= fuel 5000))
+         (display "  ")
+         (display what)
+         (display ": fuels 1 to ")
+         (write fuel)
+         (display "; first slices that began the level: ")
+         (write checked)
+         (display "; remainders resumed twice: ")
+         (write remainders)
+         (display "; their second answers: ")
+         (write answers)
+         (display "; that touched a statement: ")
+         (write (length found))
+         (newline)
+         (let ((bad (filter (lambda (a) (not (member a allowed-second-answers))) answers))
+               (found* (reverse found)))
+           (append (if completes found* (cons 'no-completion-by-5000 found*))
+                   (if (null? bad) '() (list (list 'second-answers-outside-the-allowed bad)))
+                   (if (< (* 5 checked) fuel) (list (list 'too-few-first-slices-began-the-level checked 'of fuel)) '())
+                   (if (< remainders (* 2 fuel)) (list (list 'too-few-remainders remainders 'of fuel)) '()))))
+        ((not (and (list? r) (= (length r) 4)))
+         (loop (+ fuel 1) (cons (list fuel 'the-trial-raised r) found) checked remainders answers))
+        (else
+         (loop (+ fuel 1)
+               (append (reverse (car r)) found)
+               (if (cadr r) (+ checked 1) checked)
+               (+ remainders (caddr r))
+               (fold-left (lambda (acc a) (if (member a acc) acc (cons a acc))) answers (cadddr r))))))))
+
+(test-equal "a remainder captured once ENDED is set, resumed a second time once its call has ended, checks out, steps and returns none of with-transaction's statements: at every fuel until the call completes unexpired whose first slice began the level, on a fresh connection each fuel, each remainder from that expiry on, resumed again one tick a slice, leaves the cache's count unchanged between every slice, and each statement's state and runs, and the extended code, at its end, and answers 42, the re-entry's refusal or &sqlite-transaction-ended, never an &sqlite-error; at the outer level and nested; at least one fuel in five begins its level in its first slice, and two remainders a fuel are resumed"
   '(() ())
-  (with-files
-   (lambda (db db2)
-     (let* ((prime (with-transaction db 'deferred (lambda () (with-transaction db (lambda () 'primed)))))
-            (outer (twice "the outer level" db
-                          (lambda () (lambda () (attempt (lambda () (with-transaction db 'deferred (lambda () 42))))))
-                          "BEGIN DEFERRED"))
-            (nested (with-transaction db 'deferred
-                      (lambda ()
-                        (twice "nested" db
-                               (lambda () (lambda () (attempt (lambda () (with-transaction db (lambda () 42))))))
-                               "SAVEPOINT chez_sqlite3_1")))))
-       (list outer nested)))))
+  (list (twice "the outer level" #f) (twice "nested" #t)))
 
 ;; --- no cut or wrong SQL reaches SQLite -----------------------------------------------------
 ;;
@@ -579,58 +666,77 @@
         (let ((sql (statement-sql (car rest))))
           (loop (cdr rest) (if (member sql found) found (cons sql found)))))))
 
-;; resumed-twice : String Database (-> (-> Any)) (Listof String) -> (Listof Any)
-;; At every fuel from 1 until the first slice completes the call: the first
-;; slice's remainder resumed to its end, then resumed again to its end. After
-;; each, every SQL DB tracks is one of ALLOWED and the extended code is 0:
-;; the fuels and resumes where either is not, with what was found. Prints how
-;; many remainders were resumed twice.
-(define (resumed-twice what db thunk-of allowed)
-  (let loop ((fuel 1) (found '()))
-    (let ((first ((make-engine (thunk-of)) fuel complete expire)))
-      (if (or (not (procedure? first)) (>= fuel 5000))
-          (begin
-            (display "  ")
-            (display what)
-            (display ": every first remainder, fuels 1 to ")
-            (write (- fuel 1))
-            (display ", resumed twice; resumes that tracked other SQL or left a code: ")
-            (write (length found))
-            (newline)
-            (reverse found))
-          (let* ((check (lambda (which)
-                          (let* ((texts (sql-texts db))
-                                 (other (filter (lambda (t) (not (member t allowed))) texts))
-                                 (code (extended db)))
-                            (and (or (pair? other) (not (eqv? code 0)))
-                                 (list fuel which other code)))))
-                 (a1 (finish first 1000000))
-                 (c1 (check 'first))
-                 (a2 (finish first 1000000))
-                 (c2 (check 'second))
-                 (found* (cond ((and c1 c2) (cons c2 (cons c1 found)))
-                               (c1 (cons c1 found))
-                               (c2 (cons c2 found))
-                               (else found))))
-            (loop (+ fuel 1) found*))))))
+;; resumed-twice-at : Boolean Positive-Integer (Listof String) -> (U 'completed (List (Listof Any) Boolean))
+;; At FUEL, on a fresh in-memory connection, nested inside an outer
+;; with-transaction, deferred, when NESTED: 'completed when the first slice
+;; completed the call; else its remainder resumed to its end, then resumed
+;; again to its end, and after each, every SQL the connection tracks one of
+;; ALLOWED and the extended code 0: the resumes where either is not, with
+;; what was found; and whether the first slice had begun the level.
+(define (resumed-twice-at nested? fuel allowed)
+  (with-memory
+   (lambda (db)
+     (let ((go (lambda ()
+                 (let* ((before (own-runs db))
+                        (first ((make-engine
+                                 (lambda ()
+                                   (attempt (lambda ()
+                                              (if nested?
+                                                  (with-transaction db (lambda () 42))
+                                                  (with-transaction db 'deferred (lambda () 42)))))))
+                                fuel complete expire)))
+                   (if (not (procedure? first))
+                       'completed
+                       (let* ((past (> (car (delta before (own-runs db)
+                                                   (list (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))))
+                                       0))
+                              (check (lambda (which)
+                                       (let* ((texts (sql-texts db))
+                                              (other (filter (lambda (t) (not (member t allowed))) texts))
+                                              (code (extended db)))
+                                         (and (or (pair? other) (not (eqv? code 0)))
+                                              (list fuel which other code)))))
+                              (a1 (finish first 1000000))
+                              (c1 (check 'first))
+                              (a2 (finish first 1000000))
+                              (c2 (check 'second)))
+                         (list (filter (lambda (c) c) (list c1 c2)) past)))))))
+       (if nested? (with-transaction db 'deferred go) (go))))))
+
+;; resumed-twice : String Boolean (Listof String) -> (Listof Any)
+;; resumed-twice-at at every fuel from 1 until the first slice completes
+;; the call: the resumes that tracked other SQL or left a code. Prints how
+;; many remainders were resumed twice, and how many of them were taken past
+;; the BEGIN; fewer than one fuel in five past it is itself a deviation.
+(define (resumed-twice what nested? allowed)
+  (let loop ((fuel 1) (found '()) (past 0))
+    (let ((r (resumed-twice-at nested? fuel allowed)))
+      (cond
+        ((or (eq? r 'completed) (>= fuel 5000))
+         (display "  ")
+         (display what)
+         (display ": every first remainder, fuels 1 to ")
+         (write (- fuel 1))
+         (display ", resumed twice; ")
+         (write past)
+         (display " of them taken past the BEGIN; resumes that tracked other SQL or left a code: ")
+         (write (length found))
+         (newline)
+         (append (reverse found)
+                 (if (eq? r 'completed) '() '(no-completion-by-5000))
+                 (if (< (* 5 past) fuel) (list (list 'too-few-past-the-begin past 'of fuel)) '())))
+        ((not (and (list? r) (= (length r) 2)))
+         (loop (+ fuel 1) (cons (list fuel 'the-trial-raised r) found) past))
+        (else (loop (+ fuel 1) (append (reverse (car r)) found) (if (cadr r) (+ past 1) past)))))))
 
 (define allowed-outer '("BEGIN DEFERRED" "COMMIT" "ROLLBACK" "create table t (x)"))
 (define allowed-nested
   (append allowed-outer '("SAVEPOINT chez_sqlite3_1" "RELEASE chez_sqlite3_1" "ROLLBACK TO chez_sqlite3_1")))
 
-(test-equal "no cut or wrong SQL reaches SQLite: at every fuel until the call completes unexpired, its first remainder resumed to its end and then a second time, at the outer level and nested, a whole new call among them where the remainder was taken before the call began, the connection tracks no SQL but with-transaction's own, its savepoints named in full, and the extended code is 0 after each"
+(test-equal "no cut or wrong SQL reaches SQLite: at every fuel until the call completes unexpired, on a fresh connection each fuel, its first remainder resumed to its end and then a second time, at the outer level and nested, a whole new call among them where the remainder was taken before the call began, the connection tracks no SQL but with-transaction's own, its savepoints named in full, and the extended code is 0 after each; at least one fuel in five taken past the BEGIN"
   '(() ())
-  (with-files
-   (lambda (db db2)
-     (let* ((outer (resumed-twice "the outer level" db
-                                  (lambda () (lambda () (attempt (lambda () (with-transaction db 'deferred (lambda () 42))))))
-                                  allowed-outer))
-            (nested (with-transaction db 'deferred
-                      (lambda ()
-                        (resumed-twice "nested" db
-                                       (lambda () (lambda () (attempt (lambda () (with-transaction db (lambda () 42))))))
-                                       allowed-nested)))))
-       (list outer nested)))))
+  (list (resumed-twice "the outer level" #f allowed-outer)
+        (resumed-twice "nested" #t allowed-nested)))
 
 ;; --- a failed commit's rollback, tried once under any expiry ----------------------------------
 ;;
@@ -895,37 +1001,97 @@
   (reenters))
 
 ;; --- a nested begin that fails ------------------------------------------------------------------
+;;
+;; Inside an outer with-transaction, a timer interrupt at T1 ticks steps the
+;; caller's select to a row and calls sqlite3_interrupt, which stays while
+;; the select is held, and a second at T2 ticks later finalizes it. Since
+;; M3's closing review the refusal's pass and the BEGIN share one section,
+;; so a select the connection tracks, stepped before the inner call's
+;; BEGIN, is refused there, and one stepped after cannot reach the BEGIN:
+;; no timer falls between the two. A select prepared outside the library,
+;; which the connection does not track and the refusal cannot see, still
+;; makes the SAVEPOINT fail, and so tests what slice 4's row tested with a
+;; tracked one: a begin that failed rolls nothing back.
 
-;; failed-begin-case : Positive-Integer Positive-Integer -> (List Boolean Boolean Any)
-(define (failed-begin-case t1 t2)
+;; raw-prepare! : Database String -> Positive-Integer
+;; A statement of SQL on DB, made with the raw sqlite3_prepare_v2, so the
+;; connection does not track it and the refusal's pass cannot see it.
+(define prepare-v2 (bound 'sqlite3_prepare_v2 (foreign-procedure "sqlite3_prepare_v2" (uptr uptr int uptr uptr) int)))
+(define raw-step (bound 'sqlite3_step (foreign-procedure "sqlite3_step" (uptr) int)))
+(define raw-finalize (bound 'sqlite3_finalize (foreign-procedure "sqlite3_finalize" (uptr) int)))
+(define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
+(define call-with-out-pointer (reach '(chez-sqlite3 private native) 'call-with-out-pointer))
+(define (raw-prepare! db sql)
+  (call-with-open-handle 'test-transaction-engine db
+    (lambda (h)
+      (call-with-c-string 'test-transaction-engine sql
+        (lambda (text)
+          (let-values (((rc statement)
+                        (call-with-out-pointer 'test-transaction-engine
+                          (lambda (slot) (prepare-v2 h text -1 slot 0)))))
+            (if (and (eqv? rc 0) (not (eqv? statement 0)))
+                statement
+                (error 'raw-prepare! "sqlite3_prepare_v2 did not answer a statement" rc))))))))
+
+;; held-select : Database Boolean -> (List (-> Any) (-> Any))
+;; The caller's select, tracked through prepare-statement when TRACKED,
+;; else made by raw-prepare!: a procedure that steps it to its row, and one
+;; that finalizes it, once, however often called.
+(define (held-select db tracked)
+  (let ((sql "select 1 union all select 2"))
+    (if tracked
+        (let ((st (prepare-statement db sql)))
+          (list (lambda () (step! st))
+                (lambda () (guard (e (#t #f)) (finalize-statement! st)))))
+        (let ((st (raw-prepare! db sql)) (live #t))
+          (list (lambda () (when live (raw-step st)))
+                (lambda () (when live (set! live #f) (raw-finalize st))))))))
+
+;; failed-begin-case : Boolean Positive-Integer (U Positive-Integer #f) -> (List Boolean Boolean Any)
+;; At T1 and T2, the caller's select TRACKED or not: whether each timer
+;; fired, and the inner call's answer, with-transaction's statements, the
+;; depth and the extended code straight after it. With T2 #f there is no
+;; second timer: the select stays at its row until the inner call is over.
+(define (failed-begin-case tracked t1 t2)
   (let* ((fired (vector #f #f))
          (old (timer-interrupt-handler))
          (r (with-files
              (lambda (db db2)
-               (let* ((held (prepare-statement db "select 1 union all select 2"))
-                      (w (with-transaction db 'deferred
+               (let* ((held (held-select db tracked))
+                      (step-it (car held))
+                      (finalize-it (cadr held))
+                      (w (dynamic-wind
+                           (lambda () #f)
                            (lambda ()
-                             (execute! db "insert into t values ('outer')")
-                             (timer-interrupt-handler
-                              (lambda ()
-                                (vector-set! fired 0 #t)
-                                (step! held)
-                                (call-with-open-handle 'test-transaction-engine db sqlite3-interrupt)
-                                (timer-interrupt-handler
-                                 (lambda ()
-                                   (timer-interrupt-handler old)
-                                   (vector-set! fired 1 #t)
-                                   (finalize-statement! held)))
-                                (set-timer t2)))
-                             (set-timer t1)
-                             (let* ((inner (attempt (lambda () (with-transaction db (lambda () 'inner-returned)))))
-                                    (off (set-timer 0))
-                                    (restored (timer-interrupt-handler old))
-                                    (own (own-statements db))
-                                    (depth (database-depth db))
-                                    (code (extended db)))
-                               (guard (e (#t #f)) (finalize-statement! held))
-                               (list inner own depth code))))))
+                             (with-transaction db 'deferred
+                               (lambda ()
+                                 (execute! db "insert into t values ('outer')")
+                                 (timer-interrupt-handler
+                                  (lambda ()
+                                    (vector-set! fired 0 #t)
+                                    (step-it)
+                                    (call-with-open-handle 'test-transaction-engine db sqlite3-interrupt)
+                                    (if t2
+                                        (begin
+                                          (timer-interrupt-handler
+                                           (lambda ()
+                                             (timer-interrupt-handler old)
+                                             (vector-set! fired 1 #t)
+                                             (finalize-it)))
+                                          (set-timer t2))
+                                        (begin
+                                          (timer-interrupt-handler old)
+                                          (vector-set! fired 1 #t)))))
+                                 (set-timer t1)
+                                 (let* ((inner (attempt (lambda () (with-transaction db (lambda () 'inner-returned)))))
+                                        (off (set-timer 0))
+                                        (restored (timer-interrupt-handler old))
+                                        (own (own-statements db))
+                                        (depth (database-depth db))
+                                        (code (extended db)))
+                                   (finalize-it)
+                                   (list inner own depth code)))))
+                           (lambda () (set-timer 0) (timer-interrupt-handler old) (finalize-it)))))
                  w)))))
     (set-timer 0)
     (timer-interrupt-handler old)
@@ -940,26 +1106,39 @@
        (equal? (car r) '(raised (sqlite-error with-transaction interrupt interrupt)))
        (null? (filter (lambda (t) (prefix? "SAVEPOINT" (car t))) (cadr r)))))
 
-;; failed-begins : -> (Listof Any)
-;; failed-begin-case at every T1 from 1 until four in a row fire no
-;; interrupt, and every T2 from 1 until four in a row fire no finalize,
-;; both fired: the cases that deviated, a begin that failed after which
-;; with-transaction tracked a ROLLBACK TO or RELEASE, or the extended code is
-;; neither 0 nor 9, interrupt: a ROLLBACK TO behind no SAVEPOINT answers 1.
-;; Prints how many cases failed their begin; fewer than 100 is itself a
-;; deviation.
-(define (failed-begins)
-  (let loop ((t1 1) (u1 0) (found '()) (failed 0))
+;; refused-beside-the-row? : Any -> Boolean
+;; Whether R, a failed-begin-case's outcome, is the inner call refused
+;; beside the caller's tracked select at its row.
+(define (refused-beside-the-row? r)
+  (and (list? r) (= (length r) 4)
+       (equal? (car r) '(raised (assertion-violation with-transaction
+                                 (statement-not-finished row "select 1 union all select 2"))))))
+
+;; failed-begins : Boolean -> (List Natural Natural (Listof Any))
+;; failed-begin-case, the caller's select TRACKED or not, at every T1 from
+;; 1 until four in a row fire no interrupt, and, untracked, every T2 from 1
+;; until four in a row fire no finalize, both fired; tracked, with no T2,
+;; the select held to the end, since a select the refusal sees is refused
+;; or comes after the BEGIN, whenever it is finalized. How many cases
+;; failed the nested begin, how many were refused beside the row, and the
+;; cases that deviated, a begin that failed after which with-transaction
+;; tracked a ROLLBACK TO or RELEASE, or the extended code is neither 0 nor
+;; 9, interrupt: a ROLLBACK TO behind no SAVEPOINT answers 1.
+(define (failed-begins tracked)
+  (let loop ((t1 1) (u1 0) (found '()) (failed 0) (refused 0))
     (if (or (> u1 3) (>= t1 300))
         (begin
-          (display "  the failed begins: cases that failed the nested begin: ")
+          (display (if tracked "  the refusal beside a tracked row: " "  the failed begins: "))
+          (display "cases that failed the nested begin: ")
           (write failed)
+          (display "; refused beside the row: ")
+          (write refused)
           (newline)
-          (append (reverse found) (if (< failed 100) (list (list 'too-few-failed-begins failed)) '())))
-        (let inner ((t2 1) (u2 0) (any #f) (found found) (failed failed))
-          (if (or (> u2 3) (>= t2 300))
-              (loop (+ t1 1) (if any 0 (+ u1 1)) found failed)
-              (let* ((r (failed-begin-case t1 t2))
+          (list failed refused (reverse found)))
+        (let inner ((t2 1) (u2 0) (any #f) (found found) (failed failed) (refused refused))
+          (if (or (> u2 3) (>= t2 300) (and tracked (> t2 1)))
+              (loop (+ t1 1) (if any 0 (+ u1 1)) found failed refused)
+              (let* ((r (failed-begin-case tracked t1 (and (not tracked) t2)))
                      (both (and (car r) (cadr r)))
                      (o (caddr r))
                      (fb (and both (begin-failed? o)))
@@ -968,14 +1147,21 @@
                                    (not (member (cadddr o) '(0 9)))))))
                 (inner (+ t2 1) (if (cadr r) 0 (+ u2 1)) (or any (car r))
                        (if bad (cons (list t1 t2 o) found) found)
-                       (if fb (+ failed 1) failed))))))))
+                       (if fb (+ failed 1) failed)
+                       (if (and both (refused-beside-the-row? o)) (+ refused 1) refused))))))))
 
 ;; own-sql-is-begin? : String -> Boolean
 (define (own-sql-is-begin? sql) (string=? sql "BEGIN DEFERRED"))
 
-(test-equal "a nested begin that fails leaves nothing to roll back: inside an outer with-transaction, deferred, a timer interrupt at T1 ticks steps the caller's select to a row and calls sqlite3_interrupt, which stays while the select is held, and a second at T2 ticks later finalizes it, at every T1 and T2 until four in a row do not fire: in the at least 100 cases where the inner with-transaction raises &sqlite-error interrupt with no SAVEPOINT tracked, only BEGIN DEFERRED is tracked of with-transaction's statements and the extended code is 0 or 9, never the 1 of a ROLLBACK TO behind no SAVEPOINT"
-  '()
-  (failed-begins))
+(test-equal "a nested begin that fails leaves nothing to roll back: inside an outer with-transaction, deferred, a timer interrupt at T1 ticks steps the caller's select, made outside the library so the connection does not track it, to a row and calls sqlite3_interrupt, which stays while the select is held, and a second at T2 ticks later finalizes it, at every T1 and T2 until four in a row do not fire: in the at least 100 cases where the inner with-transaction raises &sqlite-error interrupt with no SAVEPOINT tracked, only BEGIN DEFERRED is tracked of with-transaction's statements and the extended code is 0 or 9, never the 1 of a ROLLBACK TO behind no SAVEPOINT"
+  '(many ())
+  (let ((r (failed-begins #f)))
+    (list (if (>= (car r) 100) 'many (list 'too-few-failed-begins (car r))) (caddr r))))
+
+(test-equal "the refusal's pass and the BEGIN share one section: the same timer at every T1, with the caller's select tracked and held to the end, so no timer falls between the refusal and the SAVEPOINT: no nested begin fails beside the row, and at least three cases are refused, statement-not-finished"
+  '(0 many ())
+  (let ((r (failed-begins #t)))
+    (list (car r) (if (>= (cadr r) 3) 'many (list 'too-few-refused (cadr r))) (caddr r))))
 
 ;; --- a remainder resumed while an earlier resume of it is pending ---------------------------
 ;;
@@ -1114,6 +1300,356 @@
 (test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel on average"
   '(() ())
   (list (pending #f) (pending #t)))
+
+;; --- the call's claim: a remainder resumed twice begins one level ------------------------------
+;;
+;; Each with-transaction call holds a claim, made by its first expression,
+;; which the BEGIN's section takes, first in that section: a run of the call
+;; that reaches it once another has taken it begins nothing and raises
+;; &sqlite-transaction-ended. Before (M3's closing review), the flags were
+;; made after the plan's section, so a remainder taken between the call's
+;; first expression and them, resumed a second time once the call had
+;; ended, made flags of its own, began again, ran the body and committed
+;; again: at fuels 9 to 11, 15 and 16 of the review's probe.
+;;
+;; At fuel F, on a fresh connection: an engine whose thunk counts its own
+;; entries, then calls with-transaction, whose body inserts F and answers
+;; 42; its first remainder R resumed to its end, then again. A remainder
+;; taken before the call's first expression makes a whole new call
+;; (.plans/traps.md), which begins and commits again: one taken before the
+;; thunk's count re-runs that count, and so is told by it. One taken after
+;; the count but before the claim cannot be told from outside the call: the
+;; entries of with-transaction and of its work, two procedure calls, lie
+;; between, and an engine can expire at each. So a second level is allowed
+;; only where R re-ran the count, or at the claim-window fuels just after
+;; the first fuel whose first slice made it, and only where the first slice
+;; began nothing.
+
+;; claim-window : Natural
+;; The fuels after the count at which a first slice can stop before the
+;; claim: with-transaction's entry and transaction's.
+(define claim-window 2)
+
+;; claim-trial : Boolean Positive-Integer -> (U 'completed (List Any ...))
+;; One trial at FUEL, on a fresh in-memory connection, nested inside an
+;; outer with-transaction, deferred, when NESTED: 'completed when the first
+;; slice completed the call; else the entries counted by the first slice
+;; and by the end; the levels the first slice began; R's two answers; the
+;; levels begun and committed over the trial; the rows of FUEL; the depth
+;; and in-transaction? after it, the outer level over.
+(define (claim-trial nested? fuel)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (execute! db "create table t (x)")
+           (let* ((begin-sql (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))
+                  (entries 0)
+                  (thunk (lambda ()
+                           (attempt (lambda ()
+                                      (set! entries (+ entries 1))
+                                      (with-transaction db 'deferred
+                                        (lambda () (execute! db "insert into t values (?)" fuel) 42))))))
+                  (run (lambda ()
+                         (let ((first ((make-engine thunk) fuel complete expire)))
+                           (if (pair? first)
+                               'completed
+                               (let* ((e0 entries)
+                                      (b0 (car (delta '() (own-runs db) (list begin-sql))))
+                                      (a1 (finish first 1000000))
+                                      (a2 (finish first 1000000))
+                                      (runs (delta '() (own-runs db)
+                                                   (if nested?
+                                                       '("SAVEPOINT chez_sqlite3_1" "RELEASE chez_sqlite3_1"
+                                                         "ROLLBACK TO chez_sqlite3_1")
+                                                       '("BEGIN DEFERRED" "COMMIT")))))
+                                 (list e0 entries b0 a1 a2 (car runs)
+                                       (if nested? (- (cadr runs) (caddr runs)) (cadr runs))))))))
+                  (r (if nested? (with-transaction db 'deferred run) (run))))
+             (if (eq? r 'completed)
+                 'completed
+                 (append r
+                         (list (vector-ref (query-row db "select count(*) from t where x = ?" fuel) 0)
+                               (database-depth db)
+                               (if (in-transaction? db) 'open 'closed))))))))
+      (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))
+
+;; claim-sweep : Boolean -> (Listof Any)
+;; claim-trial at every fuel from 1 until the first slice completes the
+;; call: the fuels that deviated. A deviation is a second level not allowed
+;; above, more commits than levels, a first answer but 42 or the ended
+;; condition, a second but those, the re-entry's refusal or the body's
+;; execute! refused by its own claim, &sqlite-closed, fewer rows than commits,
+;; a depth but 0, or a transaction left open. Prints the fuels at which R
+;; made a whole new call, was refused by the claim, and lay past the BEGIN;
+;; fewer than three refused, or than three past, is itself a deviation, the
+;; sweep having reached nothing.
+(define (claim-sweep nested?)
+  (let loop ((fuel 1) (counted #f) (found '()) (new '()) (refused '()) (past 0))
+    (let ((r (claim-trial nested? fuel)))
+      (cond
+        ((or (eq? r 'completed) (>= fuel 5000))
+         (display (if nested? "  the claim, nested: " "  the claim, the outer level: "))
+         (display "completed unexpired at fuel ")
+         (write fuel)
+         (display "; the thunk's count first made at fuel ")
+         (write counted)
+         (display "; whole new calls at ")
+         (write (reverse new))
+         (display "; refused by the claim at ")
+         (write (reverse refused))
+         (display "; past the BEGIN at ")
+         (write past)
+         (display " fuels")
+         (newline)
+         (append (reverse found)
+                 (if (eq? r 'completed) '() '(no-completion))
+                 (if (< (length refused) 3) (list (list 'too-few-refused (length refused))) '())
+                 (if (< past 3) (list (list 'too-few-past-the-begin past)) '())))
+        ((not (and (list? r) (= (length r) 10)))
+         (loop (+ fuel 1) counted (cons (list fuel 'the-trial-raised r) found) new refused past))
+        (else
+         (let* ((e0 (list-ref r 0)) (e (list-ref r 1)) (b0 (list-ref r 2))
+                (a1 (list-ref r 3)) (a2 (list-ref r 4)) (begins (list-ref r 5)) (commits (list-ref r 6))
+                (rows (list-ref r 7)) (depth (list-ref r 8)) (open (list-ref r 9))
+                (counted* (or counted (and (eqv? e0 1) fuel)))
+                (ended '(raised (transaction-ended with-transaction)))
+                (whole-new (eqv? begins 2))
+                (allowed-new (and (eqv? b0 0)
+                                  (or (eqv? e 2)
+                                      (and counted* (< fuel (+ counted* claim-window))))))
+                (bad (append
+                      (if (and whole-new (not allowed-new)) '(a-second-level) '())
+                      (if (memv begins '(1 2)) '() (list (list 'levels begins)))
+                      (if (> commits begins) (list (list 'commits commits 'levels begins)) '())
+                      (if (member a1 (list 42 ended)) '() (list (list 'first a1)))
+                      (if (member a2 (list 42 ended '(raised (assertion-violation with-transaction (re-entered)))
+                                           '(raised (closed execute!))))
+                          '()
+                          (list (list 'second a2)))
+                      (if (<= commits rows) '() (list (list 'rows rows 'commits commits)))
+                      (if (eqv? depth 0) '() (list (list 'depth depth)))
+                      (if (eq? open 'closed) '() (list 'left-open)))))
+           (loop (+ fuel 1) counted*
+                 (if (null? bad) found (cons (cons fuel (cons bad r)) found))
+                 (if whole-new (cons fuel new) new)
+                 (if (and (eqv? b0 0) (not whole-new) (equal? a2 ended)) (cons fuel refused) refused)
+                 (if (> b0 0) (+ past 1) past))))))))
+
+;; interrupt-depth : -> Positive-Integer
+;; How many critical sections this thread is inside, plus one: what
+;; disable-interrupts answers, put back at once.
+(define (interrupt-depth)
+  (let ((n (disable-interrupts)))
+    (enable-interrupts)
+    n))
+
+;; handler-depth : (-> Any) -> (U (List 'raised-at-depth Symbol Any) (List 'no-raise Any))
+;; The depth a with-exception-handler handler runs at for the first thing
+;; THUNK raises, read before anything else, as depth-N, and what it raised,
+;; as what-raised names it. The handler escapes, so nothing returns into the
+;; raise.
+(define (handler-depth thunk)
+  (call/cc
+   (lambda (k)
+     (with-exception-handler
+      (lambda (c)
+        (let ((depth (interrupt-depth)))
+          (k (list 'raised-at-depth
+                   (string->symbol (string-append "depth-" (number->string depth)))
+                   (what-raised c)))))
+      (lambda () (list 'no-raise (thunk)))))))
+
+;; claim-depths : -> (List Natural (Listof Any))
+;; At every fuel from 1 until the call completes unexpired, on a fresh
+;; connection: an engine around handler-depth around with-transaction,
+;; deferred, whose body answers 42, its first remainder resumed to its end,
+;; then again. How many second resumes of a remainder taken before the
+;; BEGIN ran raised the ended condition, the claim's refusal, read by a
+;; handler at depth 1; and every answer of either resume that is neither 42
+;; nor a raise read at depth 1.
+(define (claim-depths)
+  (let loop ((fuel 1) (refused 0) (found '()))
+    (let ((r (with-memory
+              (lambda (db)
+                (let ((first ((make-engine
+                               (lambda ()
+                                 (handler-depth (lambda () (with-transaction db 'deferred (lambda () 42))))))
+                              fuel complete expire)))
+                  (if (pair? first)
+                      'completed
+                      (let* ((b0 (car (delta '() (own-runs db) '("BEGIN DEFERRED"))))
+                             (a1 (finish first 1000000))
+                             (a2 (finish first 1000000)))
+                        (list b0 a1 a2))))))))
+      (cond ((or (eq? r 'completed) (>= fuel 5000))
+             (display "  the claim's refusal, read by a handler: second resumes refused at depth 1: ")
+             (write refused)
+             (newline)
+             (list refused (reverse found)))
+            ((not (and (list? r) (= (length r) 3)))
+             (loop (+ fuel 1) refused (cons (list fuel 'the-trial-raised r) found)))
+            (else
+             (let ((odd (filter (lambda (a)
+                                  (not (or (equal? a '(no-raise 42))
+                                           (and (pair? a) (eq? (car a) 'raised-at-depth)
+                                                (eq? (cadr a) 'depth-1)))))
+                                (cdr r))))
+               (loop (+ fuel 1)
+                     (if (and (eqv? (car r) 0)
+                              (equal? (caddr r) '(raised-at-depth depth-1 (transaction-ended with-transaction))))
+                         (+ refused 1)
+                         refused)
+                     (if (null? odd) found (cons (list fuel odd) found)))))))))
+
+(test-equal "the claim's refusal is raised outside any critical section: at every fuel, a second resume's raise, the ended condition where the claim refused it, is read by a handler at depth 1, and at least three are"
+  '(many ())
+  (let ((r (claim-depths)))
+    (list (if (>= (car r) 3) 'many (list 'too-few-refused (car r))) (cadr r))))
+
+(test-equal "the call's claim: at every fuel from 1 until the call completes unexpired, on a fresh connection, its first remainder resumed to its end and then again, at the outer level and nested: a second level is begun only by a whole new call, from a remainder taken before the call's first expression, told by the thunk's own count or within the claim window after it; never more commits than levels; each answer 42 or the ended condition, the second also the re-entry's refusal or the body's execute! refused by its own claim; the depth 0 and nothing left open; at least three fuels refused by the claim, and three past the BEGIN"
+  '(() ())
+  (list (claim-sweep #f) (claim-sweep #t)))
+
+;; claim-reentry-case : Boolean Positive-Integer -> (List Boolean Boolean Any)
+;; At TICKS, on a fresh in-memory connection, nested inside an outer
+;; with-transaction, deferred, when NESTED: a timer of TICKS set just
+;; before with-transaction, deferred, whose handler takes a continuation K
+;; once; the body inserts 1 and, on its first entry, when K was taken, calls
+;; it, so the call is re-entered from inside its own level, with no wind
+;; crossed when K lies inside the call's wind. Whether the handler fired;
+;; whether the body called K; and the call's answer, with-transaction's
+;; BEGIN or SAVEPOINT runs, the extended code, the depth and in-transaction?
+;; after it, the outer level over.
+(define (claim-reentry-case nested? ticks)
+  (let* ((old (timer-interrupt-handler))
+         (fired #f)
+         (called #f)
+         (r (with-memory
+             (lambda (db)
+               (let* ((k #f) (entries 0)
+                      (begin-sql (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))
+                      (call (lambda ()
+                              (timer-interrupt-handler
+                               (lambda ()
+                                 (timer-interrupt-handler old)
+                                 (set! fired #t)
+                                 (call/cc (lambda (c) (set! k c)))))
+                              (set-timer ticks)
+                              (let ((a (attempt
+                                        (lambda ()
+                                          (with-transaction db 'deferred
+                                            (lambda ()
+                                              (set! entries (+ entries 1))
+                                              (when (and k (= entries 1) (not called))
+                                                (set! called #t)
+                                                (k #f))
+                                              (execute! db "insert into t values (1)")
+                                              42))))))
+                                (set-timer 0)
+                                (timer-interrupt-handler old)
+                                a)))
+                      (answer (if nested? (with-transaction db 'deferred call) (call))))
+                 (list answer (car (delta '() (own-runs db) (list begin-sql))) (extended db)
+                       (database-depth db) (if (in-transaction? db) 'open 'closed)))))))
+    (set-timer 0)
+    (timer-interrupt-handler old)
+    (list fired called r)))
+
+;; claim-reentries : Boolean -> (Listof Any)
+;; claim-reentry-case at every tick from 1 until four in a row do not fire
+;; the handler: the ticks whose call answered other than 42 or the ended
+;; condition, left a code, a depth or a transaction. Prints how many
+;; re-entered the call; fewer than ten is itself a deviation.
+(define (claim-reentries nested?)
+  (let loop ((ticks 1) (unfired 0) (reentered 0) (found '()))
+    (if (or (> unfired 3) (>= ticks 2000))
+        (begin
+          (display (if nested? "  the claim re-entered, nested: " "  the claim re-entered, the outer level: "))
+          (write reentered)
+          (display " of ")
+          (write (- ticks 1))
+          (display " ticks re-entered the call from its body")
+          (newline)
+          (append (reverse found) (if (< reentered 10) (list (list 'too-few-reentries reentered)) '())))
+        (let* ((c (claim-reentry-case nested? ticks))
+               (r (caddr c))
+               (ok (and (list? r) (= (length r) 5)
+                        (member (car r) '(42 (raised (transaction-ended with-transaction))))
+                        (memv (cadr r) '(1 2))
+                        (eqv? (caddr r) 0)
+                        (eqv? (cadddr r) (if nested? 0 0))
+                        (eq? (list-ref r 4) 'closed))))
+          (loop (+ ticks 1) (if (car c) 0 (+ unfired 1)) (if (cadr c) (+ reentered 1) reentered)
+                (if ok found (cons (list ticks c) found)))))))
+
+(test-equal "the claim is read in the BEGIN's own section: a continuation a timer's handler took inside the call, called from the body's first entry while the level is open, at every tick until four in a row do not fire, at the outer level and nested: the call answers 42 or the ended condition, never SQLite's refused BEGIN; the extended code is 0, the depth 0 and nothing left open; at least ten ticks re-enter"
+  '(() ())
+  (list (claim-reentries #f) (claim-reentries #t)))
+
+;; --- the BEGIN's plan, read in the BEGIN's section --------------------------------------------
+;;
+;; Autocommit, the depth and the refusal's pass are read in the BEGIN's own
+;; section, so no expiry splits the plan from the step: before (M3's closing
+;; review), an expiry between them let another engine begin a transaction on
+;; the connection, and the resumed call stepped BEGIN IMMEDIATE inside it,
+;; which SQLite refused, "cannot start a transaction within a transaction",
+;; after taking its lock: a second connection's BEGIN IMMEDIATE answered
+;; busy (ADR-0017, decision 2, "no BEGIN is ever issued inside a
+;; transaction").
+
+;; stale-trial : Positive-Integer -> (U 'completed (List Any ...))
+;; At FUEL, on a fresh file and two connections to it, the second with no
+;; busy timeout: engine A runs with-transaction, immediate, its body noting
+;; that it ran and answering 42, for one slice; 'completed when that slice
+;; completed it. Else the connection's own BEGIN, run to its end by engine
+;; B; then A resumed to its end. A's answer; whether its body ran; the
+;; second connection's BEGIN IMMEDIATE, then its rollback, began or what it
+;; raised; in-transaction?, B's transaction still open; B's answer; B's
+;; transaction rolled back; and the runs of SAVEPOINT chez_sqlite3_0, A's
+;; level inside B's transaction.
+(define (stale-trial fuel)
+  (with-files
+   (lambda (db db2)
+     (let* ((ran 'not-run)
+            (first ((make-engine (lambda ()
+                                   (attempt (lambda ()
+                                              (with-transaction db 'immediate
+                                                (lambda () (set! ran 'ran) 42))))))
+                    fuel complete expire)))
+       (if (pair? first)
+           'completed
+           (let* ((b ((make-engine (lambda () (attempt (lambda () (execute! db "begin") 'began))))
+                      1000000 complete (lambda (more) 'b-expired)))
+                  (a (finish first 1000000))
+                  (inside-b (car (delta '() (own-runs db) '("SAVEPOINT chez_sqlite3_0"))))
+                  (other (attempt (lambda () (execute! db2 "begin immediate") (execute! db2 "rollback") 'began)))
+                  (in (if (in-transaction? db) 'open 'closed))
+                  (rolled (attempt (lambda () (execute! db "rollback") 'rolled-back))))
+             (list a ran other in (cadr b) rolled inside-b)))))))
+
+(test-equal "the BEGIN's plan is read in the BEGIN's own section: at every fuel from 1 until engine A's with-transaction, immediate, completes in its first slice, the connection's own BEGIN run by engine B at A's first expiry, then A resumed: A answers 42 from a savepoint inside B's transaction, or the ended condition when its expiry fell inside its level, its body run either way; never SQLite's refused BEGIN; the second connection's BEGIN IMMEDIATE begins, so no lock was taken; B's transaction stays open"
+  '()
+  (let loop ((fuel 1) (found '()) (savepoints 0))
+    (let ((r (stale-trial fuel)))
+      (cond ((or (eq? r 'completed) (>= fuel 5000))
+             (display "  the stale plan: A completed in its first slice at fuel ")
+             (write fuel)
+             (display "; A's resumes that began a savepoint inside B's transaction and answered 42: ")
+             (write savepoints)
+             (newline)
+             (append (reverse found)
+                     (if (eq? r 'completed) '() '(no-completion))
+                     (if (< savepoints 3) (list (list 'too-few-savepoints savepoints)) '())))
+            ((and (list? r) (= (length r) 7)
+                  (member (car r) '(42 (raised (transaction-ended with-transaction))))
+                  (equal? (list-head (cdr r) 5) '(ran began open began rolled-back)))
+             (loop (+ fuel 1) found
+                   (if (and (eqv? (car r) 42) (eqv? (list-ref r 6) 1)) (+ savepoints 1) savepoints)))
+            (else (loop (+ fuel 1) (cons (list fuel r) found) savepoints))))))
 
 ;; --- an engine taken outside the call, resumed inside a sibling -------------------------------
 ;;
