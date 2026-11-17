@@ -427,7 +427,7 @@ reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-
 
 ## Amendment, 2026-11-17: the close's order (M4's close fix)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 8's "then `sqlite3_next_stmt` must find none, and `sqlite3_close` runs" now reads in
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix ([its mutation log](../m4-close-fix-mutation-log.md)), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 8's "then `sqlite3_next_stmt` must find none, and `sqlite3_close` runs" now reads in
 [ADR-0012](0012-explicit-close-and-the-handle.md)'s amended order: the statements finalized, then
 `sqlite3_close`, and `sqlite3_next_stmt` only after a refusal. A statement the record doesn't hold
 is a chez-sqlite3 defect or foreign code's, and the close vouches only for those it holds.

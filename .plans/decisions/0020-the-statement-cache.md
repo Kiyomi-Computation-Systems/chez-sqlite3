@@ -275,7 +275,7 @@ code.
 
 ## Amendment, 2026-11-17: the close's order (M4's close fix)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 9's "on a statement found untracked (`connection.sls:417`) or `sqlite3_close` failing
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix ([its mutation log](../m4-close-fix-mutation-log.md)), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 9's "on a statement found untracked (`connection.sls:417`) or `sqlite3_close` failing
 (`connection.sls:428`)" is now `sqlite3_close` refusing, with or without a statement left
 ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The cache is still emptied in the
 close's section, before `sqlite3_close`, whether or not the connection closes.

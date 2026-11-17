@@ -357,7 +357,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
 
 ## Amendment, 2026-11-17: the left-open paths (M4's close fix)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 2's two paths that leave the connection open, and set the latch's flag again, are
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix ([its mutation log](../m4-close-fix-mutation-log.md)), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 2's two paths that leave the connection open, and set the latch's flag again, are
 now both `sqlite3_close` refusing: with statements left to count, or none
 ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The flag is set again on both, as
 before, and `test-connection-close` holds an interrupt reaching a step after each. The citations

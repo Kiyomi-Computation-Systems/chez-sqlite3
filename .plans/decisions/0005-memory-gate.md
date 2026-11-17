@@ -770,7 +770,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: the statements check after a refused close (M4's close fix)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 5's `sqlite3_next_stmt` check runs after a refused `sqlite3_close`, not before each
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix ([its mutation log](../m4-close-fix-mutation-log.md)), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 5's `sqlite3_next_stmt` check runs after a refused `sqlite3_close`, not before each
 close ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The gate keeps its property:
 SQLite refuses a close while any statement is left, so no close succeeds beside a leaked one, and
 the refusal names the count. `test-connection-close` is in `MEMORY_SUITES_1`.
