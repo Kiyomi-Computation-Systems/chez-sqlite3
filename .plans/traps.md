@@ -228,6 +228,13 @@ told in chez-curl's `.plans/traps.md`.
   nothing. So a suite run against a library that lacks a new export dies naming no test, and a
   new row can't be watched failing that way. Watch it fail against the exports stubbed, each
   present and wrong, as M4 slice 1's red run did. (M4 slice 1, chez-sqlite3)
+- **`fork-thread` waits while another thread is in `dlopen`.** With one thread blocked in
+  `sqlite3_load_extension`'s open of a FIFO, a `fork-thread` called at 501 ms returned at 3957 ms,
+  once the load returned (glibc 2.41, in the container). That fits glibc's loader holding its lock
+  through the open, which creating a thread also takes; the cause wasn't traced further. Forking
+  a shell through `system` didn't wait. Fork
+  any helper thread before the call that may block in `dlopen` (M4 slice 2's FIFO row). (M4
+  slice 2, chez-sqlite3)
 
 ## SQLite
 

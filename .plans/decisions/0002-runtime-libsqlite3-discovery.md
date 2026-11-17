@@ -9,6 +9,8 @@
   [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, and where extension loading's guarantee lives
   ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
+  Amended 2026-11-17 in M4 slice 2, proposed: the optional entry point's prototype
+  ([amendment](#amendment-2026-11-17-the-optional-entry-points-prototype-m4-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -256,3 +258,16 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
     it absent; an open with the opt-in raises the named condition with no `sqlite3_open_v2` in the
     call log (the maintainer's Q4, "The decoy"). The decoy's open always fails, so the log can
     never show a `sqlite3_db_config` call: what a row sees is whether the open was tried.
+
+## Amendment, 2026-11-17: the optional entry point's prototype (M4 slice 2)
+
+Proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+
+- **`test-constants` asks `sqlite3_load_extension`'s prototype in a compile of its own,** and the
+  one compile asks the 43 required entry points alone. A header may mark the optional entry point
+  unavailable, as Apple's SDK is believed to: the review's stand-in header, redeclaring it
+  `__attribute__((unavailable))`, failed the whole compile and nine header rows with it.
+- **The rule:** where that compile fails and native records the entry point absent
+  (`load-extension-available?` `#f`), the row prints UNAVAILABLE and asserts both facts. Where it
+  fails and the library has the entry point, the row fails. With the stand-in header on Guix's
+  library, exactly that one row failed. The Mac step reports which the SDK's header gives.

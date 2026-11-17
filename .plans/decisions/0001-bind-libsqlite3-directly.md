@@ -4,6 +4,8 @@
   2026-11-13: a threaded Chez is required ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the variadic binding, measured, and its check
   ([amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
+  Amended 2026-11-17 in M4 slice 2, proposed: `check-variadic` as built
+  ([amendment](#amendment-2026-11-17-check-variadic-as-built-m4-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
@@ -123,3 +125,22 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
     Mac's hand run runs it by hand. chez-curl's `check-variadic` is the design; none of its code
     is copied.
 - **The consequence's Mac run** is M4 slice 2's, and each later change's.
+
+## Amendment, 2026-11-17: `check-variadic` as built (M4 slice 2)
+
+Proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+
+- **Written fresh.** The review found 82 of the first script's 150 distinct code lines verbatim in
+  chez-curl's `tests/check-variadic.sh`, against this record's "None of its code is copied". The
+  script was rewritten from the M4 plan's four steps without reopening chez-curl's: six lines are
+  shared now, `}`, `done`, `else`, `esac`, `exit 1` and `fi`.
+- **Its list of expected failures is held to the tree.** On the mutant, `test-conventions`' ten
+  sweeps of the real `src/` fail, and the script names them. `test-check-variadic`, in
+  `make test`, holds that list to `test-conventions.sps`' own tests, in order, and holds
+  `native.sls` to exactly one line carrying `(__varargs_after 2)`, comments included: a renamed
+  sweep, or the form written in a comment, fails `make test`, not CI's step alone.
+- **The arm64 step needs the binding's own failure:** on `arm64osx` or `tarm64osx`, by Chez's
+  `(machine-type)`, `test-native` on the mutant must fail a test whose name holds
+  `sqlite3_db_config`, or die. A failure of another test alone fails the step.
+- **Its cost:** 10 to 11 s in the container. CI's `main` job's figure is owed by the slice's runs
+  (the M4 plan, §7).

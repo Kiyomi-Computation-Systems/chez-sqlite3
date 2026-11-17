@@ -82,14 +82,14 @@ newest first.
     job. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
-  - **Slice 2,** the bindings and `check-variadic`, and **slice 5,** FTS5 and JSON, are built and
-    in verification.
-  - **The close fix is PR #36, below:** slice 5's FTS5 suite found `close-database!` refusing
-    every connection that had used an FTS5 table, FTS5's own statements counted as untracked. The
-    maintainer chose "Close first, count on failure", in a PR of its own before slice 5, then
-    "Document it, with a row" and "Vouch only for ours" (2026-11-17), and accepted its amendments
-    to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept all"). Slice 5 rebases onto
-    it and drops its workaround.
+  - **Slice 2,** the bindings and `check-variadic`, is PR #37, below. **Slice 5,** FTS5 and JSON,
+    is built; it rebases onto the close fix and drops its workaround.
+  - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
+    `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
+    counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
+    before slice 5, then "Document it, with a row" and "Vouch only for ours" (2026-11-17), and
+    accepted its amendments to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept
+    all").
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -152,6 +152,67 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M4 slice 2: the bindings and `check-variadic` (PR #37)
+
+- **Built:**
+  - `native.sls`'s seventh step: `sqlite3_db_config`, bound `(__varargs_after 2)` as the plan's
+    §4.2 writes it, and `sqlite3_free`, both required and plain; then `sqlite3_load_extension`,
+    optional and `__collect_safe`, through a new `bind-optional`, which answers the procedure or
+    `#f` and never refuses; `load-extension-available?`, read from that binding once;
+  - `call-with-int-cell`, the counted `int` cell a `db_config` set needs, filled by its caller,
+    read back signed, freed on every path: added after slice 1's review found no slice gave it;
+  - `constants.sls`' four ops, `sqlite-dbconfig-*`, held to `sqlite3.h`;
+  - the convention table's `variadic`, read from exactly `((__varargs_after 2))`, and the
+    constants' map rule for a prototype ending `"..."`; the optional entry point's prototype in a
+    compile of its own (ADR-0002, amended);
+  - the decoy's three switches: `sqlite3_db_config` and `sqlite3_free` dealt by the pattern of five,
+    to `-decoys` and `-missing`, and the lacking build of `sqlite3_load_extension` loading, with
+    `load-extension-available?` `#f`;
+  - `test-native`: each op's round trip with a sentinel per call, the unknown op, `sqlite3_free` of
+    NULL, the int cell's range and frees, and the load's FIFO row (ADR-0011, amended);
+  - `make check-variadic`, `tests/check-variadic.sh` and `test-check-variadic`, run as a step of
+    CI's `main` job, not by `make test`, with `check-ci`'s `MAKELINE` and `test-check-ci` moved.
+- **Watched failing:** the final suites against `87e762c`'s code failed every new row, 20 in
+  `test-native`, 38 in `test-check-variadic`; rows that test a helper's own rule were watched
+  failing against plants. The builder's 100 plants are all caught by some suite or target; the
+  survivors in one suite are argued, each caught by another. My 6: all caught, among them the int
+  range's edges, `sqlite3_free` bound `__collect_safe`, the value passed as `uptr`, an op off by one,
+  and a renamed sweep, which `make test` now sees.
+- **Reviewed** (Opus, read-only), no blocker:
+  - **two majors,** fixed: the script copied 82 of its 150 distinct lines from chez-curl's,
+    against ADR-0001's amendment, and is rewritten, six trivial lines shared; and a header that
+    marks `sqlite3_load_extension` unavailable, as Apple's SDK may, would have failed
+    `test-constants`' one compile;
+  - **five minors,** fixed: `make test` holds the script's ten names and its one form; the range
+    row asserts 2^32−1 itself; the arm64 step needs `sqlite3_db_config`'s own failure; the FIFO
+    row's hung branch releases the FIFO before any close; the ops' two sources go to slice 3.
+- **Built and taken out:** `sqlite3_stmt_busy`, for "Refuse busy statements first", which the
+  maintainer replaced with "Vouch only for ours" (the close fix's close-out).
+- **Times:** under the gate on Guix's library, `test-conventions` 46 s, `test-native` 24 s,
+  `test-check-variadic` 16 s, `test-constants` 13 s, and the three loading suites 145 to 160 s,
+  where CI's last run read 136 to 165 s. `make check-variadic` takes 10 to 11 s. Both CI figures
+  are owed by this PR's runs (the M4 plan, §7).
+- **The Mac step** is owed (ADR-0001's consequence): `make test` and `make check-variadic` with
+  Apple's library and with Homebrew's, on `main` after this merges. With Apple's, `test-native`
+  names the load rows unavailable, and `test-constants`' optional prototype row reports what the
+  SDK's header declares; `check-variadic` must end "all 7 steps ok, on tarm64osx". With Homebrew's,
+  the FIFO row is the first measure of `dlopen` on a FIFO on macOS.
+- **For slice 3:** import the ops from `constants.sls` and hold slice 1's table to them; fill the
+  cell with `db-config-sentinel` through `call-with-int-cell`; `load-extension-available?` is the
+  opt-in's check.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder, four rounds | Opus | about 860k | 276 | 264 min, its own runs among it |
+  | The review | Opus | 307k | 76 | 21 min |
+
+- **Learned:**
+  - **"Copy none of its code" needs a check, not a reminder.** The brief said it; the builder
+    copied anyway, and only the review's line count found it.
+  - **A test that compiles against a header can be broken by a platform's header,** even for an
+    entry point the code treats as optional. Ask each optional thing in a compile of its own.
 
 ### 2026-11-17 — M4's close fix: close first, and vouch only for ours (PR #36)
 
