@@ -6,7 +6,7 @@ are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. §3c, d, e and 
 ADR-0013, from the M1 plan. Amended 2026-11-14 with the M1 plan: D2 settled, D7 measured, and the
 settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 to D6 settled
 by the maintainer (§5). §3f is ADR-0015, accepted. Amended 2026-11-15 with the M3 plan: D3's leaning
-settled (§5), and what M3's research measured of §2.7 and §3d. Amended 2026-11-17 with the M4 plan:
+settled (§5), and what M3's research measured of §2.7 and §3d. Amended 2026-11-17 with the M4 plan, and accepted by the maintainer that day:
 where §2.5's guarantee lives, §2.6's FTS5 on the `current` lane alone, and §2.8's options as
 settings. Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which

@@ -33,7 +33,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(__varargs_after 2)`, plain; `sqlite3_config` is never bound** (ADR-0001, brief §2.8).
   `make check-variadic`, which CI's `main` job runs as a step and `make test` doesn't, removes the
   convention in a copy and watches `test-conventions` fail, and on Apple arm64 `test-native` too
-  (ADR-0001, amended; ADR-0021) *(provisional)*.
+  (ADR-0001, amended; ADR-0021).
 - **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are pointer-width integers,** −1 and 0 as C writes
   them. As a `uptr`, −1 is all ones, and native computes it from the pointer's size (ADR-0001).
 - **Every value a verb passes to C is checked to fit its C type before the critical section that
@@ -45,7 +45,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `sqlite3_load_extension` is optional too, since a build can omit it, as Apple's does, and
   `sqlite3_enable_load_extension` is never bound (ADR-0002, amended).
   Its absence is reported by an open that opts in, as `&sqlite-extensions-unavailable`, before
-  anything opens (ADR-0002, amended; ADR-0021) *(provisional)*.
+  anything opens (ADR-0002, amended; ADR-0021).
 - **No binding takes a Scheme object:** never Chez's `string`, `utf-8`, `u8*` or `scheme-object`
   types, nor a bytevector. Every string passed to libsqlite3 is copied, UTF-8 and NUL-terminated,
   into a counted foreign block freed on every path, and one holding U+0000 is refused before
@@ -60,8 +60,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   - **`sqlite3_reset` and `sqlite3_finalize` join them in M2,** measured waiting in the busy
     handler, and M2's four are held by behaviour too (ADR-0011 amended).
   - **`sqlite3_load_extension` joins them in M4,** measured blocking on a FIFO, where a plain
-    binding held another thread's collection for the whole wait (ADR-0011, amended; ADR-0021)
-    *(provisional)*.
+    binding held another thread's collection for the whole wait (ADR-0011, amended; ADR-0021).
 - **Nothing raises inside `critical-section`, or inside a critical `dynamic-wind` thunk,** in
   `src/` or in the testing library. Code there answers data; a raise from a call made there is
   caught in the section and raised again after it, as the same object.
@@ -220,7 +219,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   raised over the setting's condition (ADR-0018, amended in M3 slice 5).
   M4 adds four of `sqlite3_db_config`'s, `enable-load-extension`, `defensive`, `dqs-dml` and
   `dqs-ddl`, each one call held by its own answer, made only where named, and for
-  `enable-load-extension` only for `#t` (ADR-0018, amended; ADR-0021) *(provisional)*.
+  `enable-load-extension` only for `#t` (ADR-0018, amended; ADR-0021).
 - **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
@@ -251,7 +250,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
   `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
 
-## `db_config` and extensions *(provisional)*
+## `db_config` and extensions
 
 - **A connection starts as its library starts it.** No op is set unasked: DQS is on in every
   library measured, `DEFENSIVE` on Apple's alone, `ENABLE_LOAD_EXTENSION` on Ubuntu's (ADR-0021,

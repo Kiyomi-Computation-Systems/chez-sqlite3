@@ -12,8 +12,8 @@
   [amendment](#amendment-2026-11-15-chezs-foreign-ranges-m2-slice-2)). Amended 2026-11-15, and
   accepted by the maintainer that day: M3's bindings (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-bindings-m3s-plan)).
-  Amended 2026-11-17: M4's bindings (M4's plan,
-  [amendment](#amendment-2026-11-17-m4s-bindings-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's bindings
+  ([amendment](#amendment-2026-11-17-m4s-bindings-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -236,7 +236,7 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
 
 ## Amendment, 2026-11-17: M4's bindings (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2 and §4.4;
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2 and §4.4;
 [ADR-0021](0021-db-config-options-and-extension-loading.md), decisions 3, 4, 8 and 9).
 
 - **`sqlite3_load_extension` joins decision 5's list.** On a FIFO it waited until a writer opened

@@ -3,8 +3,8 @@
 - **Status:** Accepted (the maintainer, 2026-11-13). Amended 2026-11-14, and accepted by the
   maintainer that day: decision 3 is built (M1 slice 5,
   [amendment](#amendment-2026-11-14-decision-3-is-built-m1-slice-5)).
-  Amended 2026-11-17: FTS5 on the current lane (M4's plan,
-  [amendment](#amendment-2026-11-17-fts5-on-the-current-lane-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: FTS5 on the current lane
+  ([amendment](#amendment-2026-11-17-fts5-on-the-current-lane-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every SQLite chez-sqlite3 loads
 - **Settles:** brief §2.2
@@ -69,7 +69,7 @@ What the versions bring that v1 uses:
 
 ## Amendment, 2026-11-17: FTS5 on the current lane (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §2 and §4.5).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §2 and §4.5).
 
 - **The consequence's "FTS5 is wherever the build enables it" held, and CI's compiled lanes
   enabled it nowhere:** `build-sqlite.sh` compiled SQLite's defaults, so `floor` and `current` had

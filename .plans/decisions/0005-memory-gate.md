@@ -34,8 +34,8 @@
   2026-11-17 ("Accept all"). Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open risk met and
   closed, the watchdog's handshake, and the gates no row read
   ([amendment](#amendment-2026-11-17-the-open-risk-met-and-the-gates-no-row-read-m3s-closing-review)).
-  Amended 2026-11-17: M4's entry points, suites and extension (M4's plan,
-  [amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, suites and extension
+  ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -739,7 +739,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
 
 ## Amendment, 2026-11-17: M4's entry points, suites and extension (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.6).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.6).
 
 - **Three decoy children,** one for each of M4's entry points. `sqlite3_db_config` and
   `sqlite3_free` are dealt by the pattern of five (the amendment "the halves split in three");

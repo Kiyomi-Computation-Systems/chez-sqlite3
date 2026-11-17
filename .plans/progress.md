@@ -69,6 +69,11 @@ newest first.
 - **Now: M4,** extensions and `db_config`. Its slice 0, the plan, ADR-0021 and their amendments, is
   PR #31, by the M4 session, written beside M3's closing review, plans and records only (the
   maintainer, 2026-11-17).
+  - **The plan's questions:** the maintainer settled Q14 to Q16 on 2026-11-17, each the
+    recommendation: "The rule's names", "Same as leaving it out" and "An absolute path". Asked
+    again about Q14 and Q15 together, from a user's side, the answer was "Yes, as shown".
+  - **The records:** the maintainer accepted ADR-0021 and the plan's amendments the same day
+    ("Accept all").
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -131,6 +136,64 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M4 slice 0: the plan and the records (PR #31)
+
+- **Built:**
+  - [the M4 plan](2026-11-17-m4-plan.md);
+  - ADR-0021, accepted by the maintainer with the plan's Q14 to Q16, on top of the pre-work's Q1
+    to Q13 ([research/m4-prework/](research/m4-prework/README.md));
+  - the plan's owed amendments (§10), applied and accepted ("Accept all"): the brief, ADR-0001,
+    ADR-0002, ADR-0003, ADR-0005, ADR-0011, ADR-0012, ADR-0013 and ADR-0018, the global
+    constraints, AGENTS.md and `traps.md`.
+- **Measured** on Guix's 3.53.1, the floor's 3.45.1, and 3.54.1 plain and with FTS5
+  ([research/m4-plan/](research/m4-plan/README.md)):
+  - a `db_config` set that changes a flag expires the connection's statements, and one that
+    changes nothing doesn't;
+  - a set never waited, so it is bound plain;
+  - a load can block, on a FIFO, so it is bound `__collect_safe`: plain, it held another thread's
+    collection 1.15 s;
+  - a load's message is in its own slot, and a failure's code is the call's own answer;
+  - a test extension compiles in about 50 ms and loads clean under the gate;
+  - FTS5 and JSON behave alike on every build that has them.
+- **Watched failing:**
+  - the gate, on an unfreed load message: Valgrind exit 9, 448 bytes lost;
+  - the FIFO measure's plain mode;
+  - `check-sqlite.sh`, on the FTS5 build;
+  - the probes' version guard.
+- **Reviewed** (Opus, read-only). Twelve findings, all fixed, the review's three probes rerun in
+  the research:
+  - a slice 1 that would have reached `open-database` through `settings-plan`;
+  - an error code read from the connection, not the call;
+  - a load's init failure that leaves its reason only on the connection;
+  - the optional entry point in the pattern of five;
+  - `check-variadic`'s cost inside `make test`, now a CI step;
+  - plants that couldn't fail;
+  - slices called parallel that share files;
+  - Linux facts written as general ones;
+  - quotes, citations and counts.
+
+  It also found that Q14 and Q15 pulled against each other. Asked again, from a user's side, the
+  maintainer confirmed the method: Python's `sqlite3`'s shape, with the refusal naming
+  `(enable-load-extension . #t)`.
+- **Rebased** onto #32: three conflicts, each two end-appends or two Status clauses, resolved by
+  keeping both, #32's first. The plan now names the hold of its FTS5 gate, against ADR-0005's
+  amendment of that day.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The planner, two rounds | Opus | about 598k | 149 | 47 min |
+  | The plan's review | Opus | about 350k | 92 | 24 min |
+
+- **Learned:**
+  - **Put questions to the maintainer with their interactions named.** Q14 and Q15 were asked
+    side by side, and each answer was right alone; together they named a setting after a C flag
+    its `#f` doesn't set. Asking again from what a user can observe settled it.
+  - **A pure core isn't pure if the live path reads its tables.** Slice 1's names would have
+    reached `open-database` through `settings-plan`'s steps.
+  - **A failure's code is the call's,** whenever the call answers one. The connection's error
+    state is another call's more often than not.
 
 ### 2026-11-17 — M3's closing review and its fixes (PR #32)
 

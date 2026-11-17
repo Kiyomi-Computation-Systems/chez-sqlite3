@@ -7,8 +7,8 @@
   ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)). Amended 2026-11-15, and
   accepted by the maintainer that day: M3's required entry points (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
-  Amended 2026-11-17: M4's entry points, and where extension loading's guarantee lives (M4's plan,
-  [amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, and where extension loading's guarantee lives
+  ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -225,7 +225,7 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
 
 ## Amendment, 2026-11-17: M4's entry points, and where extension loading's guarantee lives (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3, §4.4 and §4.6;
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3, §4.4 and §4.6;
 [ADR-0021](0021-db-config-options-and-extension-loading.md)).
 
 - **M4 adds two required entry points** to item 5 of the M1 amendment's "What is bound, in

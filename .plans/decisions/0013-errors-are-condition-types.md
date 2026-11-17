@@ -7,8 +7,8 @@
   [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)). Amended 2026-11-15, and accepted by
   the maintainer that day: M3's conditions (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-conditions-m3s-plan)).
-  Amended 2026-11-17: M4's condition (M4's plan,
-  [amendment](#amendment-2026-11-17-m4s-condition-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's condition
+  ([amendment](#amendment-2026-11-17-m4s-condition-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -234,7 +234,7 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
 
 ## Amendment, 2026-11-17: M4's condition (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3 and §4.4).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3 and §4.4).
 
 - **The hierarchy, with M4's type:**
 

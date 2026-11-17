@@ -2,8 +2,8 @@
 
 - **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3a. Amended
   2026-11-13: a threaded Chez is required ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
-  Amended 2026-11-17: the variadic binding, measured, and its check (M4's plan,
-  [amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the variadic binding, measured, and its check
+  ([amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
@@ -95,7 +95,7 @@
 
 ## Amendment, 2026-11-17: the variadic binding, measured, and its check (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2;
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2;
 [ADR-0021](0021-db-config-options-and-extension-loading.md), decision 4).
 
 - **The consequence is measured** (M4's pre-work,

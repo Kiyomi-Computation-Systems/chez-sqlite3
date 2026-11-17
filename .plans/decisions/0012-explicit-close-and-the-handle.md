@@ -14,8 +14,8 @@
   Amended 2026-11-16 in M3 slice 5, and accepted by the maintainer that day: the open verbs'
   library, the open's claim, and decision 8's handler around the open
   ([amendment](#amendment-2026-11-16-the-open-verbs-library-m3-slice-5)).
-  Amended 2026-11-17: the record holds the opt-in (M4's plan,
-  [amendment](#amendment-2026-11-17-the-record-holds-the-opt-in-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the record holds the opt-in
+  ([amendment](#amendment-2026-11-17-the-record-holds-the-opt-in-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -367,7 +367,7 @@ M3 slice 5).
 
 ## Amendment, 2026-11-17: the record holds the opt-in (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3).
 
 - **The `database` record gains a field, the connection's opt-in to extension loading,** fixed
   when the record is made, from the settings' plan, as the statement cache's capacity is

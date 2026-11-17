@@ -15,8 +15,8 @@
   ([amendment](#amendment-2026-11-16-what-m3-slice-5-built)).
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open's claim held whole, and its sweeps' bound
   ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
-  Amended 2026-11-17: db_config's four settings (M4's plan,
-  [amendment](#amendment-2026-11-17-db_configs-four-settings-m4s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: db_config's four settings
+  ([amendment](#amendment-2026-11-17-db_configs-four-settings-m4s-plan)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -308,7 +308,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
 
 ## Amendment, 2026-11-17: `db_config`'s four settings (M4's plan)
 
-Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.1;
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.1;
 [ADR-0021](0021-db-config-options-and-extension-loading.md), decisions 1 to 5). Built on the
 maintainer's answers to M4's pre-work: "In the settings list" (Q10), "Hold the set's answer" (Q8)
 and "SQLite's default, settable" (Q5), 2026-11-16; "Library's start, documented" (Q13),

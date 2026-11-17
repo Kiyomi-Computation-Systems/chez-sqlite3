@@ -1,6 +1,6 @@
 # ADR-0021: `db_config`'s options are settings, held by the set's own answer, and extension loading is opted into at open and refused in Scheme otherwise
 
-- **Status:** Proposed, in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.1 to §4.4).
+- **Status:** Accepted (the maintainer, 2026-11-17, "Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.1 to §4.4).
   Built on the maintainer's answers of 2026-11-16 and 2026-11-17 to the pre-work's questions
   ([research/m4-prework/](../research/m4-prework/README.md#the-maintainers-answers-2026-11-16)):
   decision 3's place, "In the settings list" (Q10), and its check, "Hold the set's answer" (Q8);
