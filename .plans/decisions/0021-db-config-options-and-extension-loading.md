@@ -299,7 +299,13 @@ code's rule is the maintainer's: "Assertion violation" (2026-11-17).
   `&sqlite-error`" holds for each code SQLite answers a refused set with: 1, and Apple's 21. A code
   whose low byte is 0, 100 or 101 names no error, and `raise-sqlite-error` refuses it as
   `not-an-error`, an assertion violation. No library measured answers one to `sqlite3_db_config`.
-  If one does, the open closes the connection first, as decision 3 says, and then raises that
-  assertion violation: the answer is a defect, SQLite's or chez-sqlite3's, not a refusal. The
-  verdict answers `(error CODE)` for it, as for any code but 0, and M4 slice 3's stand-in row
-  holds the raise.
+  If one does, the open closes the connection first, as decision 3 says, and then raises an
+  assertion violation from the verb called, `open-database` or `call-with-database`, its
+  irritants `(not-an-error CODE)`: the answer is a defect, SQLite's or chez-sqlite3's, not a
+  refusal. The open tests the code itself before `raise-sqlite-error`, whose own refusal would
+  name `raise-sqlite-error`, where ADR-0013's decision 2 has every raise name the procedure the
+  caller called. The verdict answers `(error CODE)` for it, as for any code but 0. M4 slice 3's
+  stand-in row answers 100 and asserts the verb's `&who` and `(not-an-error 100)`, which a code
+  read from the connection, `(not-an-error 0)`, does not meet.
+- **This narrows "another code raises `&sqlite-error`"** in decision 3, in ADR-0018's amendment
+  of 2026-11-17, and in the global constraints, which now say so.

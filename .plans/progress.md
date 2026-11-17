@@ -77,8 +77,8 @@ newest first.
 - **Now: M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
   2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
   of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
-  - **M4 slice 1 is done:** the pure core of the four `db_config` settings and
-    `&sqlite-extensions-unavailable`, as PR #35, below. The maintainer accepted its ADR-0021
+  - **M4 slice 1,** the pure core of the four `db_config` settings and
+    `&sqlite-extensions-unavailable`, is PR #35, below. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
   - **Slice 2,** the bindings and `check-variadic`, and **slice 5,** FTS5 and JSON, are built and
@@ -181,17 +181,32 @@ newest first.
   - decided: a code that names no error, in ADR-0021's amendment;
   - moved to slice 2: the counted `int` cell, which only `native.sls` may make;
   - moved to slice 3: the ops checked against `sqlite3.h`, and the join's changes, below.
+
+  The M4 session's conformance check of the PR (Opus, read-only), seven findings, no blocker:
+  the amendment's raise named `raise-sqlite-error`, not the verb called, so the amendment now has
+  the open test the code itself; the global constraints carry the amendment; slice 3's list gains
+  `test-settings`' three rows and the stand-in row; and the log's nits are fixed.
 - **Times:** 0.3 s, 0.3 s and 2.1 s plain on Guix's 3.53.1 and the floor; 10 s, 9 s and 14 s
   under the gate on both, none `SLOW`.
 - **For slice 3:**
-  - fill the cell with `db-config-sentinel`, through slice 2's int cell, never a literal;
+  - fill the cell with `db-config-sentinel`, through slice 2's `call-with-int-cell`, which reads
+    it back as a signed C `int`, never a literal;
   - take the ops from `constants.sls`'s four, which `test-constants` holds to the header, or hold
     `db-config-settings`' ops to them by a row: today only the suite's copies back them;
   - the join: `settings-plan` maps `db-config-step`'s answers onto its refusals, and a `no-call`
     still marks the name seen, for `setting-given-twice`. The two step shapes are told apart only
     by the `cadr`, an integer op or a string of SQL, so tag them if a stand-in could hand the
     wrong kind. `unknown-setting`'s and `setting-out-of-domain`'s messages list the seven;
-  - replace `test-open-settings`' two hold-out rows with the sets' rows.
+  - replace `test-open-settings`' two hold-out rows with the sets' rows, and in `test-settings`,
+    which the plan's §5 item 3 leaves out of slice 3's files, `s-out`, the hold-out row, and M3's
+    `s-setting-names` and `s-no-row`, which hold `setting-names` whole: the join, done right,
+    fails all three (J1). If the plan's answer gains the opt-in, M3's `(settings capacity steps)`
+    rows there move too;
+  - a code that names no error: test it before `raise-sqlite-error`, and raise from the verb
+    called. The stand-in row answers 100 and asserts the verb's `&who` and `(not-an-error 100)`
+    (ADR-0021, amended);
+  - derive the record's opt-in from the step `(enable-load-extension 1005 1 #t)`, not from the
+    name, so `#f`, which makes no step, holds none (the M4 session's check of PR #35).
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

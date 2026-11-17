@@ -263,6 +263,24 @@ whose open is made before the checks' refusal and closed before it is raised, pa
 the counts are zero at the raise and `:memory:` leaves nothing. `o-file` fails it, the file made,
 as M3's `o-refusals` does; `o-file` was added for it.
 
+## The lead's plants
+
+The lead planted ten of its own in copies of the tree, by its own driver, each edit checked to
+match once. They ran on Guix's 3.53.1, with the suites named, and were all caught:
+
+| Plant | Edit | Caught by |
+|---|---|---|
+| L1 | the verdict takes any number equal to 0, so 0.0, as a code of 0 | `test-settings`, 1 row |
+| L2 | a cell that is neither 0, 1 nor the sentinel read as `()` | `test-settings`, 3 |
+| L3 | `#f` makes no call for every setting | `test-settings`, 2 |
+| L4 | `dqs-dml` and `dqs-ddl`'s ops swapped | `test-settings`, 3 |
+| L5 | a step writes 1 for `#f` | `test-settings`, 2 |
+| L6 | `raise-extensions-unavailable` drops its `&who` | `test-conditions`, 3 |
+| L7 | any cell of 0 or 1 matches, whatever was asked | `test-settings`, 2 |
+| L8 | `dqs-ddl` alone joined to `setting-names` | `test-settings`, 5; `test-open-settings`, 2 |
+| L9 | `(defensive . #f)` makes no call | `test-settings`, 2 |
+| L10 | `raise-extensions-unavailable` takes a WHO unchecked | `test-conditions`, 1 |
+
 ## The survivor, argued
 
 - **V15, the sentinel's test moved after 0's and 1's in the verdict's mapping,** is equivalent
@@ -321,15 +339,16 @@ mutant ran again on the reviewed suites, in `build/mut-r2/`.
 
 ## For the records
 
-- **The sentinel's choice,** above, is the slice's own: ADR-0021's decision 3 and ADR-0018's
-  amendment say only "neither 0 nor 1". Slice 3 fills the cell with `db-config-sentinel`, never
+- **The sentinel's choice,** above, is the slice's own: ADR-0021's decision 3 and the plan's
+  §4.1 say only "neither 0 nor 1". Slice 3 fills the cell with `db-config-sentinel`, never
   a literal of its own, or Z4's split returns: a left cell would read as itself, not `()`.
 - **Codes `raise-sqlite-error` refuses.** `db-config-verdict` answers `(error C)` for every code
   but an exact 0, so for 100, 101 and any code whose low byte is 0, such as 256, too. M2's
   `raise-sqlite-error` refuses those as `not-an-error`, an assertion violation, so decision 3's
   "any other code raises `&sqlite-error`" can't hold for them through the one procedure. No
-  library measured answers one (0, 1, and Apple's 21); slice 3, or a line in ADR-0021, says what
-  such an answer raises.
+  library measured answers one (0, 1, and Apple's 21). Settled by ADR-0021's amendment of
+  2026-11-17 (the maintainer, "Assertion violation"): an assertion violation from the verb
+  called, `(not-an-error CODE)`, which the open tests before `raise-sqlite-error`.
 - **`raise-extensions-unavailable` is the slice's addition** beside the type, its maker and its
   predicate, which the brief named: the fixed `&message` and the `&who` that ADR-0013's
   amendment gives the type live there, as `raise-transaction-ended`'s do. Slice 3 calls it inside
