@@ -15,6 +15,8 @@
   ([amendment](#amendment-2026-11-16-what-m3-slice-5-built)).
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open's claim held whole, and its sweeps' bound
   ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
+  Amended 2026-11-17: db_config's four settings (M4's plan,
+  [amendment](#amendment-2026-11-17-db_configs-four-settings-m4s-plan)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -303,3 +305,45 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
   open.
 - **`settings.sls`'s comments** said the plan and the split run before any critical section.
   They run inside `checked`'s.
+
+## Amendment, 2026-11-17: `db_config`'s four settings (M4's plan)
+
+Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.1;
+[ADR-0021](0021-db-config-options-and-extension-loading.md), decisions 1 to 5). Built on the
+maintainer's answers to M4's pre-work: "In the settings list" (Q10), "Hold the set's answer" (Q8)
+and "SQLite's default, settable" (Q5), 2026-11-16; "Library's start, documented" (Q13),
+2026-11-17.
+
+- **Decision 3's allowlist gains four of SQLite's, set by `sqlite3_db_config`, not SQL,** named
+  by the maintainer's Q14 (2026-11-17, "The rule's names"):
+
+  | Setting | Scheme value | Written as | Read back as |
+  |---|---|---|---|
+  | `enable-load-extension` | `#t` or `#f` | `1` to `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION`, for `#t` alone | the call's cell |
+  | `defensive` | `#t` or `#f` | `1` or `0` to `SQLITE_DBCONFIG_DEFENSIVE` | the call's cell |
+  | `dqs-dml` | `#t` or `#f` | `1` or `0` to `SQLITE_DBCONFIG_DQS_DML` | the call's cell |
+  | `dqs-ddl` | `#t` or `#f` | `1` or `0` to `SQLITE_DBCONFIG_DQS_DDL` | the call's cell |
+
+  `(enable-load-extension . #f)` makes no call, the same as leaving it out (Q15, "Same as
+  leaving it out"): the setting says whether `load-extension!` works, and the C flag's own state
+  can't be observed through the library.
+- **Decision 4's read-back, for these four, is the set's own answer:** one call, no second
+  statement. A cell other than the value written raises `&sqlite-setting-mismatch`, its actual
+  `()` for a cell the call left at its sentinel; a code but 0 raises `&sqlite-error`, its code
+  that answer, never the connection's, and its message `sqlite3_errstr`'s.
+- **Decision 5's order holds them:** `busy-timeout` first, the rest in the list's order. Each is
+  one call, in a section of its own, which claims the call's claim (amended in M3 slice 5). A set
+  does no I/O and never waited, under another's exclusive lock (M4's research, D4).
+- **Decision 6 holds them at open alone.** A set that changes a flag expires the connection's
+  statements, and one prepared under DQS on fails at its next step once DQS is off (D1, D2). At
+  open the connection holds none.
+- **Decision 8 holds for them:** a connection opened without one keeps its library's start,
+  `DEFENSIVE` 1 on Apple's alone, `ENABLE_LOAD_EXTENSION` 1 on Ubuntu's (M4's pre-work).
+- **The refusals' order gains a fifth step,** after the list's own rules: an opt-in on a library
+  without `sqlite3_load_extension` raises `&sqlite-extensions-unavailable`.
+- **The complement grows:** every other `SQLITE_DBCONFIG_*` op of 3.45.1's and 3.54.1's headers,
+  named by ADR-0021's rule, is `unknown-setting`. `trusted-schema` stays this record's PRAGMA, the
+  one way in to that flag (Q7).
+- **The engine rows** sweep an open holding the four among the six PRAGMAs until it completes
+  unexpired, and interleave one remainder's runs, as M3 slice 5's did; each set is made once a
+  call.

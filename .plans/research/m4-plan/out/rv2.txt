@@ -1,0 +1,4 @@
+(0 (assertion-violation raise-sqlite-error (not-an-error 0)))
+(1 (sqlite-error error error))
+(5 (sqlite-error busy busy))
+(261 (sqlite-error busy busy-recovery))

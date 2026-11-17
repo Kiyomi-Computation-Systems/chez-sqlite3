@@ -1,0 +1,48 @@
+==118== Memcheck, a memory error detector
+==118== Copyright (C) 2002-2026, and GNU GPL'd, by Julian Seward et al.
+==118== Using Valgrind-3.27.0 and LibVEX; rerun with -h for copyright info
+==118== Command: /gnu/store/5v2iykmw4z9r6wvq5kqbh2yx1zz1ncan-profile/bin/scheme --program .plans/research/m4-plan/x1-ffi-load.sps ROOT/build/m3-floor/lib/libsqlite3.so.0 DIR gate-leak
+==118== Parent PID: 74
+==118== 
+==118== 
+==118== HEAP SUMMARY:
+==118==     in use at exit: 2,134 bytes in 7 blocks
+==118==   total heap usage: 472 allocs, 465 frees, 170,471 bytes allocated
+==118== 
+==118== 64 bytes in 1 blocks are definitely lost in loss record 2 of 7
+==118==    at 0x4845772: malloc (in /gnu/store/gsixr2n0a6aacsiy6lky6d1fjh7svqyd-valgrind-3.27.0/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==118==    by 0x50C7822: sqlite3MemMalloc (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50AE637: sqlite3Malloc (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50C322F: strAccumFinishRealloc (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50FB3B7: sqlite3_vmprintf (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50FB460: sqlite3_mprintf (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50FE564: sqlite3_load_extension (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x6F0355E: ???
+==118==    by 0x4C5A86F: ???
+==118==    by 0x416B51: S_call_help (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118==    by 0x41850F: boot_call (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118==    by 0x4187F0: run_script (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118== 
+==118== 384 bytes in 1 blocks are definitely lost in loss record 6 of 7
+==118==    at 0x4845772: malloc (in /gnu/store/gsixr2n0a6aacsiy6lky6d1fjh7svqyd-valgrind-3.27.0/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==118==    by 0x50C7822: sqlite3MemMalloc (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50AE637: sqlite3Malloc (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x50FE303: sqlite3_load_extension (in ROOT/build/m3-floor/lib/libsqlite3.so.0)
+==118==    by 0x6F0355E: ???
+==118==    by 0x4C5A86F: ???
+==118==    by 0x416B51: S_call_help (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118==    by 0x41850F: boot_call (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118==    by 0x4187F0: run_script (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118==    by 0x40A09B: main (in /gnu/store/nrlh72nrgyna5mm3p2n62mmld6al0lwv-chez-scheme-10.4.0/lib/csv10.4.0/ta6le/scheme)
+==118== 
+==118== LEAK SUMMARY:
+==118==    definitely lost: 448 bytes in 2 blocks
+==118==    indirectly lost: 0 bytes in 0 blocks
+==118==      possibly lost: 0 bytes in 0 blocks
+==118==    still reachable: 1,686 bytes in 5 blocks
+==118==         suppressed: 0 bytes in 0 blocks
+==118== Reachable blocks (those to which a pointer was found) are not shown.
+==118== To see them, rerun with: --leak-check=full --show-leak-kinds=all
+==118== 
+==118== For lists of detected and suppressed errors, rerun with: -s
+==118== ERROR SUMMARY: 2 errors from 2 contexts (suppressed: 0 from 0)

@@ -2,6 +2,8 @@
 
 - **Status:** Accepted (the maintainer, 2026-11-13). Proposed in the brief, §3a. Amended
   2026-11-13: a threaded Chez is required ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
+  Amended 2026-11-17: the variadic binding, measured, and its check (M4's plan,
+  [amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
@@ -90,3 +92,34 @@
   `nothreads` job runs it on Chez built `--nothreads` from the release tarball. On a threaded Chez
   it fails, naming each library: that is its red run, and why `make test` doesn't run it.
   `tests/test-check-nothreads.sps` holds each rule on fixture trees.
+
+## Amendment, 2026-11-17: the variadic binding, measured, and its check (M4's plan)
+
+Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2;
+[ADR-0021](0021-db-config-options-and-extension-loading.md), decision 4).
+
+- **The consequence is measured** (M4's pre-work,
+  [research/m4-prework/](../research/m4-prework/README.md)):
+  - bound with `(__varargs_after 2)` in the shape `(db op int int*)`, `sqlite3_db_config`
+    round-tripped five ops on five x86_64 libraries, and on Apple arm64 with Apple's 3.51.0 and
+    Homebrew's 3.54.1, every line identical to a C oracle's;
+  - bound plain, it round-tripped every op on x86_64 too, so no Linux behaviour row can tell the
+    two apart. On Apple arm64 it crashed, "invalid memory reference", with both libraries;
+  - Linux arm64 wasn't measured: the consequence's "works on x86_64 and Linux arm64" stays
+    chez-curl's measurement.
+- **Decision 2's "once per argument shape it is called with" is one shape in v1,**
+  `(uptr int int uptr) int`. `LOOKASIDE`'s, `(db op void* int int)`, delivered its arguments
+  too, and isn't bound (brief §2.8).
+- **On Linux only a check of the form can hold it** (the maintainer's Q9, "Check plus
+  check-variadic"):
+  - the convention table gains a convention, `variadic`, for exactly `(__varargs_after 2)`, and
+    `test-conventions` holds the binding's form to its row;
+  - `test-constants` holds the row's prototype, `int (*)(sqlite3*, int, ...)`, to the header,
+    and the count of its named parameters to the convention's 2;
+  - `make check-variadic` removes the convention in a copy of the tree and watches
+    `test-conventions` fail, naming that binding alone. On Apple arm64 it runs `test-native` on
+    the copy too, which must fail; elsewhere it reports that run, never fails it. CI's `main` job
+    runs it as a step of its own, and `make test` doesn't, as chez-curl's ci.yml runs its own; the
+    Mac's hand run runs it by hand. chez-curl's `check-variadic` is the design; none of its code
+    is copied.
+- **The consequence's Mac run** is M4 slice 2's, and each later change's.

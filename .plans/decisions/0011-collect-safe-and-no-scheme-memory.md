@@ -12,6 +12,8 @@
   [amendment](#amendment-2026-11-15-chezs-foreign-ranges-m2-slice-2)). Amended 2026-11-15, and
   accepted by the maintainer that day: M3's bindings (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-bindings-m3s-plan)).
+  Amended 2026-11-17: M4's bindings (M4's plan,
+  [amendment](#amendment-2026-11-17-m4s-bindings-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -231,3 +233,25 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
 - **The context's `sqlite3_close`** writes a checkpoint, about 5 ms for 4 MB of WAL, but never
   waited in the busy handler (concurrency S5). It stays `__collect_safe`: its I/O can still be
   long.
+
+## Amendment, 2026-11-17: M4's bindings (M4's plan)
+
+Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.2 and §4.4;
+[ADR-0021](0021-db-config-options-and-extension-loading.md), decisions 3, 4, 8 and 9).
+
+- **`sqlite3_load_extension` joins decision 5's list.** On a FIFO it waited until a writer opened
+  the FIFO: `dlopen`'s `open` blocks. Bound plain, another thread's collection, asked for 300 ms
+  in, waited until the load returned, 1.15 s later; bound `__collect_safe`, it finished in 1 ms
+  (M4's research, L6 and X1). Its convention row cites this, and `test-native` holds it by
+  behaviour, by the FIFO row's method (the M1 slice 2 amendment).
+- **`sqlite3_db_config` and `sqlite3_free` are plain.** A set took 0.001 ms or less under another
+  connection's exclusive lock, where a prepare waited 1501 ms (D4). `sqlite3_free` does no I/O.
+- **`sqlite3_db_config`'s cell is a counted block,** an `int`, set to a sentinel that is neither 0
+  nor 1 before the call, and read after it, in the call's section.
+- **A load's message is the one block SQLite allocates for us.** Its `char **` slot is a counted
+  block of a pointer's size, set to NULL. A message there after the call is SQLite's own text,
+  copied by `c-string->string` under a guard, then freed with `sqlite3_free` whatever the copy
+  did, in the call's section; what the copy raised is raised after it. The path and the entry
+  point are counted C strings, each refused before anything is allocated when it holds U+0000,
+  since `dlopen` and SQLite read them to a NUL.
+- **The allowlist needs no new type:** `uptr`, `int` and `void` are in it.

@@ -1,0 +1,216 @@
+libversion: 3.54.1
+sourceid: 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+
+F0. Compile options
+  sqlite3_compileoption_used("ENABLE_FTS5"): 1
+  sqlite3_compileoption_used("ENABLE_FTS4"): 0
+  sqlite3_compileoption_used("ENABLE_FTS3"): 0
+  sqlite3_compileoption_used("ENABLE_JSON1"): 0
+  sqlite3_compileoption_used("OMIT_JSON"): 0
+  sqlite3_compileoption_used("ENABLE_LOAD_EXTENSION"): 0
+  sqlite3_compileoption_used("OMIT_LOAD_EXTENSION"): 0
+
+F1. Whether FTS5 is here
+  select count(*) from pragma_module_list where name = 'fts5'
+    row: int 1
+    done, 1 row
+  create virtual table probe using fts5(body)
+    done, 0 rows
+
+F2. FTS5's behaviour
+  create virtual table docs using fts5(title, body)
+    done, 0 rows
+  insert into docs(rowid, title, body) values (1, 'Élan vital', 'the café serves crème brûlée'), (2, 'Second', 'sqlite full text search with fts5'), (3, 'Third', 'search engines rank documents and sqlite ranks them too')
+    done, 0 rows
+  select rowid from docs where docs match 'sqlite' order by rank
+    row: int 2
+    row: int 3
+    done, 2 rows
+  select rowid, bm25(docs) from docs where docs match 'search' order by rank
+    row: int 2, real -1.0538922155688623e-06
+    row: int 3, real -9.0721649484536089e-07
+    done, 2 rows
+  select rowid from docs where docs match 'cafe'
+    row: int 1
+    done, 1 row
+  select rowid from docs where docs match 'café'
+    row: int 1
+    done, 1 row
+  select rowid from docs where docs match 'creme'
+    row: int 1
+    done, 1 row
+  select highlight(docs, 1, '[', ']') from docs where docs match 'café'
+    row: text "the [café] serves crème brûlée"
+    done, 1 row
+  select highlight(docs, 0, '[', ']') from docs where docs match 'elan'
+    row: text "[Élan] vital"
+    done, 1 row
+  select snippet(docs, 1, '<', '>', '...', 3) from docs where docs match 'engines'
+    row: text "search <engines> rank..."
+    done, 1 row
+  select rowid from docs where docs match 'searc*' order by rowid
+    row: int 2
+    row: int 3
+    done, 2 rows
+  select rowid from docs where docs match '"full text"'
+    row: int 2
+    done, 1 row
+  select rowid from docs where docs match 'NEAR(sqlite fts5, 3)'
+    done, 0 rows
+  select rowid from docs where docs match 'title:second'
+    row: int 2
+    done, 1 row
+  select rowid from docs where docs match 'title:sqlite'
+    done, 0 rows
+  select rowid from docs where docs match 'sqlite NOT fts5'
+    row: int 3
+    done, 1 row
+  select rowid from docs where docs match ?1 order by rowid   [?1 = "sqlite OR café"]
+    row: int 1
+    row: int 2
+    row: int 3
+    done, 3 rows
+  select rowid from docs where docs match '"unterminated'
+    step 1, extended 1: unterminated string
+  select rowid from docs where docs match 'nosuchcolumn:x'
+    step 1, extended 1: no such column: nosuchcolumn
+  select rowid from docs where docs match 'AND'
+    step 1, extended 1: fts5: syntax error near "AND"
+  delete from docs where rowid = 2
+    done, 0 rows
+  update docs set body = 'fts5 again' where rowid = 3
+    done, 0 rows
+  select rowid from docs where docs match 'fts5' order by rowid
+    row: int 3
+    done, 1 row
+  insert into docs(docs) values ('optimize')
+    done, 0 rows
+  insert into docs(docs) values ('integrity-check')
+    done, 0 rows
+  select count(*) from docs
+    row: int 2
+    done, 1 row
+  create virtual table v using fts5vocab(docs, 'row')
+    done, 0 rows
+  select term, doc, cnt from v where term in ('cafe', 'fts5', 'sqlite') order by term
+    row: text "cafe", int 1, int 1
+    row: text "fts5", int 1, int 1
+    done, 2 rows
+  create virtual table t2 using fts5(x, tokenize = 'unicode61 remove_diacritics 0')
+    done, 0 rows
+  insert into t2 values ('café')
+    done, 0 rows
+  select count(*) from t2 where t2 match 'cafe'
+    row: int 0
+    done, 1 row
+  select count(*) from t2 where t2 match 'café'
+    row: int 1
+    done, 1 row
+  create virtual table t3 using fts5(x, tokenize = 'porter unicode61')
+    done, 0 rows
+  insert into t3 values ('running runners ran')
+    done, 0 rows
+  select count(*) from t3 where t3 match 'run'
+    row: int 1
+    done, 1 row
+  create virtual table t4 using fts5(x, tokenize = 'nosuchtokenizer')
+    step 1, extended 1: no such tokenizer: nosuchtokenizer
+  select fts5_source_id() is not null
+    row: int 1
+    done, 1 row
+
+F3. JSON
+  select json(' { "a" : [1, 2.5, "x", null, true] } ')
+    row: text "{"a":[1,2.5,"x",null,true]}"
+    done, 1 row
+  select json('{')
+    step 1, extended 1: malformed JSON
+  select json_valid('{"a":1}'), json_valid('{'), json_valid(NULL)
+    row: int 1, int 0, null
+    done, 1 row
+  select json_extract('{"a":{"b":[10,20]}}', '$.a.b[1]')
+    row: int 20
+    done, 1 row
+  select json_extract('{"a":{"b":[10,20]}}', '$.a.b')
+    row: text "[10,20]"
+    done, 1 row
+  select json_extract('{"a":1}', '$.nosuch')
+    row: null
+    done, 1 row
+  select json_extract('{"a":1}', 'nopath')
+    step 1, extended 1: bad JSON path: 'nopath'
+  select '{"a":"é"}' -> '$.a', '{"a":"é"}' ->> '$.a'
+    row: text ""é"", text "é"
+    done, 1 row
+  select '{"a":2.5}' ->> 'a', '[7,8]' ->> 1
+    row: real 2.5, int 8
+    done, 1 row
+  select json_type('{"a":[1]}', '$.a'), json_type('1.5'), json_type('null')
+    row: text "array", text "real", text "null"
+    done, 1 row
+  select json_array_length('[1,2,3]'), json_array_length('{}')
+    row: int 3, int 0
+    done, 1 row
+  select key, value, type from json_each('{"x":1,"y":[2],"z":"s"}') order by key
+    row: text "x", int 1, text "integer"
+    row: text "y", text "[2]", text "array"
+    row: text "z", text "s", text "text"
+    done, 3 rows
+  select fullkey, atom from json_tree('{"a":{"b":1}}') where atom is not null
+    row: text "$.a.b", int 1
+    done, 1 row
+  select jsonb('{"a":1}'), typeof(jsonb('{}')), typeof(json('{}'))
+    row: blob x'4C17611331', text "blob", text "text"
+    done, 1 row
+  select json(jsonb('{"a":[1,"é"]}'))
+    row: text "{"a":[1,"é"]}"
+    done, 1 row
+  select jsonb_extract(jsonb('{"a":[1,2]}'), '$.a')
+    row: blob x'4B13311332'
+    done, 1 row
+  select json_extract(jsonb('{"a":[1,2]}'), '$.a[0]')
+    row: int 1
+    done, 1 row
+  select json_insert('{"a":1}', '$.b', 2), json_set('{"a":1}', '$.a', 3), json_replace('{"a":1}', '$.c', 4), json_remove('[1,2,3]', '$[1]')
+    row: text "{"a":1,"b":2}", text "{"a":3}", text "{"a":1}", text "[1,3]"
+    done, 1 row
+  select json_group_array(value) from (select 1 as value union all select 'x' union all select null)
+    row: text "[1,"x",null]"
+    done, 1 row
+  select json_group_object(k, v) from (select 'a' as k, 1 as v union all select 'b', 2)
+    row: text "{"a":1,"b":2}"
+    done, 1 row
+  select json_quote('a"b'), json_quote(1.5), json_quote(null)
+    row: text ""a\"b"", text "1.5", text "null"
+    done, 1 row
+  select json_object('k', 'v', 'n', 1), json_array(1, 'two', null)
+    row: text "{"k":"v","n":1}", text "[1,"two",null]"
+    done, 1 row
+  select json_error_position('{"a":}'), json_error_position('{"a":1}')
+    row: int 6, int 0
+    done, 1 row
+  select json_pretty('{"a":1}')
+    row: text "{
+    "a": 1
+}"
+    done, 1 row
+  select json_extract('[1e400]', '$[0]'), json_extract('[-1e400]', '$[0]')
+    row: real inf, real -inf
+    done, 1 row
+  select json_extract('[9223372036854775807]', '$[0]'), json_extract('[9223372036854775808]', '$[0]')
+    row: int 9223372036854775807, real 9.2233720368547758e+18
+    done, 1 row
+  select json('"\u00e9"'), json_extract('"\u00e9"', '$')
+    row: text ""\u00e9"", text "é"
+    done, 1 row
+  select json(?1), json_valid(?1)   [?1 = "[1, 2]"]
+    row: text "[1,2]", int 1
+    done, 1 row
+  select json(?1), json_valid(?1, 4), typeof(?1)   [?1 = x'0C']
+    row: text "{}", int 1, text "blob"
+    done, 1 row
+  select json(?1)   [?1 = x'0102']
+    step 1, extended 1: malformed JSON
+  select json_valid(?1, 8)   [?1 = x'0102']
+    row: int 0
+    done, 1 row

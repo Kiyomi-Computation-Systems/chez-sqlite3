@@ -1,0 +1,49 @@
+libversion: 3.53.1
+A. a failed load after a prior error
+  ENABLE_LOAD_EXTENSION 1: set
+  a prepare of select nosuch answered 1
+  after the prepare                  errcode 1, extended 1, errmsg "no such column: nosuch"
+  load DIR/nosuch.so                 answered 1, slot "DIR/nosuch.so.so: cannot open shared object file: No such file or directory"
+  after the failed load              errcode 1, extended 1, errmsg "no such column: nosuch"
+  load DIR/ext.so                    answered 0, slot NULL
+  after the successful load          errcode 1, extended 1, errmsg "no such column: nosuch"
+B. a replacing load beside a held row
+  held: step 100
+  before the load                    errcode 100, extended 100, errmsg "another row available"
+  load DIR/ext.so again              answered 1, slot "error during initialization: "
+  after it                           errcode 5, extended 5, errmsg "unable to delete/modify user-function due to active statements"
+C. ADR-0018's PRAGMAs
+  the library's start
+    PRAGMA busy_timeout = 5000           prepare 0 step 101 finalize 0; read 5000
+    PRAGMA foreign_keys = 1              prepare 0 step 101 finalize 0; read 1
+    PRAGMA foreign_keys = 0              prepare 0 step 101 finalize 0; read 0
+    PRAGMA synchronous = 0               prepare 0 step 101 finalize 0; read 0
+    PRAGMA synchronous = 3               prepare 0 step 101 finalize 0; read 3
+    PRAGMA temp_store = 2                prepare 0 step 101 finalize 0; read 2
+    PRAGMA temp_store = 1                prepare 0 step 101 finalize 0; read 1
+    PRAGMA trusted_schema = 0            prepare 0 step 101 finalize 0; read 0
+    PRAGMA trusted_schema = 1            prepare 0 step 101 finalize 0; read 1
+    PRAGMA journal_mode = truncate       prepare 0 step 101 finalize 0; read truncate
+    PRAGMA journal_mode = persist        prepare 0 step 101 finalize 0; read persist
+    PRAGMA journal_mode = wal            prepare 0 step 101 finalize 0; read wal
+    PRAGMA journal_mode = delete         prepare 0 step 101 finalize 0; read delete
+  controls, outside the list
+    PRAGMA journal_mode = off            prepare 0 step 101 finalize 0; read off
+    PRAGMA writable_schema = 1           prepare 0 step 101 finalize 0; read 1
+  DEFENSIVE 1, DQS_DML 0, DQS_DDL 0: set
+    PRAGMA busy_timeout = 5000           prepare 0 step 101 finalize 0; read 5000
+    PRAGMA foreign_keys = 1              prepare 0 step 101 finalize 0; read 1
+    PRAGMA foreign_keys = 0              prepare 0 step 101 finalize 0; read 0
+    PRAGMA synchronous = 0               prepare 0 step 101 finalize 0; read 0
+    PRAGMA synchronous = 3               prepare 0 step 101 finalize 0; read 3
+    PRAGMA temp_store = 2                prepare 0 step 101 finalize 0; read 2
+    PRAGMA temp_store = 1                prepare 0 step 101 finalize 0; read 1
+    PRAGMA trusted_schema = 0            prepare 0 step 101 finalize 0; read 0
+    PRAGMA trusted_schema = 1            prepare 0 step 101 finalize 0; read 1
+    PRAGMA journal_mode = truncate       prepare 0 step 101 finalize 0; read truncate
+    PRAGMA journal_mode = persist        prepare 0 step 101 finalize 0; read persist
+    PRAGMA journal_mode = wal            prepare 0 step 101 finalize 0; read wal
+    PRAGMA journal_mode = delete         prepare 0 step 101 finalize 0; read delete
+  controls, outside the list
+    PRAGMA journal_mode = off            prepare 0 step 101 finalize 0; read delete
+    PRAGMA writable_schema = 1           prepare 0 step 101 finalize 0; read 0

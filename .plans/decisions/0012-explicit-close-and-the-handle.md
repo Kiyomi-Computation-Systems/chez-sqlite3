@@ -14,6 +14,8 @@
   Amended 2026-11-16 in M3 slice 5, and accepted by the maintainer that day: the open verbs'
   library, the open's claim, and decision 8's handler around the open
   ([amendment](#amendment-2026-11-16-the-open-verbs-library-m3-slice-5)).
+  Amended 2026-11-17: the record holds the opt-in (M4's plan,
+  [amendment](#amendment-2026-11-17-the-record-holds-the-opt-in-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -362,3 +364,19 @@ M3 slice 5).
   refused run's `&sqlite-closed`.
 - **`open-database-with-cache-capacity` is gone.** The suites give `'((statement-cache . N))`
   ([ADR-0020](0020-the-statement-cache.md), amended in M3 slice 5).
+
+## Amendment, 2026-11-17: the record holds the opt-in (M4's plan)
+
+Proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3).
+
+- **The `database` record gains a field, the connection's opt-in to extension loading,** fixed
+  when the record is made, from the settings' plan, as the statement cache's capacity is
+  ([ADR-0020](0020-the-statement-cache.md), amended in M3 slice 5). `load-extension!` reads it
+  last of its six checks, after its database, its owning thread, an open connection, its path
+  and its entry point ([ADR-0021](0021-db-config-options-and-extension-loading.md), decision 7).
+  A set that fails closes the connection, so no caller holds a record whose opt-in the C call
+  lacks.
+- **The refusals' order** ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5) gains a
+  fifth step, after the list's own rules: an opt-in on a library without
+  `sqlite3_load_extension` raises `&sqlite-extensions-unavailable`, before anything is
+  allocated.

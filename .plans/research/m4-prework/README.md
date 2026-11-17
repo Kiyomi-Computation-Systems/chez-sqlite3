@@ -188,7 +188,7 @@ No Ubuntu header was fetched, so the Ubuntu row has no `constants-` or `oracle-`
 - **Valgrind, with the gate's flags** (`--error-exitcode=9 --leak-check=full
   --show-leak-kinds=definite --errors-for-leak-kinds=definite`, and `--command-line-only=yes`):
   - on guix, floor, current and Ubuntu: 0 errors, 0 bytes definitely lost, exit 0;
-  - between 1,683 and 1,878 bytes in 5 blocks still reachable;
+  - between 1,697 and 1,892 bytes in 5 blocks still reachable, as the four logs show;
   - the output under Valgrind was the same as without it, byte for byte;
   - the logs are `out/valgrind-*.txt`.
 

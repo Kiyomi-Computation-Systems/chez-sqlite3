@@ -6,8 +6,9 @@ are now ADR-0001, ADR-0002, ADR-0004 and ADR-0006, all accepted. §3c, d, e and 
 ADR-0013, from the M1 plan. Amended 2026-11-14 with the M1 plan: D2 settled, D7 measured, and the
 settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 to D6 settled
 by the maintainer (§5). §3f is ADR-0015, accepted. Amended 2026-11-15 with the M3 plan: D3's leaning
-settled (§5), and what M3's research measured of §2.7 and §3d. Where a record and this brief
-disagree, the record wins.
+settled (§5), and what M3's research measured of §2.7 and §3d. Amended 2026-11-17 with the M4 plan:
+where §2.5's guarantee lives, §2.6's FTS5 on the `current` lane alone, and §2.8's options as
+settings. Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses
@@ -81,9 +82,23 @@ need prepared statements, and the conveniences are built on them. Nothing privat
    can never load a library. A library built without extension loading raises a named
    condition. Apple's system SQLite is one: measured in M1, it is built with
    `OMIT_LOAD_EXTENSION`.
+   M4's pre-work and research measured the rest ([research/m4-prework/](research/m4-prework/),
+   [research/m4-plan/](research/m4-plan/)). The opt-in is a setting of the open,
+   `(enable-load-extension . #t)`, and the one verb that loads, `load-extension!`, refuses a
+   connection that didn't opt in before anything reaches C, naming the setting: that refusal is
+   the guarantee (the maintainer's Q3, 2026-11-16, and Q14 and Q15, 2026-11-17). It is needed,
+   since Ubuntu's library, CI's `main` lane's, opens every connection with the C call already
+   on. SQL's `load_extension()` stays refused on every library measured, the C call on or off.
+   The named condition is raised by an open that opts in on a library without
+   `sqlite3_load_extension` (ADR-0021).
 6. **FTS5 and JSON are compiled in, not loaded.** Tests use both on every SQLite they run
    against, and a compile-option query (`sqlite3_compileoption_used`) is exported so an
    application can check at startup.
+   M4's pre-work found CI's `floor` and `current` lanes compiled SQLite's defaults, which leave
+   FTS5 out, so no suite could use it there. The `current` lane now adds
+   `-DSQLITE_ENABLE_FTS5`, and the `floor` lane keeps the defaults (the maintainer's Q1,
+   2026-11-16). The FTS5 suite runs on every lane: on `floor` it names FTS5 unavailable and
+   asserts the refusal instead (ADR-0003, amended). JSON is in every library measured.
 7. **PRAGMAs are SQL.** They run through the ordinary statement path. Opening a connection
    also takes a checked list of per-connection settings, run on every open, because
    `foreign_keys` and `busy_timeout` reset with each connection. A PRAGMA's value can't be a
@@ -100,6 +115,9 @@ need prepared statements, and the conveniences are built on them. Nothing privat
 8. **`sqlite3_config` stays out:** it is process-wide and legal only before SQLite
    initialises. `sqlite3_db_config` is reached through a few named, checked options:
    extension loading, defensive mode, double-quoted strings.
+   They are settings of the open, each one `sqlite3_db_config` call held by its own answer, set
+   only where the list names it (the maintainer's Q5, Q8, Q10 and Q13, 2026-11-16 and 17;
+   ADR-0021). `TRUSTED_SCHEMA` stays ADR-0018's PRAGMA (Q7).
 
 ## 3. Proposed, for decision records in M0 and M1
 
@@ -172,6 +190,7 @@ Out of v1:
   [The M3 plan](2026-11-15-m3-plan.md).
 - **M4, extensions and `db_config`.** Loadable extensions opt-in, defensive mode, DQS. FTS5
   and JSON suites.
+  [The M4 plan](2026-11-17-m4-plan.md).
 - **M5, the release.** `/docs` finished, README, CHANGELOG, 0.1.0. `docs/reference.md` grows
   from M1's first export on (the harness plan, §4).
 

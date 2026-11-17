@@ -444,6 +444,44 @@ told in chez-curl's `.plans/traps.md`.
   the floor with `-DHAVE_NANOSLEEP=0` and planted a retry: every timed row passed, each wait 2000
   to 2001 ms. The rows now read the grain, and bound the wait under 2000 ms there.
   (M3's closing review, chez-sqlite3)
+- **`db_config` sets no error on its connection, and a load none of its own.** After
+  `sqlite3_db_config` answered 1 for an op it didn't know, the connection still said 1, "no such
+  column: nosuch", an earlier prepare's, and on a fresh connection 0, which `raise-sqlite-error`
+  refuses as no error. After a failed `sqlite3_load_extension`, it still said what it said
+  before: the load's text is in its message slot alone. But an extension's init that fails a
+  call of its own leaves that call's error there: a replacing load beside a held row answered 1,
+  its slot said "error during initialization: ", and the connection said 5, "unable to
+  delete/modify user-function due to active statements" (M4's research, D3, L3; M4's plan
+  review, rv1, rv2). Take the code from the call's answer. (M4's research, chez-sqlite3)
+- **A failed load names a path the caller never gave.** SQLite tries the path, then the path with
+  a suffix appended, `.so` on Linux and `.dylib` under `__APPLE__` (3.45.1's `azEndings`), and
+  reports the second failure. On Linux a missing `nosuch.so` read
+  `nosuch.so.so: cannot open shared object file`, and so did an empty file or a directory,
+  hiding the real cause (L2). (M4's research, chez-sqlite3)
+- **A bare name to `sqlite3_load_extension` is `dlopen`'s search.** On Linux, `ext.so`, with the
+  working directory holding it, wasn't found, and `./ext.so` was (L2); from another working
+  directory, `ext.so` and `ext` both loaded with `LD_LIBRARY_PATH` naming the directory that held
+  it, and neither without it (M4's plan review, rv3). macOS's dlopen(3) documents a leaf name
+  searched in the working directory too, for an unrestricted process: not measured.
+  (M4's research, chez-sqlite3)
+- **A `db_config` set that changes a flag expires every statement on its connection;** one that
+  changes nothing doesn't. A statement prepared and run with DQS on failed at its next step once
+  `DQS_DML` was turned off: its re-prepare refused the double-quoted name (D1, D2). (M4's
+  research, chez-sqlite3)
+- **Each library opens connections its own way.** Ubuntu's 3.45.1, built
+  `ENABLE_LOAD_EXTENSION`, opens every connection with the C call to `sqlite3_load_extension`
+  on; the others whose start could be read open it off. Apple's answers 21 to the op and leaves
+  the cell, so its start isn't known. Apple's 3.51.0 opens every connection with `DEFENSIVE`
+  on, and no compile option it lists says so (M4's pre-work). (M4's research, chez-sqlite3)
+- **`DEFENSIVE` turns `writable_schema` off without a word.** Under it,
+  `PRAGMA writable_schema = 1` answered done, and read back 0 (M4's pre-work). (M4's research,
+  chez-sqlite3)
+- **An FTS5 table on a library without FTS5 fails at its step, not its prepare:** "no such
+  module: fts5", 1 (M4's pre-work; F1). (M4's research, chez-sqlite3)
+- **Every load runs the extension's init again, and a close unloads it.** Its init count read 1,
+  2 and 3 across two loads into one connection and one into another, and 1 again once both had
+  closed. A load whose init replaces a function failed while a statement of the connection was at
+  a row, and with none held it expired every statement (L4, L8). (M4's research, chez-sqlite3)
 
 ## Checks and environment
 
