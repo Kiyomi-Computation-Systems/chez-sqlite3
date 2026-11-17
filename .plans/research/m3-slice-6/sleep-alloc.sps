@@ -1,0 +1,26 @@
+#!r6rs
+;; Probe: bytes allocated by the pieces of the watchdog's hold window outside
+;; any section: sleep of a precomputed duration, a bound foreign call taking
+;; a uptr, and a set! of a captured flag.
+(import (chezscheme))
+(define one-ms (make-time 'time-duration 1000000 0))
+(load-shared-object "libc.so.6")
+(define ident (foreign-procedure "getpid" () int))
+(define flag #f)
+(define (note! on?) (set! flag on?))
+(define (measure label thunk n)
+  (collect-request-handler (lambda () #f))
+  (let* ((b0 (bytes-allocated)))
+    (let loop ((i 0)) (when (< i n) (thunk) (loop (+ i 1))))
+    (let ((b1 (bytes-allocated)))
+      (printf "~a: ~a bytes over ~a calls\n" label (- b1 b0) n))))
+(measure "nothing" (lambda () #f) 1000)
+(measure "sleep 1 ms" (lambda () (sleep one-ms)) 200)
+(measure "a foreign call" (lambda () (ident)) 1000)
+(measure "set! of a captured flag" (lambda () (note! #t) (note! #f)) 1000)
+(define sink #f)
+(measure "a cons, the control" (lambda () (set! sink (cons 1 2))) 1000)
+(measure "a make-time, the control" (lambda () (set! sink (make-time 'time-duration 1000000 0))) 1000)
+(measure "a critical-section around a set!" (lambda () (critical-section (note! #t) (note! #f))) 1000)
+(measure "the window outside the verb: enter, note, sleep, section of note and leave" (lambda () (ident) (note! #t) (sleep one-ms) (critical-section (note! #f) (ident))) 200)
+(measure "the window with disable-interrupts and enable-interrupts in place of the section" (lambda () (ident) (note! #t) (sleep one-ms) (disable-interrupts) (note! #f) (ident) (enable-interrupts)) 200)

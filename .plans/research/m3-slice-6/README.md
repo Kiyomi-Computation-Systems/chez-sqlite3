@@ -13,7 +13,9 @@ for part C is beside them.
   - Under Valgrind it sent no interrupt during any of three prepares, each about 3.8 s. Valgrind
     runs one thread at a time, and a thread running C keeps it.
   - Plain, each prepare stopped in about 170 ms.
-  - Across the slice's runs: none of 15 stopped under Valgrind, and 8 of 9 plain.
+  - Across the slice's runs, these three and part A's log's: with no sleep, none of 15 stopped
+    under Valgrind, and 8 of 9 plain. A watchdog sleeping 1 ms a round (part A's log) stopped none
+    of 3 under Valgrind, and none of 3 plain.
 - **The suites' device** ([prepare-mem.sps](prepare-mem.sps)). Each round the watchdog takes
   SQLite's memory mutex, `SQLITE_MUTEX_STATIC_MEM`, sleeps 1 ms holding it, interrupts, then lets
   it go. The owner prepares 900,015 characters of `select 1 in (1, 1, …)`, whose items each
@@ -33,6 +35,21 @@ for part C is beside them.
   into freed memory: run it only under Valgrind, as the command shows.** The gate's race row
   can't reach that write: its plant hands Chez a cleared handle, and Chez refuses it before C
   (ADR-0019, amended in M3 slice 6).
+- **The hold's window allocates nothing** ([sleep-alloc.sps](sleep-alloc.sps), output in
+  [sleep-alloc.txt](sleep-alloc.txt), the lead's rerun). A sleep, a foreign call and a `set!`
+  allocate 0 bytes a call; `critical-section` 48 at its entry, as a `make-time` does. The probe's
+  `cons` control reads 0: its operands are constants, so it is made once.
+- **The lead's part A mutants** ([lead-drive-a.py](lead-drive-a.py), output in
+  [lead-drive-a.txt](lead-drive-a.txt)): K1, K2, K4 and K5, run from `build/lead-mut/`.
+- **Follow-up 2, the call inside the latch.** After the slice's review:
+  - [a2-engine-trials.sps](a2-engine-trials.sps), output in
+    [a2-engine-trials.txt](a2-engine-trials.txt): an engine sweep of `interrupt-database/with`
+    on a stand-in, closing at the first expiry. On the review's plant P-a, a stand-in that only
+    notes its call is never called after the close; one that spins 20 turns first is, at most
+    fuels;
+  - [a2-plants.py](a2-plants.py) makes the follow-up's plant copies under `build/a2/final/`, and
+    [a2-run.sh](a2-run.sh) runs the suites on them plain and under the gate; their output is
+    [a2-plants.txt](a2-plants.txt).
 
 ## Contention (part B)
 

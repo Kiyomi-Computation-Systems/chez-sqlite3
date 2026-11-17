@@ -23,16 +23,23 @@
 ;;; microsecond after each burst, a system call that lets the owner run under
 ;;; Valgrind, which runs one thread at a time; the owner's opens and closes
 ;;; of a file make system calls of their own.
-;;; Probe P5 (.plans/m3-slice-6-mutation-log.md). A plant that calls
-;;; sqlite3_interrupt whatever the flag says fails the race row by name: the
-;;; close clears the record's handle, so the plant's call on a closed
-;;; connection is refused on #f before it reaches C. Valgrind saw no error
-;;; against it, nor against a plant that reads the handle before the latch,
-;;; over 1, 20 and 200 rounds, though it reports sqlite3_interrupt on a
-;;; freed connection when a stale handle reaches C. So the gate's row sees
-;;; nothing here: tests/test-interrupt-database.sps's rows inside the close
-;;; fail both plants on one thread, and slice 1's tests/test-interrupt.sps
-;;; fails a latch without its mutex.
+;;; Probe P5 (.plans/m3-slice-6-mutation-log.md, part A). P5's plant, M08,
+;;; calls sqlite3_interrupt whatever the flag says. It fails the race row by
+;;; name: the close clears the record's handle, so the plant's call on a
+;;; closed connection is refused on #f before it reaches C, and Valgrind saw
+;;; no error against it over 1, 20 and 200 rounds. P5b reads the handle
+;;; before the latch and calls whenever it is not #f, ignoring the flag: the
+;;; race passed it over 200 rounds under the gate, with no error, though
+;;; Valgrind reports sqlite3_interrupt on a freed connection when a stale
+;;; handle reaches C. So the race row sees no missing exclusion.
+;;; tests/test-interrupt-database.sps fails both plants on one thread, with
+;;; no timing: its rows inside the close, and its engine row through a
+;;; stand-in, whose call comes after the close, on #f for M08 and on the live
+;;; handle for P5b. Its engine row through the verb raises on M08's #f, and
+;;; under make test-memory Valgrind reports P5b's call on the freed
+;;; connection there. Its two-thread row fails P5b, and slice 1's
+;;; tests/test-interrupt.sps fails a latch without its mutex (the log's
+;;; part A, follow-up 2).
 ;;;
 ;;; A thread this suite forks answers whatever it raises, and every wait for
 ;;; it is bounded (AGENTS.md). The loading procedures are reached through

@@ -96,7 +96,7 @@ Valgrind runs one thread at a time, and a thread running C keeps the lock: slice
 meant to interrupt every 5 ms, sent its first interrupt 16.5 s into a step ([traps.md](traps.md)).
 A long step ends anyway, once the watchdog gets in. A prepare doesn't wait for it. Measured in the
 container, with a watchdog interrupting `prepare-statement` of `SELECT 1` and 4 MB of empty
-comments (`build/m3s6-probe/prepare-gate.sps`, git-ignored, kept for the records):
+comments ([research/m3-slice-6/prepare-gate.sps](research/m3-slice-6/prepare-gate.sps)):
 
 | Run | The watchdog | Each of three prepares |
 |---|---|---|
@@ -119,7 +119,7 @@ call that allocates as it runs blocks inside SQLite at its next allocation, and 
 the one thread then runnable, sends its interrupt there. Comments allocate nothing, so the
 prepare's SQL is `select 1 in (1, 1, …, 1)`, a million and one items, 3,000,015 characters: an
 expression for each item, and a space after each comma for the tokenizer's check. The long step
-calls `randomblob` on each row. Measured with `build/m3s6-probe/prepare-mem.sps`: under
+calls `randomblob` on each row. Measured with [research/m3-slice-6/prepare-mem.sps](research/m3-slice-6/prepare-mem.sps): under
 Valgrind, three of three prepares of 300,001 items stopped, 786 to 839 ms, each in the
 watchdog's first round; plain, a million items stopped in 123 to 124 ms, in 7 or 8 rounds.
 
@@ -135,7 +135,7 @@ the owner as threads do outside Valgrind.
 **The hold is no critical section; measured after the lead's proposal.** The lead proposed
 wrapping each round's hold, from `mutex-enter` to `mutex-leave`, in `critical-section`, so that
 the watchdog never handles a collect request, and never starts a collection, while it holds the
-mutex, whatever the owner calls. The reasoning about sections holds (`build/m3s6-probe/section.sps`,
+mutex, whatever the owner calls. The reasoning about sections holds ([research/m3-slice-6/section.sps](research/m3-slice-6/section.sps),
 twice):
 
 - a collect request made inside a section waits for its end: 105,600,000 bytes allocated inside
@@ -157,10 +157,12 @@ run); plain, every row passed. The long steps still stopped: a step runs until a
 hold catches it at a `randomblob`. So the suites keep the hold outside any section, as built, and
 the header's rule about the owner's calls is the one line of defence.
 
-An alternative that keeps the device, measured but not applied (`build/m3s6-probe/sleep-alloc.sps`
-and the copy `build/mut/hold-alt/`): take the mutex, set the flag and sleep outside any section,
-which allocate nothing (0 bytes over 200 and 1000 calls each, where a `cons` made 16 a call and
-`critical-section` itself 48 at its entry), so no collect request can arise while the mutex is
+An alternative that keeps the device, measured but not applied ([research/m3-slice-6/sleep-alloc.sps](research/m3-slice-6/sleep-alloc.sps),
+its output from the lead's rerun in `sleep-alloc.txt`, and a copy of the tree, `build/mut/hold-alt/`,
+not kept): take the mutex, set the flag and sleep outside any section, which allocate nothing (0
+bytes over 200 and 1000 calls each, where a `make-time` made 48 a call and `critical-section`
+itself 48 at its entry; the lead's rerun read 0 for the probe's `cons` control, whose constant
+operands let it be made once, so it controls nothing), so no collect request can arise while the mutex is
 held there; then `disable-interrupts`, call the verb, clear the flag, let the mutex go, and
 `enable-interrupts`, so the verb's allocation can't start a collection until the mutex is gone (0
 bytes over 200 calls for the window but the verb). The sleep stays outside, so the owner's
@@ -268,7 +270,8 @@ under `make test-memory` through the copy's own `scripts/guix-env`.
   thread at a time never ran the interrupter between its read and its call while the owner freed
   the connection. `test-interrupt-database`'s five rows inside the close failed it.
 - **Valgrind does see the access itself,** measured directly in the copy
-  (`build/mut/a/build/p5/direct.sps`: open, read the handle, close, `sqlite3-interrupt` on it),
+  ([research/m3-slice-6/p5-direct.sps](research/m3-slice-6/p5-direct.sps), run as `build/mut/a/build/p5/direct.sps`: open, read the
+  handle, close, `sqlite3-interrupt` on it),
   on both libraries. At the floor:
 
   ```text
@@ -301,7 +304,8 @@ Run by the lead on part A's hand-back, in the worktree and in a copy under its g
 - **The device** reproduced under Valgrind: `prepare-mem.sps 300000 hold 3` stopped 3 of 3
   prepares in the watchdog's first round. The plain watchdog, `prepare-gate.sps 4 0 3`, sent 0,
   125 and 0 interrupts, and stopped none.
-- **The lead's mutants** (`build/lead-mut/drive-a.py`), against the three new suites,
+- **The lead's mutants** ([research/m3-slice-6/lead-drive-a.py](research/m3-slice-6/lead-drive-a.py), run from `build/lead-mut/`, its
+  output `lead-drive-a.txt`), against the three new suites,
   `test-interrupt`, `test-connection` and the four `test-open-*` suites:
 
   | Mutation | What it plants | Failed |
@@ -332,6 +336,222 @@ Run by the lead on part A's hand-back, in the worktree and in a copy under its g
   narrows the hazard without closing it. The guarantee in either shape is the header's rule: every
   call the owner makes while the watchdog may hold the mutex is `__collect_safe` or takes none of
   SQLite's memory.
+
+### Part A, follow-up 2: the call inside the latch
+
+An Opus agent built it from the lead's brief, after the slice's adversarial review, in the
+slice's worktree at `f2bfd05`.
+
+**The finding.** The review's plant P-a keeps the flag's check but moves the call out of the
+latch: the latch's thunk only reads the handle into a local, and `(when h (sqlite3-interrupt h))`
+runs after the latch returns. Every row passed it, plain and under the gate. It is a real
+use-after-free: an engine's expiry between the latch and the call, then a close, then the
+remainder resumed, calls `sqlite3_interrupt` on the freed connection. Slice 1's engine and
+stand-in rows hold the latch's own procedures; how the record hands its call to the latch was in
+no row, and the plan's §5 item 6 asked for no engine row for this verb.
+
+#### What it adds
+
+- **`(chez-sqlite3 private connection)`:** `interrupt-database/with : Database (Positive-Integer
+  -> Any) -> Void`, the verb's work with its foreign call given. It refuses a non-database,
+  naming `interrupt-database!`, then hands the latch a thunk that reads the handle and calls the
+  given procedure on it, both inside the latch's section. `interrupt-database!` is it, given
+  `sqlite3-interrupt`. It is exported from the private library only: `(chez-sqlite3)` keeps its
+  68 names, `check-seam` holds, and `test-public`'s row of the connection library's exports names
+  it.
+- **`test-interrupt-database`,** 15 rows to 18:
+  - **the stand-in's sweep:** `interrupt-database/with` in an engine, at every fuel from 1 until
+    it completes unexpired. Each trial takes a fresh connection and engine, closes the connection
+    at the first expiry and resumes the remainder to its end. The stand-in spins 20 turns, then
+    notes its call (below). The row fails when a trial's stand-in was called after the close, or
+    more than once, or with any but the live handle, or the call raised; and by name when no
+    trial was resumed after a close, when the trial that completed did not call the stand-in
+    once with the live handle, and when a collection ran during the sweep;
+  - **the verb's sweep:** the same, through `interrupt-database!`: every trial answers void and
+    raises nothing, some trial was resumed after a close, the completing trial's probe reads
+    `set`, and no collection ran. Plain, it can't see a call on a freed connection; under the
+    gate Valgrind does;
+  - **the two-thread row:** a stand-in in flight on another thread, through
+    `interrupt-database/with`, while the owner closes. The close's first finalize, an entry of
+    the suite's own, notes the work's start, which must follow the stand-in's end.
+
+  Each sweep collects first, with `collect-trip-bytes` at a gigabyte, so no collect request
+  moves where a fuel stops ([traps.md](traps.md)), and prints its completing fuel.
+- **Comments:** `test-interrupt-close`'s P5 paragraph names M08 and P5b, with P5b's 200 rounds
+  from this log, and says which rows fail each now. `test-interrupt-reach`'s watchdog count is
+  the measured one: none of 18 prepares stopped under Valgrind, 15 with no sleep, which sent no
+  interrupt in 14 and 125 in the other, and 3 with a 1 ms sleep, which sent none. That is this
+  log's nine, three and three (the table above, and the lead's rerun) and
+  [output.txt](research/m3-slice-6/output.txt)'s three gated runs with no sleep, 0 sent each.
+
+`interrupt.sls`, slice 1's rows, the Makefile, the workflow and the shards are unchanged.
+
+#### The red runs
+
+Against `f2bfd05`'s library, with the changed suites:
+
+| Suite | Red run | Green run |
+|---|---|---|
+| `test-interrupt-database` | 16 passed, 2 failed | 18 passed |
+| `test-public` | 21 passed, 1 failed | 22 passed |
+
+The two that failed in `test-interrupt-database` are the stand-in's sweep, which ran to its
+500th fuel with every call refused as "could not be reached", and the two-thread row, its
+interrupter refused the same way. The verb's sweep passed red, as a row of the right code must;
+the plants below fail it. `test-public` failed its row of the connection library's exports
+alone.
+
+Green, plain, five runs on each library: 18 of 18 every time. Both sweeps complete at fuel 13,
+after 12 trials resumed after a close. Every resumed trial had expired before the latch's
+section: no trial of the right code expires after the call.
+
+#### The stand-in's spin
+
+**A stand-in that only notes its call may cost an engine no tick.** The suite's stand-in at first
+noted its call and did nothing else. Against P-a it was called after the close at one fuel of
+14, fuel 13. The probe [a2-engine-trials.sps](research/m3-slice-6/a2-engine-trials.sps), whose
+stand-in only notes, found no such fuel against P-a, bare or inside a guard as the suite runs it:
+P-a's sweep completed at the right code's fuel. Which code costs a tick is the compiler's, so the
+window hung on the suite's own wrapper. With 20 turns of a loop before the note, a tick each, the
+probe's P-a was called after the close at 20 fuels of 26, alike at the floor, and the suite's at
+21 of 34. The right code completes at the same fuel with the spin or without it: inside the
+latch's section the loop costs nothing. Output:
+[a2-engine-trials.txt](research/m3-slice-6/a2-engine-trials.txt). The verb's sweep needs no spin:
+`sqlite3-interrupt` costs a tick of its own, as the review's probe found, and the gate's runs
+below find P-a's window through it.
+
+#### How the plants ran
+
+[a2-plants.py](research/m3-slice-6/a2-plants.py) makes each plant's copy of the worktree under
+the git-ignored `build/a2/final/`, by tar without `build/` and `.git`, with `build/m3-floor`
+copied in, each edit checked to match its file once. [a2-run.sh](research/m3-slice-6/a2-run.sh)
+runs, in the container, `make deps` and six suites plain in each copy, each under `timeout 300`,
+counting from the suites' own output; and `make test-memory
+MEMORY_SUITES=tests/test-interrupt-database.sps` in a copy, on either library. Its output is
+[a2-plants.txt](research/m3-slice-6/a2-plants.txt). The suites: `test-interrupt-database`
+(database, 18), `test-interrupt-reach` (reach, 13), `test-interrupt-close` (close, 8),
+`test-interrupt` (interrupt, 19), `test-connection` (connection, 63) and `test-public` (public,
+22). None died or hung.
+
+#### The plants
+
+| Plant | What it plants | Failed plain | `test-interrupt-database` under the gate |
+|---|---|---|---|
+| P-a | in `interrupt-database/with`, the thunk reads the handle into a local, and the call is made after the latch returns | database 2: the stand-in's sweep, called after the close at 21 fuels, 13 to 33; the two-thread row | 1 Valgrind error, from the verb's sweep, on each library |
+| P-a at the verb | `interrupt-database!` hands `interrupt-database/with` a procedure that keeps the handle, then calls `sqlite3-interrupt` on it; `interrupt-database/with` right | **none** | 1 Valgrind error on each library |
+| handle before | the handle read before the latch, the call inside it | **none** | **none**: no error |
+| twice | the call made inside the latch, then again after it | database 2: the stand-in's sweep, called twice in the completing trial, and after the close at 21 fuels; the two-thread row | 1 Valgrind error |
+| section | the latch, and the call after it, in one critical section of the record's own | database 1: the two-thread row alone | no error; the row fails |
+| no call | the thunk reads the handle and calls nothing | database 10, reach 8, close 2 | |
+| no latch | the call made with whatever the record holds, no latch | database 11, close 1 | |
+| P5b | part A's: the handle read, the call when it is not `#f`, no latch, no flag | database 8: the six rows inside a close, the stand-in's sweep at 22 fuels, the two-thread row | 2 Valgrind errors, from the verb's sweep |
+| M08 | part A's P5 plant: the latch's flag read made `#t`, in `interrupt.sls`, in the copy only | database 10, close 1, interrupt 11 | no error; the 10 rows fail |
+| no expiry | the suite's sweeps start at fuel 100000 | database 2: each sweep's `no-trial-resumed` | |
+| collecting | the suite's trials each collect after the open | database 2: each sweep's `(collections 13)` | |
+
+Each Valgrind error is "Invalid write of size 4" at `sqlite3_interrupt`, 408 bytes inside a block
+`sqlite3_close` freed, of 840 bytes on 3.53.1 and 792 at the floor. P-a, section and the right
+code ran five times plain on each library, each run alike.
+
+**Every new row watched failing,** each of its parts:
+
+- **the stand-in's sweep:** a call after the close, by P-a, twice, P5b, no latch and M08; two
+  calls in the completing trial, by twice; none in it, by no call; no trial resumed, by no
+  expiry; a collection, by collecting;
+- **the verb's sweep:** a trial raising, by no latch and M08, whose `(sqlite3-interrupt #f)` Chez
+  refuses; the probe `clear` in the completing trial, by no call; no trial resumed, by no expiry;
+  a collection, by collecting; and under the gate, Valgrind's invalid write, by P-a at the verb,
+  P-a, twice and P5b;
+- **the two-thread row:** by P-a, twice, section, P5b, no latch and no call.
+
+#### The two-thread row earns its place
+
+**Section** keeps the call after the latch, but puts the latch and the call in one critical
+section of the record's own. No expiry splits a section, so both sweeps pass it; inside the
+close the flag reads clear, so the rows inside the close pass it; slice 1's race holds the latch
+alone; and the gate saw no error. Yet the latch's mutex is let go before the call, and a critical
+section keeps out only its own thread's engines (ADR-0019, decision 3): another thread's close
+takes the mutex, clears the flag and frees the connection while the call is in flight. The
+two-thread row holds a stand-in in flight there and fails it, `(interrupt-start work-start
+interrupt-end)`, in every run. So it stays.
+
+#### The survivors, argued
+
+- **P-a at the verb survives plain, and fails the gate.** `interrupt-database/with` is right, and
+  `interrupt-database!` keeps the handle the latch hands it, then calls `sqlite3-interrupt` after.
+  The stand-in's rows never reach the verb's own code, and plain, a write into freed memory is
+  silent. Under `make test-memory MEMORY_SUITES=tests/test-interrupt-database.sps` the verb's
+  sweep fails it on both libraries, one error each. CI's `memory-1` runs the suite.
+- **The handle read before the latch, the call inside it, is equivalent,** as M14 was. A record's
+  handle is its connection's or `#f`, never another's: the open sets it, and only a close that
+  closed clears it. The close clears the flag under the latch's mutex before anything else. So
+  inside the latch, with the flag set, a handle read before it is still the live one: a close
+  between the read and the latch either closed the connection, and the flag is clear, or left it
+  open, the handle the same and the flag set again. Both sweeps passed it, plain and under the
+  gate, with no error.
+
+#### Times
+
+`test-interrupt-database`, plain, three runs a library: 293 to 299 ms before, 506 to 523 ms
+after, the two-thread row's 200 ms wait elapsing whole. Under the gate, by its `time:` lines:
+
+| | Guix's 3.53.1 | The floor's 3.45.1 |
+|---|---|---|
+| before, `f2bfd05` | 10 s, 10 s | 10 s, 11 s |
+| after | 10 s, 11 s, 11 s | 11 s, 11 s, 11 s |
+
+#### For the records
+
+- **ADR-0019's slice 6 amendment, `global-constraints.md`'s interrupt line, and the plan's §4.8
+  and §5 item 6:** the call is made inside the latch, never after it returns;
+  `interrupt-database/with`; the three rows; and the gate's view of the call, the verb's sweep,
+  which sees P-a at the verb and P5b where the race row saw neither.
+- **The trap:** a stand-in that only notes its call may cost an engine no tick.
+- **The watchdog's count:** 18 prepares under Valgrind, as above.
+
+#### The lead's checks of follow-up 2
+
+Run by the lead on the hand-back, in the worktree and in copies under its git-ignored
+`build/lead-a2/`.
+
+- **Rerun:** `make test` ran 73, passed 73; `test-interrupt-database` passed under the gate, 11 s.
+- **The lead's plants,** each written by hand:
+
+  | Plant | What it changes | Caught by |
+  |---|---|---|
+  | P-a, rewritten | `interrupt-database/with`'s latch only reads the handle; the call follows the latch | plain: the stand-in sweep and the two-thread row |
+  | pre-call | a call on the handle as read before the latch, then the latch's own | plain: eight rows, the six inside a close, the stand-in sweep and the two-thread row |
+  | P-a at the verb | `interrupt-database!` itself reads in the latch and calls after it, `/with` left right | under the gate: "Invalid write of size 4", the suite failed by exit 9 |
+
+- **The trap reproduced** on the lead's P-a copy with `a2-engine-trials.sps`: with no spin, no
+  trial called after the close, fuels 1 to 6; with `spin`, trials 23 to 25 called after it, and
+  fuel 26 completed.
+- **The watchdog's count:** the builder's 18 is right, and the lead's first rewording of the
+  records, twelve and three, was wrong. The records' "none of 15 … in 14 … 8 of 9 plain" had
+  counted the watchdog with no sleep alone: the builder's nine, the lead's three and
+  `output.txt`'s three. The records now name both watchdogs.
+- **The review's other findings:** the records citing `build/` now cite the research copies, and
+  `sleep-alloc.sps` and the lead's part A driver are copied in, with their outputs. The `cons`
+  control's 16 bytes a call did not reproduce, so the `make-time` control stands in its place.
+  ADR-0019's P5b is named as ignoring the flag, and `test-transaction-interrupt`'s nearness to
+  `SLOW` is in ADR-0005's amendment as an open risk.
+- **A flake, found and fixed: the busy wait's row.** `make test` once failed on
+  `test-interrupt-reach`, its code unchanged since `f2bfd05`. Run alone 30 times, the suite failed
+  twice, both on "a busy wait it doesn't stop": `BEGIN IMMEDIATE` raised `&sqlite-interrupt` at
+  0 ms, the watchdog's one send at 0 ms, where every other run waited 1501 to 1503 ms.
+  - **The cause:** SQLite clears a connection's interrupt when a statement starts with none
+    running, and an interrupt that lands after the clear, before the statement reaches its busy
+    wait, stops it at once. The row's watchdog sends its first interrupt the moment it signals the
+    owner, which steps the moment it wakes, so the two race at the statement's start. Only that
+    first send can land in the window: a copy whose watchdog sent with no sleep between rounds
+    failed 0 of 20, as likely as not at that rate. The interrupt stopping a statement is right;
+    the row holds the wait.
+  - **The fix:** `watched` takes an optional quiet start, and the busy row's watchdog sends
+    nothing for the wait's first 200 ms. `during-the-wait` still requires a send from 250 ms.
+  - **After it:** 0 of 60 runs failed alone, each waiting 1501 to 1502 ms, and 0 of 20 in the
+    no-sleep copy; under the gate, `test-interrupt-reach` passed in 15 s. Without the fix it failed
+    2 of 50 runs in all; 0 of 60 at that rate is a 1-in-12 chance, at the observed 2 of 30 about
+    1 in 60.
 
 ## Part B: contention
 
@@ -551,7 +771,7 @@ B08, B10 and B11.
 
 - **A thread that dies on a raise runs the base exception handler, and
   `make-process-temp-directory`'s hook removes its directory then.** Reproduced with
-  `build/m3s6b-probe/thread-removes-dir.sps`, git-ignored: a program makes the directory, forks a
+  [research/m3-slice-6/thread-removes-dir.sps](research/m3-slice-6/thread-removes-dir.sps): a program makes the directory, forks a
   thread that raises `'boom` unguarded, waits for the thread's `dynamic-wind` after thunk, and
   reads `(file-directory? dir)`: `#t` before, `#f` after, the main thread going on and exiting 0.
   So one thread's death removed every later row's file, and each open answered `cantopen`. A
@@ -574,7 +794,7 @@ B08, B10 and B11.
   transaction has read. Measured here, on both libraries, beside another's `BEGIN IMMEDIATE` and
   write, with a 1500 ms timeout: a deferred transaction's first statement, an insert, waited
   1502 ms and answered busy; after a `select`, the same insert answered busy in 0 ms; each left
-  the transaction open (`build/m3s6b-probe/deferred-first-write.sps`, git-ignored). It fits B2's
+  the transaction open ([research/m3-slice-6/deferred-first-write.sps](research/m3-slice-6/deferred-first-write.sps)). It fits B2's
   reading of the source, the handler called only from no transaction. The page now says "once it
   has read".
 
@@ -898,3 +1118,7 @@ session's scratch directory, one plant a copy.
     passes after.
   - After the fix, `make test SUITES=tests/test-utf8.sps` runs that suite alone and passes.
 - **The comma trap reproduced** on the host's GNU Make 4.3, as the part reports.
+- **The plants' numbers skip P3 and P10 to P14:** ideas the lead set aside before running any.
+  P3, a trailing space on a run line, would only fail `check-ci` falsely. P10, P11 and P13 were
+  part C's own G07, K06 and W01. P12 changed `test-check-ci`'s rows, not the code. P14 became the
+  narrowed-run probe above.

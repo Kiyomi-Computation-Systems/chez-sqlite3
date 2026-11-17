@@ -5,8 +5,8 @@
 ;;; interrupt-database!; call-with-open-handle, the one way to a
 ;;; connection's handle, and
 ;;; check-database-owner are M2's statements', with the tracking procedures
-;;; below; failure-details and first-finalize-failure are exported for the
-;;; suites too.
+;;; below; failure-details, first-finalize-failure and
+;;; interrupt-database/with are exported for the suites too.
 ;;;
 ;;; The open verbs, open-database and call-with-database, are (chez-sqlite3
 ;;; private open)'s since M3 slice 5: their settings run statements through
@@ -100,10 +100,14 @@
 ;;;                  is the one verb another thread may call: it checks only
 ;;;                  that its argument is a database, and calls
 ;;;                  sqlite3_interrupt through the latch, holding its mutex,
-;;;                  while the flag is set. It lives here because the record
-;;;                  and its handle do, and the handle's one accessor,
-;;;                  call-with-open-handle, makes the owner check this verb
-;;;                  must not (ADR-0012, decision 2; ADR-0010, amended)
+;;;                  while the flag is set; the call itself is made inside
+;;;                  the latch, never after it returns. Its work is
+;;;                  interrupt-database/with's, which takes the foreign call,
+;;;                  so the suites run it on a stand-in. It lives here because
+;;;                  the record and its handle do, and the handle's one
+;;;                  accessor, call-with-open-handle, makes the owner check
+;;;                  this verb must not (ADR-0012, decision 2; ADR-0010,
+;;;                  amended)
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
@@ -112,7 +116,7 @@
           database-cache-capacity database-cache-count
           database-cache-check-out! database-cache-return!
           changes total-changes last-insert-rowid in-transaction?
-          interrupt-database!
+          interrupt-database! interrupt-database/with
           database-depth set-database-depth!)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
@@ -600,13 +604,29 @@
   ;; flag being set means the handle is live. It reads nothing else of the
   ;; connection, since any call that takes the connection's own mutex waits
   ;; for the step it means to stop (M3's research, concurrency I8), and
-  ;; answers nothing.
+  ;; answers nothing. It is interrupt-database/with, given sqlite3_interrupt.
   (define (interrupt-database! db)
+    (interrupt-database/with db sqlite3-interrupt))
+
+  ;; interrupt-database/with : Database (Positive-Integer -> Any) -> Void
+  ;; interrupt-database!'s work, with its foreign call INTERRUPT given, so a
+  ;; suite runs the record's own wiring on a stand-in, as slice 1's suite
+  ;; runs the latch's (ADR-0019, consequences). DB that is no database is an
+  ;; assertion violation from interrupt-database!. Then, inside
+  ;; interrupt-latch-interrupt!'s one critical section, holding DB's latch's
+  ;; mutex and only while the latch is interruptible: DB's handle read, and
+  ;; INTERRUPT called with it, its answer dropped. Both stay inside: a call
+  ;; made after the latch returns could be stopped between the two, by an
+  ;; engine's expiry or by another thread, and made after a close had freed
+  ;; the connection. A raise from INTERRUPT is raised after the section, the
+  ;; same object. Answers nothing. For the suites; (chez-sqlite3) exports
+  ;; only interrupt-database!.
+  (define (interrupt-database/with db interrupt)
     (unless (database? db)
       (assertion-violation 'interrupt-database! "not a database" 'not-a-database
                            (shown-value db)))
     (interrupt-latch-interrupt! (unchecked-database-latch db)
-                                (lambda () (sqlite3-interrupt (unchecked-database-handle db))))
+                                (lambda () (interrupt (unchecked-database-handle db))))
     (if #f #f))
 
   ;; --- the counters (ADR-0016, decision 8) ---------------------------------------------------

@@ -22,9 +22,11 @@
 ;;; The watchdog. Valgrind runs one thread at a time, and a thread running C
 ;;; keeps it: a watchdog meant to interrupt every 5 ms sent its first
 ;;; interrupt 16.5 s into a step (.plans/traps.md), and against a prepare of
-;;; 4 MB of comments, about 3.9 s under Valgrind, one interrupting with no
-;;; sleep stopped none of twelve prepares, sending no interrupt in eleven and
-;;; 125 in the other. A thread
+;;; 4 MB of comments, about 3.8 to 4 s under Valgrind, a watchdog stopped
+;;; none of 18 prepares: interrupting with no sleep, it sent no interrupt in
+;;; 14 of 15 and 125 in the other; sleeping 1 ms a round, none in 3
+;;; (.plans/m3-slice-6-mutation-log.md, part A, and
+;;; .plans/research/m3-slice-6/output.txt). A thread
 ;;; blocked on a mutex lets the others run. So the watchdog, each round,
 ;;; takes SQLite's own memory mutex, SQLITE_MUTEX_STATIC_MEM, which
 ;;; sqlite3_malloc and sqlite3_free take while memory statistics are on, as
@@ -236,11 +238,13 @@
 (define bound-ms 120000)
 (define one-ms (duration 1))
 
-;; watched : Database (-> Any) Boolean
+;; watched : Database (-> Any) Boolean [Natural]
 ;;           -> (List Any Natural Symbol Any (Listof Natural))
 ;; THUNK run on this thread while a watchdog thread interrupts DB, from
-;; before THUNK starts until it has returned or raised, or bound-ms have
-;; passed since the call began. Each round, when HOLD?, the watchdog takes
+;; before THUNK starts, or from QUIET-MS milliseconds after it starts when
+;; QUIET-MS is given, until it has returned or raised, or bound-ms have
+;; passed since the call began. A quiet round sends nothing, and sleeps
+;; 1 ms. Each round, when HOLD?, the watchdog takes
 ;; SQLite's memory mutex and sleeps 1 ms holding it, calls interrupt-database!,
 ;; lets the mutex go; then it sleeps 1 ms (the suite's header). THUNK starts
 ;; only once the watchdog holds the mutex for its first round. Answers what
@@ -250,7 +254,12 @@
 ;; WHAT ... END), the first three of its raises, which are its answer,
 ;; never its end; and the
 ;; milliseconds, from THUNK's start, at which each interrupt was sent.
-(define (watched db thunk hold?)
+(define watched
+  (case-lambda
+    ((db thunk hold?) (watched db thunk hold? 0))
+    ((db thunk hold? quiet-ms) (watched/quiet db thunk hold? quiet-ms))))
+
+(define (watched/quiet db thunk hold? quiet-ms)
   (let* ((m (make-mutex))
          (c (make-condition))
          (started #f)
@@ -266,17 +275,25 @@
           (fork-thread
            (lambda ()
              (let round ()
-               (unless (or (with-mutex m done) (past?))
-                 (when hold? (mutex-enter memory-mutex))
-                 (with-mutex m
-                   (unless started (set! started #t) (condition-broadcast c)))
-                 (when hold? (sleep one-ms))
-                 (let ((verb (interrupt! db)))
-                   (when hold? (mutex-leave memory-mutex))
-                   (unless (eq? verb 'void) (note! verb)))
-                 (with-mutex m (when t0 (set! sends (cons (- (real-time) t0) sends))))
-                 (sleep one-ms)
-                 (round)))
+               (cond
+                 ((or (with-mutex m done) (past?)))
+                 ((and (> quiet-ms 0)
+                       (with-mutex m
+                         (unless started (set! started #t) (condition-broadcast c))
+                         (or (not t0) (< (- (real-time) t0) quiet-ms))))
+                  (sleep one-ms)
+                  (round))
+                 (else
+                   (when hold? (mutex-enter memory-mutex))
+                   (with-mutex m
+                     (unless started (set! started #t) (condition-broadcast c)))
+                   (when hold? (sleep one-ms))
+                   (let ((verb (interrupt! db)))
+                     (when hold? (mutex-leave memory-mutex))
+                     (unless (eq? verb 'void) (note! verb)))
+                   (with-mutex m (when t0 (set! sends (cons (- (real-time) t0) sends))))
+                   (sleep one-ms)
+                   (round))))
              (with-mutex m
                (set! started #t)
                (set! ended #t)
@@ -404,7 +421,18 @@
       'interrupted-during-the-wait
       (list 'no-interrupt-during-the-wait sends)))
 
-(test-equal "a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts all through the wait, which reach SQLite, BEGIN IMMEDIATE waits at least 1000 ms and under 3000, then step! raises &sqlite-busy, busy and busy"
+;; The watchdog stays quiet for the wait's first quiet-ms. SQLite clears a
+;; connection's interrupt when a statement starts with none running, and an
+;; interrupt that lands after that, before the statement reaches its busy
+;; wait, stops the statement at once: plain, the watchdog's first interrupt,
+;; sent as the step began, did so in 2 runs of 30, BEGIN IMMEDIATE raising
+;; &sqlite-interrupt at 0 ms (the slice's mutation log, the lead's checks of
+;; follow-up 2). That is the interrupt stopping a statement, as it should;
+;; this row holds the wait, which no interrupt stops, so its interrupts start
+;; well inside it, and during-the-wait still requires one from 250 ms.
+(define quiet-ms 200)
+
+(test-equal "a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts from 200 ms into the wait to its end, which reach SQLite, BEGIN IMMEDIATE waits at least 1000 ms and under 3000, then step! raises &sqlite-busy, busy and busy"
   (list '(raised (sqlite-busy step! busy busy)) 'interrupts-sent 'the-watchdog-ended 'waited
         'interrupted-during-the-wait 'set zero-counts)
   (let ((holder #f) (waiter #f) (st #f))
@@ -419,7 +447,7 @@
              (execute! holder "begin immediate")
              (set! waiter (open-database path '((busy-timeout . 1500))))
              (set! st (prepare-statement waiter "begin immediate"))
-             (let* ((w (watched waiter (lambda () (step! st)) #f))
+             (let* ((w (watched waiter (lambda () (step! st)) #f quiet-ms))
                     (ms (cadr w))
                     (reached (flag waiter)))
                (display "    timed: the busy wait, interrupted: ")

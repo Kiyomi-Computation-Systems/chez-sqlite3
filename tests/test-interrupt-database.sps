@@ -39,6 +39,16 @@
 ;;;                  reached through applied-settings!, and
 ;;;                  call-with-database's close: each clears the flag inside,
 ;;;                  and each that is left open sets it again
+;;;   engines        the call inside the latch: an interrupt run in an engine,
+;;;                  the connection closed at its first expiry, then the
+;;;                  remainder resumed, at every fuel from 1 until it
+;;;                  completes unexpired. Through interrupt-database/with, the
+;;;                  record's procedure that takes the foreign call, a
+;;;                  stand-in is never called after the close; through
+;;;                  interrupt-database!, no trial raises, and under make
+;;;                  test-memory Valgrind reads every call it makes to C
+;;;   two threads    a stand-in in flight on another thread, through the
+;;;                  record: the close's work starts only once it has ended
 ;;;
 ;;; tests/test-interrupt-reach.sps holds what the verb reaches, and
 ;;; tests/test-interrupt-close.sps a running step after a failed close and the
@@ -55,7 +65,8 @@
         (srfi :64)
         (only (chezscheme) foreign-procedure fork-thread thread-join make-mutex with-mutex
               make-condition condition-wait condition-broadcast make-time current-time
-              time-difference add-duration time>=?)
+              time-difference add-duration time>=? make-engine collect collect-trip-bytes
+              collections parameterize)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -106,6 +117,7 @@
 (define query-row (public 'query-row))
 (define execute! (public 'execute!))
 (define call-with-open-handle (reach '(chez-sqlite3 private connection) 'call-with-open-handle))
+(define interrupt-database/with (reach '(chez-sqlite3 private connection) 'interrupt-database/with))
 (define track-statement! (reach '(chez-sqlite3 private connection) 'track-statement!))
 (define applied-settings! (reach '(chez-sqlite3 private open) 'applied-settings!))
 (define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
@@ -269,6 +281,28 @@
     (if (with-mutex m (await m c (lambda () done) answer-ms))
         (begin (thread-join thread) (with-mutex m answer))
         'unfinished)))
+
+;; start-thread : (-> Any) -> (Natural -> Any)
+;; THUNK run on a thread of its own: its answer, or (raised TEXT) for what
+;; it raised, is the thread's answer. Answers a procedure that waits up to
+;; MS milliseconds for that answer, joins the thread once it has answered
+;; and answers it, or answers unfinished, joining nothing.
+(define (start-thread thunk)
+  (let* ((m (make-mutex))
+         (c (make-condition))
+         (done #f)
+         (answer 'unfinished)
+         (thread (fork-thread
+                  (lambda ()
+                    (let ((a (guard (e (#t (list 'raised (describe e)))) (thunk))))
+                      (with-mutex m
+                        (set! answer a)
+                        (set! done #t)
+                        (condition-broadcast c)))))))
+    (lambda (ms)
+      (if (with-mutex m (await m c (lambda () done) ms))
+          (begin (thread-join thread) (with-mutex m answer))
+          'unfinished))))
 
 (define temp-dir (guard (e (#t #f)) (make-process-temp-directory)))
 (define case-number 0)
@@ -581,6 +615,263 @@
                 (when raw (guard (e (#t #f)) (finalize raw)))
                 (when kept (close-quietly kept)))))))
     (list closes left-open)))
+
+;; --- engines: the call inside the latch -----------------------------------------------------
+;; interrupt-latch-interrupt!'s one critical section holds the flag's read
+;; and the call together (ADR-0019, decision 2), and an engine spends no
+;; ticks inside a section (.plans/traps.md). So an expiry comes before the
+;; section, and a close then clears the flag, so the remainder calls
+;; nothing; or after the call, which the close then follows. How the record
+;; hands its call to the latch is these rows' to hold: tests/test-interrupt.sps
+;; holds the latch alone, on stand-ins. A call made after the latch returns,
+;; the handle read inside it, can expire between the two with the live
+;; handle in hand, and its remainder, resumed after the close, calls on a
+;; freed connection (the slice's review, P-a).
+;;
+;; Each trial takes a fresh connection and a fresh engine, closes the
+;; connection at the engine's first expiry, and resumes the remainder to
+;; its end. A fuel names no fixed point in the code, so the fuels run from 1
+;; until a trial completes without expiring (.plans/traps.md), and a sweep
+;; with no trial resumed after a close fails by name. A collect request
+;; costs an engine's ticks, so each sweep collects first, with
+;; collect-trip-bytes raised far above what it allocates, and fails by name
+;; when a collection ran during it: each fuel then stops at one point of the
+;; code, and the sweep passes every point the call has.
+
+;; max-fuel : Positive-Integer
+;; Where a sweep gives up: far past the fuel at which the call completes.
+(define max-fuel 500)
+
+;; split-trial : Positive-Integer (Database Positive-Integer (Any -> Void) -> Any)
+;;               -> (U (List 'completed Any Any (Listof Any)) (List 'resumed Any (Listof Any))
+;;                     (List 'raised Any (Listof Any)))
+;; One trial at FUEL: a fresh connection, and (CALL db live note!) run in a
+;; fresh engine, its answer read by answered inside the engine; LIVE is the
+;; connection's handle, and NOTE! adds to the trial's notes. Completed
+;; unexpired: completed, the answer, the probe read before the close, and
+;; the notes. Expired: the connection closed, noted closed, and the
+;; remainder resumed to its end: resumed, the answer, and the notes. raised,
+;; for what the open or a close raised, and the notes.
+(define (split-trial fuel call)
+  (let ((db #f) (notes '()))
+    (let* ((note! (lambda (n) (set! notes (cons n notes))))
+           (close! (lambda () (close-database! db) (note! 'closed)))
+           (outcome
+            (dynamic-wind
+              (lambda () #f)
+              (lambda ()
+                (attempt
+                 (lambda ()
+                   (set! db (open-database ":memory:"))
+                   (let ((live (with-handle db (lambda (h) h))))
+                     ((make-engine (lambda () (answered (lambda () (call db live note!)))))
+                      fuel
+                      (lambda (left answer)
+                        (let ((seen (flag db)))
+                          (close!)
+                          (list 'completed answer seen)))
+                      (lambda (next)
+                        (close!)
+                        (let resume ((next next))
+                          (next 100000000
+                                (lambda (left answer) (list 'resumed answer))
+                                resume))))))))
+              (lambda () (when db (close-quietly db))))))
+      (append outcome (list (reverse notes))))))
+
+;; sweep : String (Database Positive-Integer (Any -> Void) -> Any)
+;;         -> (List (Listof (Pairof Positive-Integer Any)) Any)
+;; split-trial of CALL at each fuel from 1, until a trial is not resumed or
+;; max-fuel is reached: each trial by its fuel, in order; and
+;; no-collection-during-the-sweep, or how many ran. It collects first, and
+;; runs with collect-trip-bytes at a gigabyte. Prints, naming WHAT, the fuel
+;; it stopped at and how many trials it resumed.
+(define (sweep what call)
+  (collect)
+  (let* ((before (collections))
+         (trials (parameterize ((collect-trip-bytes (* 1024 1024 1024)))
+                   (let loop ((fuel 1) (trials '()))
+                     (let* ((trial (split-trial fuel call))
+                            (trials (cons (cons fuel trial) trials)))
+                       (if (and (eq? (car trial) 'resumed) (< fuel max-fuel))
+                           (loop (+ fuel 1) trials)
+                           (reverse trials))))))
+         (after (collections))
+         (last (list-ref trials (- (length trials) 1))))
+    (display "  ")
+    (display what)
+    (display ": stopped at fuel ")
+    (display (car last))
+    (display ", ")
+    (display (cadr last))
+    (display ", after ")
+    (display (length (filter (lambda (t) (eq? (cadr t) 'resumed)) trials)))
+    (display " trials resumed after a close")
+    (newline)
+    (list trials (if (= before after) 'no-collection-during-the-sweep (list 'collections (- after before))))))
+
+;; notes-of : (Pairof Positive-Integer (Listof Any)) -> (Listof Any)
+;; A trial's notes, its last element.
+(define (notes-of trial) (list-ref trial (- (length trial) 1)))
+
+;; called-after-the-close? : (Listof Any) -> Boolean
+;; Whether NOTES hold anything after closed.
+(define (called-after-the-close? notes)
+  (let ((after (memq 'closed notes)))
+    (and after (pair? (cdr after)))))
+
+;; read-sweep : (List (Listof (Pairof Positive-Integer Any)) Any) ((Pairof Positive-Integer Any) -> Boolean)
+;;              -> (List Any Symbol Any Any)
+;; RUN read whole: its trials FINE? refuses, by fuel, or none-went-wrong;
+;; resumed-after-a-close, or no-trial-resumed; its last trial, the fuel
+;; dropped; and whether a collection ran during it.
+(define (read-sweep run fine?)
+  (let ((trials (car run)))
+    (list (let ((wrong (filter (lambda (t) (not (fine? t))) trials)))
+            (if (null? wrong) 'none-went-wrong wrong))
+          (if (exists (lambda (t) (eq? (cadr t) 'resumed)) trials)
+              'resumed-after-a-close
+              'no-trial-resumed)
+          (cdr (list-ref trials (- (length trials) 1)))
+          (cadr run))))
+
+;; spin : Natural -> Void
+;; N turns of a loop, each a tick an engine counts outside a critical
+;; section.
+(define (spin n) (let loop ((i 0)) (when (< i n) (loop (+ i 1)))))
+
+;; stand-in : Positive-Integer (Any -> Void) -> (Any -> Void)
+;; A stand-in for sqlite3_interrupt that spins 20 turns, then notes its
+;; call: called-live when it is handed LIVE, else (called HANDLE). It calls
+;; nothing. The spin gives an engine ticks to stop it at: a stand-in that
+;; only notes its call may cost none, and then no fuel stops a call made
+;; after the latch returns before its note. Against P-a, the slice's probe
+;; with such a stand-in expired after the latch at no fuel, and this suite's
+;; at one fuel of 14; with the spin, the probe at 20 fuels of 26 and this
+;; suite at 21 of 34 (.plans/research/m3-slice-6/a2-engine-trials.sps; the
+;; slice's mutation log). Inside the latch's section the spin costs no tick.
+(define (stand-in live note!)
+  (lambda (h)
+    (spin 20)
+    (note! (if (eqv? h live) 'called-live (list 'called h)))))
+
+;; stand-in-fine? : (Pairof Positive-Integer (Listof Any)) -> Boolean
+;; Whether a trial completed or was resumed, the call answering void, its
+;; stand-in called at most once, with the live handle, and never after the
+;; close.
+(define (stand-in-fine? trial)
+  (let ((notes (notes-of trial)))
+    (and (memq (cadr trial) '(completed resumed))
+         (eq? (caddr trial) 'void)
+         (not (called-after-the-close? notes))
+         (for-all (lambda (n) (memq n '(called-live closed))) notes)
+         (<= (length (filter (lambda (n) (eq? n 'called-live)) notes)) 1))))
+
+(test-equal "interrupt-database/with in an engine, at every fuel from 1 until it completes unexpired, each trial a fresh connection and engine, the connection closed at the first expiry and the remainder resumed to its end: no trial calls its stand-in after the close; some trial was resumed after a close; the trial that completed called it once, with the live handle, and SQLite never; no collection ran"
+  '(none-went-wrong resumed-after-a-close (completed void clear (called-live closed))
+                    no-collection-during-the-sweep)
+  (read-sweep (sweep "interrupt-database/with"
+                     (lambda (db live note!) (interrupt-database/with db (stand-in live note!))))
+              stand-in-fine?))
+
+;; Plain, a call on a freed connection is silent: sqlite3_interrupt writes
+;; one int into the freed block, and nothing reads it. So plain, this row
+;; reads only what the verb answers and raises, and a verb that calls
+;; sqlite3_interrupt after the latch returns, the latch handing it the
+;; handle, passes it. Under make test-memory, Valgrind sees the write: at
+;; each fuel that stops such a verb between the latch and its call, the
+;; suite's .valgrind log, build/memory/test-interrupt-database.valgrind,
+;; reports "Invalid write of size 4 at sqlite3_interrupt", 408 bytes inside
+;; a block sqlite3_close freed, of 840 bytes on 3.53.1 and 792 at the floor,
+;; and the gate fails the suite (the slice's mutation log, part A,
+;; follow-up 2).
+(test-equal "interrupt-database! in an engine, swept the same way: every trial answers void and raises nothing; some trial was resumed after a close; the trial that completed reached SQLite, the probe reading set; no collection ran"
+  '(none-went-wrong resumed-after-a-close (completed void set (closed))
+                    no-collection-during-the-sweep)
+  (read-sweep (sweep "interrupt-database!" (lambda (db live note!) (interrupt-database! db)))
+              (lambda (trial)
+                (and (memq (cadr trial) '(completed resumed))
+                     (eq? (caddr trial) 'void)
+                     (equal? (notes-of trial) '(closed))))))
+
+;; --- two threads: the call under the latch's mutex ------------------------------------------
+;; A critical section keeps out only its own thread's engines and
+;; interrupts; between threads the latch's mutex is the exclusion (ADR-0019,
+;; decision 3). A call made inside a section of the record's own, after the
+;; latch has let its mutex go, passes the engine rows, since no expiry
+;; splits the section, and the rows inside the close, where the flag reads
+;; clear; slice 1's race holds the latch alone. This row holds a stand-in in
+;; flight on another thread while the owner closes, and the close's first
+;; finalize, an entry of this suite's own, notes when the work starts.
+
+;; The waits: in-flight-ms, the stand-in's wait for the close's work to
+;; start, elapses whole when the record is right, so it is short; the other
+;; elapses only when something is wrong.
+(define in-flight-ms 200)
+(define long-ms 5000)
+
+;; race-through-the-record : -> Any
+;; A fresh connection tracking an entry of this suite's own, whose finalize
+;; notes work-start, and two threads with one board of notes:
+;;   - the interrupter calls interrupt-database/with, whose stand-in notes
+;;     interrupt-start, when handed the live handle, else what it was
+;;     handed; says it is in flight; waits up to long-ms for the owner to say
+;;     it is calling the close, then up to in-flight-ms for the close's work
+;;     to start; and notes interrupt-end;
+;;   - the owner, this thread, waits up to long-ms for the stand-in to be in
+;;     flight, says it is calling the close, and closes.
+;; The notes, in order; the interrupter's answer, by answered; the close's;
+;; and the counts.
+(define (race-through-the-record)
+  (let ((db #f))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (attempt
+         (lambda ()
+           (set! db (open-database ":memory:"))
+           (let* ((live (with-handle db (lambda (h) h)))
+                  (m (make-mutex))
+                  (c (make-condition))
+                  (notes '())
+                  (in-flight #f)
+                  (calling-close #f)
+                  (work-started #f)
+                  (note! (lambda (n) (set! notes (cons n notes))))
+                  (tracked (track-statement! db (list 'this-suites-entry)
+                                             (lambda (handle)
+                                               (with-mutex m
+                                                 (note! 'work-start)
+                                                 (set! work-started #t)
+                                                 (condition-broadcast c))
+                                               'finalized)))
+                  (interrupter
+                   (start-thread
+                    (lambda ()
+                      (answered
+                       (lambda ()
+                         (interrupt-database/with
+                          db
+                          (lambda (h)
+                            (with-mutex m
+                              (note! (if (eqv? h live) 'interrupt-start (list 'interrupt-start h)))
+                              (set! in-flight #t)
+                              (condition-broadcast c)
+                              (await m c (lambda () calling-close) long-ms)
+                              (await m c (lambda () work-started) in-flight-ms)
+                              (note! 'interrupt-end)))))))))
+                  (ready (with-mutex m (await m c (lambda () in-flight) long-ms)))
+                  (calling (with-mutex m
+                             (set! calling-close #t)
+                             (condition-broadcast c)))
+                  (closed (attempt (lambda () (close-database! db) 'closed)))
+                  (interrupted (interrupter answer-ms)))
+             (list (with-mutex m (reverse notes)) interrupted closed (native-counts))))))
+      (lambda () (when db (close-quietly db))))))
+
+(test-equal "a stand-in in flight on another thread, through interrupt-database/with, when the owner closes: the close's work starts only once the stand-in has ended; the interrupter answers void, the close closes, nothing is counted"
+  (list '(interrupt-start interrupt-end work-start) 'void 'closed zero-counts)
+  (race-through-the-record))
 
 (test-equal "every count is zero at the end"
   zero-counts

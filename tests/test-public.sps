@@ -191,8 +191,9 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!; the cache's four procedures; and the transaction depth's two, with-transaction's"
-  (sorted-names '(close-database! database? interrupt-database! call-with-open-handle
+(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!, and interrupt-database/with, the verb's procedure that takes the foreign call, for the suites; the cache's four procedures; and the transaction depth's two, with-transaction's"
+  (sorted-names '(close-database! database? interrupt-database! interrupt-database/with
+                  call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
                   tracked-statements untrack-statement!
                   prepared-open connection-outcome opened-database close-connection
