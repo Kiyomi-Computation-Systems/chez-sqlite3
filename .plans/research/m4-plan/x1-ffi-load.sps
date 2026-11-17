@@ -1,7 +1,11 @@
 ;;; x1-ffi-load.sps: sqlite3_load_extension through Chez's FFI, as v1's verb
 ;;; would call it (the M4 plan, sections 4.4 and 8).
 ;;;
-;;; Usage: scheme --program x1-ffi-load.sps LIBRARY DIR MODE
+;;; Usage: scheme --program x1-ffi-load.sps LIBRARY DIR MODE [SUFFIX]
+;;;
+;;; SUFFIX, "so" when not given, is the suffix of every file it names in DIR,
+;;; in place of "so": the Mac's run gives "dylib" (.plans/research/m4-mac/).
+;;; Without it the output is the same as before.
 ;;;
 ;;; Standalone: it loads LIBRARY by that path with load-shared-object and
 ;;; binds what it needs with foreign-procedure, and loads none of
@@ -46,12 +50,17 @@
     (flush-output-port port)))
 
 (define arguments (command-line-arguments))
-(unless (= (length arguments) 3)
-  (display "usage: scheme --program x1-ffi-load.sps LIBRARY DIR MODE\n" (current-error-port))
+(unless (memv (length arguments) '(3 4))
+  (display "usage: scheme --program x1-ffi-load.sps LIBRARY DIR MODE [SUFFIX]\n"
+           (current-error-port))
   (exit 2))
 (define library-path (car arguments))
 (define dir (cadr arguments))
 (define mode (string->symbol (caddr arguments)))
+(define suffix (if (= (length arguments) 4) (cadddr arguments) "so"))
+;; in-dir : String -> String
+;; DIR's file named BASE, with SUFFIX.
+(define (in-dir base) (string-append dir "/" base "." suffix))
 (unless (memq mode '(gate gate-leak gate-none fifo-plain fifo-safe))
   (display "x1-ffi-load.sps: MODE is gate, gate-leak, gate-none, fifo-plain or fifo-safe\n"
            (current-error-port))
@@ -194,10 +203,10 @@
   (let ((db (open-memory)))
     (c-call-on db)
     (when load?
-      (load-ext load-safe db (string-append dir "/ext.so") #f free?)
+      (load-ext load-safe db (in-dir "ext") #f free?)
       (half db)
-      (load-ext load-safe db (string-append dir "/ext-failing.so") #f free?)
-      (load-ext load-safe db (string-append dir "/nosuch.so") #f free?))
+      (load-ext load-safe db (in-dir "ext-failing") #f free?)
+      (load-ext load-safe db (in-dir "nosuch") #f free?))
     (let ((closed (close-db db)))
       (emit 'close closed)))
   (emit 'memory-used-after (memory-used)))
@@ -205,7 +214,7 @@
 ;; --- the FIFO ------------------------------------------------------------------
 
 (define (fifo binding label)
-  (let* ((path (string-append dir "/fifo.so"))
+  (let* ((path (in-dir "fifo"))
          (db (open-memory))
          (m (make-mutex))
          (c (make-condition))
