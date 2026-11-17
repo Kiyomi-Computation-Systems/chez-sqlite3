@@ -133,12 +133,21 @@
   (`.plans/research/m3-plan/single/`).
 * A busy wait's length is the build's: one without `nanosleep` sleeps whole
   seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
-  a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms
-  (`.plans/research/m3-plan/concurrency/`).
+  a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms,
+  and under twice the timeout, so a retry in Scheme fails it
+  (`.plans/research/m3-plan/concurrency/`; ADR-0019, amended).
 * A connection's own statement held at a row stops its writes from waiting:
   under another's write lock they answered BUSY at once, where without the
   held read they waited out a 1500 ms timeout. A row that waits on a lock
   holds no read of its own (`.plans/research/m3-plan/slice-0/`, P12).
+* SQLite's unix VFS keeps a closed connection's file descriptor while
+  another connection in the process holds a POSIX lock on the file. Read
+  a file's descriptors only once every connection holding a lock on it
+  has let go (`.plans/traps.md`).
+* A collect request costs an engine's run ticks. A row that judges one
+  run by another at the same fuel collects first, with
+  `collect-trip-bytes` raised above what the runs allocate, or judges
+  each run by what it saw itself (`.plans/traps.md`).
 
 **Chez and the FFI**
 
@@ -173,6 +182,19 @@
   section that touches the call's resource, not only around the caller's
   procedure, and a row tells a whole new call, from a continuation taken
   before the call began, from a re-entry (`.plans/traps.md`).
+* One remainder can also be resumed again while an earlier resume of it
+  is still pending, so a flag set only once a call ends lets both runs
+  act. Give the call a claim that each section compares, inside the
+  section, with a position the run carries, and advances (ADR-0016,
+  ADR-0018, amended). Build text with Chez's own procedures inside a
+  critical section: `number->string`, resumed from inside, answered `""`
+  or the digits twice (`.plans/traps.md`).
+* A sweep of an engine's remainders takes a fresh engine and connection
+  for every trial, checks the call's clean answer first, and fails by
+  name when too few trials have both runs past the call's first section:
+  one remainder reused across trials sweeps nothing past the first. An
+  engine's fuel names no fixed point in the code, so sweep every pair of
+  fuels (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

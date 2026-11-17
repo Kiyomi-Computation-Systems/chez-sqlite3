@@ -5,7 +5,9 @@
   decision 5's interrupt between statements, "SQLite's way, documented" (Q12); and decision 8's
   busy timeout, with no default, "None, SQLite's 0" (Q10). Revised the same day after the plan's
   adversarial review: decision 2's flag on both paths a failed close takes, decision 8's held
-  read, and a test of the exclusion that doesn't need the gate.
+  read, and a test of the exclusion that doesn't need the gate. Amended 2026-11-16 in M3 slice 5,
+  and accepted by the maintainer that day: decision 11's upper bound, the maintainer's "Keep,
+  amend" ([amendment](#amendment-2026-11-16-a-waits-upper-bound-m3-slice-5)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `interrupt-database!`, the close's part in it, and the busy timeout
 - **Settles:** ADR-0010, decision 1: "M3's `sqlite3_interrupt` … M3 designs it with
@@ -167,3 +169,19 @@ research, concurrency; "single" names its other half):
   closes on another, every wait bounded. Whether Valgrind sees the planted copy without the
   exclusion, as an invalid write, is the M3 plan's probe P5. If it can't, the stand-in row is the
   exclusion's failing test, and the gate's row says it saw nothing.
+
+## Amendment, 2026-11-16: a wait's upper bound (M3 slice 5)
+
+Accepted by the maintainer on 2026-11-16 ("Keep, amend"), proposed in M3 slice 5, from its
+adversarial review ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5; the slice's
+[mutation log](../m3-slice-5-mutation-log.md), part C).
+
+- **Decision 11, amended: a row that times a wait asserts it under twice its timeout,** as well as
+  at least 1000 ms. The review planted a retry in Scheme, each setting tried again once on busy: it
+  waited 3003 ms against 1502, and every row passed, asserting only the lower bound. So "no retry
+  in Scheme" (decision 7) had no row. Under 3000 ms for a 1500 ms timeout, the mutant fails.
+- **Measured,** `test-open-locks`: each wait ran 1502 ms plain, and 1509 to 1526 ms under Valgrind
+  at the floor, about 1.5 s under the bound. A build without `nanosleep`, sleeping whole seconds,
+  waits 1000 ms for 1500 (concurrency B3's variant), under it too.
+- **A wait the other connection ends mid-wait is still asserted only as before its timeout's end**
+  (slice-0 P3).

@@ -100,7 +100,6 @@
 (define tracked-statements (reach connection-library 'tracked-statements))
 (define call-with-open-handle (reach connection-library 'call-with-open-handle))
 (define database-cache-count (reach connection-library 'database-cache-count))
-(define open-database-with-cache-capacity (reach connection-library 'open-database-with-cache-capacity))
 (define sqlite3-extended-errcode (reach native-library 'sqlite3-extended-errcode))
 (define sqlite3-interrupt (reach native-library 'sqlite3-interrupt))
 (define call-with-statement-handle (reach statement-library 'call-with-statement-handle))
@@ -265,11 +264,10 @@
         (when db (guard (e (#t #f)) (close-database! db)))))))
 
 ;; open-uncached : String -> Database
-;; A connection to PATH whose statement cache holds nothing, capacity 0, so
-;; with-transaction prepares each of its statements afresh. The suite's one
-;; call of the private opener, which M3 slice 5's statement-cache setting
-;; replaces.
-(define (open-uncached path) (open-database-with-cache-capacity 0 path))
+;; A connection to PATH whose statement cache holds nothing, its
+;; statement-cache setting 0, so with-transaction prepares each of its
+;; statements afresh.
+(define (open-uncached path) (open-database path '((statement-cache . 0))))
 
 ;; with-uncached : (Database Database -> Any) -> Any
 ;; with-case, and a third connection to its file at capacity 0, closed after.

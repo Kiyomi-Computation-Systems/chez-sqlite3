@@ -102,6 +102,54 @@ told in chez-curl's `.plans/traps.md`.
   re-entered, so a counter at the procedure's entry counts it twice. (M3 slice 3's review and
   fixes, chez-sqlite3)
 
+- **A remainder resumed again while an earlier resume of it is pending gets past a flag set
+  once a call ends.** M3 slice 5's review took `open-database`'s remainder R before the open, at
+  fuel 199, and resumed it at fuel 38 until it expired after the open, as R1. R resumed again to
+  its end opened a second connection and returned it; R1 was then refused. Its connection stayed
+  open, counted and unreachable. Past the open, the same schedule applied the settings twice.
+  The briefs had modelled "resumed twice" only as one resume run to its end before the next.
+  A claim each section compares with a position the run carries, and advances, holds
+  (ADR-0018, amended in M3 slice 5). The M2 session's sweep of slice 4 then found the same in
+  slice 3's `execute!`, `query` and `query-row`: R1 held a statement that R found out of the
+  cache and prepared again, and two runs past the check-out shared one, `query` answering rows
+  the other had stepped past (ADR-0016, amended in M3 slice 5's part D). (M3 slice 5's review,
+  fixes and part D, chez-sqlite3)
+
+- **Chez's `number->string`, resumed from inside, answers wrong.** On Chez 10.4.0,
+  `(string-append "PRAGMA busy_timeout = " (number->string 1234))` under an engine, its
+  remainder resumed to its end a second time, answered `"PRAGMA busy_timeout = "` at fuels 22,
+  23, 31 and 32. Resumed while an earlier resume was pending, it answered the digits twice,
+  `"12341234"`, or none ([research/m3-slice-5/](research/m3-slice-5/README.md),
+  `number-twice.sps`, `number-interleaved.sps`). `string-append` alone never differed. Build
+  such text in a critical section. (M3 slice 5 and its fixes, chez-sqlite3)
+
+- **A collect request costs an engine's run ticks.** An engine of 300 allocating calls first
+  completed unexpired at fuel 5238 with no collection pending, and at 5253 with one every 4 KiB,
+  whatever the collect-request handler did, nothing included (`gc-ticks.sps`). So two runs of
+  one call at one fuel can stop ticks apart. (M3 slice 5's fixes, chez-sqlite3)
+
+- **An engine's fuel names no fixed point in the code.** Stepped one tick a slice,
+  `execute-script!` completed in 123 slices, yet a remainder taken at fuel 1 and resumed at fuel
+  127 had not begun the script: 432 of 527 sampled trials (F, G) stood elsewhere than the stepped
+  run after F + G ticks ([research/m3-slice-5/](research/m3-slice-5/README.md), `ticks.sps`).
+  Where a remainder lies depends on the code after it too: one first expression, followed by
+  different code, put the last fuel whose remainder made a whole new call at 6 or at 7, and
+  `execute!`'s is at 8 (`boundary.sps`). So sweep every (F, G), and bound a whole new call by the
+  fuel at which the same call, refused at its first check, completes. (M3 slice 5's part D,
+  chez-sqlite3)
+
+- **A keyboard interrupt that comes pending inside a critical section is handled as the section
+  ends,** before the next expression. A timer and an engine spend no ticks inside one: a timer
+  of 10 had 9 left after 1000 calls in a section, and an engine of fuel 10 around such a
+  section completed with 3 left (`section-end.sps`, Linux only). So the code just after a
+  section is reached by a signal alone. (M3 slice 5's fixes, chez-sqlite3)
+
+- **Exporting a new name from a library can break one that imports it whole.** Chez refuses the
+  importer when it defines the name too: "multiple definitions for open-outcome in body". M3
+  slice 5 exported `open-outcome` from `(chez-sqlite3 private connection)`, which
+  `(chez-sqlite3 private statement)` imports whole and defines its own of, so the export became
+  `connection-outcome`. (M3 slice 5, chez-sqlite3)
+
 - **Chez's `map` called its procedure from the end, in pairs.** On 10.4.0,
   `(map (lambda (i) (set! seen (cons i seen)) i) '(0 1 2 3 4 5))` in a program called it on 4,
   5, 2, 3, 0, 1, so over 0 to 31 the first call was on 30. A cache row that filled its table
@@ -207,8 +255,20 @@ told in chez-curl's `.plans/traps.md`.
   SELECT first (slice-0 P9). (M3's research, chez-sqlite3)
 
 - **Some settings fail at once, with a busy timeout set.** `journal_mode = wal` under another
-  connection's reserved lock, and `journal_mode = delete` on a WAL file while any other connection
-  is open, even an idle one, answered BUSY with no wait under a 200 ms timeout (slice-0 P2). (M3's research,
+  connection's reserved lock, and `journal_mode = delete` on a WAL file beside another connection
+  that has read it, even one idle now, answered BUSY with no wait under a 200 ms timeout (slice-0
+  P2). A connection opened and never used holds nothing of the file, and doesn't block leaving
+  WAL ([research/m3-slice-5/](research/m3-slice-5/README.md), `locks.sps`). (M3's research and M3
+  slice 5, chez-sqlite3)
+
+- **SQLite's unix VFS keeps a closed connection's file descriptor while another connection in
+  the process holds a POSIX lock on the file.** A failed open under another's exclusive lock left
+  one descriptor more, which a later open reused (`busy-probe.sps`). Read a file's descriptors
+  only once every holder has let go. (M3 slice 5, chez-sqlite3)
+
+- **`sqlite3_cancel_auto_extension` keeps SQLite's list of entry points;
+  `sqlite3_reset_auto_extension` frees it.** A suite that registered one and cancelled it failed
+  its `sqlite3_memory_used` check by 8 bytes, which Valgrind didn't report. (M3 slice 5's fixes,
   chez-sqlite3)
 
 - **A refused `BEGIN IMMEDIATE` still takes its lock.** Inside a deferred transaction that had read
@@ -493,6 +553,20 @@ told in chez-curl's `.plans/traps.md`.
     --base main`, and then deleting the branch.
   - **The order:** merge; retarget the next PR to `main`; check that no open PR still has the old
     base; then delete. (M3's merge train, chez-sqlite3)
+
+- **A sweep that reuses one remainder across its trials sweeps nothing past the first.** The
+  lead's first sweep of the conveniences under pending resumes took one remainder R a fuel and
+  resumed it at every G. After the first trial R's call had ended, so every later trial was
+  refused at once, and the sweep found slice 3's `query` clean in 3,876 trials, where a fresh
+  engine and connection a trial found a statement left out of the cache in 3,655 of 10,147. Its
+  `query-fold` passed the seed for the procedure, so every trial raised at the procedure's check.
+  Take a fresh remainder and connection for every trial, check the call's clean answer first, and
+  count the trials in which both runs got past the call's first section: a sweep fails by name
+  when that count is trivial, as M3 slice 5's part D suites do (the M2 session's guard;
+  [research/m3-slice-5/](research/m3-slice-5/README.md), `pending-sweep.sps`). Count it
+  against the fuels swept, not as a fixed total: slice 4's guard of 1,000 trials failed at 647
+  once part D halved the call's fuel.
+  (M3 slice 5's part D, chez-sqlite3)
 
 ## Editing the records
 

@@ -30,7 +30,9 @@ newest first.
   settled, and the plan's amendments to the older records (its §10), applied in M3 slice 0, the
   same day ("Accept all"); and M3 slice 1's amendments to ADR-0016, ADR-0017, ADR-0018 and
   ADR-0020, the same day ("Accept all"); and M3 slice 3's amendments to ADR-0014, ADR-0016,
-  ADR-0017 and ADR-0020, on 2026-11-16 ("Accept all").
+  ADR-0017 and ADR-0020, on 2026-11-16 ("Accept all"); and, the same day, slice 2's to ADR-0002
+  and ADR-0005, slice 4's to ADR-0017, and slice 5's to ADR-0012, ADR-0016, ADR-0018 and
+  ADR-0020 ("Accept all"), and to ADR-0019's decision 11 ("Keep, amend").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All five jobs are
   required: `main`, `memory` and `nothreads`, and, since slice 5 merged, `floor` and `current`.
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
@@ -41,11 +43,15 @@ newest first.
   session, squash-merged with CI passing in every job.
 - **M3 slice 3 is done:** the conveniences, the counters and the cache, as PR #24, `f496cf5`,
   squash-merged with CI passing in every job.
-- **Now: M3 slice 4, transactions, is PR #25 on `m3-slice-4-transactions`,** by the M2 session,
-  rebased onto `f496cf5` and merged in turn (the maintainer, 2026-11-16: "Run all four", slices 1
-  to 4 in order). Then slice 5, the settings, PR #26, by the M3 session, rebased onto it. The
-  maintainer's order, 2026-11-15: slices 1 and 2 in parallel, then 3, then 4 (the M2 session) and 5 in
-  parallel, then 6, each its own PR, stacked on the one before
+- **M3 slice 4 is done:** transactions, as PR #25, `aa89dde`, by the M2 session, squash-merged
+  with CI passing in every job. Slices 1 to 4 merged in order, each rebased onto the squash before
+  it (the maintainer, 2026-11-16: "Run all four").
+- **Now: M3 slice 5, the settings, is PR #26 on `m3-slice-5-settings`,** by the M3 session,
+  rebased onto `aa89dde`. It carries part D, the fix of slice 3's conveniences under pending
+  resumes. Next, slice 6, interrupt and contention, where the `memory` job is also sharded (the
+  maintainer, 2026-11-16: "Shard in slice 6"). The maintainer's order, 2026-11-15: slices 1 and 2
+  in parallel, then 3, then 4 (the M2 session) and 5 in parallel, then 6, each its own PR, stacked
+  on the one before
   ([the M3 plan](2026-11-15-m3-plan.md), §5). M2's slices ran in the stacked order of 2026-11-14
   too, and M2's Mac run is done, below.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
@@ -93,6 +99,106 @@ newest first.
   (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-16 — M3 slice 5: the settings (PR #26)
+
+- **Built** by the M3 session, beside slice 4 from slice 3's `9deda02`, then rebased onto slice 4's
+  `5c295c1`, by four builders in turn:
+  - **Part A,** `(chez-sqlite3 private open)`:
+    - `open-database` and `call-with-database` take a settings list among their options;
+    - the list is checked before anything opens, and `busy-timeout` is set first;
+    - each of SQLite's six settings is set once and read back;
+    - `statement-cache` is fixed in the record, and the private opener of slice 3 is gone;
+    - `sqlite-setting-mismatch?` and its three accessors are exported;
+  - **Part B:** the lock rows, `test-open-locks`, and the plants;
+  - **The review's fixes:**
+    - every open call holds a claim, each section one-shot;
+    - the checks run in one critical section;
+    - a wait's upper bound;
+  - **Part D,** the conveniences' claim: `execute!`, `query` and `query-row` hold the same claim
+    on every section, and `query-fold` and `execute-script!` keep slice 3's flag.
+  - **On the rebase,** slice 4's pending row in `test-transaction-engine` now sweeps every G, is
+    guarded a fuel on average, and asserts the body's stray, which slice 4 could only observe.
+- **Decided by the maintainer** (2026-11-16):
+  - when the close after a failed setting fails too, the setting's condition is raised ("Setting's
+    error wins"; ADR-0018, decision 7, amended);
+  - a row asserts a wait under twice its timeout ("Keep, amend"; ADR-0019, decision 11);
+  - slice 3's defect fixed here, as part D, with slice 4 unmoved ("In slice 5's PR").
+- **Watched failing:** each suite red against the code before it. Part A ran 41 mutations, 40
+  caught; part B 8 lock mutations and 6 plants, all caught; the fixes 29, 24 caught; part D 33, 29
+  caught, and 5 plants of its shared rows, all caught. Every survivor is argued in
+  [the log](m3-slice-5-mutation-log.md). The lead's own mutants, eleven across the parts, were
+  each caught by named rows.
+- **Reviewed** (Opus, read-only), every finding reproduced before it was fixed:
+  - **The open verbs under a remainder resumed while an earlier resume of it was pending:** R
+    taken before the open, R1 pending past it, R to its end, then R1. `open-database` left a
+    connection open, counted and unreachable, and applied the settings twice. The brief had
+    modelled "resumed twice" only as one resume run to its end before the next. Fixed by the
+    claim.
+  - **A survivor's argument was false:** the close after a failed setting can fail, through an
+    untracked statement and a timer's re-entry of `call-with-database`'s wind.
+  - **No row bounded a wait from above,** so a retry in Scheme passed. Now every timed wait is
+    under twice its timeout.
+  - **Minors:** the failure path's flag, the list's order through the verbs, an option and a list
+    together, no engine row for `call-with-database`, and a dangling traps citation.
+  - **Not reproduced:** the review's "`call-with-open-handle`'s window is reachable". There were
+    no hits in 7,200 single-shot trials, nor in 1,116 of `call-with-database`. Its hits with
+    multi-shot resumes are refusals by design. M1's comment stands.
+- **The M2 session's finding,** sweeping slice 4 under the same schedule: slice 3's `execute!`,
+  `query` and `query-row` left their statement outside the cache. Before part D, that happened in
+  1,360 of 3,910, 3,655 of 10,147 and 1,849 of 5,044 trials, at a row in 1,935 and 602 of them.
+  Two runs also shared one statement, so `query` answered rows the other had stepped past. Part
+  D's fix leaves none. It also closed a second hole: a timer's raise just past the check-out
+  lost the statement.
+- **Measured** ([research/m3-slice-5/](research/m3-slice-5/README.md)), alike on 3.53.1 and
+  3.45.1:
+  - the open verbs' engine and interleaving sweeps (ADR-0018, amended in M3 slice 5);
+  - the lock rows: each wait 1502 to 1503 ms plain, and 1509 to 1526 ms under Valgrind at the
+    floor; at once, 0 to 4 ms; released mid-wait, 529 to 530 ms;
+  - part D's sweeps, and P6's fuels again, about half of slice 3's for the three (ADR-0016,
+    amended in M3 slice 5's part D);
+  - SQLite's unix VFS keeps a closed connection's descriptor while another connection holds a
+    lock on the file.
+- **Records,** accepted by the maintainer on 2026-11-16:
+  - ADR-0012, ADR-0018 and ADR-0020 amended ("Accept all");
+  - ADR-0019's decision 11 ("Keep, amend");
+  - part D's ADR-0016 and ADR-0020 ("Accept all");
+  - the plan's §4.3, §4.5, §5 item 5 and §8 P2;
+  - constraints: the open verbs' claim, the conveniences' claim and flag, text built in a
+    section, a failed setting's close, and a wait's upper bound;
+  - AGENTS.md rules on interleaved runs, file descriptors under a lock, a collect request's
+    ticks, a wait's bounds and a sweep of remainders; and their traps.
+- **CI:** run 43957085196 on `b4a403a`: all five jobs passed, and `memory` took 40m31s,
+  against slice 4's 31m22s on a runner of the same class, where `test-check-ci` took 85 s. The
+  gate ran 68 suites, none slow:
+  - part D's six took 445 s: the script's halves 148 s and 145 s, the fold's 72 s;
+  - the open verbs' four took 98 s;
+  - the slowest was still `test-library-loading-decoys`, at 176 s of 450;
+  - `test-transaction-engine`, sweeping every G, took 65 s, against 64 s at every fourth.
+
+  On the slower class, where slice 4's run took 35m07s, this one would come near ADR-0005's 45
+  minutes.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Builder, part A | Opus | about 498k | 145 | 48 min |
+  | Builder, part B | Opus | about 398k | 103 | 32 min |
+  | Adversarial review | Opus | about 318k | 95 | 21 min |
+  | The review's fixes | Opus | about 565k | 189 | 63 min |
+  | Builder, part D | Opus | about 601k | 179 | 84 min |
+
+- **Learned** ([traps.md](traps.md)):
+  - A remainder can be resumed while an earlier resume of it is pending. A flag set once a call
+    ends lets both runs act; a claim each section compares with the run's own position holds.
+  - A sweep that reuses one remainder across its trials sweeps nothing past the first. My first
+    sweep of slice 3's `query` called it clean in 3,876 trials, and its fold passed the seed for
+    the procedure. Take a fresh remainder a trial, check the clean answer first, and guard
+    against a trivial sweep by the fuels swept, not by a fixed total.
+  - An engine's fuel names no fixed point in the code, so a sweep covers every (F, G).
+  - Chez's `number->string`, resumed from inside, answered `""` or the digits twice.
+  - A finding from the other session's sweep reached code two slices back. Slices stacked on one
+    another share their defects, so a sweep in one is worth running over the others.
 
 ### 2026-11-16 — M3 slice 4: transactions (PR #25)
 

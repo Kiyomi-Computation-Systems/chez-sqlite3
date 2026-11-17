@@ -16,17 +16,19 @@
 ;;; one statement each, through the connection's statement cache, and finish
 ;;; it on every path; the counters are SQLite's, read as it keeps them
 ;;; (ADR-0016, ADR-0020). with-transaction reads autocommit to nest, and again
-;;; to learn whether its transaction survived its body (ADR-0017).
+;;; to learn whether its transaction survived its body (ADR-0017). The open
+;;; verbs take a settings list, applied at open and read back (ADR-0018).
 (library (chez-sqlite3)
   (export
-   ;; --- connections (chez-sqlite3 private connection) ---
-   ;; open-database : String Symbol ... -> Database
+   ;; --- connections (chez-sqlite3 private open, chez-sqlite3 private connection) ---
+   ;; open-database : String (U Symbol Settings) ... -> Database
    ;;   options: read-only | read-write | create | uri | memory | no-follow | no-mutex
    open-database
    ;; close-database! : Database -> Void
    close-database!
-   ;; call-with-database : String Symbol ... (Database -> A ...) -> A ...
+   ;; call-with-database : String (U Symbol Settings) ... (Database -> A ...) -> A ...
    call-with-database
+   ;;   Settings = (Listof (Pairof Symbol Any))
    ;; database? : Any -> Boolean
    database?
 
@@ -160,10 +162,19 @@
    ;; sqlite-invalid-text-column : SqliteInvalidText -> Natural
    sqlite-invalid-text-column
    ;; sqlite-invalid-text-offset : SqliteInvalidText -> Natural
-   sqlite-invalid-text-offset)
+   sqlite-invalid-text-offset
+   ;; sqlite-setting-mismatch? : Any -> Boolean
+   sqlite-setting-mismatch?
+   ;; sqlite-setting-mismatch-setting : SqliteSettingMismatch -> Symbol
+   sqlite-setting-mismatch-setting
+   ;; sqlite-setting-mismatch-expected : SqliteSettingMismatch -> Any
+   sqlite-setting-mismatch-expected
+   ;; sqlite-setting-mismatch-actual : SqliteSettingMismatch -> Any
+   sqlite-setting-mismatch-actual)
   (import (chez-sqlite3 private require-threaded)
+          (only (chez-sqlite3 private open) open-database call-with-database)
           (only (chez-sqlite3 private connection)
-                open-database close-database! call-with-database database?
+                close-database! database?
                 changes total-changes last-insert-rowid in-transaction?)
           (only (chez-sqlite3 private conveniences)
                 execute! execute-script! query query-row query-fold)
@@ -187,4 +198,6 @@
                 sqlite-library-unavailable-detail sqlite-library-unavailable-candidates
                 sqlite-wrong-thread? sqlite-wrong-thread-owner sqlite-wrong-thread-caller
                 sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?
-                sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset)))
+                sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset
+                sqlite-setting-mismatch? sqlite-setting-mismatch-setting
+                sqlite-setting-mismatch-expected sqlite-setting-mismatch-actual)))

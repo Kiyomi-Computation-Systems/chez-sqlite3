@@ -1,0 +1,122 @@
+#!r6rs
+;;; The suite for one query's runs interleaved (ADR-0016, amended in M3 slice
+;;; 5's part D; the maintainer's "Guard every call", ADR-0016, amended in M3
+;;; slice 3), in (chez-sqlite3 private conveniences): one remainder of the
+;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
+;;; schedule, the tell, the control and the judge are (conveniences-pending)'s,
+;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
+;;; one a convenience, so each stays well under the memory gate's limit.
+;;;
+;;;   the tell     one query outside any engine: the authorizer notes its
+;;;                select prepared once, and the cache keeps its statement,
+;;;                ready
+;;;   interleaved  query of a select on t's three rows, cold: R taken at every
+;;;                fuel from 1 until the call completes without expiring; R
+;;;                resumed at every later fuel until that resume completes, R1
+;;;                taken where it expires; then R resumed again to its end,
+;;;                then R1. After every trial: each run answers the three rows
+;;;                or &sqlite-closed from query; the select was prepared once,
+;;;                twice only where the control makes a whole new call; no
+;;;                statement is tracked outside the cache, none at a row, the
+;;;                cache holding the call's statement, ready; nothing is
+;;;                counted once the connection is closed. Enough trials
+;;;                interleave past the call's first section, and both past it
+;;;   failing      the same for a query whose second step fails: one run
+;;;                raises the failure, and again each run taken past the
+;;;                call's give-back, which finalizes the failed statement;
+;;;                every other run is refused, &sqlite-closed, never its own
+;;;                raise
+;;;   a timer      a timer handler that raises, at every tick until the call
+;;;                completes before it runs: the raise reaches the caller, the
+;;;                statement given back, ready, by the call's claim of whatever
+;;;                position is next
+;;;   taken        a timer handler that takes a statement for the call's SQL,
+;;;                steps it to its row and raises, at every tick: the call's
+;;;                give-back leaves the taken statement alone, still at its row
+;;;
+;;; Every computation that can raise runs under a guard with a sentinel of its
+;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+(import (rnrs)
+        (srfi :64)
+        (chez-sqlite3-testing)
+        (chez-sqlite3 private counters)
+        (conveniences-pending))
+
+(define runner (test-runner-simple))
+(test-runner-current runner)
+
+(let ((simple-end (test-runner-on-test-end runner)))
+  (test-runner-on-test-end! runner
+    (lambda (r)
+      (simple-end r)
+      (when (memq (test-result-kind r) '(fail xpass))
+        (display "  expected: ")
+        (write (test-result-ref r 'expected-value))
+        (newline)
+        (display "  actual:   ")
+        (write (test-result-ref r 'actual-value))
+        (newline)))))
+
+;; past-a-fuel, both-a-fuel : Natural
+;; The fewest trials a fuel on average, over the fuels up to the one at which the call
+;; completes, that interleave past the call's first section, and that are
+;; both past it, for a sweep that reaches anything: a sweep that reused one
+;; R across every G makes at most one a fuel.
+(define past-a-fuel 3)
+(define both-a-fuel 3)
+
+(test-begin "conveniences-pending-query")
+
+(test-equal "(chez-sqlite3) loads, reached through eval"
+  'loaded
+  public-load)
+
+(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension"
+  'registered
+  (tell-registered))
+
+(test-equal "every count is zero once the load has returned"
+  zero-counts
+  (native-counts))
+
+(test-equal "the tell: one query outside any engine answers t's three rows, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed"
+  (list '(#(1) #(2) #(3)) 1 '(1 2 3) '(("select x from t where x > ?" . ready)) 1 zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (clean-call 'query)))
+
+(test-equal "query's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the three rows or &sqlite-closed from query; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"
+  (list '() 'interleavings-reached zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (reported 'query (sweep 'query 'every) past-a-fuel both-a-fuel)))
+
+(test-equal "the tell, for a query that fails: one query outside any engine of a select whose second step overflows raises SQLite's error from query, the authorizer noting the select's four selects, once; the failed statement is finalized at its return, never kept, and nothing is counted once the connection is closed"
+  (list '(raised (sqlite-error query error error)) 4 '(1 2 3) '() 0 zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (clean-call 'query-failing)))
+
+(test-equal "a query that fails, its remainder R taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: the second step's failure is raised by one run, and again by each run taken past the call's give-back, every other run raising &sqlite-closed from query, a refused run's own raise never; the select is prepared once, twice only where the control makes a whole new call; the failed statement is finalized, nothing tracked; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"
+  (list '() 'interleavings-reached zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (reported 'query-failing (sweep 'query-failing 'every) past-a-fuel both-a-fuel)))
+
+(test-equal "a timer handler that raises, at every tick from 1 until query completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out; nothing is counted once each connection is closed"
+  (list '() 'some-raised zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (timer-reported 'query (timer-sweep 'query))))
+
+(test-equal "a timer handler that takes a statement for query's SQL from the cache, or a fresh one, steps it to its row, then raises, at every tick from 1 until the call completes before it runs: the call answers, or the raise reaches the caller; the taken statement is still at its row, left alone by the call's give-back, even once the call has given its own back and the handler took that one; once the trial gives it back, the cache holds the call's statement, ready, nothing at a row, and nothing is counted once each connection is closed"
+  (list '() 'some-raised zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (timer-reported 'query (taken-sweep 'query))))
+
+(test-equal "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"
+  '(reset 0)
+  (tell-reset))
+
+(test-equal "every count is zero at the end"
+  zero-counts
+  (native-counts))
+
+(test-end "conveniences-pending-query")
+
+(exit (suite-exit-status runner))

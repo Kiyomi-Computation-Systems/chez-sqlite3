@@ -17,7 +17,8 @@
 ;;;                 cached select * answers the column an alter table added
 ;;;   the binds     every value checked before any is bound
 ;;;   the cache     the statement count after each convenience at the
-;;;                 default, at 0 and at 1, set privately; the very statement
+;;;                 default, at 0 and at 1, set by the statement-cache
+;;;                 setting; the very statement
 ;;;                 reused; a PRAGMA cached as any other (slice 0's P1);
 ;;;                 foreign_keys = 1 re-preparing the rest (slice 0's P13),
 ;;;                 and trusted_schema = 0 and = 1 each (slice 0's P13b); a
@@ -98,7 +99,6 @@
 (define execute-script! (reach conveniences 'execute-script!))
 (define open-database (reach '(chez-sqlite3) 'open-database))
 (define close-database! (reach '(chez-sqlite3) 'close-database!))
-(define open-database-with-cache-capacity (reach connection-library 'open-database-with-cache-capacity))
 (define database-cache-count (reach connection-library 'database-cache-count))
 (define tracked-statements (reach connection-library 'tracked-statements))
 (define prepare-statement (reach statement-library 'prepare-statement))
@@ -213,7 +213,7 @@
 (define (with-memory-db proc) (with-db (lambda () (open-database ":memory:")) proc))
 
 (define (with-capacity capacity proc)
-  (with-db (lambda () (open-database-with-cache-capacity capacity ":memory:")) proc))
+  (with-db (lambda () (open-database ":memory:" (list (cons 'statement-cache capacity)))) proc))
 
 ;; in-dir : (String -> Any) -> Any
 (define (in-dir proc)
@@ -446,14 +446,14 @@
                                (eq? select (cached-statement db "select x from t"))))))
        (list counts (states db) (if again 'the-very-statements 'others))))))
 
-(test-equal "at a capacity of 0, set privately, each convenience leaves no statement: every return finalizes"
+(test-equal "at a capacity of 0, set by the statement-cache setting, each convenience leaves no statement: every return finalizes"
   (list '((0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0) (0 0)) '() '(#(1) #(2) #(3) #(4)))
   (with-capacity 0
     (lambda (db)
       (let* ((counts (each-convenience! db)))
         (list counts (states db) (tier-run db "select x from t order by x"))))))
 
-(test-equal "at a capacity of 1, set privately, each convenience leaves one statement, the last one's, and execute-script! leaves the one before it"
+(test-equal "at a capacity of 1, set by the statement-cache setting, each convenience leaves one statement, the last one's, and execute-script! leaves the one before it"
   (list '((1 1) (1 1) (1 1) (1 1) (1 1) (1 1) (1 1) (1 1)) '(("select x from t" . ready)))
   (with-capacity 1
     (lambda (db)

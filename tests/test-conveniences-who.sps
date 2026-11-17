@@ -92,7 +92,6 @@
 (define execute-script! (reach conveniences 'execute-script!))
 (define open-database (reach '(chez-sqlite3) 'open-database))
 (define close-database! (reach '(chez-sqlite3) 'close-database!))
-(define open-database-with-cache-capacity (reach connection-library 'open-database-with-cache-capacity))
 (define call-with-open-handle (reach connection-library 'call-with-open-handle))
 (define tracked-statements (reach connection-library 'tracked-statements))
 (define prepare-statement (reach statement-library 'prepare-statement))
@@ -244,7 +243,7 @@
                 (lambda ()
                   (attempt (lambda ()
                              (make-table! path)
-                             (set! db (open-database-with-cache-capacity capacity path))
+                             (set! db (open-database path (list (cons 'statement-cache capacity))))
                              (proc path db))))
                 (lambda () (when db (undo! '() (list db)))))))))
 

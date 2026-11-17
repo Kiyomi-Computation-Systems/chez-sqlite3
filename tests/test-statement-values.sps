@@ -395,8 +395,8 @@
   zero-counts
   (native-counts))
 
-(test-equal "(chez-sqlite3 private statement-values) exports exactly its six verbs, each one's who-taking internal, and bind-each!/who"
-  '(bind! bind!/who bind-all! bind-all!/who bind-each!/who clear-bindings! clear-bindings!/who
+(test-equal "(chez-sqlite3 private statement-values) exports exactly its six verbs, each one's who-taking internal, bind-each!/who, and bind-each!/at, its work as data, for a call's claim"
+  '(bind! bind!/who bind-all! bind-all!/who bind-each!/at bind-each!/who clear-bindings! clear-bindings!/who
     column-bytevector column-bytevector/who column-name column-name/who column-value
     column-value/who)
   (guard (e (#t (list 'raised (describe e))))

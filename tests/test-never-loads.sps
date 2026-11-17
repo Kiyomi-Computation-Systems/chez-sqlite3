@@ -214,6 +214,7 @@
             (chez-sqlite3 private connection)
             (chez-sqlite3 private conveniences)
             (chez-sqlite3 private native)
+            (chez-sqlite3 private open)
             (chez-sqlite3 private report)
             (chez-sqlite3 private statement)
             (chez-sqlite3 private statement-values)
