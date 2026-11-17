@@ -18,6 +18,18 @@
 ;;;   read-back-comparison  a match, or the mismatch's setting, expected and
 ;;;                         actual, for slice 5 to raise
 ;;;
+;;; M4 slice 1 adds the four sqlite3_db_config settings (ADR-0021, decisions 1
+;;; to 3 and 5; ADR-0018, amended for M4), beside setting-names and not in
+;;; it: settings-plan's steps are SQL, and open.sls runs every one as SQL, so
+;;; M4 slice 3 joins them to the list, with the open's calls.
+;;;
+;;;   db-config-settings       the four: each name, its op and its domain
+;;;   db-config-setting-names  their names
+;;;   db-config-sentinel       what the cell holds before the call
+;;;   db-config-step           the call for a name and a value, or none
+;;;   db-config-verdict        the call's answer and cell: a match, the
+;;;                            mismatch's fields, or an error's code
+;;;
 ;;; The table (ADR-0018, decision 3), each value written as canonical SQL from
 ;;; the words below and decimal integers alone, so no text of the caller's
 ;;; reaches SQL:
@@ -33,11 +45,14 @@
 ;;;                    32 when absent               the cache's capacity
 ;;;
 ;;; Each procedure but raise-setting-refusal answers data for any argument and
-;;; raises nothing, so slice 5 may call any of them inside a critical section;
-;;; raise-setting-refusal is called after it.
+;;; raises nothing, so slice 5 may call any of them inside a critical section,
+;;; as M4 slice 3 may db-config-step and db-config-verdict; raise-setting-
+;;; refusal is called after it.
 (library (chez-sqlite3 private settings)
   (export setting-names setting-refusal-rules split-open-arguments settings-plan
-          raise-setting-refusal read-back-value read-back-comparison)
+          raise-setting-refusal read-back-value read-back-comparison
+          db-config-settings db-config-setting-names db-config-sentinel db-config-step
+          db-config-verdict)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
           (only (chez-sqlite3 private conditions) shown-value))
@@ -264,4 +279,70 @@
     (let ((actual (read-back-value name answer)))
       (if (and (row-answer? answer) (eqv? actual expected))
           'match
-          (list 'mismatch name expected actual)))))
+          (list 'mismatch name expected actual))))
+
+  ;; --- db_config's four (ADR-0021; ADR-0018, amended for M4) ------------------------------
+
+  ;; db-config-settings : (Listof (List Symbol Natural (Listof Boolean)))
+  ;; The four, in the M4 plan's table order (section 4.1): each setting's
+  ;; name, its op's C name with SQLITE_DBCONFIG_ dropped, lower-cased, _
+  ;; turned to - (ADR-0021, decision 1); its op, that C name's value in the
+  ;; floor's sqlite3.h; and its domain, #t or #f. Each value is written to its
+  ;; op as 1 or 0, and read back from the call's own cell.
+  (define db-config-settings
+    '((enable-load-extension 1005 (#t #f))
+      (defensive 1010 (#t #f))
+      (dqs-dml 1013 (#t #f))
+      (dqs-ddl 1014 (#t #f))))
+
+  ;; db-config-setting-names : (Listof Symbol)
+  ;; The four's names, in the table's order. None is in setting-names until
+  ;; M4 slice 3 joins them.
+  (define db-config-setting-names (map car db-config-settings))
+
+  ;; db-config-sentinel : Integer
+  ;; What the call's cell holds before the call (ADR-0021, decision 3): the
+  ;; call writes 0 or 1 there whatever it is given (M4's research, D6), so a
+  ;; cell that still holds this after the call was left by it. An exact
+  ;; integer a C int holds, so the cell, a counted int block, holds it as
+  ;; written; neither 0 nor 1. It is the core's, not an argument: the cell's
+  ;; fill and the verdict's reading are one value, and the verdict, given
+  ;; none, cannot be handed a 0 or a 1.
+  (define db-config-sentinel -1)
+
+  ;; Db-Config-Step = (List Symbol Natural (U 0 1) Boolean)
+  ;; db-config-step : Any Any -> (U Db-Config-Step 'no-call 'out-of-domain 'not-db-config)
+  ;; The call that sets NAME, one of the four, to VALUE: (name op written
+  ;; expected), written 1 for #t and 0 for #f, expected VALUE, the step's
+  ;; name and expected where a PRAGMA's step has its own. (enable-load-
+  ;; extension . #f) makes no call, no-call: it is the same as leaving the
+  ;; setting out, and the op's 0 is never sent (ADR-0021, decision 5; Q15).
+  ;; A VALUE outside NAME's domain is out-of-domain; a NAME that is none of
+  ;; the four, any value at all, not-db-config. Total.
+  (define (db-config-step name value)
+    (let ((setting (assq name db-config-settings)))
+      (cond ((not setting) 'not-db-config)
+            ((not (memv value (caddr setting))) 'out-of-domain)
+            ((and (eq? name 'enable-load-extension) (eq? value #f)) 'no-call)
+            (else (list name (cadr setting) (if value 1 0) value)))))
+
+  ;; db-config-verdict : Any Any Any Any
+  ;;                     -> (U 'match (List 'mismatch Any Any Any) (List 'error Any))
+  ;; What a set's call answered, CODE, and left in its cell, CELL, say of
+  ;; NAME's set to EXPECTED, #t or #f (ADR-0021, decision 3): any CODE but
+  ;; an exact 0 is (error CODE), whatever CELL holds, for M4 slice 3 to raise
+  ;; as &sqlite-error of that code; code 0 and CELL the value written, 1 for
+  ;; #t, 0 for #f, is match; code 0 and any other CELL is (mismatch NAME
+  ;; EXPECTED ACTUAL), the fields of &sqlite-setting-mismatch, ACTUAL () for a
+  ;; cell left at db-config-sentinel, nothing read, #t for 1, #f for 0, and
+  ;; anything else as itself. An EXPECTED that is no boolean matches no cell.
+  ;; Total.
+  (define (db-config-verdict name expected code cell)
+    (cond ((not (eqv? code 0)) (list 'error code))
+          ((and (boolean? expected) (eqv? cell (if expected 1 0))) 'match)
+          (else
+           (list 'mismatch name expected
+                 (cond ((eqv? cell db-config-sentinel) '())
+                       ((eqv? cell 1) #t)
+                       ((eqv? cell 0) #f)
+                       (else cell)))))))

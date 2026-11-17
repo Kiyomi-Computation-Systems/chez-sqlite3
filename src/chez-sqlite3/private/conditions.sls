@@ -29,6 +29,12 @@
 ;;;   &sqlite-transaction-ended    a body returned after its transaction ended
 ;;;                                under it (ADR-0017)
 ;;;
+;;; M4 adds one more member under the root (ADR-0013, amended for M4):
+;;;
+;;;   &sqlite-extensions-unavailable  an open opted in to extension loading
+;;;                                   on a library without
+;;;                                   sqlite3_load_extension (ADR-0021)
+;;;
 ;;; A raise may compound one with &who, &message and &irritants, so that the
 ;;; default handler prints readable text. Tests assert the reason symbol and
 ;;; the fields, never that text.
@@ -68,6 +74,8 @@
           sqlite-setting-mismatch-actual raise-setting-mismatch
           &sqlite-transaction-ended make-sqlite-transaction-ended sqlite-transaction-ended?
           raise-transaction-ended
+          &sqlite-extensions-unavailable make-sqlite-extensions-unavailable
+          sqlite-extensions-unavailable? raise-extensions-unavailable
 
           kind-of shown-value checked-accessor)
   (import (chez-sqlite3 private require-threaded)
@@ -523,12 +531,38 @@
                       (make-message-condition
                        "the body returned after its transaction had ended under it"))))
 
+  ;; --- &sqlite-extensions-unavailable (ADR-0021, decision 10; ADR-0013, amended for M4) ----
+  ;;
+  ;; No field beyond the &who and the fixed &message its raise compounds.
+  ;; Under the root, neither an &sqlite-error, since SQLite answered no code,
+  ;; nor an &sqlite-library-unavailable, whose reasons refuse a library at
+  ;; its load: this library loaded and works, and lacks only
+  ;; sqlite3_load_extension. An open whose settings opt in to extension
+  ;; loading, (enable-load-extension . #t), raises it before anything opens
+  ;; (ADR-0021, decision 5).
+
+  ;; make-sqlite-extensions-unavailable : -> &sqlite-extensions-unavailable
+  ;; sqlite-extensions-unavailable? : Any -> Boolean
+  (define-condition-type &sqlite-extensions-unavailable &chez-sqlite3-error
+    make-sqlite-extensions-unavailable sqlite-extensions-unavailable?)
+
+  ;; raise-extensions-unavailable : Symbol -> Nothing
+  ;; An &sqlite-extensions-unavailable, compounded with &who WHO, the open
+  ;; verb, and a fixed &message. A WHO that is no symbol is an assertion
+  ;; violation from raise-extensions-unavailable.
+  (define (raise-extensions-unavailable who)
+    (check-raise-who 'raise-extensions-unavailable who)
+    (raise (condition (make-sqlite-extensions-unavailable) (make-who-condition who)
+                      (make-message-condition
+                       "this libsqlite3 has no sqlite3_load_extension, so no connection of it can load an extension; CHEZ_SQLITE3_LIBRARY can name one that has it"))))
+
   ;; sqlite-busy? : Any -> Boolean
   ;; sqlite-constraint? : Any -> Boolean
   ;; sqlite-read-only? : Any -> Boolean
   ;; sqlite-interrupt? : Any -> Boolean
   ;; sqlite-setting-mismatch? : Any -> Boolean
   ;; sqlite-transaction-ended? : Any -> Boolean
+  ;; sqlite-extensions-unavailable? : Any -> Boolean
   ;; sqlite-invalid-text? : Any -> Boolean
   ;; sqlite-invalid-text-column : &sqlite-invalid-text -> Natural
   ;; sqlite-invalid-text-offset : &sqlite-invalid-text -> Natural

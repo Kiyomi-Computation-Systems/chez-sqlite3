@@ -28,6 +28,12 @@
 ;;;                                 for and the value read
 ;;;   &sqlite-transaction-ended     M3: a body returned after its transaction
 ;;;                                 ended, under the root, no field
+;;;   &sqlite-extensions-unavailable
+;;;                                 M4: an open that opts in to extension
+;;;                                 loading on a library without
+;;;                                 sqlite3_load_extension, under the root, no
+;;;                                 field, neither an &sqlite-error nor an
+;;;                                 &sqlite-library-unavailable
 ;;;
 ;;; Then kind-of, shown-value and checked-accessor, which name a caller's
 ;;; value by its kind where a refusal would print it, and the agreement of
@@ -143,7 +149,9 @@
      sqlite-setting-mismatch-setting sqlite-setting-mismatch-expected
      sqlite-setting-mismatch-actual raise-setting-mismatch
      &sqlite-transaction-ended make-sqlite-transaction-ended sqlite-transaction-ended?
-     raise-transaction-ended))
+     raise-transaction-ended
+     &sqlite-extensions-unavailable make-sqlite-extensions-unavailable
+     sqlite-extensions-unavailable? raise-extensions-unavailable))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private conditions)))))
 
@@ -859,41 +867,49 @@
 (define (a-setting-mismatch) (make-sqlite-setting-mismatch 'journal-mode "wal" "memory"))
 (define (a-transaction-ended) (make-sqlite-transaction-ended))
 
+;; an-extensions-unavailable : -> Condition
+(define (an-extensions-unavailable) (make-sqlite-extensions-unavailable))
+
 ;; matrix-kinds : Any -> (Listof Boolean)
 ;; error?, assertion-violation?, chez-sqlite3-error?, sqlite-error?, busy?,
 ;; constraint?, read-only?, interrupt?, invalid-text?, setting-mismatch?,
-;; transaction-ended?, library-unavailable?, wrong-thread?, closed?.
+;; transaction-ended?, extensions-unavailable?, library-unavailable?,
+;; wrong-thread?, closed?.
 (define (matrix-kinds c)
   (list (error? c) (assertion-violation? c) (chez-sqlite3-error? c) (sqlite-error? c)
         (sqlite-busy? c) (sqlite-constraint? c) (sqlite-read-only? c) (sqlite-interrupt? c)
         (sqlite-invalid-text? c) (sqlite-setting-mismatch? c) (sqlite-transaction-ended? c)
+        (sqlite-extensions-unavailable? c)
         (sqlite-library-unavailable? c) (sqlite-wrong-thread? c) (sqlite-closed? c)))
 
 (test-equal "the matrix, whole: every type against every predicate, so none sits under the wrong parent"
   '(;; root
-    (#t #f #t #f #f #f #f #f #f #f #f #f #f #f)
+    (#t #f #t #f #f #f #f #f #f #f #f #f #f #f #f)
     ;; plain &sqlite-error
-    (#t #f #t #t #f #f #f #f #f #f #f #f #f #f)
+    (#t #f #t #t #f #f #f #f #f #f #f #f #f #f #f)
     ;; &sqlite-busy
-    (#t #f #t #t #t #f #f #f #f #f #f #f #f #f)
+    (#t #f #t #t #t #f #f #f #f #f #f #f #f #f #f)
     ;; &sqlite-constraint
-    (#t #f #t #t #f #t #f #f #f #f #f #f #f #f)
+    (#t #f #t #t #f #t #f #f #f #f #f #f #f #f #f)
     ;; &sqlite-read-only
-    (#t #f #t #t #f #f #t #f #f #f #f #f #f #f)
+    (#t #f #t #t #f #f #t #f #f #f #f #f #f #f #f)
     ;; &sqlite-interrupt
-    (#t #f #t #t #f #f #f #t #f #f #f #f #f #f)
+    (#t #f #t #t #f #f #f #t #f #f #f #f #f #f #f)
     ;; &sqlite-invalid-text: under the root, not under &sqlite-error
-    (#t #f #t #f #f #f #f #f #t #f #f #f #f #f)
+    (#t #f #t #f #f #f #f #f #t #f #f #f #f #f #f)
     ;; &sqlite-setting-mismatch and &sqlite-transaction-ended: under the root
-    (#t #f #t #f #f #f #f #f #f #t #f #f #f #f)
-    (#t #f #t #f #f #f #f #f #f #f #t #f #f #f)
+    (#t #f #t #f #f #f #f #f #f #t #f #f #f #f #f)
+    (#t #f #t #f #f #f #f #f #f #f #t #f #f #f #f)
+    ;; &sqlite-extensions-unavailable: under the root, neither an
+    ;; &sqlite-error nor an &sqlite-library-unavailable
+    (#t #f #t #f #f #f #f #f #f #f #f #t #f #f #f)
     ;; library-unavailable, wrong-thread, closed
-    (#t #f #t #f #f #f #f #f #f #f #f #t #f #f)
-    (#t #f #t #f #f #f #f #f #f #f #f #f #t #f)
-    (#t #f #t #f #f #f #f #f #f #f #f #f #f #t)
+    (#t #f #t #f #f #f #f #f #f #f #f #f #t #f #f)
+    (#t #f #t #f #f #f #f #f #f #f #f #f #f #t #f)
+    (#t #f #t #f #f #f #f #f #f #f #f #f #f #f #t)
     ;; an assertion violation, a plain error
-    (#f #t #f #f #f #f #f #f #f #f #f #f #f #f)
-    (#t #f #f #f #f #f #f #f #f #f #f #f #f #f))
+    (#f #t #f #f #f #f #f #f #f #f #f #f #f #f #f)
+    (#t #f #f #f #f #f #f #f #f #f #f #f #f #f #f))
   (map (lambda (thunk) (let ((c (built thunk))) (if (condition? c) (matrix-kinds c) c)))
        (list make-chez-sqlite3-error
              (lambda () (make-sqlite-error 'error 'error "m" #f #f))
@@ -903,6 +919,7 @@
              (lambda () (make-sqlite-error 'interrupt 'interrupt "m" #f #f))
              an-invalid-text
              a-setting-mismatch a-transaction-ended
+             an-extensions-unavailable
              a-library-unavailable a-wrong-thread a-closed
              make-assertion-violation make-error)))
 
@@ -911,33 +928,45 @@
   (let ((c (make-sqlite-error 'locked 'locked-sharedcache "m" #f #f)))
     (list (sqlite-busy? c) (sqlite-constraint? c) (sqlite-read-only? c) (sqlite-interrupt? c))))
 
-(test-equal "the seven predicates are false for a symbol, #f, a string, a number and a message"
-  '((#f #f #f #f #f #f #f) (#f #f #f #f #f #f #f) (#f #f #f #f #f #f #f) (#f #f #f #f #f #f #f)
-    (#f #f #f #f #f #f #f))
+(test-equal "the eight predicates are false for a symbol, #f, a string, a number and a message"
+  '((#f #f #f #f #f #f #f #f) (#f #f #f #f #f #f #f #f) (#f #f #f #f #f #f #f #f)
+    (#f #f #f #f #f #f #f #f) (#f #f #f #f #f #f #f #f))
   (map (lambda (v)
          (list (sqlite-busy? v) (sqlite-constraint? v) (sqlite-read-only? v)
                (sqlite-invalid-text? v) (sqlite-interrupt? v) (sqlite-setting-mismatch? v)
-               (sqlite-transaction-ended? v)))
+               (sqlite-transaction-ended? v) (sqlite-extensions-unavailable? v)))
        (list 'busy #f "busy" 5 (make-message-condition "busy"))))
 
-(test-equal "the exported types sit where the matrix says: each subtype's parent is &sqlite-error; &sqlite-invalid-text's, &sqlite-setting-mismatch's and &sqlite-transaction-ended's is the root"
-  '(#t #t #t #t #t #t #t)
+(test-equal "sqlite-extensions-unavailable? is false for every value that is no condition and for every other condition: a symbol, #f, #t, (), a string, a number, a char, a vector, a procedure; a message, a who, an irritants, a plain error, an assertion violation, a serious condition, and a compound of a message and a who"
+  '(#f #f #f #f #f #f #f #f #f #f #f #f #f #f #f #f)
+  (map (lambda (v) (sqlite-extensions-unavailable? v))
+       (list 'sqlite-extensions-unavailable #f #t '() "extensions" 5 #\e
+             (vector (make-sqlite-extensions-unavailable)) car
+             (make-message-condition "m") (make-who-condition 'open-database)
+             (make-irritants-condition '()) (make-error) (make-assertion-violation)
+             (make-serious-condition)
+             (condition (make-message-condition "m") (make-who-condition 'open-database)))))
+
+(test-equal "the exported types sit where the matrix says: each subtype's parent is &sqlite-error; &sqlite-invalid-text's, &sqlite-setting-mismatch's, &sqlite-transaction-ended's and &sqlite-extensions-unavailable's is the root"
+  '(#t #t #t #t #t #t #t #t)
   (list (eq? (record-type-parent (record-type-descriptor &sqlite-busy)) (record-type-descriptor &sqlite-error))
         (eq? (record-type-parent (record-type-descriptor &sqlite-constraint)) (record-type-descriptor &sqlite-error))
         (eq? (record-type-parent (record-type-descriptor &sqlite-read-only)) (record-type-descriptor &sqlite-error))
         (eq? (record-type-parent (record-type-descriptor &sqlite-interrupt)) (record-type-descriptor &sqlite-error))
         (eq? (record-type-parent (record-type-descriptor &sqlite-invalid-text)) (record-type-descriptor &chez-sqlite3-error))
         (eq? (record-type-parent (record-type-descriptor &sqlite-setting-mismatch)) (record-type-descriptor &chez-sqlite3-error))
-        (eq? (record-type-parent (record-type-descriptor &sqlite-transaction-ended)) (record-type-descriptor &chez-sqlite3-error))))
+        (eq? (record-type-parent (record-type-descriptor &sqlite-transaction-ended)) (record-type-descriptor &chez-sqlite3-error))
+        (eq? (record-type-parent (record-type-descriptor &sqlite-extensions-unavailable)) (record-type-descriptor &chez-sqlite3-error))))
 
-(test-equal "the types' own fields: none for the subtypes; &sqlite-invalid-text's are column and offset; &sqlite-setting-mismatch's setting, expected and actual; &sqlite-transaction-ended's none"
-  '(#() #() #() #() #(column offset) #(setting expected actual) #())
+(test-equal "the types' own fields: none for the subtypes; &sqlite-invalid-text's are column and offset; &sqlite-setting-mismatch's setting, expected and actual; &sqlite-transaction-ended's none; &sqlite-extensions-unavailable's none"
+  '(#() #() #() #() #(column offset) #(setting expected actual) #() #())
   (list (record-type-field-names (record-type-descriptor &sqlite-busy)) (record-type-field-names (record-type-descriptor &sqlite-constraint))
         (record-type-field-names (record-type-descriptor &sqlite-read-only))
         (record-type-field-names (record-type-descriptor &sqlite-interrupt))
         (record-type-field-names (record-type-descriptor &sqlite-invalid-text))
         (record-type-field-names (record-type-descriptor &sqlite-setting-mismatch))
-        (record-type-field-names (record-type-descriptor &sqlite-transaction-ended))))
+        (record-type-field-names (record-type-descriptor &sqlite-transaction-ended))
+        (record-type-field-names (record-type-descriptor &sqlite-extensions-unavailable))))
 
 ;; --- &sqlite-invalid-text ----------------------------------------------------------------
 
@@ -1012,7 +1041,7 @@
     'no-raise))
 
 (test-equal "raise-invalid-text raises the whole condition: an invalid-text from the who given, with a message, no irritants, its column and offset"
-  '((#t #f #t #f #f #f #f #f #t #f #f #f #f #f) column-value message no-irritants 4 9)
+  '((#t #f #t #f #f #f #f #f #t #f #f #f #f #f #f) column-value message no-irritants 4 9)
   (invalid-text-compound (lambda () (raise-invalid-text 'column-value 4 9))))
 
 (test-equal "raise-invalid-text names its who, and takes column 0 and offset 0"
@@ -1137,7 +1166,7 @@
     'no-raise))
 
 (test-equal "raise-setting-mismatch raises the whole condition: a setting-mismatch from the who given, with a message, no irritants, its setting, expected and actual"
-  '((#t #f #t #f #f #f #f #f #f #t #f #f #f #f) open-database message no-irritants
+  '((#t #f #t #f #f #f #f #f #f #t #f #f #f #f #f) open-database message no-irritants
     busy-timeout 1500 0)
   (m3-compound (lambda () (raise-setting-mismatch 'open-database 'busy-timeout 1500 0))))
 
@@ -1152,12 +1181,12 @@
         (m3-compound (lambda () (raise-setting-mismatch 'w "busy-timeout" 1 0)))))
 
 (test-equal "an sqlite-transaction-ended is a chez-sqlite3-error of its own type alone, with no fields"
-  '(#t #f #t #f #f #f #f #f #f #f #t #f #f #f)
+  '(#t #f #t #f #f #f #f #f #f #f #t #f #f #f #f)
   (let ((c (built a-transaction-ended)))
     (if (condition? c) (matrix-kinds c) c)))
 
 (test-equal "raise-transaction-ended raises the whole condition: a transaction-ended from the who given, with a message and no irritants"
-  '((#t #f #t #f #f #f #f #f #f #f #t #f #f #f) with-transaction message no-irritants)
+  '((#t #f #t #f #f #f #f #f #f #f #t #f #f #f #f) with-transaction message no-irritants)
   (m3-compound (lambda () (raise-transaction-ended 'with-transaction))))
 
 (test-equal "raise-transaction-ended refuses a who that is no symbol"
@@ -1177,6 +1206,112 @@
            'returned-normally))
        (list (lambda () (raise-setting-mismatch 'w 'busy-timeout 1 0))
              (lambda () (raise-transaction-ended 'w)))))
+
+;; --- M4 slice 1: &sqlite-extensions-unavailable (ADR-0021, decision 10) -------------------
+;; Its kinds against every other type are held in the matrix above, and its
+;; parent and its fields with the other types'.
+
+(test-equal "an sqlite-extensions-unavailable is a chez-sqlite3-error of its own type alone, with no fields: neither an sqlite-error nor a library-unavailable"
+  '(#t #f #t #f #f #f #f #f #f #f #f #t #f #f #f)
+  (let ((c (built an-extensions-unavailable)))
+    (if (condition? c) (matrix-kinds c) c)))
+
+(test-equal "raise-extensions-unavailable raises the whole condition: an extensions-unavailable from the who given, with a message and no irritants"
+  '((#t #f #t #f #f #f #f #f #f #f #f #t #f #f #f) open-database message no-irritants)
+  (m3-compound (lambda () (raise-extensions-unavailable 'open-database))))
+
+(test-equal "raise-extensions-unavailable names the who it is given: open-database and call-with-database"
+  '(open-database call-with-database)
+  (map (lambda (who)
+         (let ((c (m3-compound (lambda () (raise-extensions-unavailable who)))))
+           (if (and (list? c) (> (length c) 1)) (cadr c) c)))
+       '(open-database call-with-database)))
+
+;; simple-kinds : (-> Any) -> Any
+;; The simple conditions of what THUNK raised, each by its kind, in order;
+;; (other-raise TEXT) for a raise that is no condition, or no-raise.
+(define (simple-kinds thunk)
+  (guard (e ((condition? e)
+             (map (lambda (s)
+                    (cond ((sqlite-extensions-unavailable? s) 'extensions-unavailable)
+                          ((who-condition? s) 'who)
+                          ((message-condition? s) 'message)
+                          ((irritants-condition? s) 'irritants)
+                          (else 'other)))
+                  (simple-conditions e)))
+            (#t (list 'other-raise (describe e))))
+    (thunk)
+    'no-raise))
+
+(test-equal "raise-extensions-unavailable's condition is exactly three simple conditions: the type, its &who and its &message, nothing else"
+  '(extensions-unavailable who message)
+  (simple-kinds (lambda () (raise-extensions-unavailable 'open-database))))
+
+;; message-of : (-> Any) -> Any
+;; The &message text of what THUNK raised, for comparing two raises, never
+;; with a text of the suite's; (no-message TEXT) or no-raise.
+(define (message-of thunk)
+  (guard (e ((message-condition? e) (condition-message e))
+            (#t (list 'no-message (describe e))))
+    (thunk)
+    'no-raise))
+
+(test-equal "raise-extensions-unavailable's message is fixed: the same string from each open verb"
+  'same
+  (let* ((a (message-of (lambda () (raise-extensions-unavailable 'open-database))))
+         (b (message-of (lambda () (raise-extensions-unavailable 'call-with-database)))))
+    (if (and (string? a) (string? b) (string=? a b)) 'same (list 'differs a b))))
+
+;; Each raise helper whose &message is fixed: the message is all a fieldless
+;; type carries beside its who. raise-library-unavailable and
+;; raise-sqlite-error carry the caller's text instead.
+(define fixed-message-raises
+  (list (cons 'raise-invalid-text (lambda () (raise-invalid-text 'w 1 2)))
+        (cons 'raise-wrong-thread (lambda () (raise-wrong-thread 'w 1 2)))
+        (cons 'raise-closed (lambda () (raise-closed 'w)))
+        (cons 'raise-setting-mismatch (lambda () (raise-setting-mismatch 'w 'busy-timeout 1 0)))
+        (cons 'raise-transaction-ended (lambda () (raise-transaction-ended 'w)))
+        (cons 'raise-extensions-unavailable (lambda () (raise-extensions-unavailable 'w)))))
+
+;; message-shape : Any -> Any
+;; text for a string that is not empty, empty for "", else what message-of
+;; answered; the text itself is never read.
+(define (message-shape m)
+  (cond ((and (string? m) (> (string-length m) 0)) 'text)
+        ((string? m) 'empty)
+        (else (list 'no-text m))))
+
+(test-equal "each fixed &message is a string, not empty, and its helper's own: no other raise helper's is equal to it, so neither raise-extensions-unavailable's nor raise-transaction-ended's is none or another type's, never compared with a text of the suite's"
+  (map (lambda (r) (list (car r) 'text 'its-own)) fixed-message-raises)
+  (let ((messages (map (lambda (r) (cons (car r) (message-of (cdr r)))) fixed-message-raises)))
+    (map (lambda (m)
+           (let ((same (filter (lambda (o) (and (not (eq? (car o) (car m))) (equal? (cdr o) (cdr m))))
+                               messages)))
+             (list (car m) (message-shape (cdr m))
+                   (if (null? same) 'its-own (cons 'shared-with (map car same))))))
+         messages)))
+
+(test-equal "raise-extensions-unavailable refuses a who that is no symbol, naming it by shown-value"
+  '((assertion-violation raise-extensions-unavailable (who (kind string)))
+    (assertion-violation raise-extensions-unavailable (who 5))
+    (assertion-violation raise-extensions-unavailable (who #f)))
+  (list (m3-compound (lambda () (raise-extensions-unavailable "open-database")))
+        (m3-compound (lambda () (raise-extensions-unavailable 5)))
+        (m3-compound (lambda () (raise-extensions-unavailable #f)))))
+
+(test-equal "raise-extensions-unavailable never returns: a handler that returns gets the &non-continuable R6RS raises for it"
+  'non-continuable
+  (guard (e ((non-continuable-violation? e) 'non-continuable)
+            (#t (list 'other-raise (describe e))))
+    (with-exception-handler (lambda (c) 'handled)
+                            (lambda () (raise-extensions-unavailable 'open-database)))
+    'returned-normally))
+
+(test-equal "every accessor of another type refuses an extensions-unavailable, from the accessor, by its kind: it carries no field of &sqlite-error's, &sqlite-library-unavailable's, &sqlite-wrong-thread's, &sqlite-invalid-text's or &sqlite-setting-mismatch's"
+  (map (lambda (a) (refusal (car a) '(kind other)))
+       (append lib-accessors new-accessors invalid-text-accessors setting-mismatch-accessors))
+  (map (lambda (a) (raised (lambda () ((cdr a) (an-extensions-unavailable)))))
+       (append lib-accessors new-accessors invalid-text-accessors setting-mismatch-accessors)))
 
 (test-end "conditions")
 

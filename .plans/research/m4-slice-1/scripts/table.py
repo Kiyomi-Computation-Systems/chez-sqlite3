@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""table.py LABELS: the mutation log's table, from labels.py's output saved
+to LABELS, one row a mutant, with each plant's description below."""
+import re
+import sys
+
+D = {
+ "D1": "the four's domain loosened: each `(#t #f)` in the table made `(#t #f 0 1)`",
+ "D2": "the step's domain check dropped: any value a step, written by its truth",
+ "S1": "a step made for `(enable-load-extension . #f)`: the no-call clause dropped",
+ "V1": "the verdict ignores the code: its error clause dropped",
+ "V2": "the verdict ignores the cell: code 0 always a match",
+ "Z0": "a sentinel of 0",
+ "Z1": "a sentinel of 1",
+ "J1": "the four joined to `setting-names` early",
+ "C1": "the condition made an `&sqlite-error`, its maker filling the fields",
+ "C2": "the condition made an `&sqlite-library-unavailable`, its maker filling the fields",
+ "T1": "`dqs-dml`'s and `dqs-ddl`'s ops swapped",
+ "T2": "`enable-load-extension`'s op 1017, `TRUSTED_SCHEMA`'s",
+ "T3": "the table's order: `defensive` first",
+ "T4": "a fifth entry, `(trusted-schema 1017 (#t #f))`, the op Q7 declined",
+ "T5": "a name misspelt, `enable-load-extensions`",
+ "T6": "`defensive`'s domain narrowed to `(#t)`",
+ "N1": "the names written out, `dqs-ddl` missing",
+ "S2": "no call for every `#f`, Q15's rule over all four",
+ "S3": "no call for `enable-load-extension` at all, its `#t` too",
+ "S4": "the value written inverted, 0 for `#t`",
+ "S5": "the step's expected the integer written, not the value",
+ "S6": "a name none of the four answered `out-of-domain`",
+ "S7": "a value outside the domain answered `no-call`",
+ "S8": "every step's op 1005",
+ "S9": "the opt-in's no-call for any value but `#t`, before the domain check",
+ "S10": "the domain checked before the name, against a fixed `(#t #f)`",
+ "Z2": "a sentinel of 2^31, past a C int",
+ "Z3": "a sentinel of -1.0, inexact",
+ "Z4": "the verdict's sentinel -2, the export's -1: the fill and the reading apart",
+ "V3": "the code tested by `=`, so a non-number raises and 0.0 is 0",
+ "V4": "the code's low byte tested, so 256 is ok",
+ "V5": "the match's boolean guard dropped",
+ "V6": "the cell compared with the value asked, not the value written",
+ "V7": "a cell left at the sentinel read as itself, not `()`",
+ "V8": "1 and 0 read as themselves, not `#t` and `#f`",
+ "V9": "1 read as `#f` and 0 as `#t`",
+ "V10": "any other cell read as `()`",
+ "V11": "the mismatch's expected the integer written",
+ "V12": "the mismatch's setting `db-config`, not the name",
+ "V13": "the error's code the cell",
+ "V14": "the match tested before the code",
+ "V15": "the sentinel tested after 0 and 1",
+ "J2": "J1, and each of the four given a PRAGMA in `enumerated-settings`: the open runs `PRAGMA defensive = 1` as SQL",
+ "J3": "the four accepted by `settings-plan` and dropped, no step: the open succeeds and sets nothing",
+ "J4": "`enable-fkey`, another op's name, joined to `setting-names`",
+ "J5": "in a copy of `open.sls`, the open made before the checks' refusal and closed before it is raised",
+ "C3": "the type's parent `&error`, not the root",
+ "C4": "the predicate the root's, `chez-sqlite3-error?`",
+ "C5": "a field, `library`, its maker filling it",
+ "C6": "the raise's `&message` made `&irritants`",
+ "C7": "the raise's `&who` dropped",
+ "C8": "the raise's who always `open-database`",
+ "C9": "the raise's who check dropped",
+ "C10": "`raise-continuable` for `raise`",
+ "C11": "the message led by the who, so not fixed",
+ "C12": "an `&irritants` of the who compounded too",
+ "C13": "the raise makes an `&sqlite-transaction-ended`",
+ "C14": "the predicate `condition?`",
+ "E1": "`(chez-sqlite3)` exports `sqlite-extensions-unavailable?` early, signature comment and all",
+ "E2": "settings.sls exports `step-for` too",
+ "E3": "conditions.sls exports `check-raise-who` too",
+ "F1": "in the copy's `test-settings`, the suite's own fixture: `fp-digits` dropped from the headers' ops",
+ "P-TOP": "the review's: `setting-names` made improper, `(... trusted-schema . statement-cache)`",
+ "P-MSG": "the review's: the new type's fixed message `\"\"`",
+ "P-MSG2": "the review's: the new type's fixed message `&sqlite-closed`'s",
+ "P-MSG3": "`raise-transaction-ended`'s fixed message `\"\"`",
+ "P-MSG4": "`raise-transaction-ended`'s fixed message `&sqlite-closed`'s",
+}
+print("| Plant | What it plants | Failed |")
+print("|---|---|---|")
+for line in open(sys.argv[1]):
+    name, rest = line.split(None, 1)
+    rest = rest.strip()
+    rest = "**survived**" if rest == "SURVIVED" else re.sub(r"(\b[sco]-[a-z0-9-]+|public-[a-z]+|reference-[a-z]+)", r"`\1`", rest)
+    print("| %s | %s | %s |" % (name, D[name], rest))

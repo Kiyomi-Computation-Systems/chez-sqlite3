@@ -13,6 +13,9 @@
   from the user's side, "Yes, as shown". Revised the same day after the plan's review (Opus):
   decision 3's and 7's codes, decision 7's message, its owner check, its free, and the
   context's Linux facts.
+  Amended 2026-11-17 in M4 slice 1, and accepted by the maintainer that day ("Accept"): the
+  cell's sentinel, the core's constant, and a code that names no error, "Assertion violation"
+  ([amendment](#amendment-2026-11-17-the-sentinel-and-a-code-that-names-no-error-m4-slice-1)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
 - **Settles:** brief §2.5 and §2.8, as the M4 plan amends them
@@ -278,3 +281,25 @@ Apple's 3.51.0 and Homebrew's 3.54.1 (pre-work); and on the first three again, o
   Extensions entry that opens with the method: open with `(enable-load-extension . #t)`, load by
   an absolute path, and the refusal, naming the setting, without it. It says that a failure's
   message names the path SQLite tried last, and gives `sqlite-extensions-unavailable?`.
+
+## Amendment, 2026-11-17: the sentinel, and a code that names no error (M4 slice 1)
+
+Accepted by the maintainer on 2026-11-17 ("Accept"), proposed in M4 slice 1
+([its mutation log](../m4-slice-1-mutation-log.md)), from the slice and its review (Opus). The
+code's rule is the maintainer's: "Assertion violation" (2026-11-17).
+
+- **The sentinel is the core's constant, -1:** `db-config-sentinel`, in
+  `(chez-sqlite3 private settings)`, not an argument of the verdict. The call writes 0 or 1 to
+  the cell whatever it is given (the M4 plan's research, D6), so a cell still holding -1 was left
+  by the call, and the verdict reads it as `()`. The open fills the cell with
+  `db-config-sentinel`, never a literal of its own, so the fill and the reading are one value.
+  The plan's "a sentinel of 0 or 1 refused" (§5, item 1) is held by a row on the constant: an
+  exact integer a C `int` holds, neither 0 nor 1.
+- **A code that names no error is an assertion violation.** Decision 3's "any other code raises
+  `&sqlite-error`" holds for each code SQLite answers a refused set with: 1, and Apple's 21. A code
+  whose low byte is 0, 100 or 101 names no error, and `raise-sqlite-error` refuses it as
+  `not-an-error`, an assertion violation. No library measured answers one to `sqlite3_db_config`.
+  If one does, the open closes the connection first, as decision 3 says, and then raises that
+  assertion violation: the answer is a defect, SQLite's or chez-sqlite3's, not a refusal. The
+  verdict answers `(error CODE)` for it, as for any code but 0, and M4 slice 3's stand-in row
+  holds the raise.
