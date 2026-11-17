@@ -207,6 +207,8 @@ Each check was run once against a planted fault, on the floor, in `build/m4pre/c
 
 ## The questions M4's plan must settle
 
+The maintainer answered nine of them on 2026-11-16: [the answers](#the-maintainers-answers-2026-11-16).
+
 1. **FTS5 on CI's compiled lanes.** `build-sqlite.sh` compiles with SQLite's defaults, and so the
    `floor` and `current` lanes have no FTS5: "no such module: fts5". Guix's, Ubuntu's (the `main`
    lane), Apple's and Homebrew's all have it. The choices:
@@ -281,6 +283,32 @@ Each check was run once against a planted fault, on the floor, in `build/m4pre/c
 12. **The codes to map.** Measured so far: 0; 1 for an unknown op; 21 from Apple's for
     `ENABLE_LOAD_EXTENSION`. All five ops exist at the floor, so 1 means a mistake of ours. The
     Mac step shows what Apple's answers for the other four.
+
+## The maintainer's answers, 2026-11-16
+
+Each was chosen from a picker whose first option was the recommendation. M4's plan builds on
+them, and its slice 0 writes them into the records each one names.
+
+| Q | Answer | What it means for M4 |
+|---|---|---|
+| 1 | "FTS5 on current only" | `build-sqlite.sh --current` adds `-DSQLITE_ENABLE_FTS5`. `floor` keeps SQLite's defaults, so it runs the no-FTS5 path on a real library. `check-sqlite.sh`'s `current` options and that lane's cache key move with it. Brief §2.6 is amended. |
+| 3 | "Refuse in Scheme" | The load verb refuses a connection that didn't opt in, before any C call. An open that doesn't opt in makes no `db_config` call, so the library's starting value (1 on Ubuntu's) is never reached: only that verb calls `sqlite3_load_extension`. Brief §2.5 and ADR-0002 are amended to say where the guarantee lives. |
+| 4 | "The decoy" | `DECOY_LACKS_sqlite3_load_extension`. A suite opens the decoy with the opt-in, asserts the named condition, and reads the call log to show that no `db_config` call was made. No real `OMIT_LOAD_EXTENSION` build. |
+| 5 | "SQLite's default, settable" | Connections start with DQS on, as every library measured does. A caller turns `DQS_DML` and `DQS_DDL` off by name. |
+| 6 | "Document it, with a row" | The reference for `defensive` says a caller's `PRAGMA writable_schema = 1` does nothing under it. A row asserts that the set answers done and reads back 0, and is watched failing with defensive off. |
+| 7 | "PRAGMA only" | ADR-0018's `trusted-schema` stays the one way in to that flag. No `TRUSTED_SCHEMA` op: brief §2.8's three options stand. |
+| 8 | "Hold the set's answer" | One call per set. The cell holds a sentinel before the call, the code is asserted, and a cell other than the value asked raises `&sqlite-setting-mismatch`. |
+| 9 | "Check plus check-variadic" | `test-conventions` asserts that the binding carries `(__varargs_after 2)` in the shape `(db op int int*)`. A `check-variadic` target removes it in a copy and watches that check fail, as chez-curl's does. |
+| 10 | "In the settings list" | The extension opt-in, `defensive` and the two DQS options join `open-database`'s settings list (ADR-0018) as new names, set at every open and checked by the set's own answer (Q8), with engine rows like M3 slice 5's. |
+
+Not put to the maintainer:
+
+- **Q2** follows from Q1: `floor` has no FTS5, so a suite must pass there. The precedent is the
+  memory check's (ADR-0005, amended): choose the rows by `sqlite-compile-option? "ENABLE_FTS5"`,
+  name FTS5 unavailable, never silently, and assert the refusal's code instead. The plan
+  confirms it.
+- **Q11:** plain, by ADR-0011's rule, unless the plan measures a wait.
+- **Q12** waits for the Mac step.
 
 ## What a record says that a run contradicts
 
