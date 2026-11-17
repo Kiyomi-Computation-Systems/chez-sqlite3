@@ -737,22 +737,83 @@
         (guard (e (#t #f)) (execute! holder "rollback"))
         (close-answer holder)))))
 
+(define (busy who sql) (list 'raised (list 'sqlite-error who 'busy 'busy sql)))
+
+;; grain-ms : -> Any
+;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
+;; answer busy, under another connection's reserved lock on a fresh file,
+;; both on this thread: about 250 where the build sleeps in milliseconds, 0
+;; where it sleeps whole seconds, whose first sleep would pass the timeout
+;; (concurrency B3; test-contention's P4 row). Else what it answered, or
+;; raised.
+(define (grain-ms)
+  (in-dir
+   (lambda (dir)
+     (let* ((path (string-append dir "/grain.db"))
+            (holder (open-database path)))
+       (dynamic-wind
+         (lambda () #f)
+         (lambda ()
+           (execute! holder "create table t (x)")
+           (execute! holder "begin immediate")
+           (execute! holder "insert into t values (1)")
+           (let ((waiter (open-database path '((busy-timeout . 250)))))
+             (dynamic-wind
+               (lambda () #f)
+               (lambda ()
+                 (let* ((t0 (real-time))
+                        (r (attempt (lambda () (execute! waiter "begin immediate"))))
+                        (t1 (real-time)))
+                   (if (equal? r (busy 'execute! "begin immediate")) (- t1 t0) (list 'not-busy r))))
+               (lambda () (close-answer waiter)))))
+         (lambda ()
+           (guard (e (#t #f)) (execute! holder "rollback"))
+           (close-answer holder)))))))
+
+;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
+;; The build's busy-wait grain, read once, before the timed row:
+;; milliseconds from 125 ms, half the timeout, as test-contention's P4 row
+;; tells them apart.
+(define grain
+  (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
+    (cond ((not (integer? ms)) (list 'unread ms))
+          ((>= ms 125) 'milliseconds)
+          (else 'whole-seconds))))
+
+;; retry-ms : Natural
+;; Where the timed open's wait is too long: a retry of its 1500 ms busy
+;; timeout waits at least 2000 ms on a whole-second build, and 3000 on any
+;; other; an unread grain takes the looser bound, and its row fails.
+(define retry-ms (if (eq? grain 'whole-seconds) 2000 3000))
+
 ;; timed : (List Any Natural Natural Natural) -> (List Any Symbol Natural Natural)
-;; R with its milliseconds read as waited, at least 1000 and under 3000;
-;; too-long, from 3000; or at-once. The timed open's busy timeout is 1500
-;; ms: a build without nanosleep sleeps whole seconds, 2000 ms of it, which
-;; still waited; one retry in Scheme waits it out twice, at least 3000
-;; (ADR-0019, no retry in Scheme).
+;; R with its milliseconds read as waited, at least 1000 and under retry-ms;
+;; too-long, from retry-ms; or at-once. The timed open's busy timeout is
+;; 1500 ms: one wait takes 1500 ms of it on a build that sleeps in
+;; milliseconds, and 1000 on one without nanosleep, which sleeps whole
+;; seconds; one retry in Scheme waits it out twice, at least 3000 on the
+;; first and 2000 on the second (ADR-0019, no retry in Scheme).
 (define (timed r)
   (if (and (list? r) (= (length r) 4))
       (list (car r)
-            (cond ((>= (cadr r) 3000) 'too-long) ((>= (cadr r) 1000) 'waited) (else 'at-once))
+            (cond ((>= (cadr r) retry-ms) 'too-long) ((>= (cadr r) 1000) 'waited) (else 'at-once))
             (caddr r) (cadddr r))
       r))
 
-(define (busy who sql) (list 'raised (list 'sqlite-error who 'busy 'busy sql)))
+(test-equal "the busy wait's grain is read before the timed row, as test-contention's P4 row reads it: a 250 ms busy timeout under another's reserved lock answers busy after 125 ms or more, milliseconds, or before, whole seconds; the timed open's wait is too long from 3000 ms on the first, and from 2000 on the second"
+  'read
+  (begin
+    (display "    the grain: ")
+    (write grain)
+    (display ", a wait too long from ")
+    (display retry-ms)
+    (display " ms")
+    (newline)
+    (cond ((and (eq? grain 'milliseconds) (= retry-ms 3000)) 'read)
+          ((and (eq? grain 'whole-seconds) (= retry-ms 2000)) 'read)
+          (else (list grain retry-ms)))))
 
-(test-equal "busy-timeout runs first, whatever the list's order: under another's exclusive lock, with busy-timeout last at 1500 ms, synchronous's prepare waits once, at least 1000 ms and under 3000, then open-database raises &sqlite-busy, naming synchronous's SQL; with no busy-timeout it answers busy at once, as call-with-database does, its procedure never called; under a reserved lock journal-mode wal's step answers busy at once; each leaves the holder alone counted, with its three statements, and once it has closed, nothing counted and no descriptor open"
+(test-equal "busy-timeout runs first, whatever the list's order: under another's exclusive lock, with busy-timeout last at 1500 ms, synchronous's prepare waits once, at least 1000 ms and under 3000, or 2000 on a whole-second build, then open-database raises &sqlite-busy, naming synchronous's SQL; with no busy-timeout it answers busy at once, as call-with-database does, its procedure never called; under a reserved lock journal-mode wal's step answers busy at once; each leaves the holder alone counted, with its three statements, and once it has closed, nothing counted and no descriptor open"
   (list (list (busy 'open-database "PRAGMA synchronous = 2") 'waited 1 3)
         (list (busy 'open-database "PRAGMA synchronous = 2") 'at-once 1 3)
         (list (busy 'call-with-database "PRAGMA synchronous = 2") 'at-once 1 3)

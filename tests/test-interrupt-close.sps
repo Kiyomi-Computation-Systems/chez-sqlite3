@@ -17,7 +17,10 @@
 ;;;
 ;;; The watchdog of the left-open rows is tests/test-interrupt-reach.sps's,
 ;;; whose header says why it holds SQLite's memory mutex across each round:
-;;; under Valgrind a thread running C keeps the CPU from every other.
+;;; under Valgrind a thread running C keeps the CPU from every other; and why
+;;; its first round is a handshake: SQLite clears the interrupt as the step
+;;; starts, so the watchdog interrupts again only once it has read the flag
+;;; clear, the step then held at its next allocation.
 ;;;
 ;;; The race's interrupter makes its calls in bursts of ten, and sleeps 1
 ;;; microsecond after each burst, a system call that lets the owner run under
@@ -121,6 +124,9 @@
 (define mutex-enter (bound 'sqlite3_mutex_enter (foreign-procedure "sqlite3_mutex_enter" (uptr) void)))
 (define mutex-leave (bound 'sqlite3_mutex_leave (foreign-procedure "sqlite3_mutex_leave" (uptr) void)))
 
+;; int sqlite3_is_interrupted(sqlite3*), from 3.41.0, so at the floor
+(define is-interrupted (bound 'sqlite3_is_interrupted (foreign-procedure "sqlite3_is_interrupted" (uptr) int)))
+
 ;; SQLITE_MUTEX_STATIC_MEM, sqlite3.h's 3: the mutex sqlite3_malloc takes.
 (define memory-mutex (guard (e (#t 0)) (mutex-alloc 3)))
 
@@ -203,14 +209,22 @@
 ;; before THUNK starts until it has returned or raised, or bound-ms have
 ;; passed since the call began. Each round the watchdog takes SQLite's
 ;; memory mutex, sleeps 1 ms holding it, calls interrupt-database!, lets the
-;; mutex go, and sleeps 1 ms; THUNK starts once it holds the mutex for its
-;; first round. Answers what THUNK answered, or (raised WHAT);
+;; mutex go, and sleeps 1 ms, the first round the handshake; THUNK starts
+;; once that holds the mutex and has interrupted. Answers what THUNK
+;; answered, or (raised WHAT);
 ;; interrupts-sent or no-interrupt-sent; and the watchdog's end:
 ;; the-watchdog-ended, the-watchdog-did-not-end, or (the-watchdog-raised
 ;; WHAT ... END), the first three of its raises, which are its answer,
-;; never its end.
+;; never its end. A raise anywhere in a round, from mutex-enter, sleep or
+;; the bookkeeping as much as from the verb, is noted so: the round's
+;; handler lets SQLite's mutex go if the round took it, counts the watchdog
+;; started, sleeps 1 ms, and the next round follows, until THUNK is done or
+;; the deadline has passed (AGENTS.md). A thread that died holding the mutex
+;; would leave THUNK blocked inside SQLite for good. The one raise the
+;; device can't answer is a mutex-leave that raises every time.
 (define (watched db thunk)
-  (let* ((m (make-mutex))
+  (let* ((handle (with-handle db (lambda (h) h)))
+         (m (make-mutex))
          (c (make-condition))
          (started #f)
          (done #f)
@@ -219,22 +233,77 @@
          (raises '())
          (by (add-duration (current-time 'time-monotonic) (duration bound-ms)))
          (past? (lambda () (time>=? (current-time 'time-monotonic) by)))
+         (note! (lambda (what) (with-mutex m (when (< (length raises) 3) (set! raises (cons what raises))))))
+         (start! (lambda () (with-mutex m (unless started (set! started #t) (condition-broadcast c)))))
+         ;; holding: whether this round took SQLite's mutex and has not let
+         ;; it go. Only the watchdog's thread reads or sets it.
+         (holding #f)
+         ;; let-go! : -> Void
+         ;; The mutex let go, if this round took it. A mutex-leave that
+         ;; raises has not let it go, so HOLDING stays set, the handler
+         ;; tries again, and the next round takes it no second time.
+         (let-go! (lambda () (when holding (mutex-leave memory-mutex) (set! holding #f))))
+         ;; send! : -> Void
+         ;; interrupt-database! on DB, counted, what it answers but void noted.
+         (send! (lambda ()
+                  (let ((verb (interrupt! db)))
+                    (with-mutex m (set! sent (+ sent 1)))
+                    (unless (eq? verb 'void) (note! verb)))))
+         ;; handshaken: whether the first round has been tried.
+         (handshaken #f)
+         ;; handshake! : -> 'again
+         ;; The first round, tests/test-interrupt-reach.sps's: SQLite's mutex
+         ;; taken and the interrupt sent before THUNK starts, so the flag
+         ;; reads set; then, the mutex held, the flag read each 1 ms until it
+         ;; reads clear, which only THUNK's call does, at its statement's
+         ;; start; then the interrupt sent again, landing inside the call,
+         ;; and the mutex let go. Tried once, whatever it raises: a second
+         ;; try could wait, holding the mutex, for a clear that came already.
+         (handshake!
+          (lambda ()
+            (set! handshaken #t)
+            (mutex-enter memory-mutex)
+            (set! holding #t)
+            (send!)
+            (unless (eqv? (is-interrupted handle) 1) (note! 'the-first-interrupt-left-the-flag-clear))
+            (start!)
+            (let wait ()
+              (unless (or (with-mutex m done) (past?))
+                (sleep one-ms)
+                (if (eqv? (is-interrupted handle) 0)
+                    (send!)
+                    (wait))))
+            (let-go!)
+            'again))
+         ;; round! : -> (U 'again 'stop)
+         ;; One round, the first a handshake; what it raises is raised, to
+         ;; the loop's handler.
+         (round!
+          (lambda ()
+            (cond
+              ((or (with-mutex m done) (past?)) 'stop)
+              ((not handshaken) (handshake!))
+              (else
+                (unless holding (mutex-enter memory-mutex) (set! holding #t))
+                (start!)
+                (sleep one-ms)
+                (let ((verb (interrupt! db)))
+                  (let-go!)
+                  (with-mutex m (set! sent (+ sent 1)))
+                  (unless (eq? verb 'void) (note! verb)))
+                (sleep one-ms)
+                'again))))
          (watchdog
           (fork-thread
            (lambda ()
-             (let round ()
-               (unless (or (with-mutex m done) (past?))
-                 (mutex-enter memory-mutex)
-                 (with-mutex m
-                   (unless started (set! started #t) (condition-broadcast c)))
-                 (sleep one-ms)
-                 (let ((verb (interrupt! db)))
-                   (mutex-leave memory-mutex)
-                   (with-mutex m
-                     (set! sent (+ sent 1))
-                     (unless (or (eq? verb 'void) (>= (length raises) 3)) (set! raises (cons verb raises)))))
-                 (sleep one-ms)
-                 (round)))
+             (let loop ()
+               (let ((next (guard (e (#t (guard (x (#t #f)) (let-go!))
+                                         (guard (x (#t #f)) (note! (list 'a-round-raised (what-raised e))))
+                                         (guard (x (#t #f)) (start!))
+                                         (guard (x (#t #f)) (sleep one-ms))
+                                         'again))
+                             (round!))))
+                 (when (eq? next 'again) (loop))))
              (with-mutex m
                (set! started #t)
                (set! ended #t)
@@ -359,7 +428,8 @@
 ;; next. The interrupter, a thread of its own, takes the published
 ;; connection and whether it was closed, under the board's mutex; calls
 ;; interrupt-database! on it outside the mutex; notes the call, and what
-;; it answered but void; sleeps 1 microsecond after every tenth call; and
+;; it answered but void, or what its turn raised; sleeps 1 microsecond
+;; after every tenth call; and
 ;; goes on until told to stop,
 ;; or bound-ms have passed. The owner begins once the interrupter has made
 ;; a call, and tells it to stop once its rounds are done and a call has
@@ -383,18 +453,29 @@
           (fork-thread
            (lambda ()
              (let loop ((burst 0))
-               (unless (or (with-mutex m stop) (past?))
-                 (let* ((taken (with-mutex m (cons current closed?)))
-                        (verb (if (car taken) (interrupt! (car taken)) 'nothing-published)))
-                   (with-mutex m
-                     (set! calls (+ calls 1))
-                     (when (cdr taken) (set! closed-calls (+ closed-calls 1)))
-                     (unless (or (memq verb '(void nothing-published)) (>= (length others) 3))
-                       (set! others (cons verb others)))
-                     (condition-broadcast c)))
-                 (if (= burst 9)
-                     (begin (sleep one-microsecond) (loop 0))
-                     (loop (+ burst 1)))))
+               (let ((next
+                      ;; A raise in a call's turn, the bookkeeping's or the
+                      ;; sleep's as much as the verb's, is an answer among
+                      ;; the others, and the next turn follows (AGENTS.md).
+                      (guard (e (#t (guard (x (#t #f))
+                                      (with-mutex m
+                                        (when (< (length others) 3)
+                                          (set! others (cons (list 'a-turn-raised (what-raised e)) others)))
+                                        (condition-broadcast c)))
+                                    'again))
+                        (if (or (with-mutex m stop) (past?))
+                            'stop
+                            (let* ((taken (with-mutex m (cons current closed?)))
+                                   (verb (if (car taken) (interrupt! (car taken)) 'nothing-published)))
+                              (with-mutex m
+                                (set! calls (+ calls 1))
+                                (when (cdr taken) (set! closed-calls (+ closed-calls 1)))
+                                (unless (or (memq verb '(void nothing-published)) (>= (length others) 3))
+                                  (set! others (cons verb others)))
+                                (condition-broadcast c))
+                              (when (= burst 9) (sleep one-microsecond))
+                              'again)))))
+                 (when (eq? next 'again) (loop (if (= burst 9) 0 (+ burst 1))))))
              (with-mutex m
                (set! ended #t)
                (condition-broadcast c)))))

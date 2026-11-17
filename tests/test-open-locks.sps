@@ -8,7 +8,8 @@
 ;;;
 ;;;   waits        rollback journal, under another's exclusive lock:
 ;;;                journal-mode, wal or delete, waits out a busy timeout of
-;;;                1500 ms, at least 1000 and under 3000, once, then raises
+;;;                1500 ms, at least 1000 and under 3000, or 2000 on a
+;;;                whole-second build, once, then raises
 ;;;                &sqlite-busy naming its SQL; under a read, journal-mode
 ;;;                wal does. Each leaves
 ;;;                nothing counted: the connection is closed
@@ -38,12 +39,16 @@
 ;;; last waits, and with none answers busy at once; journal-mode wal under a
 ;;; reserved lock, with no busy timeout, answers busy at once.
 ;;;
-;;; A wait is told from none by 1000 ms, and from a retry by 3000, twice the
-;;; busy timeout: each timed open's is 1500 ms, a build without nanosleep
-;;; sleeps whole seconds, so waits 1000 of it and at most 2000, and a second
-;;; wait, a retry in Scheme, takes at least another 1500 (AGENTS.md;
-;;; concurrency B3; ADR-0019, no retry in Scheme). Each timed case prints its
-;;; milliseconds, for a reader of the run. File descriptors are read only once
+;;; A wait is told from none by 1000 ms, and from a retry by twice what one
+;;; wait takes. Each timed open's busy timeout is 1500 ms. A build that
+;;; sleeps in milliseconds waits 1500 of it, and a retry in Scheme 3000; one
+;;; without nanosleep sleeps whole seconds, so waits 1000 of it, and a retry
+;;; 2000 (AGENTS.md; concurrency B3; ADR-0019, no retry in Scheme). So the
+;;; suite reads the build's grain first, as test-contention's P4 row does: a
+;;; 250 ms busy timeout answers busy after about 250 ms on the first, and at
+;;; once on the second. A wait is too long from 3000 ms on the first, and
+;;; from 2000 on the second. Each timed case prints its milliseconds, for a
+;;; reader of the run. File descriptors are read only once
 ;;; the holder has closed: SQLite's unix VFS keeps a closed connection's
 ;;; descriptor while another connection of the process holds a POSIX lock on
 ;;; the file (.plans/research/m3-slice-5/).
@@ -198,12 +203,55 @@
   (when st (finalize-statement! st))
   (when (in-transaction? db) (execute! db "rollback")))
 
+;; grain-ms : -> Any
+;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
+;; answer busy, under another connection's reserved lock on a fresh file,
+;; both on this thread: about 250 where the build sleeps in milliseconds, 0
+;; where it sleeps whole seconds, whose first sleep would pass the timeout
+;; (concurrency B3). Else what it answered, or raised.
+(define (grain-ms)
+  (in-dir
+   (lambda (dir)
+     (let* ((path (file-in dir "grain.db" 'delete))
+            (holder (open-database path)))
+       (dynamic-wind
+         (lambda () #f)
+         (lambda ()
+           (hold! holder 'reserved)
+           (let ((waiter (open-database path '((busy-timeout . 250)))))
+             (dynamic-wind
+               (lambda () #f)
+               (lambda ()
+                 (let* ((t0 (real-time))
+                        (r (attempt (lambda () (execute! waiter "begin immediate"))))
+                        (t1 (real-time)))
+                   (if (equal? r (busy 'execute! "begin immediate")) (- t1 t0) (list 'not-busy r))))
+               (lambda () (close-answer waiter)))))
+         (lambda ()
+           (guard (e (#t #f)) (let-go! holder #f))
+           (close-answer holder)))))))
+
+;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
+;; The build's busy-wait grain, read once, before any row: milliseconds from
+;; 125 ms, half the timeout, as test-contention's P4 row tells them apart.
+(define grain
+  (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
+    (cond ((not (integer? ms)) (list 'unread ms))
+          ((>= ms 125) 'milliseconds)
+          (else 'whole-seconds))))
+
+;; retry-ms : Natural
+;; Where a timed open's wait is too long: a retry of its 1500 ms busy
+;; timeout waits at least 2000 ms on a whole-second build, and 3000 on any
+;; other; an unread grain takes the looser bound, and its row fails.
+(define retry-ms (if (eq? grain 'whole-seconds) 2000 3000))
+
 ;; how-long : Natural -> Symbol
-;; MS as waited, at least 1000 and under 3000; too-long, from 3000; or
-;; at-once. Every timed open's busy timeout is 1500 ms: a build without
-;; nanosleep sleeps whole seconds, 2000 ms of it, which still waited; one
-;; retry in Scheme waits it out twice, at least 3000, which is too long.
-(define (how-long ms) (cond ((>= ms 3000) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
+;; MS as waited, at least 1000 and under retry-ms; too-long, from retry-ms;
+;; or at-once. Every timed open's busy timeout is 1500 ms: one wait takes
+;; 1500 ms of it on a build that sleeps in milliseconds and 1000 on one
+;; that sleeps whole seconds, and a retry in Scheme waits it out twice.
+(define (how-long ms) (cond ((>= ms retry-ms) 'too-long) ((>= ms 1000) 'waited) (else 'at-once)))
 
 ;; note-time! : String Natural -> Void
 ;; A timed case's milliseconds, printed for a reader of the run.
@@ -372,9 +420,24 @@
   zero-counts
   (native-counts))
 
+;; --- the grain -----------------------------------------------------------------------------
+
+(test-equal "the busy wait's grain is read before any row, as test-contention's P4 row reads it: a 250 ms busy timeout under another's reserved lock answers busy after 125 ms or more, milliseconds, or before, whole seconds; a timed wait is too long from 3000 ms on the first, and from 2000 on the second"
+  'read
+  (begin
+    (display "    the grain: ")
+    (write grain)
+    (display ", a wait too long from ")
+    (display retry-ms)
+    (display " ms")
+    (newline)
+    (cond ((and (eq? grain 'milliseconds) (= retry-ms 3000)) 'read)
+          ((and (eq? grain 'whole-seconds) (= retry-ms 2000)) 'read)
+          (else (list grain retry-ms)))))
+
 ;; --- waits ---------------------------------------------------------------------------------
 
-(test-equal "rollback journal: under another's exclusive lock, journal-mode waits out the 1500 ms busy timeout once, at least 1000 ms and under 3000, at wal through open-database and at delete through call-with-database, busy-timeout listed last; under a read, journal-mode wal waits the same; each then raises &sqlite-busy naming the setting's SQL, leaves nothing counted, the connection closed, and call-with-database's procedure is never called; once the holders have closed, nothing is counted and no descriptor is open"
+(test-equal "rollback journal: under another's exclusive lock, journal-mode waits out the 1500 ms busy timeout once, at least 1000 ms and under 3000, or 2000 on a whole-second build, at wal through open-database and at delete through call-with-database, busy-timeout listed last; under a read, journal-mode wal waits the same; each then raises &sqlite-busy naming the setting's SQL, leaves nothing counted, the connection closed, and call-with-database's procedure is never called; once the holders have closed, nothing is counted and no descriptor is open"
   (list (list (busy 'open-database "PRAGMA journal_mode = wal") 'waited 'nothing-left)
         (list (busy 'call-with-database "PRAGMA journal_mode = delete") 'waited 'nothing-left)
         'proc-not-called
