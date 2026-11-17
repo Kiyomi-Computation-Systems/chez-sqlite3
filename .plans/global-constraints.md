@@ -147,6 +147,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   test-memory` prints each suite's time, and fails one past it as `SLOW`, so a suite is split
   before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
   562 s on a slow runner (ADR-0005, amended).
+- **CI's memory gate runs in two jobs, `memory-1` and `memory-2`, each proving the gate on its own
+  runner before its shard.** The Makefile lists each shard's suites, and every `tests/test-*.sps`
+  stands in exactly one; `make check-memory-shards`, which `make test` runs, holds it, so a new
+  suite fails `make test` until it is placed (ADR-0005, amended in M3 slice 6).
 
 ## Conveniences, transactions, settings and interrupt
 

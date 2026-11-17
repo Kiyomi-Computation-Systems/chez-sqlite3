@@ -605,6 +605,16 @@ told in chez-curl's `.plans/traps.md`.
   against the fuels swept, not as a fixed total: slice 4's guard of 1,000 trials failed at 647
   once part D halved the call's fuel.
   (M3 slice 5's part D, chez-sqlite3)
+- **A comma inside a make function's arguments splits them, and the recipe's shell then fails.**
+  M3 slice 6's first refusal of a shard's list from outside wrote "to run other suites, give …"
+  inside `$(foreach … $(if …,echo "…",))`. Make read the comma as the end of the `$(if)`'s
+  then-part, so the shell got an `echo` with its quote left open, and every `make test-memory`
+  failed before any suite ran. Reproduced with GNU Make 4.3: a recipe
+  `$(if $(X),echo "one, two" >&2; exit 1;) echo after`, with `X := 1`, fails with
+  `Syntax error: Unterminated quoted string`; with "one and two" it prints the message. Write a
+  message inside a make function's arguments with no comma, or take the test into the shell, as
+  `test-memory` now reads the lists' origins.
+  (M3 slice 6's part C, chez-sqlite3)
 
 ## Editing the records
 

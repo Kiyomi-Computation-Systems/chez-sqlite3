@@ -124,6 +124,10 @@
   as `SLOW`. CI's runners differ about two to one, so split a suite long
   before it nears the limit, and read a cost from more than one CI run
   (ADR-0005, amended).
+* CI's memory gate runs in two shards, the Makefile's `MEMORY_SUITES_1`
+  and `MEMORY_SUITES_2`. A new suite goes in the one whose suites take
+  less time on CI, and `make test` fails, naming it, until it is in one
+  (ADR-0005, amended).
 * A thread a suite forks dies on a raise it does not catch, and a waiter with
   no bound then hangs the suite, naming no test. Make whatever a thread raises
   its answer, and bound every wait for one.
