@@ -66,20 +66,23 @@
 ;;; claim of whatever position is next, unless the call has ended, so a
 ;;; raise always finishes it, whichever run then held it.
 ;;;
-;;; query-fold and execute-script! keep slice 3's flag, which their winds
-;;; make enough: an engine's expiry inside the fold's wind finishes its
-;;; statement and sets its flag, and one inside the script's block frees the
-;;; block, so neither survives a preemption, and no second run reaches a
-;;; statement another holds. Every critical section that touches the call's
-;;; statement reads the flag first: the check-out's, before the table is
-;;; read; a miss's prepare, before it prepares, both through checked-out's
-;;; LEFT?; each bind's, through bind-each!/who's; each step's and each
-;;; column read's, through while-held; and the return's or the finalize's,
-;;; which also sets it. Set, the section touches nothing, and the
-;;; convenience raises &sqlite-closed after it. A re-entry inside the
-;;; library's own winds, call-with-open-handle's, around a check-out or a
-;;; prepare, and call-with-block's, around a script, is refused by those
-;;; winds, an assertion violation, re-entered, before any flag is read.
+;;; query-fold keeps slice 3's flag, which its wind makes enough: an
+;;; engine's expiry inside the fold's wind finishes its statement and sets
+;;; its flag, so it does not survive a preemption, and no second run reaches
+;;; a statement another holds. Every critical section that touches the
+;;; call's statement reads the flag first: the check-out's, before the table
+;;; is read; a miss's prepare, before it prepares, both through
+;;; checked-out's LEFT?; each bind's, through bind-each!/who's; each step's
+;;; and each column read's, through while-held; and the return's or the
+;;; finalize's, which also sets it. Set, the section touches nothing, and
+;;; the convenience raises &sqlite-closed after it. execute-script! holds a
+;;; claim on its statements' byte offsets instead, each prepare's section
+;;; claiming its own (below): an expiry inside the script's block frees the
+;;; block, but a timer's handler can jump back inside it, crossing no
+;;; winder. A re-entry inside the library's own winds, call-with-open-
+;;; handle's, around a check-out or a prepare, and call-with-block's, around
+;;; a script, is refused by those winds, an assertion violation, re-entered,
+;;; before any flag or claim is read.
 ;;;
 ;;; A remainder taken before a call's first expression is the caller's:
 ;;; resumed, it makes a whole new call, with a claim or a flag of its own.
@@ -115,14 +118,17 @@
 ;;;       call-with-c-string, whose before thunk refuses a re-entry; so
 ;;;       nothing raises out of the block's extent, and everything raised in
 ;;;       it is caught there and raised after call-with-c-string returns
-;;;       (ADR-0016, decision 7). Its flag says the call's run has begun,
-;;;       marked by its first prepare's section, which reads it first: so a
-;;;       call re-entered before its block refuses, &sqlite-closed, rather
-;;;       than running the script again. Below.
+;;;       (ADR-0016, decision 7). Its claim is the byte offset of the last
+;;;       statement the call prepared, each prepare's section claiming its
+;;;       own, past it, before it prepares: so a call re-entered before its
+;;;       block, or jumped back inside it, refuses, &sqlite-closed, rather
+;;;       than running a statement again. Below.
 ;;;
-;;; code-number is exported for the suites, which hold its branches.
+;;; code-number is exported for the suites, which hold its branches, and
+;;; made-claim, which they hold whole: once a call has ended, no position is
+;;; claimed again, 0 included.
 (library (chez-sqlite3 private conveniences)
-  (export execute! query query-row query-fold execute-script! code-number)
+  (export execute! query query-row query-fold execute-script! code-number made-claim)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind)
@@ -168,7 +174,8 @@
   ;; procedure answered. Given N, a run's position, and LAST?, called inside
   ;; that run's section: #t when the call's position is N, or N is #f and
   ;; the call has not ended, the call's position then advanced past N, or
-  ;; ended when LAST?; else #f, nothing changed. Raises nothing.
+  ;; ended when LAST?; else #f, nothing changed. Once the call has ended,
+  ;; #f for every N, 0 and #f included. Raises nothing.
   (define (made-claim)
     (let ((at 0))
       (lambda (n last?)
@@ -479,12 +486,30 @@
   ;; script-step-offset, the failing statement's first token (ADR-0016,
   ;; decision 7, amended in M3 slice 1).
   ;;
-  ;; The call's flag, BEGUN, is made first, unset, and marked by the first
-  ;; prepare's section, which reads it first: so a call re-entered before
-  ;; its block, through a continuation or an engine's remainder resumed a
-  ;; second time, makes a block of its own, and its first prepare refuses,
-  ;; &sqlite-closed from execute-script!, rather than running the script
-  ;; again. Inside the block, call-with-block refuses a re-entry itself.
+  ;; The call's claim, CLAIMED, is made by its first expression: the byte
+  ;; offset of the last statement any run of the call has prepared, -1 at
+  ;; first. Each run carries its statement's offset, START, an argument of
+  ;; its loop, never assigned, and each prepare's section claims it, by
+  ;; claim!, inside the section, before it prepares: refused unless START
+  ;; lies past CLAIMED, then CLAIMED is START. Refused, the section prepares
+  ;; nothing, and &sqlite-closed is raised from execute-script!. A script's
+  ;; offsets only grow, so each statement is prepared once a call, by
+  ;; whichever run reaches it first:
+  ;;   - a call re-entered before its block, through a continuation or an
+  ;;     engine's remainder resumed a second time, makes a block of its own,
+  ;;     and its first prepare, at 0, is refused;
+  ;;   - a continuation a timer's or keyboard's handler captured inside the
+  ;;     block, between two statements, and called by a later fire of the
+  ;;     same call, jumps back within the block's extent and crosses no
+  ;;     winder, so call-with-block never sees it: the next prepare is
+  ;;     refused, at an offset the call has passed (M3's closing review,
+  ;;     reviewer A's script-reenter3.sps: 629 of 2804 trials ran a
+  ;;     statement again under slice 3's flag, read by the first prepare
+  ;;     alone). One inside a statement's own extent meets that statement's
+  ;;     state: a step at done is refused by the statement tier, an
+  ;;     assertion violation, and a finalized statement's by &sqlite-closed.
+  ;; A re-entry after an engine's expiry has freed the block is refused by
+  ;; call-with-block first.
   ;;
   ;; Nothing raises out of the block's extent: call-with-block refuses a
   ;; re-entry, so a non-matching guard's re-raise there would be replaced by
@@ -498,17 +523,21 @@
   ;; engine's resume is refused by call-with-block, from execute-script!:
   ;; execute-script! does not survive an engine's preemption.
   (define (execute-script! db sql)
-    (let ((who 'execute-script!) (begun #f))
-      ;; begin! : -> Boolean
-      ;; Whether the call's run had begun, marking it begun: the first
-      ;; prepare's check, evaluated in its section.
-      (define (begin!) (let ((was begun)) (set! begun #t) was))
+    (let ((who 'execute-script!) (claimed -1))
+      ;; claim! : Natural -> Boolean
+      ;; Whether START, the byte offset of the statement a run is about to
+      ;; prepare, lies past every offset the call has claimed, claiming it
+      ;; then: each prepare's check, evaluated in its section. Raises
+      ;; nothing.
+      (define (claim! start)
+        (and (> start claimed)
+             (begin (set! claimed start) #t)))
       (check-database-owner who db)
       (let-values (((copy bytes) (checked-sql who sql)))
         (let ((outcome (call-with-c-string who copy
                          (lambda (block)
                            (guard (c (#t (list 'raised c)))
-                             (script-run who db copy bytes block begin!))))))
+                             (script-run who db copy bytes block claim!))))))
           (case (car outcome)
             ((done) (if #f #f))
             ((prepare-failed)
@@ -525,34 +554,33 @@
                    (raise c))))
             (else (raise (cadr outcome))))))))
 
-  ;; script-run : Symbol Database String Bytevector Positive-Integer (-> Boolean)
+  ;; script-run : Symbol Database String Bytevector Positive-Integer (Natural -> Boolean)
   ;;   -> (U (List 'done) (List 'prepare-failed Integer String Natural Integer)
   ;;         (List 'step-failed Condition Natural))
   ;; The script SQL, BYTES its UTF-8 and BLOCK its C string, run statement
   ;; by statement, from byte 0, for WHO: done at the script's end or at a
   ;; NULL statement; else the first failure, as data. What anything else
   ;; raises reaches the caller's guard, inside the block's extent. The first
-  ;; prepare always runs, so a closed DB is refused even for an empty script,
-  ;; and its section evaluates BEGIN!, the call's check, first: the run
-  ;; marked begun, or &sqlite-closed when it had begun already. The later
-  ;; prepares take no check: call-with-block refuses a re-entry into the
-  ;; block's extent, so none is reached again.
-  (define (script-run who db sql bytes block begin!)
+  ;; prepare always runs, so a closed DB is refused even for an empty script.
+  ;; Each prepare's section claims its statement's offset by CLAIM!, the
+  ;; call's, first: refused, &sqlite-closed (execute-script!'s comment).
+  (define (script-run who db sql bytes block claim!)
     (let ((end (bytevector-length bytes)))
-      (let loop ((start 0) (check begin!))
-        (let ((next (script-statement who db sql bytes block start check)))
+      (let loop ((start 0))
+        (let ((next (script-statement who db sql bytes block start claim!)))
           (cond ((pair? next) next)
                 ((>= next end) '(done))
-                (else (loop next #f)))))))
+                (else (loop next)))))))
 
   ;; script-statement : Symbol Database String Bytevector Positive-Integer Natural
-  ;;                    (U (-> Boolean) #f)
+  ;;                    (Natural -> Boolean)
   ;;   -> (U Natural (List 'done) (List 'prepare-failed Integer String Natural Integer)
   ;;         (List 'step-failed Condition Natural))
-  ;; The statement from byte START prepared by prepared-at, with no flags
-  ;; and CHECK, the call's check or #f, handed to ST inside the prepare's
-  ;; section; stepped to done, its rows
-  ;; dropped, and finalized: the tail's byte offset, where the next begins.
+  ;; The statement from byte START prepared by prepared-at, with no flags,
+  ;; its check START's claim by CLAIM!, evaluated in the prepare's section
+  ;; before it prepares, and handed to ST inside that section; stepped to
+  ;; done, its rows dropped, and finalized: the tail's byte offset, where
+  ;; the next begins.
   ;; done for a NULL statement; (prepare-failed CODE MESSAGE START OFFSET)
   ;; for a failed prepare, its answers as prepared-at gives them; and
   ;; (step-failed C START) for a step that raised C, an &sqlite-error, once
@@ -560,12 +588,13 @@
   ;; nothing. The critical wind's after thunk finalizes ST on every other
   ;; way out, and raises nothing: a finalize of a finalized statement does
   ;; nothing, so no flag is needed.
-  (define (script-statement who db sql bytes block start check)
+  (define (script-statement who db sql bytes block start claim!)
     (let ((st #f))
       (dynamic-wind #t
         (lambda () #f)
         (lambda ()
-          (let ((made (prepared-at who db sql bytes block start 0 (lambda (s) (set! st s)) check)))
+          (let ((made (prepared-at who db sql bytes block start 0 (lambda (s) (set! st s))
+                                   (lambda () (not (claim! start))))))
             (case (car made)
               ((empty) '(done))
               ((failed)

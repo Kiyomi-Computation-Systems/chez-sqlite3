@@ -2,7 +2,8 @@
 ;;; (chez-sqlite3 private open): the open verbs, open-database and
 ;;; call-with-database, and the settings list they take (ADR-0012, decisions
 ;;; 3 and 8; ADR-0018). (chez-sqlite3) exports the two; applied-settings! is
-;;; exported for the suites.
+;;; exported for the suites, and made-claim, which they hold whole: no
+;;; position a call has passed is claimed again, 0 included.
 ;;;
 ;;; They live here, not in (chez-sqlite3 private connection), because the
 ;;; settings run statements through M2's statement tier, (chez-sqlite3
@@ -100,7 +101,7 @@
 ;;; irritants begin with a symbol naming its rule, then the value by
 ;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
 (library (chez-sqlite3 private open)
-  (export open-database call-with-database applied-settings!)
+  (export open-database call-with-database applied-settings! made-claim)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind)
@@ -156,7 +157,8 @@
   ;; A call's claim: the position of the next section any run of the call
   ;; may make, 0 at first, held by the procedure answered. Given N, a run's
   ;; position, and called inside that run's section: #t, the call's position
-  ;; advanced to N + 1, when the call's is N; else #f, nothing changed. Raises
+  ;; advanced to N + 1, when the call's is N; else #f, nothing changed: so
+  ;; no position the call has passed is claimed again, 0 included. Raises
   ;; nothing.
   (define (made-claim)
     (let ((at 0))

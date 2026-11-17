@@ -204,13 +204,13 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
 
-(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings!, for the suites"
-  (sorted-names '(open-database call-with-database applied-settings!))
+(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings! and made-claim, for the suites"
+  (sorted-names '(open-database call-with-database applied-settings! made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private open)))))
 
-(test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number, for the suites"
-  (sorted-names '(execute! execute-script! query query-row query-fold code-number))
+(test-equal "(chez-sqlite3 private conveniences) exports exactly the five conveniences, which (chez-sqlite3) exports, and code-number and made-claim, for the suites"
+  (sorted-names '(execute! execute-script! query query-row query-fold code-number made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private conveniences)))))
 
