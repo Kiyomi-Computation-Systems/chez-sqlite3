@@ -2,7 +2,8 @@
 
 Written and run 2026-11-16, before M4 has a plan, on `main` at `cc8c60d`. Every Linux run was in
 the Guix container: Chez 10.4.0 (`ta6le`, threaded), gcc 16.2.0, Valgrind 3.27.0, x86_64. The
-Mac step is [mac.md](mac.md), and has not run yet. Nothing here ships.
+Mac step is [mac.md](mac.md). The maintainer ran it on 2026-11-17: [its
+results](#results-the-mac-step-on-apple-arm64). Nothing here ships.
 
 ## The files
 
@@ -205,6 +206,74 @@ Each check was run once against a planted fault, on the floor, in `build/m4pre/c
    the DQS messages and the lookaside counts. So the oracle comparison reads the library, not only
    the code.
 
+## Results: the Mac step, on Apple arm64
+
+Run 2026-11-17 by the maintainer, by [mac.md](mac.md), from PR #29's branch: macOS 26.7.1,
+arm64 (`tarm64osx`), Chez 10.4.1. The libraries are Apple's `/usr/lib/libsqlite3.dylib` (3.51.0)
+and Homebrew's 3.54.1. The files are `out/*-mac-apple-3.51.0.txt` and `out/*-mac-brew-3.54.1.txt`.
+Step 3's `system.txt` didn't come back; the maintainer gave the machine's details by hand.
+
+- **The plain binding crashes on Apple arm64, with both libraries:** "Exception: invalid memory
+  reference", exit 255.
+  - With Homebrew's, it crashed at its first call.
+  - With Apple's, `ENABLE_LOAD_EXTENSION` came first and answered 21 on every call, leaving the
+    cell untouched, as it does under the variadic binding. The crash came after it.
+  - So ADR-0001's decision is measured: without `(__varargs_after 2)`, `db_config` doesn't
+    receive its variadic arguments on Apple arm64. Only question 9's check can hold this on Linux.
+- **`(__varargs_after 2)` works on Apple arm64.**
+  - With Homebrew's, all five verdicts are `ok`.
+  - With Apple's, four are `ok`. `ENABLE_LOAD_EXTENSION` fails because Apple's answers 21 to every
+    call and leaves the cell untouched ([mac-d7](../mac-d7/)).
+  - On both, every `varargs` line is identical to the C oracle's, compiled by the Mac's `cc`
+    against each library's header.
+- **The `LOOKASIDE` shape delivers its three arguments on both:** the slots used peaked at 7, 5, 7,
+  and 0 when off. With a statement held at a row, a second `LOOKASIDE` answered 5.
+- **Behaviour is as on Linux, but for SQL's `load_extension('x')` on Apple's.** There it fails at
+  prepare, 1, "no such function: load_extension", as the OMIT build's does. On Homebrew's it
+  prepares, then answers 1, "not authorized", at step, with the C call on or off. Both
+  libraries' DQS messages are the longer form, as 3.53.1's are.
+- **The census:**
+
+  | | Apple's 3.51.0 | Homebrew's 3.54.1 |
+  |---|---|---|
+  | Options | 71 | 54 |
+  | FTS5 | yes | yes |
+  | `json('{}')` | `{}` | `{}` |
+  | `jsonb('{}')` | blob `0C` | blob `0C` |
+  | `select "x"` (DQS) | row `x` | row `x` |
+  | `ENABLE_LOAD_EXTENSION` start | **21**, cell untouched | 0 |
+  | `DEFENSIVE` start | **1** | 0 |
+  | `DQS_DML` start | 1 | 1 |
+  | `DQS_DDL` start | 1 | 1 |
+  | `TRUSTED_SCHEMA` start | 1 | 1 |
+  | `sqlite3_load_extension` | **missing** | present |
+  | `sqlite3_enable_load_extension` | **missing** | present |
+  | `sqlite3_threadsafe` | 2 | 1 |
+
+  - Apple's lists `OMIT_LOAD_EXTENSION`, `DEFAULT_MEMSTATUS=0` and `DQS=3`, as M1 found.
+  - Homebrew's lists `ENABLE_FTS5`, `ENABLE_MEMORY_MANAGEMENT`, `ENABLE_STAT4` and
+    `ENABLE_API_ARMOR`, among others.
+  - The lists are whole in the two `census-mac-*` files.
+- **Apple's library starts `DEFENSIVE` on.** Every other library measured, six of them, starts it
+  off. No option in Apple's list names it, so it's Apple's change, like its 21s.
+- **The constants:** 19, against Homebrew's header, with no fault. Step 5 doesn't check Apple's
+  header.
+- **No Valgrind run on the Mac,** and none was asked for.
+
+What it adds to the questions below:
+
+- **Question 9:** the plain binding's crash is measured. A Linux check of the convention is all
+  that would catch a binding that loses it.
+- **Question 12:**
+  - Apple's other four ops answer 0.
+  - Only `ENABLE_LOAD_EXTENSION` answers 21, and question 3's opt-in never reaches that call on
+    Apple's library. It has no `sqlite3_load_extension`, so the entry-point check refuses first.
+- **Question 3:** Homebrew's starts `ENABLE_LOAD_EXTENSION` at 0, as upstream's defaults do, and
+  Ubuntu's starts it at 1.
+- **New: `DEFENSIVE`'s start differs by library.** Under question 5's answer, a connection starts
+  as its library does. So on Apple's library a caller's `writable_schema` set does nothing by
+  default, and on the rest it works. The maintainer answered it as question 13, [below](#the-maintainers-answers-2026-11-16).
+
 ## The questions M4's plan must settle
 
 The maintainer answered nine of them on 2026-11-16: [the answers](#the-maintainers-answers-2026-11-16).
@@ -301,6 +370,12 @@ them, and its slice 0 writes them into the records each one names.
 | 9 | "Check plus check-variadic" | `test-conventions` asserts that the binding carries `(__varargs_after 2)` in the shape `(db op int int*)`. A `check-variadic` target removes it in a copy and watches that check fail, as chez-curl's does. |
 | 10 | "In the settings list" | The extension opt-in, `defensive` and the two DQS options join `open-database`'s settings list (ADR-0018) as new names, set at every open and checked by the set's own answer (Q8), with engine rows like M3 slice 5's. |
 
+**Question 13, from the Mac step, answered 2026-11-17:** `DEFENSIVE`'s start differs by library,
+1 on Apple's and 0 on the six others. The answer is **"Library's start, documented"**, the same
+rule as question 5's. `defensive` is set only where a caller names it in the settings list. The
+reference says Apple's library starts it on, so a caller who needs one behaviour everywhere names
+it. No call is added to an open.
+
 Not put to the maintainer:
 
 - **Q2** follows from Q1: `floor` has no FTS5, so a suite must pass there. The precedent is the
@@ -321,13 +396,14 @@ Not put to the maintainer:
   at every open (question 3). The rest of §2.5 holds everywhere measured: SQL's `load_extension()`
   stays refused, with the C call on or off.
 - **No contradiction of ADR-0001's consequence** that a binding without `__varargs_after` works on
-  x86_64: it did, on every library. Linux arm64 is unmeasured, and Apple arm64 is the Mac step's.
+  x86_64 and fails on Apple arm64. It worked on every x86_64 library. On Apple arm64 it crashed,
+  with both libraries (the Mac step). Linux arm64 is unmeasured.
 - **mac-d7's "For M4" line** holds: Apple's answer of 21 isn't a refusal SQLite names. The
   OMIT build shows that upstream doesn't give it at all.
 
 ## Not run
 
-- **The Mac step,** which needs the maintainer: [mac.md](mac.md).
+- **Valgrind on the Mac:** none was asked for. Neither was the constants check on Apple's header.
 - **Linux arm64:** no such machine here.
 - **The C oracle and `constants.c` on Ubuntu's library:** no Ubuntu header was fetched. Its
   `varargs.sps` verdicts and Valgrind run are here.
