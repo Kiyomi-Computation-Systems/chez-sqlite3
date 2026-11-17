@@ -167,6 +167,16 @@ told in chez-curl's `.plans/traps.md`.
   tracked, one of them `failed`, until `with-transaction` took, stepped and gave back each of its
   statements in one critical section. (M3 slice 4, chez-sqlite3)
 
+- **Unlocking an object that isn't locked can unpin another.** In Chez 10.4.0, `Sunlock_object`
+  (`c/gcwrapper.c`) decrements the segment's `must_mark` count whether or not the object was
+  locked, and a locked object outside the new space stays put only through that count. So an
+  extra `unlock-object` can let the collector move another locked object in the same segment.
+  - The first build of PR #30's gate unlocked a refused registration's callbacks, and its
+    builder's probe saw only that nothing raised.
+  - The review read the source. No move was shown: in the probe's setup even an unlocked
+    callable didn't move.
+  - Unlock exactly what was locked, once. (M3's Mac run, PR #30's review, chez-sqlite3)
+
 ## SQLite
 
 - **The `sqlite3` command can carry its own SQLite; Guix's does.** The brief's first evidence read
@@ -348,6 +358,30 @@ told in chez-curl's `.plans/traps.md`.
   answered INTERRUPT at 0 ms where it waited 1502 ms otherwise. A row about the wait sends its
   interrupts only once the wait has surely begun, as that row does from 200 ms.
   (M3 slice 6, chez-sqlite3)
+- **Apple's SQLite refuses `sqlite3_auto_extension`.** Apple's 3.51.0, on macOS 26.7.1, answered
+  21, `SQLITE_MISUSE`, for a real entry point. Upstream answers 21 there only for NULL, under API
+  armor. Seven suites register an authorizer through it to note every prepare. On Apple's
+  library they noted nothing:
+  - 19 rows failed;
+  - the reset rows and two kinds of checks passed without testing anything, since an empty tell
+    satisfies them.
+
+  Homebrew's 3.54.1, on the same Mac, registered it. The suites now name the tell unavailable on
+  21 alone, and drop only the checks that read it ([research/m3-mac/](research/m3-mac/)). Like
+  its 21 for `db_config`'s `ENABLE_LOAD_EXTENSION` ([mac-d7](research/mac-d7/)), it's Apple's
+  change. (M3's Mac run, chez-sqlite3)
+- **`ENABLE_MEMORY_MANAGEMENT` changes how far a NOMEM reaches.** A multi-row write gets a
+  statement journal (`usesStmtJournal = isMultiWrite && mayAbort`). On a NOMEM, SQLite rolls
+  back just that statement, and the whole transaction only if that rollback fails.
+  - An allocation past the heap limit calls `sqlite3_release_memory`, which frees page cache
+    only in a build with `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`.
+  - So in such a build, Homebrew's among them, the statement's rollback succeeds and the
+    transaction stays open. `test-transaction-nomem`'s S3, `insert into b select
+    randomblob(100000) from src limit 3`, ended the transaction at the floor, on 3.53.1 and on
+    CI's 3.54.1, and left it open on Homebrew's 3.54.1.
+  - That's reproduced on Linux: open in exactly the two of five 3.54.1 builds with the option.
+  - So the case is the build's, not the SQL's or the version's. Read autocommit after the
+    failure, as AGENTS.md says. (M3's Mac run, chez-sqlite3)
 
 ## Checks and environment
 

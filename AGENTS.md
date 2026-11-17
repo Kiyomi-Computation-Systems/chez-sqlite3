@@ -137,10 +137,12 @@
   makes while the mutex may be held is `__collect_safe` or takes none of
   SQLite's memory, or another thread's collection waits on it
   (`.plans/traps.md`).
-* Whether a failure ended a transaction can't be told from its code or its
-  SQL: the same NOMEM or FULL undid one statement or the whole transaction,
-  by one function call. Read `sqlite3_get_autocommit` after it
-  (`.plans/research/m3-plan/single/`).
+* Whether a failure ended a transaction can't be told from its code, its
+  SQL or its version: the same NOMEM or FULL undid one statement or the
+  whole transaction, by one function call, and one compile option,
+  `ENABLE_MEMORY_MANAGEMENT`, moves a statement's NOMEM from one to the
+  other. Read `sqlite3_get_autocommit` after it
+  (`.plans/research/m3-plan/single/`, `.plans/research/m3-mac/`).
 * A busy wait's length is the build's: one without `nanosleep` sleeps whole
   seconds, so a timeout under 1000 ms answers BUSY at once. A row that times
   a wait uses a timeout of at least 1500 ms and asserts at least 1000 ms,
@@ -209,6 +211,9 @@
   fuels (`.plans/traps.md`). A stand-in a sweep reads spins before the
   effect it notes: one that only notes may cost no tick, and then no fuel
   splits it from the code before it (`.plans/traps.md`).
+* Unlock exactly what was locked, once: Chez 10.4.0's `unlock-object` of an
+  object that isn't locked still decrements its segment's count, and can
+  unpin another locked object there (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,

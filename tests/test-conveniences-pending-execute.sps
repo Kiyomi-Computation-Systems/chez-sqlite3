@@ -27,6 +27,12 @@
 ;;;                statement given back, ready, by the call's claim of whatever
 ;;;                position is next
 ;;;
+;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
+;;; there is no tell. A row whose every check needs it is skipped, through
+;;; (conveniences-pending)'s tell-available!; a row with one check that
+;;; reads it runs its others, through tell-kept?. Either prints UNAVAILABLE,
+;;; so nothing is unavailable silently.
+;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise (AGENTS.md).
 (import (rnrs)
@@ -64,32 +70,45 @@
   'loaded
   public-load)
 
-(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension"
-  'registered
-  (tell-registered))
+;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
+;; The tell's registration, which every row that depends on the tell is
+;; gated by, through tell-available! or tell-kept?.
+(define registration (tell-registered))
+
+(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
+  'registered-or-refused
+  (if (tell-answered? registration) 'registered-or-refused registration))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts
   (native-counts))
 
-(test-equal "the tell: one execute! outside any engine inserts its row once, the authorizer noting its insert prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed"
-  (list 'no-value 1 '(1 2 3 9) '(("insert into t values (?)" . ready)) 1 zero-counts)
-  (guard (e (#t (list 'raised (describe e))))
-    (clean-call 'execute!)))
+(let* ((name "the tell: one execute! outside any engine inserts its row once, the authorizer noting its insert prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed")
+       (noted? (tell-kept? registration name "count of the prepares the authorizer noted")))
+  (test-equal name
+    (list 'no-value (tell-noted noted? 1) '(1 2 3 9) '(("insert into t values (?)" . ready)) 1 zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (clean-call 'execute! noted?))))
 
-(test-equal "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"
-  (list '() 'interleavings-reached zero-counts)
-  (guard (e (#t (list 'raised (describe e))))
-    (reported 'execute! (sweep 'execute! 'every) past-a-fuel both-a-fuel)))
+(let ((name "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
+  (tell-available! registration name)
+  (test-equal name
+    (list '() 'interleavings-reached zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (reported 'execute! (sweep 'execute! 'every) past-a-fuel both-a-fuel))))
 
-(test-equal "a timer handler that raises, at every tick from 1 until execute! completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out; nothing is counted once each connection is closed"
-  (list '() 'some-raised zero-counts)
-  (guard (e (#t (list 'raised (describe e))))
-    (timer-reported 'execute! (timer-sweep 'execute!))))
+(let* ((name "a timer handler that raises, at every tick from 1 until execute! completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out; nothing is counted once each connection is closed")
+       (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))
+  (test-equal name
+    (list '() 'some-raised zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (timer-reported 'execute! (timer-sweep 'execute! prepares?)))))
 
-(test-equal "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"
-  '(reset 0)
-  (tell-reset))
+(let ((name "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"))
+  (tell-available! registration name)
+  (test-equal name
+    '(reset 0)
+    (tell-reset)))
 
 (test-equal "every count is zero at the end"
   zero-counts
