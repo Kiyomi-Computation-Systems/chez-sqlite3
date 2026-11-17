@@ -16,6 +16,8 @@
   Amended 2026-11-17 in M4 slice 1, and accepted by the maintainer that day ("Accept"): the
   cell's sentinel, the core's constant, and a code that names no error, "Assertion violation"
   ([amendment](#amendment-2026-11-17-the-sentinel-and-a-code-that-names-no-error-m4-slice-1)).
+  Amended 2026-11-17 in M4's close fix, proposed: an extension's open work and the close
+  ([amendment](#amendment-2026-11-17-an-extensions-open-work-and-the-close-m4s-close-fix)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
 - **Settles:** brief §2.5 and §2.8, as the M4 plan amends them
@@ -309,3 +311,11 @@ code's rule is the maintainer's: "Assertion violation" (2026-11-17).
   read from the connection, `(not-an-error 0)`, does not meet.
 - **This narrows "another code raises `&sqlite-error`"** in decision 3, in ADR-0018's amendment
   of 2026-11-17, and in the global constraints, which now say so.
+
+## Amendment, 2026-11-17: an extension's open work and the close (M4's close fix)
+
+Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). A loaded extension's virtual tables close as SQLite's own modules do: `sqlite3_close`
+disconnects them first ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). A statement, a
+blob or a backup an extension leaves open on the connection makes `close-database!` refuse, and is
+the extension's, with what SQLite's refused close does to it: the close vouches only for what
+chez-sqlite3 tracks ("Vouch only for ours"). Slice 4's Extensions entry says so.

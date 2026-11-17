@@ -36,6 +36,8 @@
   ([amendment](#amendment-2026-11-17-the-open-risk-met-and-the-gates-no-row-read-m3s-closing-review)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, suites and extension
   ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
+  Amended 2026-11-17 in M4's close fix, proposed: decision 5's statements check after a refused close
+  ([amendment](#amendment-2026-11-17-the-statements-check-after-a-refused-close-m4s-close-fix)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -765,3 +767,10 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
   unavailable, never silently, as the memory check names itself where the count is off. They
   choose them by native's record of `sqlite3_load_extension`, and assert the named condition
   there for real.
+
+## Amendment, 2026-11-17: the statements check after a refused close (M4's close fix)
+
+Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 5's `sqlite3_next_stmt` check runs after a refused `sqlite3_close`, not before each
+close ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The gate keeps its property:
+SQLite refuses a close while any statement is left, so no close succeeds beside a leaked one, and
+the refusal names the count. `test-connection-close` is in `MEMORY_SUITES_1`.

@@ -18,6 +18,8 @@
   Amended 2026-11-16 in M3 slice 3, and accepted by the maintainer that day: the internals as
   built, the script's prepare, and the call's check
   ([amendment](#amendment-2026-11-16-the-internals-m3-slice-3-built)).
+  Amended 2026-11-17 in M4's close fix, proposed: decision 8 in the close's new order
+  ([amendment](#amendment-2026-11-17-the-closes-order-m4s-close-fix)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every prepared statement
 - **Settles:** brief §4's statements; how [ADR-0010](0010-a-connection-belongs-to-its-thread.md)'s
@@ -422,3 +424,10 @@ reports and its adversarial review ([research/m3-slice-3/](../research/m3-slice-
     (`busy-reset.sps`);
   - ten held statements took 70 lookaside slots with no flags, and none with `PERSISTENT`
     (`lookaside-tails.sps`).
+
+## Amendment, 2026-11-17: the close's order (M4's close fix)
+
+Proposed in M4's close fix [its mutation log](../m4-close-fix-mutation-log.md), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). Decision 8's "then `sqlite3_next_stmt` must find none, and `sqlite3_close` runs" now reads in
+[ADR-0012](0012-explicit-close-and-the-handle.md)'s amended order: the statements finalized, then
+`sqlite3_close`, and `sqlite3_next_stmt` only after a refusal. A statement the record doesn't hold
+is a chez-sqlite3 defect or foreign code's, and the close vouches only for those it holds.
