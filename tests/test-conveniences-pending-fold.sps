@@ -33,8 +33,10 @@
 ;;; holds. Its code is unchanged by part D, and the row holds it so.
 ;;;
 ;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
-;;; there is no tell, so each row that depends on it prints UNAVAILABLE and
-;;; is skipped, never passed: (conveniences-pending)'s tell-available!.
+;;; there is no tell. A row whose every check needs it is skipped, through
+;;; (conveniences-pending)'s tell-available!; a row with one check that
+;;; reads it runs its others, through tell-kept?. Either prints UNAVAILABLE,
+;;; so nothing is unavailable silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise (AGENTS.md).
@@ -75,7 +77,7 @@
 
 ;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
 ;; The tell's registration, which every row that depends on the tell is
-;; gated by, through tell-available!.
+;; gated by, through tell-available! or tell-kept?.
 (define registration (tell-registered))
 
 (test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
@@ -86,12 +88,12 @@
   zero-counts
   (native-counts))
 
-(let ((name "the tell: one query-fold outside any engine answers the sum of t's rows, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed"))
-  (tell-available! registration name)
+(let* ((name "the tell: one query-fold outside any engine answers the sum of t's rows, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed")
+       (noted? (tell-kept? registration name "count of the prepares the authorizer noted")))
   (test-equal name
-    (list 6 1 '(1 2 3) '(("select x from t where x > ?" . ready)) 1 zero-counts)
+    (list 6 (tell-noted noted? 1) '(1 2 3) '(("select x from t where x > ?" . ready)) 1 zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (clean-call 'query-fold))))
+      (clean-call 'query-fold noted?))))
 
 (let ((name "query-fold's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the sum or &sqlite-closed from query-fold, or a re-entry's refusal; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, an expiry inside the fold's wind having finalized it; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
   (tell-available! registration name)
@@ -100,12 +102,12 @@
     (guard (e (#t (list 'raised (describe e))))
       (reported 'query-fold (sweep 'query-fold 'every) past-a-fuel both-a-fuel))))
 
-(let ((name "a timer handler that raises, at every tick from 1 until query-fold completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, the raise having finalized it; nothing is counted once each connection is closed"))
-  (tell-available! registration name)
+(let* ((name "a timer handler that raises, at every tick from 1 until query-fold completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, the raise having finalized it; nothing is counted once each connection is closed")
+       (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))
   (test-equal name
     (list '() 'some-raised zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (timer-reported 'query-fold (timer-sweep 'query-fold)))))
+      (timer-reported 'query-fold (timer-sweep 'query-fold prepares?)))))
 
 (let ((name "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"))
   (tell-available! registration name)

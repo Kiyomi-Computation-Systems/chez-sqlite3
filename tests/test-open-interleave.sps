@@ -67,9 +67,12 @@
 ;;; raise nothing. The entry point is unregistered, and both unlocked, at
 ;;; the end. A libsqlite3 can refuse the registration: Apple's 3.51.0
 ;;; answers 21, SQLITE_MISUSE, for an entry point upstream takes. With no
-;;; tell, nothing is noted, so each row that reads the notes, or raises
-;;; SIGINT from the callbacks, goes through tell-available!, which prints
-;;; UNAVAILABLE and skips it: never passed (ADR-0005, amended).
+;;; tell, nothing is noted, and nothing is unavailable silently (ADR-0005,
+;;; amended): a row whose every check needs the tell, or that raises SIGINT
+;;; from the callbacks, goes through tell-available!, which prints
+;;; UNAVAILABLE and skips it; a row with checks that read the notes goes
+;;; through tell-kept?, which prints UNAVAILABLE for them, and the row runs
+;;; its others.
 ;;;
 ;;; Which fuels lie before the call's first expression is measured, not
 ;;; assumed: at each fuel, a control takes R and resumes it to its end
@@ -227,50 +230,75 @@
 
 ;; registered : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
 ;; The entry point registered, the two callbacks locked, for every new
-;; connection; or the code sqlite3_auto_extension refused it with, the
-;; callbacks unlocked again, since nothing will call them.
+;; connection; or the code sqlite3_auto_extension answered instead. The
+;; callbacks stay locked then, never called: Chez 10.4.0's unlock of an
+;; object not locked still decrements its segment's count, which can unpin
+;; another object there.
 (define registered
   (guard (e (#t (list 'raised (describe e))))
     (lock-object authorizer)
     (lock-object entry-point)
     (let ((rc (auto-extension (foreign-callable-entry-point entry-point))))
-      (if (eqv? rc 0)
-          'registered
-          (begin
-            (unlock-object entry-point)
-            (unlock-object authorizer)
-            (list 'auto-extension-answered rc))))))
+      (if (eqv? rc 0) 'registered (list 'auto-extension-answered rc)))))
 
-;; tell-refused : Any -> (U Integer #f)
-;; The code of ANSWER, registered's, when it is a refusal, a nonzero
-;; integer; else #f.
-(define (tell-refused answer)
-  (and (pair? answer) (eq? (car answer) 'auto-extension-answered)
-       (pair? (cdr answer)) (null? (cddr answer))
-       (let ((rc (cadr answer)))
-         (and (integer? rc) (exact? rc) (not (eqv? rc 0)) rc))))
+;; sqlite-misuse : Natural
+;; SQLITE_MISUSE, 21, the one refusal: Apple's 3.51.0 answers it for an
+;; entry point upstream takes, where upstream answers it only for NULL.
+;; Any other code, SQLITE_NOMEM's 7 from a failed realloc or whatever
+;; sqlite3_initialize failed with, is a failure, which nothing gates.
+(define sqlite-misuse 21)
+
+;; tell-refused? : Any -> Boolean
+;; Whether ANSWER, registered's, is the refusal.
+(define (tell-refused? answer)
+  (equal? answer (list 'auto-extension-answered sqlite-misuse)))
 
 ;; tell-answered? : Any -> Boolean
-;; Whether ANSWER, registered's, is registered, or a refusal with its code:
-;; not a raise, nor anything else.
+;; Whether ANSWER, registered's, is registered, or the refusal: not another
+;; code, a raise, nor anything else.
 (define (tell-answered? answer)
-  (or (eq? answer 'registered) (and (tell-refused answer) #t)))
+  (or (eq? answer 'registered) (tell-refused? answer)))
 
-;; tell-available! : Any String -> Void
-;; The gate of a row that depends on the tell, NAME: where ANSWER,
-;; registered's, is a refusal, prints that the row is unavailable, and
-;; skips it, so it is never passed (ADR-0005, amended). Anything else runs
-;; the row: registered, or a raise, which the registration row fails.
-(define (tell-available! answer name)
-  (let ((rc (tell-refused answer)))
-    (when rc
+;; unavailable! : Any String (U String #f) -> Boolean
+;; Whether ANSWER, registered's, is the refusal; then the row NAME, or its
+;; CHECK, the one part that reads the tell, is printed unavailable, so it
+;; is never passed unseen (ADR-0005, amended). The one place both gates
+;; below decide.
+(define (unavailable! answer name check)
+  (let ((refused (tell-refused? answer)))
+    (when refused
       (display "UNAVAILABLE ")
       (display name)
+      (when check
+        (display ", its ")
+        (display check))
       (display ": this libsqlite3 refused sqlite3_auto_extension (")
-      (display rc)
+      (display sqlite-misuse)
       (display "), so the tell can't note a prepare")
-      (newline)
-      (test-skip name))))
+      (newline))
+    refused))
+
+;; tell-available! : Any String -> Void
+;; The gate of a row NAME that needs the tell whole: where ANSWER,
+;; registered's, is the refusal, the row is printed unavailable and
+;; skipped, never passed. Anything else runs it.
+(define (tell-available! answer name)
+  (when (unavailable! answer name #f)
+    (test-skip name)))
+
+;; tell-kept? : Any String String -> Boolean
+;; The gate of CHECK, the one part of the row NAME that reads the tell: #f
+;; where ANSWER, registered's, is the refusal, CHECK printed unavailable,
+;; the row's other checks run; else #t, every check run.
+(define (tell-kept? answer name check)
+  (not (unavailable! answer name check)))
+
+;; tell-noted : Boolean Any -> Any
+;; VALUE, read from the callbacks' notes, where its check is KEPT?; else
+;; the symbol unavailable. A row puts it in its expected value and its
+;; actual alike, so it asserts the rest of its output whole.
+(define (tell-noted kept? value)
+  (if kept? value 'unavailable))
 
 ;; --- helpers ------------------------------------------------------------------------------
 
@@ -689,10 +717,10 @@
   zero-counts
   (native-counts))
 
-(let ((name "the tell: an open with the two settings is noted once, then each PRAGMA it prepares, in the plan's order, busy-timeout's first, its value and none for a read"))
-  (tell-available! registered name)
+(let* ((name "the tell: an open with the two settings is noted once, then each PRAGMA it prepares, in the plan's order, busy-timeout's first, its value and none for a read")
+       (noted? (tell-kept? registered name "count of the opens and the PRAGMAs the callbacks noted")))
   (test-equal name
-    (list 1 plan as-asked zero-counts)
+    (list (tell-noted noted? 1) (tell-noted noted? plan) as-asked zero-counts)
     (begin
       (set! noted '())
       (let* ((db (open-database ":memory:" settings))
@@ -700,7 +728,8 @@
              (c (latest-of (handle-of db) conns))
              (read (readings db)))
         (close-answer db)
-        (list (length conns) (and c (cadr c)) read (native-counts))))))
+        (list (tell-noted noted? (length conns)) (tell-noted noted? (and c (cadr c))) read
+              (native-counts))))))
 
 (let ((name "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted"))
   (tell-available! registered name)
@@ -740,13 +769,15 @@
 ;; connection; the second anything else, or
 ;; noting what it may not; a new one where the control made none; a
 ;; connection's PRAGMAs no prefix of the plan, or one twice; anything
-;; counted after. A remainder taken while open-database's connection was
+;; counted after. Where NOTED? is #f, the checks that read the notes are
+;; dropped: that the second notes nothing, that only a whole new call
+;; opens a connection, and each connection's PRAGMAs. A remainder taken while open-database's connection was
 ;; still open, counted at the expiry beyond the counts at the start, lies
 ;; before the failure's close, so
 ;; the second resume is refused, there or earlier, never the mismatch
 ;; again: that comes only from one taken past the close. An expiry closes
 ;; call-with-database's connection, so none is counted at its expiries.
-(define (failing-twice verb fuel new?)
+(define (failing-twice verb fuel new? noted?)
   (begin
     (set! noted '())
     (let* ((start (native-counts))
@@ -765,7 +796,8 @@
                                  (cond ((null? rest) k)
                                        ((eq? (car (car rest)) 'open) (loop (cdr rest) (+ k 1)))
                                        (else (loop (cdr rest) k)))))
-                 (quiet (and (eqv? (cadr second) 0) (eq? (caddr second) 'counts-kept)))
+                 (quiet (and (or (not noted?) (eqv? (cadr second) 0))
+                             (eq? (caddr second) 'counts-kept)))
                  (kind (cond ((and (equal? (car second) (refused-answer verb)) quiet) 'refused)
                              ((and (equal? (car second) (mismatched verb)) quiet) 'again)
                              ((and (equal? (car second) (mismatched verb)) (eqv? opened-since 1)
@@ -778,10 +810,11 @@
                         (and (eq? verb 'call-with-database) (equal? first (refused-answer verb))))
               (deviate! (list 'first first)))
             (when (eq? kind 'other) (deviate! (list 'second second opened-since)))
-            (when (and (eq? kind 'new) (not new?)) (deviate! (list 'new-where-the-control-made-none)))
+            (when (and noted? (eq? kind 'new) (not new?))
+              (deviate! (list 'new-where-the-control-made-none)))
             (when (and open-at-expiry (not (eq? kind 'refused)))
               (deviate! (list 'open-at-the-expiry-but-not-refused kind)))
-            (let loop ((rest conns))
+            (let loop ((rest (if noted? conns '())))
               (unless (null? rest)
                 (unless (prefix? (cadr (car rest)) failing-plan)
                   (deviate! (list 'not-the-plan (cadr (car rest)))))
@@ -789,17 +822,18 @@
             (unless (equal? (native-counts) start) (deviate! (list 'counts start (native-counts))))
             (list kind (reverse deviations)))))))
 
-;; failing-sweep : Symbol -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)) Counts)
-;; failing-twice at every fuel from 1 until the call completes without
-;; expiring, at most 20000, a whole new call allowed where the succeeding
-;; call's control made one, at the fuel or the one before, as sweep allows
-;; it: the checks run in one section, which spends no ticks, so the two
-;; calls' ticks before their claims are alike. That fuel; each fuel's
-;; deviations; how many fuels each kind came at; and the counts after.
-(define (failing-sweep verb)
+;; failing-sweep : Symbol Boolean -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)) Counts)
+;; failing-twice, NOTED? given it, at every fuel from 1 until the call
+;; completes without expiring, at most 20000, a whole new call allowed
+;; where the succeeding call's control made one, at the fuel or the one
+;; before, as sweep allows it: the checks run in one section, which spends
+;; no ticks, so the two calls' ticks before their claims are alike. That
+;; fuel; each fuel's deviations; how many fuels each kind came at; and the
+;; counts after.
+(define (failing-sweep verb noted?)
   (let loop ((fuel 1) (deviations '()) (kinds '()) (was-new #f))
     (let* ((made (begin (quieted!) (control verb fuel)))
-           (t (failing-twice verb fuel (or (eq? made #t) was-new))))
+           (t (failing-twice verb fuel (or (eq? made #t) was-new) noted?)))
       (cond ((eq? t 'completed) (list fuel (reverse deviations) kinds (native-counts)))
             ((>= fuel 20000) (list 'no-completion-by-20000 (reverse deviations) kinds (native-counts)))
             (else
@@ -822,17 +856,17 @@
         (let ((p (assq 'refused (caddr run)))) (if (and p (> (cdr p) 0)) 'some-refused 'none-refused))
         (cadddr run)))
 
-(let ((name "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only where the control makes a whole new call does it open a connection, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after"))
-  (tell-available! registered name)
+(let* ((name "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only where the control makes a whole new call does it open a connection, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after")
+       (noted? (tell-kept? registered name "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")))
   (test-equal name
     (list '() 'some-refused zero-counts)
-    (failing-reported 'open-database (failing-sweep 'open-database))))
+    (failing-reported 'open-database (failing-sweep 'open-database noted?))))
 
-(let ((name "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, or raises the mismatch again, noting nothing; only where the control makes a whole new call does it open a connection; nothing is counted after"))
-  (tell-available! registered name)
+(let* ((name "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, or raises the mismatch again, noting nothing; only where the control makes a whole new call does it open a connection; nothing is counted after")
+       (noted? (tell-kept? registered name "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")))
   (test-equal name
     (list '() 'some-refused zero-counts)
-    (failing-reported 'call-with-database (failing-sweep 'call-with-database))))
+    (failing-reported 'call-with-database (failing-sweep 'call-with-database noted?))))
 
 ;; --- an interrupt that escapes, at each of call-with-database's sections --------------------
 

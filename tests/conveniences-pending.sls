@@ -46,9 +46,12 @@
 ;;; them last, through tell-reset, as tests/test-open-interleave.sps does.
 ;;; A libsqlite3 can refuse the registration: Apple's 3.51.0 answers 21,
 ;;; SQLITE_MISUSE, for an entry point upstream takes. With no tell, no
-;;; prepare is noted, so each row that reads the notes, or raises SIGINT
-;;; from the authorizer, goes through tell-available!, which prints
-;;; UNAVAILABLE and skips it: never passed (ADR-0005, amended).
+;;; prepare is noted, and nothing is unavailable silently (ADR-0005,
+;;; amended): a row whose every check needs the tell, or that raises
+;;; SIGINT from the authorizer, goes through tell-available!, which prints
+;;; UNAVAILABLE and skips it; a row with one check that reads the notes
+;;; goes through tell-kept?, which prints UNAVAILABLE for that check, and
+;;; the row runs its others.
 ;;;
 ;;; The control: at each fuel, on a connection whose statement cache holds
 ;;; none, so every call prepares its statement, R is taken and resumed to its
@@ -107,8 +110,9 @@
 ;;; sqlite3_auto_extension, sqlite3_reset_auto_extension, sqlite3_trace_v2 and
 ;;; C's raise after the load, each under a guard of its own.
 (library (conveniences-pending)
-  (export public-load tell-registered tell-answered? tell-available! tell-reset zero-counts
-          clean-call sweep reported timer-sweep timer-reported taken-sweep keyboard-in)
+  (export public-load tell-registered tell-answered? tell-available! tell-kept? tell-noted
+          tell-reset zero-counts clean-call sweep reported timer-sweep timer-reported
+          taken-sweep keyboard-in)
   (import (rnrs)
           (rnrs eval)
           (only (srfi :64) test-skip)
@@ -261,56 +265,82 @@
 
   ;; tell-registered : -> (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
   ;; The entry point registered, the two callbacks locked, for every new
-  ;; connection; or the code sqlite3_auto_extension refused it with, the
-  ;; callbacks unlocked again, since nothing will call them. Raises nothing.
+  ;; connection; or the code sqlite3_auto_extension answered instead. The
+  ;; callbacks stay locked then, never called: Chez 10.4.0's unlock of an
+  ;; object not locked still decrements its segment's count, which can unpin
+  ;; another object there. Raises nothing.
   (define (tell-registered)
     (guard (e (#t (list 'raised (describe e))))
       (lock-object authorizer)
       (lock-object entry-point)
       (let ((rc (auto-extension (foreign-callable-entry-point entry-point))))
-        (if (eqv? rc 0)
-            'registered
-            (begin
-              (unlock-object entry-point)
-              (unlock-object authorizer)
-              (list 'auto-extension-answered rc))))))
+        (if (eqv? rc 0) 'registered (list 'auto-extension-answered rc)))))
 
-  ;; tell-refused : Any -> (U Integer #f)
-  ;; The code of ANSWER, tell-registered's, when it is a refusal, a nonzero
-  ;; integer; else #f.
-  (define (tell-refused answer)
-    (and (pair? answer) (eq? (car answer) 'auto-extension-answered)
-         (pair? (cdr answer)) (null? (cddr answer))
-         (let ((rc (cadr answer)))
-           (and (integer? rc) (exact? rc) (not (eqv? rc 0)) rc))))
+  ;; sqlite-misuse : Natural
+  ;; SQLITE_MISUSE, 21, the one refusal: Apple's 3.51.0 answers it for an
+  ;; entry point upstream takes, where upstream answers it only for NULL.
+  ;; Any other code, SQLITE_NOMEM's 7 from a failed realloc or whatever
+  ;; sqlite3_initialize failed with, is a failure, which nothing gates.
+  (define sqlite-misuse 21)
+
+  ;; tell-refused? : Any -> Boolean
+  ;; Whether ANSWER, tell-registered's, is the refusal.
+  (define (tell-refused? answer)
+    (equal? answer (list 'auto-extension-answered sqlite-misuse)))
 
   ;; tell-answered? : Any -> Boolean
-  ;; Whether ANSWER, tell-registered's, is registered, or a refusal with its
-  ;; code: not a raise, nor anything else.
+  ;; Whether ANSWER, tell-registered's, is registered, or the refusal: not
+  ;; another code, a raise, nor anything else.
   (define (tell-answered? answer)
-    (or (eq? answer 'registered) (and (tell-refused answer) #t)))
+    (or (eq? answer 'registered) (tell-refused? answer)))
 
-  ;; tell-available! : Any String -> Void
-  ;; The gate of a row that depends on the tell, NAME: where ANSWER,
-  ;; tell-registered's, is a refusal, prints that the row is unavailable,
-  ;; and skips it, so it is never passed (ADR-0005, amended). Anything else
-  ;; runs the row: registered, or a raise, which the registration row fails.
-  (define (tell-available! answer name)
-    (let ((rc (tell-refused answer)))
-      (when rc
+  ;; unavailable! : Any String (U String #f) -> Boolean
+  ;; Whether ANSWER, tell-registered's, is the refusal; then the row NAME,
+  ;; or its CHECK, the one part that reads the tell, is printed unavailable,
+  ;; so it is never passed unseen (ADR-0005, amended). The one place both
+  ;; gates below decide.
+  (define (unavailable! answer name check)
+    (let ((refused (tell-refused? answer)))
+      (when refused
         (display "UNAVAILABLE ")
         (display name)
+        (when check
+          (display ", its ")
+          (display check))
         (display ": this libsqlite3 refused sqlite3_auto_extension (")
-        (display rc)
+        (display sqlite-misuse)
         (display "), so the tell can't note a prepare")
-        (newline)
-        (test-skip name))))
+        (newline))
+      refused))
+
+  ;; tell-available! : Any String -> Void
+  ;; The gate of a row NAME that needs the tell whole: where ANSWER,
+  ;; tell-registered's, is the refusal, the row is printed unavailable and
+  ;; skipped, never passed. Anything else runs it.
+  (define (tell-available! answer name)
+    (when (unavailable! answer name #f)
+      (test-skip name)))
+
+  ;; tell-kept? : Any String String -> Boolean
+  ;; The gate of CHECK, the one part of the row NAME that reads the tell:
+  ;; #f where ANSWER, tell-registered's, is the refusal, CHECK printed
+  ;; unavailable, the row's other checks run; else #t, every check run.
+  (define (tell-kept? answer name check)
+    (not (unavailable! answer name check)))
+
+  ;; tell-noted : Boolean Any -> Any
+  ;; VALUE, read from the tell's notes, where its check is KEPT?; else the
+  ;; symbol unavailable. A row puts it in its expected value and its actual
+  ;; alike, so it asserts the rest of its output whole.
+  (define (tell-noted kept? value)
+    (if kept? value 'unavailable))
 
   ;; tell-reset : -> (U (List 'reset Natural) (List 'raised Any))
   ;; The entry point unregistered and the callbacks unlocked; then how many
   ;; prepares a fresh connection's select noted: 0, the tell gone. Harmless
-  ;; after a refusal: no entry point of this library is registered, and
-  ;; unlocking an unlocked object does nothing in Chez.
+  ;; after a refusal: no entry point of this library is registered, and the
+  ;; callbacks, which tell-registered locked all the same, are unlocked
+  ;; once each. Call it once: a second unlock is of objects not locked.
   (define (tell-reset)
     (guard (e (#t (list 'raised (describe e))))
       (reset-auto-extension)
@@ -522,16 +552,16 @@
 
   ;; --- one clean call -----------------------------------------------------------------------
 
-  ;; clean-call : Symbol -> (List Any Natural (Listof Any) (Listof (Pairof String Symbol)) Natural Counts)
+  ;; clean-call : Symbol Boolean -> (List Any (U Natural 'unavailable) (Listof Any) (Listof (Pairof String Symbol)) Natural Counts)
   ;; VERB's call, once, outside any engine, on a fresh connection: its
-  ;; answer, the prepares the authorizer noted, t's rows, what the
-  ;; connection tracks and caches, and the counts once it is closed. The
-  ;; tell's own row.
-  (define (clean-call verb)
+  ;; answer, the prepares the authorizer noted, or unavailable unless
+  ;; NOTED?, t's rows, what the connection tracks and caches, and the
+  ;; counts once it is closed. The tell's own row.
+  (define (clean-call verb noted?)
     (let* ((c (call-of verb))
            (db (fresh '()))
            (answer ((thunk-of c db)))
-           (prepares (noted-count (call-kind c)))
+           (prepares (tell-noted noted? (noted-count (call-kind c))))
            (rows (tier-run db "select x from t order by x"))
            (tracked (states db))
            (cached (database-cache-count db)))
@@ -830,16 +860,17 @@
   ;; given back is no longer the call's: a handler that takes it from the
   ;; cache, then raises, keeps it as it took it.
 
-  ;; timer-trial : Call Positive-Integer -> (List Boolean (Listof Any))
+  ;; timer-trial : Call Positive-Integer Boolean -> (List Boolean (Listof Any))
   ;; C on a fresh connection, a timer of TICKS ticks set just before the
   ;; call, whose handler raises the symbol timer once, the timer cleared
   ;; after: whether the handler ran; and what deviated. The call answers its
   ;; answer, or the raise reaches the caller, the very symbol; the
-  ;; statement was prepared at most once, its effect made at most once; no
+  ;; statement was prepared at most once, as the authorizer noted, checked
+  ;; only where PREPARES?, its effect made at most once; no
   ;; statement is tracked outside the cache, none at a row, the cache holding
   ;; the call's statement, ready, or none, the raise before its check-out;
   ;; nothing is counted once the connection is closed.
-  (define (timer-trial c ticks)
+  (define (timer-trial c ticks prepares?)
     (let* ((start (native-counts))
            (db (fresh '()))
            (fired #f)
@@ -869,7 +900,8 @@
       (define (deviate! d) (set! deviations (cons d deviations)))
       (unless (or (equal? answer (car (call-answers c))) (eq? answer 'timer))
         (deviate! (list 'answer answer)))
-      (unless (<= prepares (call-prepares c)) (deviate! (list 'prepares prepares)))
+      (unless (or (not prepares?) (<= prepares (call-prepares c)))
+        (deviate! (list 'prepares prepares)))
       (unless (and (list? rows) (exists (lambda (one) (equal? rows (append '(1 2 3) one)))
                                         (cons '() (made-by-one c))))
         (deviate! (list 'rows rows)))
@@ -880,15 +912,16 @@
       (unless (equal? counts start) (deviate! (list 'counts start counts)))
       (list fired (reverse deviations))))
 
-  ;; timer-sweep : Symbol -> (List Any Natural (Listof Any) Counts)
+  ;; timer-sweep : Symbol Boolean -> (List Any Natural (Listof Any) Counts)
   ;; VERB's call under timer-trial at every tick from 1 until the call
-  ;; completes before the handler runs, at most 20000: that tick, or
-  ;; no-completion-by-20000; how many ticks the handler raised at; each
-  ;; tick's deviations; and the counts after.
-  (define (timer-sweep verb)
+  ;; completes before the handler runs, at most 20000, its prepares checked
+  ;; only where PREPARES?: that tick, or no-completion-by-20000; how many
+  ;; ticks the handler raised at; each tick's deviations; and the counts
+  ;; after.
+  (define (timer-sweep verb prepares?)
     (let ((c (call-of verb)))
       (let loop ((ticks 1) (raised 0) (deviations '()))
-        (let* ((t (timer-trial c ticks))
+        (let* ((t (timer-trial c ticks prepares?))
                (deviations (if (null? (cadr t)) deviations (cons (list ticks (cadr t)) deviations))))
           (cond ((not (car t)) (list ticks raised (reverse deviations) (native-counts)))
                 ((>= ticks 20000) (list 'no-completion-by-20000 raised (reverse deviations) (native-counts)))

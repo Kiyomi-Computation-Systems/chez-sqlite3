@@ -1,12 +1,15 @@
 #!/bin/sh
 # Reproduces, on Linux, the Mac's S3 case in tests/test-transaction-nomem.sps:
-# SQLite 3.54.1's amalgamation compiled four ways, the suite run on each.
+# SQLite 3.54.1's amalgamation compiled six ways, the suite run on each.
 #
-#   defaults   CI's current lane's line (scripts/ci/build-sqlite.sh)
-#   brew-all   that line plus every option Homebrew's 3.54.1 lists and the
-#              lane's lacks (out of census-mac-brew-3.54.1.txt, M4's pre-work)
-#   mm         plus -DSQLITE_ENABLE_MEMORY_MANAGEMENT alone
-#   stat4      plus -DSQLITE_ENABLE_STAT4 alone
+#   defaults     CI's current lane's line (scripts/ci/build-sqlite.sh)
+#   brew-all     that line plus every option Homebrew's 3.54.1 lists and the
+#                lane's lacks (census-mac-brew-3.54.1.txt, in M4's pre-work)
+#   brew-no-mm   brew-all without -DSQLITE_ENABLE_MEMORY_MANAGEMENT
+#   mm           the lane's line plus -DSQLITE_ENABLE_MEMORY_MANAGEMENT alone
+#   stat4        the lane's line plus -DSQLITE_ENABLE_STAT4 alone
+#   mm-page64k   mm plus -DSQLITE_DEFAULT_PAGE_SIZE=65536, which the PR's
+#                review found takes S2's, R3's, R4's and [F]'s NOMEM away
 #
 # Usage, inside scripts/guix-env, from the repository's root:
 #   sh .plans/research/m3-mac/memory-management.sh AMALGAMATION-DIR [SUITE]
@@ -18,11 +21,12 @@ set -eu
 a=$1
 suite=${2:-tests/test-transaction-nomem.sps}
 b=build/s3-brew
-all="-DSQLITE_ENABLE_API_ARMOR -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBSTAT_VTAB
+no_mm="-DSQLITE_ENABLE_API_ARMOR -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBSTAT_VTAB
  -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_GEOPOLY
- -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_MEMORY_MANAGEMENT -DSQLITE_ENABLE_PERCENTILE
+ -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_PERCENTILE
  -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STAT4
  -DSQLITE_ENABLE_UNLOCK_NOTIFY -DSQLITE_MAX_VARIABLE_NUMBER=250000 -DSQLITE_USE_URI=1"
+all="$no_mm -DSQLITE_ENABLE_MEMORY_MANAGEMENT"
 build() {
   n=$1
   shift
@@ -34,9 +38,12 @@ build() {
 build defaults
 # shellcheck disable=SC2086
 build brew-all $all
+# shellcheck disable=SC2086
+build brew-no-mm $no_mm
 build mm -DSQLITE_ENABLE_MEMORY_MANAGEMENT
 build stat4 -DSQLITE_ENABLE_STAT4
-for n in defaults brew-all mm stat4; do
+build mm-page64k -DSQLITE_ENABLE_MEMORY_MANAGEMENT -DSQLITE_DEFAULT_PAGE_SIZE=65536
+for n in defaults brew-all brew-no-mm mm stat4 mm-page64k; do
   echo "== $n"
   C_INCLUDE_PATH=$PWD/$b/$n/include CHEZ_SQLITE3_LIBRARY=$PWD/$b/$n/lib/libsqlite3.so.0 \
     make test SUITES="$suite" 2>&1 | grep -E '^    S3|^FAIL|^  actual|^test: ran' || true

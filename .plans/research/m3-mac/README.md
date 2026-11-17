@@ -11,7 +11,7 @@ and ADR-0004 ask. The machine: macOS 26.7.1, arm64, Chez 10.4.1. The libraries: 
 |---|---|
 | [mac-apple.txt](mac-apple.txt) | `make test`, whole, with Apple's library |
 | [mac-brew.txt](mac-brew.txt) | `make test`, whole, with Homebrew's |
-| [memory-management.sh](memory-management.sh) | S3's Mac case, reproduced on Linux: 3.54.1 built four ways |
+| [memory-management.sh](memory-management.sh) | S3's Mac case, reproduced on Linux: 3.54.1 built six ways |
 | [memory-management.txt](memory-management.txt) | Its output, for the fixed suite and for `main`'s |
 
 `make check-dev` and `make check-test-fails` ran with Apple's library and passed. `check-dev`
@@ -30,7 +30,9 @@ cases". The maintainer pasted those outputs in the session; they aren't kept her
 | P4, the busy wait's grain | milliseconds: a 250 ms timeout answered busy after 284 ms | milliseconds: 288 ms |
 
 None of the eight failing suites is slice 6's. All are on `main`, from slices 3 to 5. Each is a
-fault in a test, not in the library. The library behaved correctly in every failing row.
+fault in a test. No failing row showed a fault in the library. On Apple's library the sweeps
+couldn't judge what they saw, since only the tell can tell a whole new call from a re-entry;
+they passed in full on Homebrew's library, on the same Mac.
 
 ## Apple's library refuses `sqlite3_auto_extension`
 
@@ -45,13 +47,29 @@ fault in a test, not in the library. The library behaved correctly in every fail
 - **What failed after it:** with no authorizer, nothing was noted. The tells' prepare counts read
   0; the sweeps found no interleaving (`too-few-interleavings past 0`); the rows that raise
   SIGINT from the authorizer never raised.
-- **Fourteen rows passed there without testing anything.** The timer rows, the reset rows and
-  `test-open-interleave`'s failing-call sweeps read the tell's notes too, and an empty tell
-  satisfies them: a prepare count of 0 is at most any bound.
-- **The fix, in this PR:** where registration is refused, each of the 33 rows that need the tell
-  prints `UNAVAILABLE` and is skipped, never passed, as the memory check is on the same library
-  (ADR-0005, amended). The sweeps are still run on the Mac by Homebrew's library. The plants are
-  in [the mutation log](../../m3-mac-mutation-log.md).
+- **Some checks passed there without testing anything.** An empty tell satisfies them:
+  - the seven reset rows, which read only the tell;
+  - the prepare bound in the five timer rows, since a count of 0 is at most any bound;
+  - the whole-new-call checks in `test-open-interleave`'s two failing-call sweeps.
+
+  The rest of the timer rows and of those sweeps tested real properties on Apple's library, and
+  still do.
+- **The fix, in this PR:** where the registration is refused with 21, 33 rows report what they
+  can't check, as the memory check does on the same library (ADR-0005, amended: the suite passes
+  on its other checks).
+  - **18 rows need the tell whole:** the nine sweeps, query-row's check-out row, the escape row
+    and the seven reset rows. Each prints `UNAVAILABLE` and is skipped, never passed. The sweeps
+    still run on the Mac with Homebrew's library.
+  - **15 rows mix checks:** the eight tell rows, the five timer rows and the two failing-call
+    sweeps. Each runs, and drops only the check that reads the tell, printing `UNAVAILABLE` with
+    that check's name. Each still asserts its whole output, with the dropped part as
+    `unavailable` on both sides.
+  - **Any other code fails the registration row,** with nothing skipped. Upstream also answers 7
+    from a failed realloc, or whatever `sqlite3_initialize` failed with.
+  - **The callbacks stay locked after a refusal.** Chez 10.4.0's `Sunlock_object` decrements the
+    segment's count whether or not the object was locked (`c/gcwrapper.c`), so an extra unlock
+    can unpin another object.
+  - The plants are in [the mutation log](../../m3-mac-mutation-log.md).
 
 ## A NOMEM's reach differs by build, at one version
 
@@ -65,24 +83,46 @@ fault in a test, not in the library. The library behaved correctly in every fail
 - **The cause is one compile option, `ENABLE_MEMORY_MANAGEMENT`,** reproduced on Linux
   ([memory-management.sh](memory-management.sh), its output in
   [memory-management.txt](memory-management.txt)):
-  - 3.54.1's amalgamation, checked against the `current` lane's pins, was compiled four ways
-    with the lane's line: as it is; plus every option Homebrew's lists and the lane's lacks
-    (M4's pre-work, `census-mac-brew-3.54.1.txt`); plus `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`
-    alone; plus `-DSQLITE_ENABLE_STAT4` alone.
-  - S3's NOMEM left the transaction open in the second and third builds, and ended it in the
-    first and fourth.
+  - 3.54.1's amalgamation, checked against the `current` lane's pins, was compiled with the
+    lane's line in these ways:
+    - as it is;
+    - plus every option Homebrew's lists and the lane's lacks
+      (`../m4-prework/out/census-mac-brew-3.54.1.txt`, in PR #28);
+    - that set without `-DSQLITE_ENABLE_MEMORY_MANAGEMENT`;
+    - plus `-DSQLITE_ENABLE_MEMORY_MANAGEMENT` alone;
+    - plus `-DSQLITE_ENABLE_STAT4` alone.
+  - S3's NOMEM left the transaction open in exactly the two builds with the option, and ended it
+    in the other three. So within Homebrew's set the option is necessary as well as sufficient.
   - `main`'s suite failed S3 on those two builds as it did on the Mac, with the same actual
-    values, and passed on the other two. The fixed suite passed on all four.
+    values, and passed on the other three. The fixed suite passed on all five.
+- **Why only S3, in 3.54.1's source:**
+  - A statement gets a statement journal only when it's a multi-row write that may abort:
+    `usesStmtJournal = isMultiWrite && mayAbort`. Among the NOMEM rows only S3, an
+    `insert … select` of three rows, is a multi-row write.
+  - On a NOMEM, `sqlite3VdbeHalt` rolls back just the statement when it has a statement
+    journal. If that rollback fails, SQLite rolls back the whole transaction and autocommit
+    reads 1.
+  - When an allocation passes the heap limit, SQLite calls `sqlite3_release_memory`. Built with
+    `ENABLE_MEMORY_MANAGEMENT`, that frees page cache; without it, it does nothing.
+  - So S3's statement rollback can succeed only in a build with the option, and that leaves the
+    transaction open. S1, S2, S4 and the R rows have no statement journal. Each kept its case on
+    every build where it met a NOMEM.
+- **A second premise depends on the build.** With `ENABLE_MEMORY_MANAGEMENT` and
+  `-DSQLITE_DEFAULT_PAGE_SIZE=65536`, S2, R3, R4 and [F] get no NOMEM at all: their call returns
+  its value, and the rows fail by name. This was found by PR #30's review and reproduced here.
+  It isn't a false pass, so nothing in the suite changes for it.
 - **The fault:** the row fixed S3's case, ended, as the default builds showed it. AGENTS.md
   already says a failure's reach can't be told from its code or its SQL. It can't be told from
   the version either: one compile option, at the same release, gives the other case.
 - **The fix, in this PR:** S3 takes the case its body's autocommit shows, and holds
   `with-transaction`'s exit to that case's whole outcome. It prints the case it met. S1, S2 and
-  S4 passed with Homebrew's, so the suite still holds both cases on every library measured. The
-  plants are in [the mutation log](../../m3-mac-mutation-log.md).
+  S4 kept their cases with Homebrew's library and on every build above, so the suite still holds
+  both cases everywhere it was run. The plants are in
+  [the mutation log](../../m3-mac-mutation-log.md).
 
 ## Still to run
 
 - **The eight suites, again on the Mac,** with both libraries, once this PR's fixes are on a
   branch: `make test SUITES="…"` with the eight names.
-- **M4's pre-work probes,** [mac.md](../m4-prework/mac.md): `m4pre-mac.tgz` isn't in yet.
+- **M4's pre-work probes** ran on the Mac the same day. Their results are in PR #28, in
+  `../m4-prework/`.
