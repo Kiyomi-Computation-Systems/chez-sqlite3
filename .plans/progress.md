@@ -78,7 +78,7 @@ newest first.
   2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
   of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
   - **M4 slice 1 is done:** the pure core of the four `db_config` settings and
-    `&sqlite-extensions-unavailable`, as PR #34, below. The maintainer accepted its ADR-0021
+    `&sqlite-extensions-unavailable`, as PR #35, below. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
   - **Slice 2,** the bindings and `check-variadic`, and **slice 5,** FTS5 and JSON, are built and
@@ -149,7 +149,7 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-17 — M4 slice 1: the pure core (PR #34)
+### 2026-11-17 — M4 slice 1: the pure core (PR #35)
 
 - **Built,** with no foreign code and no new suite:
   - `settings.sls`: the four `db_config` settings as a table and procedures of their own, beside
