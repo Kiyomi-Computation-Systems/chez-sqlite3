@@ -233,8 +233,10 @@ told in chez-curl's `.plans/traps.md`.
   once the load returned (glibc 2.41, in the container). That fits glibc's loader holding its lock
   through the open, which creating a thread also takes; the cause wasn't traced further. Forking
   a shell through `system` didn't wait. Fork
-  any helper thread before the call that may block in `dlopen` (M4 slice 2's FIFO row). (M4
-  slice 2, chez-sqlite3)
+  any helper thread before the call that may block in `dlopen` (M4 slice 2's FIFO row).
+  Reproduce, from the root: `scripts/guix-env sh -c 'd=$(mktemp -d); mkfifo $d/f.fifo; (sleep 4;
+  exec 3<>$d/f.fifo) & $CHEZ --script .plans/research/m4-slice-2/fifo-thread.sps
+  "$CHEZ_SQLITE3_LIBRARY" $d/f.fifo; wait'`. (M4 slice 2, chez-sqlite3)
 
 ## SQLite
 

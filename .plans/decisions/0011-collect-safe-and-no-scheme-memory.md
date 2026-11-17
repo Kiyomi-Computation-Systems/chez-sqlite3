@@ -260,7 +260,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: the int cell, and the load's FIFO row (M4 slice 2)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 ([its mutation log](../m4-slice-2-mutation-log.md)), from the slice and its review (Opus).
 
 - **`call-with-int-cell`,** native's: a counted block of an `int`'s size, written with the
   caller's fill, passed to a procedure, read back as a signed `int` after it returns, and freed on
@@ -268,10 +268,11 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 
   anything is allocated. It is the cell ADR-0021's decision 3 names: slice 1's review found that no
   slice gave the open one, and only `native.sls` may touch foreign memory. Slice 3 fills it with
   `db-config-sentinel`.
-- **The load's FIFO row, by decision 3's method:** the C call is turned on through the binding
+- **The load's FIFO row, by the M1 slice 2 amendment's method:** the C call is turned on through the binding
   first; the collector's thread is forked before the loader's, since a `fork-thread` waits while
   another thread is in `dlopen` (`traps.md`); the collector's collection must finish while the load
   waits, and releases it. Bound plain, the load holds the collection, and only the 30 s watchdog
   releases it: the row fails, `released-by-the-watchdog`. Where the loader is still in the call
   when the row gives up, the FIFO is opened for writing before any close, so the row fails by name
-  instead of waiting on the connection's mutex.
+  instead of waiting on the connection's mutex. The probes are in
+  [research/m4-slice-2/](../research/m4-slice-2/): `fifo-load.sps` and `fifo-thread.sps`.

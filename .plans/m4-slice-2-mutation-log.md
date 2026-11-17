@@ -69,9 +69,10 @@ checked to occur as often as expected before it was written. The copies ran insi
 worktree's container, after `make deps` in each, each suite under `timeout 300`, on Guix's
 3.53.1; a copy's `.env`, where it has one, puts the review's stand-in header first on
 `C_INCLUDE_PATH`. The counts are read from the suites' own `# of unexpected failures` lines, never
-by eye. The drivers, `mutants.py`, `mutants2.py` and `mutants3.py`, are in the session's
-scratchpad; `build/mut3/run-mutants.sh`, the results and every log are under the worktree's
-git-ignored `build/mut3/`. The first round's are under `build/mut/`, the second's, with
+by eye. The drivers, `mutants.py`, `mutants2.py`, `mutants3.py`, `describe.py` and `run-mutants.sh`,
+are kept in [research/m4-slice-2/scripts/](research/m4-slice-2/scripts/), run from the
+worktree's root; the copies, the results and every log are made under the git-ignored
+`build/mut3/`. The first round's were under `build/mut/`, the second's, with
 `sqlite3_stmt_busy`, under `build/mut2/`.
 
 ## The red runs
@@ -189,7 +190,7 @@ check-variadic: all 7 steps ok, on ta6le
 The review's second item. `test-constants` asked every row's prototype in one compile, and that
 came to include the optional `sqlite3_load_extension`, which Apple's SDK `sqlite3.h` is believed
 to mark unavailable on macOS: the review's stand-in header,
-`build/review-mut/apple-hdr/sqlite3.h`, `#include_next` and a redeclaration with
+`.plans/research/m4-slice-2/stand-in/sqlite3.h`, the review's,, `#include_next` and a redeclaration with
 `__attribute__((unavailable))`, failed the one compile and nine header rows with it.
 
 - **The one compile** now asks the 43 required rows, and a row says so: 43, and
@@ -239,14 +240,14 @@ row failed by name, `(the-loader-hung released (0 "" "") then satisfied)`, and t
 **The trap:** while `dlopen` waits on the FIFO, glibc's dynamic loader holds its lock, and a
 thread made then waits for it. The first version forked the collector after the loader, and its
 collection finished a second after the load, released by the 15 s watchdog, under the
-`__collect_safe` binding. Measured with `build/probe/fifo-thread.sps` in the container (glibc
+`__collect_safe` binding. Measured with `.plans/research/m4-slice-2/fifo-thread.sps` in the container (glibc
 2.41): a `fork-thread` called 0.5 s into a blocked load returned at 3957 ms, when the load did.
 So the row forks the collector first, and the loader, the last thread it makes, after it;
 `capture-command`'s shell, which the collector starts, doesn't wait. Reproduced by:
 
 ```
 scripts/guix-env sh -c 'd=$(mktemp -d); mkfifo $d/f.fifo; (sleep 4; exec 3<>$d/f.fifo) & \
-  $CHEZ --script build/probe/fifo-thread.sps "$CHEZ_SQLITE3_LIBRARY" $d/f.fifo; wait'
+  $CHEZ --script .plans/research/m4-slice-2/fifo-thread.sps "$CHEZ_SQLITE3_LIBRARY" $d/f.fifo; wait'
 ```
 
 which prints `fork-thread called 501, returned 3957; new thread ran 3957; load returned 3957`.
@@ -502,7 +503,7 @@ pointer-sized and zeroed, and 0 is what a set writes.
 ## The Mac step
 
 Owed by ADR-0001's consequence, whenever the variadic binding changes (the plan, §5 item 2): on
-the maintainer's Mac, from this slice's branch, `make test` and `make check-variadic`, with
+the maintainer's Mac, on `main` after this slice merges, `make test` and `make check-variadic`, with
 Apple's library and with Homebrew's.
 
 - With Apple's, by discovery: `test-native` prints UNAVAILABLE for `ENABLE_LOAD_EXTENSION`'s round

@@ -189,16 +189,22 @@ newest first.
     row asserts 2^32−1 itself; the arm64 step needs `sqlite3_db_config`'s own failure; the FIFO
     row's hung branch releases the FIFO before any close; the ops' two sources go to slice 3.
 - **Built and taken out:** `sqlite3_stmt_busy`, for "Refuse busy statements first", which the
-  maintainer replaced with "Vouch only for ours" (the close fix's close-out).
+  maintainer replaced with "Vouch only for ours" (PR #36's close-out).
 - **Times:** under the gate on Guix's library, `test-conventions` 46 s, `test-native` 24 s,
   `test-check-variadic` 16 s, `test-constants` 13 s, and the three loading suites 145 to 160 s,
-  where CI's last run read 136 to 165 s. `make check-variadic` takes 10 to 11 s. Both CI figures
-  are owed by this PR's runs (the M4 plan, §7).
+  where CI's last run read 136 to 165 s. `make check-variadic` takes 10 to 11 s here, and about
+  11 s in CI's `main` job (run 44189788123). The loading suites' CI times are owed by this PR's
+  memory jobs (the M4 plan, §7).
 - **The Mac step** is owed (ADR-0001's consequence): `make test` and `make check-variadic` with
   Apple's library and with Homebrew's, on `main` after this merges. With Apple's, `test-native`
   names the load rows unavailable, and `test-constants`' optional prototype row reports what the
   SDK's header declares; `check-variadic` must end "all 7 steps ok, on tarm64osx". With Homebrew's,
-  the FIFO row is the first measure of `dlopen` on a FIFO on macOS.
+  `CHEZ_SQLITE3_LIBRARY=/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib` and
+  `C_INCLUDE_PATH=/opt/homebrew/opt/sqlite/include`, the FIFO row is the first measure of `dlopen`
+  on a FIFO on macOS. Run PR #34's `research/m4-mac/mac.md` first: its L6 says whether macOS's
+  `dlopen` waits on a FIFO. If it doesn't, the load's FIFO row needs a Mac allowance first, as
+  the open's FIFO row has one (`fifo-refused`), or `check-variadic`'s control stops before its
+  mutant.
 - **For slice 3:** import the ops from `constants.sls` and hold slice 1's table to them; fill the
   cell with `db-config-sentinel` through `call-with-int-cell`; `load-extension-available?` is the
   opt-in's check.

@@ -128,19 +128,23 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: `check-variadic` as built (M4 slice 2)
 
-Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 ([its mutation log](../m4-slice-2-mutation-log.md)), from the slice and its review (Opus).
 
 - **Written fresh.** The review found 82 of the first script's 150 distinct code lines verbatim in
   chez-curl's `tests/check-variadic.sh`, against this record's "None of its code is copied". The
   script was rewritten from the M4 plan's four steps without reopening chez-curl's: six lines are
   shared now, `}`, `done`, `else`, `esac`, `exit 1` and `fi`.
-- **Its list of expected failures is held to the tree.** On the mutant, `test-conventions`' ten
-  sweeps of the real `src/` fail, and the script names them. `test-check-variadic`, in
+- **Its list of expected failures is held to the tree.** On the mutant, `test-conventions`' row
+  "src: no violation" and its nine sweeps of the real `src/` fail, ten tests, and the script names
+  them. `test-check-variadic`, in
   `make test`, holds that list to `test-conventions.sps`' own tests, in order, and holds
   `native.sls` to exactly one line carrying `(__varargs_after 2)`, comments included: a renamed
   sweep, or the form written in a comment, fails `make test`, not CI's step alone.
 - **The arm64 step needs the binding's own failure:** on `arm64osx` or `tarm64osx`, by Chez's
   `(machine-type)`, `test-native` on the mutant must fail a test whose name holds
   `sqlite3_db_config`, or die. A failure of another test alone fails the step.
-- **Its cost:** 10 to 11 s in the container. CI's `main` job's figure is owed by the slice's runs
-  (the M4 plan, §7).
+- **Its cost:** 10 to 11 s in the container, and about 11 s in CI's `main` job, from its copy to
+  "all 7 steps ok" (run 44189788123).
+- **One line matches chez-curl's word for word:** the Makefile's recipe,
+  `@TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' TEST_TIMEOUT='$(TEST_TIMEOUT)' sh tests/check-variadic.sh`.
+  It is this repository's own pattern for a script target, as `check-test-fails`' is, and is kept.
