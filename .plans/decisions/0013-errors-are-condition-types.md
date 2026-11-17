@@ -7,6 +7,8 @@
   [amendment](#amendment-2026-11-14-m2s-conditions-m2s-plan)). Amended 2026-11-15, and accepted by
   the maintainer that day: M3's conditions (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-conditions-m3s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's condition
+  ([amendment](#amendment-2026-11-17-m4s-condition-m4s-plan)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every condition the library raises
 - **Settles:** brief §3g
@@ -229,3 +231,52 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   is `row` or `failed` ([ADR-0017](0017-with-transaction-and-savepoints.md), decision 1). A
   re-entry is no refusal: M3's winders let it through, and a re-entered fold raises
   `&sqlite-closed`, a re-entered transaction's return `&sqlite-transaction-ended`.
+
+## Amendment, 2026-11-17: M4's condition (M4's plan)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3 and §4.4).
+
+- **The hierarchy, with M4's type:**
+
+  ```
+  &error
+   └ &chez-sqlite3-error             no fields; every library condition is one
+      ├ &sqlite-error                code, extended-code, message, sql, offset
+      │   ├ &sqlite-busy             primary code busy or locked
+      │   ├ &sqlite-constraint       primary code constraint
+      │   ├ &sqlite-read-only        primary code readonly
+      │   └ &sqlite-interrupt        primary code interrupt (M3)
+      ├ &sqlite-invalid-text         column, offset
+      ├ &sqlite-setting-mismatch     setting, expected, actual (M3)
+      ├ &sqlite-transaction-ended    no fields (M3)
+      ├ &sqlite-extensions-unavailable  no fields (M4)
+      ├ &sqlite-library-unavailable  reason, path, source, detail, candidates, library
+      ├ &sqlite-wrong-thread         owner, caller
+      └ &sqlite-closed               no fields
+  ```
+
+- **`&sqlite-extensions-unavailable`** is raised by an open whose settings opt in to extension
+  loading on a library without `sqlite3_load_extension`
+  ([ADR-0021](0021-db-config-options-and-extension-loading.md), decision 5). It has no field
+  beyond its `&who`, the open verb, and a fixed `&message`. It isn't a `&sqlite-error`, since
+  SQLite answered no code, nor a `&sqlite-library-unavailable`, whose reasons refuse a library at
+  its load: this library loads and works. `(chez-sqlite3)` exports
+  `sqlite-extensions-unavailable?` (the maintainer's Q14, 2026-11-17, "The rule's names").
+- **Decision 3's code and message, for M4's two calls.** Each `&sqlite-error`'s code and extended
+  code are the call's own answer, never the connection's `sqlite3_extended_errcode`: after a
+  refused set the connection read 0, which `raise-sqlite-error` refuses as no error, and after a
+  failed load it read 5 where the call answered 1 (M4's research, D3, rv1, rv2).
+  - A `db_config` set's carries `sqlite3_errstr` of its code: `db_config` sets no error on its
+    connection, whose `sqlite3_errmsg` is another call's (D3).
+  - A load's carries the text SQLite wrote to its message slot, which names the path SQLite tried
+    last, and `sqlite3_errstr`'s when there is none. SQLite's own failures set no error on the
+    connection (L3; rv1, part A). An extension's init that fails a call of its own leaves that
+    call's error there, where the slot says only "error during initialization: ", so when the
+    connection's extended code changed across the call, the connection's message follows the
+    slot's (rv1, part B).
+  - Neither carries SQL or an offset.
+- **M4's refusals of a caller's mistake are assertion violations** (decision 7): a setting's value
+  outside its domain; `load-extension!` on a connection that didn't opt in,
+  `extension-loading-not-enabled`, whose message names the fix, `(enable-load-extension . #t)`;
+  a path or an entry point that is no string or holds U+0000, and a path that isn't absolute (the
+  maintainer's Q16, "An absolute path"), each string named by its kind.

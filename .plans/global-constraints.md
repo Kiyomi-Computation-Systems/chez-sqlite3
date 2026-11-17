@@ -29,8 +29,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Constants and signatures are checked against `sqlite3.h`** by a C program compiled at test
   time. A missing header or compiler fails the suite, never skips it. The compiler is a test
   oracle, never an install dependency (ADR-0001).
-- **`sqlite3_db_config` is bound with `(__varargs_after 2)`; `sqlite3_config` is never bound**
-  (ADR-0001, brief §2.8).
+- **`sqlite3_db_config` is bound once, in the shape `(db op int int*)`, with
+  `(__varargs_after 2)`, plain; `sqlite3_config` is never bound** (ADR-0001, brief §2.8).
+  `make check-variadic`, which CI's `main` job runs as a step and `make test` doesn't, removes the
+  convention in a copy and watches `test-conventions` fail, and on Apple arm64 `test-native` too
+  (ADR-0001, amended; ADR-0021).
 - **`SQLITE_TRANSIENT` and `SQLITE_STATIC` are pointer-width integers,** −1 and 0 as C writes
   them. As a `uptr`, −1 is all ones, and native computes it from the pointer's size (ADR-0001).
 - **Every value a verb passes to C is checked to fit its C type before the critical section that
@@ -41,6 +44,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `foreign-entry?`, its absence reported where it is used (ADR-0003, ADR-0002).
   `sqlite3_load_extension` is optional too, since a build can omit it, as Apple's does, and
   `sqlite3_enable_load_extension` is never bound (ADR-0002, amended).
+  Its absence is reported by an open that opts in, as `&sqlite-extensions-unavailable`, before
+  anything opens (ADR-0002, amended; ADR-0021).
 - **No binding takes a Scheme object:** never Chez's `string`, `utf-8`, `u8*` or `scheme-object`
   types, nor a bytevector. Every string passed to libsqlite3 is copied, UTF-8 and NUL-terminated,
   into a counted foreign block freed on every path, and one holding U+0000 is refused before
@@ -54,6 +59,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   (ADR-0011).
   - **`sqlite3_reset` and `sqlite3_finalize` join them in M2,** measured waiting in the busy
     handler, and M2's four are held by behaviour too (ADR-0011 amended).
+  - **`sqlite3_load_extension` joins them in M4,** measured blocking on a FIFO, where a plain
+    binding held another thread's collection for the whole wait (ADR-0011, amended; ADR-0021).
 - **Nothing raises inside `critical-section`, or inside a critical `dynamic-wind` thunk,** in
   `src/` or in the testing library. Code there answers data; a raise from a call made there is
   caught in the section and raised again after it, as the same object.
@@ -210,6 +217,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   the library's own `statement-cache`, which SQLite never sees and nothing reads back. They run at
   open only. A failure closes the connection, then raises, and a close that fails then isn't
   raised over the setting's condition (ADR-0018, amended in M3 slice 5).
+  M4 adds four of `sqlite3_db_config`'s, `enable-load-extension`, `defensive`, `dqs-dml` and
+  `dqs-ddl`, each one call held by its own answer, made only where named, and for
+  `enable-load-extension` only for `#t` (ADR-0018, amended; ADR-0021).
 - **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
@@ -239,6 +249,38 @@ Proposed record is marked *(provisional)* until that record is accepted.
   (ADR-0019, amended in M3 slice 6).
 - **M3's five bindings are plain,** and `sqlite3_busy_timeout`, `sqlite3_is_interrupted` and
   `sqlite3_exec` are never bound (ADR-0011, amended; ADR-0019).
+
+## `db_config` and extensions
+
+- **A connection starts as its library starts it.** No op is set unasked: DQS is on in every
+  library measured, `DEFENSIVE` on Apple's alone, `ENABLE_LOAD_EXTENSION` on Ubuntu's (ADR-0021,
+  decision 2).
+- **Each `db_config` set is one call, in a critical section of its own, held by its own
+  answer.** Its cell holds a sentinel, neither 0 nor 1, before the call. Code 0 and the value
+  written match; another cell raises `&sqlite-setting-mismatch`; another code raises
+  `&sqlite-error`, its code that answer and its message `sqlite3_errstr`'s, never the
+  connection's, since `db_config` sets no error there. The connection is closed first (ADR-0021,
+  decision 3).
+- **The opt-in is checked before anything opens:** on a library without
+  `sqlite3_load_extension`, `&sqlite-extensions-unavailable`, and no C call (ADR-0021, decision 5).
+- **The guarantee lives in Scheme.** `(enable-load-extension . #t)` lets `load-extension!` work;
+  `#f`, or no setting, makes it refuse, an assertion violation naming the setting, before anything
+  reaches C. Where a library opens connections with the C call on, as Ubuntu's does, that refusal
+  is all that stops a load (ADR-0021, decisions 5 and 6).
+- **`load-extension!` checks a database, the owning thread, an open connection, an absolute path,
+  its entry point, then the opt-in.** It holds a claim. One section makes the call, reads the
+  connection's extended code before and after it, and copies and frees the message with
+  `sqlite3_free` on every path. A failure raises `&sqlite-error` whose code is the call's answer,
+  with the slot's message, followed by the connection's when its code changed across the call
+  (ADR-0021, decision 7).
+- **Never bound:** `sqlite3_enable_load_extension`, `db_config`'s other shapes, `TRUSTED_SCHEMA`
+  as an op, `sqlite3_auto_extension` and its siblings (ADR-0021, decision 11).
+- **A suite's rows for what a library may lack** are chosen by what the library reports:
+  FTS5 by `sqlite-compile-option? "ENABLE_FTS5"`, held to `pragma_module_list`; extension
+  loading by native's record of `sqlite3_load_extension`. The rest are named unavailable, never
+  silently, and the refusal is asserted in their place, so each suite runs on every lane. The
+  `current` lane compiles with `ENABLE_FTS5`, the `floor` lane with SQLite's defaults (ADR-0003,
+  ADR-0005, amended).
 
 ## Layout and names
 

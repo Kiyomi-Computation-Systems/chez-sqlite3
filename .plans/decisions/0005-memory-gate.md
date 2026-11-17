@@ -34,6 +34,8 @@
   2026-11-17 ("Accept all"). Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open risk met and
   closed, the watchdog's handshake, and the gates no row read
   ([amendment](#amendment-2026-11-17-the-open-risk-met-and-the-gates-no-row-read-m3s-closing-review)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, suites and extension
+  ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -734,3 +736,32 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closin
   either could have skipped its rows on every Linux lane, and passed.
   - **The tell** is now held to an idle entry point registered straight through the FFI.
   - **`memory-kept`** is now held to the memory check's own control.
+
+## Amendment, 2026-11-17: M4's entry points, suites and extension (M4's plan)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.6).
+
+- **Three decoy children,** one for each of M4's entry points. `sqlite3_db_config` and
+  `sqlite3_free` are dealt by the pattern of five (the amendment "the halves split in three");
+  the optional `sqlite3_load_extension` stays out of it, its rows named in
+  `test-library-loading-real` ([ADR-0002](0002-runtime-libsqlite3-discovery.md), amended
+  2026-11-17). Each adds a child of about 5 s under the gate. Slice 2 reads the three suites'
+  times from more than one CI run, naming each.
+- **M4's new suites** each go in a shard, as `make check-memory-shards` requires, and by the
+  shards' amendment in the one whose suites take less time.
+- **`make check-variadic` runs in CI's `main` job,** in its "Checks and suites" run line, after
+  `check-test-fails`, never inside `make test`, whose `check-test-fails` cases each run under a
+  5 s suite timeout and a 70 s bound. `check-ci`'s line for that step moves with it
+  ([ADR-0001](0001-bind-libsqlite3-directly.md), amended 2026-11-17).
+- **A loaded extension leaves the gate clean.** An extension compiled at test time, loaded,
+  called and closed under the gate's Valgrind flags gave 0 errors and nothing definitely lost,
+  and `sqlite3_memory_used` came back to 0. The same program, with the same open and close and no
+  load, left the same still reachable blocks, byte for byte in count and size, on each of three
+  libraries (M4's research, X1). The gate needs no suppression for one.
+- **A load's message is SQLite's memory,** freed by `sqlite3_free`. Left unfreed, two messages
+  were 448 bytes definitely lost, and 432 bytes above the memory check's baseline: both parts of
+  the gate see it (X1).
+- **On a library without extension loading,** as Apple's is, the suites name their load rows
+  unavailable, never silently, as the memory check names itself where the count is off. They
+  choose them by native's record of `sqlite3_load_extension`, and assert the named condition
+  there for real.

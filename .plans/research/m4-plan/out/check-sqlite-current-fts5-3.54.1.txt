@@ -1,0 +1,12 @@
+check-sqlite.sh: ROOT/build/m4plan/current-fts5/lib/libsqlite3.so.0's compile options are not the 38 of the pinned current SQLite, line for line:
+--- expected
++++ library
+@@ -14,6 +14,7 @@
+ DEFAULT_WAL_SYNCHRONOUS=2
+ DEFAULT_WORKER_THREADS=0
+ DIRECT_OVERFLOW_READ
++ENABLE_FTS5
+ MALLOC_SOFT_LIMIT=1024
+ MAX_ATTACHED=10
+ MAX_COLUMN=2000
+(exit 1)

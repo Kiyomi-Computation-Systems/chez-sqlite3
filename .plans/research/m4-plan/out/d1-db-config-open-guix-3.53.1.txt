@@ -1,0 +1,94 @@
+libversion: 3.53.1
+sourceid: 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+constants: ENABLE_LOAD_EXTENSION 1005, DEFENSIVE 1010, DQS_DML 1013, DQS_DDL 1014, SQLITE_DBCONFIG_MAX 1023, STMTSTATUS_REPREPARE 5
+
+D1. A set between a SELECT's two runs; codes as SQLite answers them
+  nothing (the control)                          S 101, reset 0; set -1 cell -; S's reprepares 0, its second run 101, then 0
+  ENABLE_LOAD_EXTENSION 0 -> 1, a change         S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 1
+  ENABLE_LOAD_EXTENSION 0 -> 0, unchanged        S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 0
+  ENABLE_LOAD_EXTENSION read (-1)                S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 0
+  DEFENSIVE 0 -> 1, a change                     S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 1
+  DEFENSIVE 0 -> 0, unchanged                    S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 0
+  DEFENSIVE read (-1)                            S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 0
+  DQS_DML 1 -> 0, a change                       S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 1
+  DQS_DML 1 -> 1, unchanged                      S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 0
+  DQS_DML read (-1)                              S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 0
+  DQS_DDL 1 -> 0, a change                       S 101, reset 0; set 0 cell 0; S's reprepares 0, its second run 101, then 1
+  DQS_DDL 1 -> 1, unchanged                      S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 0
+  DQS_DDL read (-1)                              S 101, reset 0; set 0 cell 1; S's reprepares 0, its second run 101, then 0
+
+D1b. A set while the SELECT is held at its first row
+  nothing (the control)                          S at a row 100; set -1 cell -; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  ENABLE_LOAD_EXTENSION 0 -> 1, a change         S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 1
+  ENABLE_LOAD_EXTENSION 0 -> 0, unchanged        S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  ENABLE_LOAD_EXTENSION read (-1)                S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DEFENSIVE 0 -> 1, a change                     S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 1
+  DEFENSIVE 0 -> 0, unchanged                    S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DEFENSIVE read (-1)                            S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DQS_DML 1 -> 0, a change                       S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 1
+  DQS_DML 1 -> 1, unchanged                      S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DQS_DML read (-1)                              S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DQS_DDL 1 -> 0, a change                       S at a row 100; set 0 cell 0; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 1
+  DQS_DDL 1 -> 1, unchanged                      S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+  DQS_DDL read (-1)                              S at a row 100; set 0 cell 1; S's reprepares 0, to done 101, then 0; reset 0, again 101, then 0
+
+D2. A statement prepared with DQS on, then DQS turned off, then run again
+  DQS_DML: select "no_such_column"         first run 101, reset 0; set 0: 0 cell 0; second run 1 (extended 1, no such column: "no_such_column" - should this be a string literal in single-quotes?); reprepares 0; reset 1; finalize 0
+  DQS_DDL: create index ... ("no_such_column") first run 101, reset 0; set 0: 0 cell 0; second run 101 (extended 101, no more rows available); reprepares 1; reset 0; finalize 0
+  DQS_DML: select x from t (control)       first run 101, reset 0; set 0: 0 cell 0; second run 101 (extended 101, no more rows available); reprepares 1; reset 0; finalize 0
+
+D3. The connection's error state around db_config
+  after the open                             errcode 0, extended 0, errmsg "not an error"
+  a failing prepare answered 1
+  after it                                   errcode 1, extended 1, errmsg "no such column: nosuch"
+  op 1999 answered 1, cell untouched; sqlite3_errstr(1) is "SQL logic error"
+  after op 1999                              errcode 1, extended 1, errmsg "no such column: nosuch"
+  DEFENSIVE 1 answered 0, cell 1
+  after DEFENSIVE 1                          errcode 1, extended 1, errmsg "no such column: nosuch"
+  after a fresh open and select 1            errcode 0, extended 0, errmsg "not an error"
+  op 1999 answered 1, cell untouched
+  after op 1999                              errcode 0, extended 0, errmsg "not an error"
+
+D4. A set under another connection's EXCLUSIVE lock
+  under EXCLUSIVE, busy_timeout 1500: ENABLE_LOAD_EXTENSION 1 answered 0, cell 1
+  under EXCLUSIVE, busy_timeout 1500: ENABLE_LOAD_EXTENSION 0 answered 0, cell 0
+  under EXCLUSIVE, busy_timeout 1500: DEFENSIVE 1 answered 0, cell 1
+  under EXCLUSIVE, busy_timeout 1500: DEFENSIVE 0 answered 0, cell 0
+  under EXCLUSIVE, busy_timeout 1500: DQS_DML 1 answered 0, cell 1
+  under EXCLUSIVE, busy_timeout 1500: DQS_DML 0 answered 0, cell 0
+  under EXCLUSIVE, busy_timeout 1500: DQS_DDL 1 answered 0, cell 1
+  under EXCLUSIVE, busy_timeout 1500: DQS_DDL 0 answered 0, cell 0
+  the control: a SELECT's prepare there answered 5 (extended 5)
+
+D5. Each op's round trip, on connections the open can make
+  :memory:                           ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  :memory:                           DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  :memory:                           DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  :memory:                           DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  a file, schema unread              ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  a file, schema unread              DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  a file, schema unread              DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  a file, schema unread              DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  READONLY                           ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  READONLY                           DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  READONLY                           DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  READONLY                           DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  NOMUTEX                            ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  NOMUTEX                            DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  NOMUTEX                            DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  NOMUTEX                            DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  inside a transaction that wrote    ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  inside a transaction that wrote    DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  inside a transaction that wrote    DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  inside a transaction that wrote    DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  (a SELECT stepped: 100)
+  beside a statement at a row        ENABLE_LOAD_EXTENSION  start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  beside a statement at a row        DEFENSIVE              start 0; set 1: 0 cell 1; read 0 cell 1; set 0: 0 cell 0; read 0 cell 0
+  beside a statement at a row        DQS_DML                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+  beside a statement at a row        DQS_DDL                start 1; set 0: 0 cell 0; read 0 cell 0; set 1: 0 cell 1; read 0 cell 1
+
+D6. onoff values v1 never passes
+  ENABLE_LOAD_EXTENSION  set 0: 0 cell 0; set 2: 0 cell 1; set -2: 0 cell 1; set 0: 0 cell 0
+  DEFENSIVE              set 0: 0 cell 0; set 2: 0 cell 1; set -2: 0 cell 1; set 0: 0 cell 0
+  DQS_DML                set 0: 0 cell 0; set 2: 0 cell 1; set -2: 0 cell 1; set 0: 0 cell 0
+  DQS_DDL                set 0: 0 cell 0; set 2: 0 cell 1; set -2: 0 cell 1; set 0: 0 cell 0

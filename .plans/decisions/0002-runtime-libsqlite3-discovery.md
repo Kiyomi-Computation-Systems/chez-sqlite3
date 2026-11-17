@@ -7,6 +7,8 @@
   ([amendment](#amendment-2026-11-14-m2s-required-entry-points-m2s-plan)). Amended 2026-11-15, and
   accepted by the maintainer that day: M3's required entry points (M3's plan,
   [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, and where extension loading's guarantee lives
+  ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -220,3 +222,37 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   points between `test-library-loading-decoys` and `test-library-loading-real`, the halves M2
   split the suite into in PR #19 (ADR-0005, amended). Since M3 slice 2, a pattern of five deals
   them to three suites instead ([ADR-0005](0005-memory-gate.md), amended 2026-11-16).
+
+## Amendment, 2026-11-17: M4's entry points, and where extension loading's guarantee lives (M4's plan)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §4.3, §4.4 and §4.6;
+[ADR-0021](0021-db-config-options-and-extension-loading.md)).
+
+- **M4 adds two required entry points** to item 5 of the M1 amendment's "What is bound, in
+  order", after M3's, in the same step: `sqlite3_db_config` and `sqlite3_free`. Each is checked
+  with `foreign-entry?` before it is bound, else `missing-api` naming it. Both are in the floor's
+  build.
+- **The optional one, `sqlite3_load_extension`,** follows them in the same step: bound only when
+  `foreign-entry?` finds it, its absence recorded, never refused. It is reported where extension
+  loading is asked for, as the M1 amendment says: an open whose settings opt in raises
+  `&sqlite-extensions-unavailable` before anything opens (ADR-0021, decision 5).
+- **The M1 amendment's "M4 turns on the C call alone" holds, and isn't the guarantee.** Ubuntu's
+  library, CI's `main` lane's, is built `ENABLE_LOAD_EXTENSION`, and opens every connection with
+  the C call already on (M4's pre-work). What keeps a connection that didn't opt in from loading
+  is the verb's refusal in Scheme, before any C call (the maintainer's Q3, "Refuse in Scheme").
+  `sqlite3_enable_load_extension` stays never bound, so SQL's `load_extension()` stays refused
+  on every library, as measured with the C call on.
+- **A library without extension loading is told by `foreign-entry?`,** never by `db_config`'s
+  answer: upstream's `OMIT_LOAD_EXTENSION` build answers 0 to the op, and Apple's answers 21
+  (M4's pre-work, question 4).
+- **Each gets a decoy switch,** `DECOY_LACKS_<entry>`.
+  - The two required ones are dealt by the pattern of five ([ADR-0005](0005-memory-gate.md),
+    amended 2026-11-16), each a `missing-api` row.
+  - **The optional one stays out of the pattern:** the list it deals holds required entry points
+    alone, and a list of optional ones follows it, the two held together to the convention
+    table. Dealt at its place, 43, it would have gone to `test-library-loading-real` with a
+    `missing-api` row, for a library that must load.
+  - Its rows, named in `test-library-loading-real`: the build without it loads, and native records
+    it absent; an open with the opt-in raises the named condition with no `sqlite3_open_v2` in the
+    call log (the maintainer's Q4, "The decoy"). The decoy's open always fails, so the log can
+    never show a `sqlite3_db_config` call: what a row sees is whether the open was tried.

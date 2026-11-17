@@ -3,6 +3,8 @@
 - **Status:** Accepted (the maintainer, 2026-11-13). Amended 2026-11-14, and accepted by the
   maintainer that day: decision 3 is built (M1 slice 5,
   [amendment](#amendment-2026-11-14-decision-3-is-built-m1-slice-5)).
+  Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: FTS5 on the current lane
+  ([amendment](#amendment-2026-11-17-fts5-on-the-current-lane-m4s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every SQLite chez-sqlite3 loads
 - **Settles:** brief §2.2
@@ -64,3 +66,24 @@ What the versions bring that v1 uses:
 - **The `current` lane does the same at 3.54.1.**
 - **Before CI:** with both builds, compiled in the Guix container with the lanes' flags,
   `make test` passed 25 of 25 suites. See [the log](../m1-slice-5-mutation-log.md).
+
+## Amendment, 2026-11-17: FTS5 on the current lane (M4's plan)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 ([the M4 plan](../2026-11-17-m4-plan.md), §2 and §4.5).
+
+- **The consequence's "FTS5 is wherever the build enables it" held, and CI's compiled lanes
+  enabled it nowhere:** `build-sqlite.sh` compiled SQLite's defaults, so `floor` and `current` had
+  no FTS5, where Guix's, Ubuntu's (`main`), Apple's and Homebrew's have it (M4's pre-work).
+- **The `current` lane compiles with `-DSQLITE_ENABLE_FTS5`** (the maintainer's Q1, "FTS5 on
+  current only"). Built so, 3.54.1 lists one more option, `ENABLE_FTS5`, after
+  `DIRECT_OVERFLOW_READ`, 39 for 38 (M4's research, F0). `check-sqlite.sh`'s `current` list and
+  `test-ci-sqlite`'s copy move with it. Each lane's cache key moves by itself, since both hash
+  `build-sqlite.sh`; the workflow doesn't change.
+- **The `floor` lane keeps SQLite's defaults,** so a real library runs the suites' path for a
+  library without FTS5. The FTS5 suite chooses its rows by `sqlite-compile-option?
+  "ENABLE_FTS5"`, held to `pragma_module_list`, names FTS5 unavailable, never silently, and
+  asserts the refusal in their place, code `error` at the `create virtual table`'s step, as the
+  memory check names itself unavailable on a library that keeps no count
+  ([ADR-0005](0005-memory-gate.md), amended).
+- **JSON is in every library measured,** the floor's included, and alike there but for
+  `json_pretty`, which arrived in 3.46.0. The JSON suite uses the floor's functions alone (F3).

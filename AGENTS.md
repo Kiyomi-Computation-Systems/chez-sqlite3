@@ -225,6 +225,16 @@
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,
   amended).
+* A variadic C function is bound with `(__varargs_after N)`, N its named
+  parameters. Without it, `sqlite3_db_config` worked on x86_64 and crashed
+  on Apple arm64 (`.plans/research/m4-prework/`), so no Linux behaviour row
+  can see the convention lost.
+* `sqlite3_db_config` sets no error on its connection, and
+  `sqlite3_load_extension` none of its own: after either fails, the
+  connection's code and `sqlite3_errmsg` are another call's, unless an
+  extension's init failed a call that set them. Take a failure's code from
+  the call's own answer, a set's message from `sqlite3_errstr`, and a
+  load's from its own message slot (`.plans/research/m4-plan/`).
 * Chez's `utf8->string`, and a UTF-8 transcoder, drop one leading U+FEFF.
   Decode a column's value or name with `strict-utf8->string`, which keeps
   it. `c-string->string` keeps it too but replaces invalid bytes, so it
