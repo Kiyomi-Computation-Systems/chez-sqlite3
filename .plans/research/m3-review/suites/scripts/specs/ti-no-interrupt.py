@@ -1,0 +1,1 @@
+EDITS = [('tests/test-transaction-interrupt.sps', "                                (sqlite3-interrupt handle)\n                                'void)))", "                                #f\n                                'void)))")]

@@ -1,0 +1,1 @@
+EDITS = [('src/chez-sqlite3/private/transaction.sls', '              (when (and begun (not ended))\n                (set! rollback-failure', '              (when #f\n                (set! rollback-failure')]

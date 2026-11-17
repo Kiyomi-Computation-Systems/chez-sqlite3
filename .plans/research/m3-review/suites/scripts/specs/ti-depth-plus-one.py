@@ -1,0 +1,1 @@
+EDITS = [('src/chez-sqlite3/private/transaction.sls', '(begin-plan (sqlite3-get-autocommit handle) (database-depth db) mode)', '(begin-plan (sqlite3-get-autocommit handle) (+ (database-depth db) 1) mode)')]

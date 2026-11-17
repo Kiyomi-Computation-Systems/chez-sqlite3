@@ -1,0 +1,1 @@
+EDITS = [('tests/test-transaction-interrupt.sps', 'select i from k where length(randomblob(16)) = 16")', 'select i from k")'), ('tests/test-transaction-interrupt.sps', 'select count(*) from k, src where length(randomblob(16)) = 16")', 'select count(*) from k, src")')]

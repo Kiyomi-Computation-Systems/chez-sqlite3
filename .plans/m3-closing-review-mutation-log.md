@@ -145,9 +145,9 @@ the lead's brief, in `chez-sqlite3-wt-m3cr-t`, on `m3cr-transaction` from `main`
   under `timeout 300`, through the worktree's `scripts/guix-env`.
 - **The edits.** A mutation is a list of edits, each checked to match its file's text exactly
   once before it is written.
-- **The counts** are read from the suites' own output, never by eye. The driver
-  (`build/t/mutants.py`, `build/t/run-mutants.sh`) and every log are in the worktree's
-  git-ignored `build/t/`.
+- **The counts** are read from the suites' own output, never by eye. The driver, `mutants.py` and
+  `run-mutants.sh`, is kept in [research/m3-review/transaction/scripts/](research/m3-review/transaction/scripts/);
+  every log stayed in the worktree's git-ignored `build/t/`.
 - **The red runs** used `build/t/red/`: a copy of `e590fdc`'s tree with the five changed suites
   put in.
 
@@ -244,7 +244,7 @@ and `transaction`'s, and an engine can stop at each.
 - **The brief's rule alone** would fail the fixed code at fuels 7 and 8. Its rule: a second commit
   only where the second resume re-ran the thunk's entry.
 - **A probe in a library of its own** found the same one-fuel gap per procedure entry
-  (`build/t/probe/window.sps`).
+  (`research/m3-review/transaction/scripts/probe-window.sps`).
 
 ### Item 2: the refusal and slice 4's failed-begin row
 
@@ -304,7 +304,7 @@ The brief: a timer's handler reaches the window between `finished`'s set and the
 
 ### Times
 
-Plain, one run each, `build/t/time-suites.sh` in the container, while two other builders ran
+Plain, one run each, `research/m3-review/transaction/scripts/time-suites.sh` in the container, while two other builders ran
 beside it. Under the gate, `make test-memory MEMORY_SUITES=…`, the gate's `time:` lines.
 
 | Suite | Plain, 3.53.1 | Plain, floor | Gate, 3.53.1 | Gate, floor |
@@ -365,10 +365,11 @@ An Opus agent built them from the lead's brief, in `chez-sqlite3-wt-m3cr-c`, on
 
 Every plant ran in a copy of the worktree of its own, `build/c/NAME/`, made by
 `rsync -a --exclude .git --exclude build`, with `build/m3-floor` copied in, after `make deps` in
-the copy, through the worktree's `scripts/guix-env` (`build/c/plant.sh`, `build/c/runc.sh`). Each
+the copy, through the worktree's `scripts/guix-env` (`plant.sh` and `runc.sh`, kept in
+[research/m3-review/conveniences/scripts/](research/m3-review/conveniences/scripts/)). Each
 plant is a list of edits, each checked to match its file's text exactly once before it is
 written. The counts are read from the suites' own output, never by eye. The plants and their
-logs are in `build/c/`, git-ignored.
+logs stayed in `build/c/`, git-ignored.
 
 #### The red runs
 
@@ -614,7 +615,8 @@ The Makefile's shard lists are unchanged: no suite was split.
 Each plant ran in a copy of the worktree, `build/s/NAME/`, made by `rsync -a --exclude .git
 --exclude build`, with `build/m3-floor` copied in, through the copy's own `scripts/guix-env`,
 after `make deps` there. A plant is a list of edits, each checked to match its file exactly once
-(`build/s/plant.py`, the specs in `build/s/specs/`). The old suites ran as `tests/old-*.sps`, copied
+(`plant.py`, with every plant's spec, kept in
+[research/m3-review/suites/scripts/](research/m3-review/suites/scripts/)). The old suites ran as `tests/old-*.sps`, copied
 from `e590fdc`, beside the new. Counts come from the suites' own `# of` lines. A floor run sets
 `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` to the floor's.
 
@@ -948,12 +950,13 @@ scripts/guix-env sh -c 'make test'
 scripts/guix-env sh -c "make test-memory MEMORY_SUITES='tests/test-transaction-interrupt.sps'"
 scripts/guix-env sh -c 'CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include make test-memory MEMORY_SUITES=tests/test-transaction-interrupt.sps'
 scripts/guix-env sh -c '$CHEZ --libdirs src:tests:build/scheme-libs --program .plans/research/m3-review/suites/cache-order.sps'
-taskset -c 2,3 scripts/guix-env sh -c 'build/s/race.sh floor old 1000000 200 30 LABEL'
-taskset -c 2,3 scripts/guix-env sh -c 'build/s/race.sh floor handshake 1000000 200 30 LABEL'
+taskset -c 2,3 scripts/guix-env sh -c '.plans/research/m3-review/suites/scripts/race.sh floor old 1000000 200 30 LABEL'
+taskset -c 2,3 scripts/guix-env sh -c '.plans/research/m3-review/suites/scripts/race.sh floor handshake 1000000 200 30 LABEL'
 ```
 
-`build/s/race.sh` runs `prepare-race.sps` under the gate's Valgrind options; its arguments are the
+`race.sh` runs `prepare-race.sps` under the gate's Valgrind options, writing into `build/s/race/`; its arguments are the
 library, the device, the IN list's items, the delay in ms, the trials and a label.
 
-A plant: `build/s/mkcopy.sh NAME && python3 build/s/plant.py build/s/NAME build/s/specs/SPEC.py`,
+A plant, with the kept scripts in `.plans/research/m3-review/suites/scripts/` as `S`:
+`$S/mkcopy.sh NAME && python3 $S/plant.py build/s/NAME $S/specs/SPEC.py`,
 then `make deps` and the suite in the copy.
