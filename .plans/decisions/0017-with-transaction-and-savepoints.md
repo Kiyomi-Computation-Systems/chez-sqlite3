@@ -21,7 +21,8 @@
   maintainer confirmed that day ("Confirm, and name the SQL"; "Document it"; "One section per
   statement"), and four consequences found by the slice's review
   ([amendment](#amendment-2026-11-16-with-transaction-as-built-m3-slice-4)). Amended 2026-11-16
-  in M3 slice 6, proposed: a deferred transaction's first write, and the default under contention
+  in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): a deferred transaction's first
+  write, and the default under contention
   ([amendment](#amendment-2026-11-16-a-deferred-transactions-first-write-m3-slice-6)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `with-transaction`
@@ -425,7 +426,8 @@ against a plant.
 
 ## Amendment, 2026-11-16: a deferred transaction's first write (M3 slice 6)
 
-Proposed in M3 slice 6, from part B's builder's report and the lead's checks (the slice's
+Accepted by the maintainer on 2026-11-17 ("Accept all"). Proposed in M3 slice 6, from part B's
+builder's report and the lead's checks (the slice's
 [mutation log](../m3-slice-6-mutation-log.md), part B;
 [research/m3-slice-6/](../research/m3-slice-6/README.md)).
 

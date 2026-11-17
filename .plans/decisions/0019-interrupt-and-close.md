@@ -8,7 +8,8 @@
   read, and a test of the exclusion that doesn't need the gate. Amended 2026-11-16 in M3 slice 5,
   and accepted by the maintainer that day: decision 11's upper bound, the maintainer's "Keep,
   amend" ([amendment](#amendment-2026-11-16-a-waits-upper-bound-m3-slice-5)). Amended
-  2026-11-16 in M3 slice 6, proposed: the interrupt and contention as built, and probes P4 and P5
+  2026-11-16 in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): the interrupt and
+  contention as built, and probes P4 and P5
   ([amendment](#amendment-2026-11-16-the-interrupt-and-contention-as-built-m3-slice-6)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `interrupt-database!`, the close's part in it, and the busy timeout
@@ -190,7 +191,8 @@ adversarial review ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5
 
 ## Amendment, 2026-11-16: the interrupt and contention, as built (M3 slice 6)
 
-Proposed in M3 slice 6, from its builders' reports, the lead's checks and the slice's review (the
+Accepted by the maintainer on 2026-11-17 ("Accept all"). Proposed in M3 slice 6, from its
+builders' reports, the lead's checks and the slice's review (the
 slice's [mutation log](../m3-slice-6-mutation-log.md), parts A and B, and part A's follow-up 2;
 [research/m3-slice-6/](../research/m3-slice-6/README.md)).
 

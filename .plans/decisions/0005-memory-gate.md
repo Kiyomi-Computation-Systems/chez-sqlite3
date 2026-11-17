@@ -30,7 +30,8 @@
   halves split in three (M3 slice 2,
   [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)). Amended 2026-11-16
   by the maintainer's choice, "Shard in slice 6": the memory job split in two (M3 slice 6,
-  [amendment](#amendment-2026-11-16-the-memory-job-split-in-two-m3-slice-6)), proposed.
+  [amendment](#amendment-2026-11-16-the-memory-job-split-in-two-m3-slice-6)), and accepted on
+  2026-11-17 ("Accept all").
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -607,7 +608,8 @@ replaces the M3 amendment's "three to `test-library-loading-decoys` and two to
 
 ## Amendment, 2026-11-16: the memory job split in two (M3 slice 6)
 
-Proposed in M3 slice 6, by the maintainer's choice of 2026-11-16, "Shard in slice 6". It carries
+Accepted by the maintainer on 2026-11-17 ("Accept all"). Proposed in M3 slice 6, by the
+maintainer's choice of 2026-11-16, "Shard in slice 6". It carries
 out the M3 amendment's rule, "past 45 minutes, three quarters of its 60, the job is sharded", and
 makes decision 6's one `memory` job two. chez-curl ADR-0014's amendment "the memory job is split
 in two" is the design. Its job names are kept, so the two repositories' required checks read
