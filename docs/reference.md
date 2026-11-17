@@ -182,6 +182,19 @@ Closing finalizes the connection's live statements first, oldest first. If
 one of those finalizes failed, the connection is closed all the same, and
 the first failure is raised after.
 
+A close is refused only when something other than chez-sqlite3 left work
+open on the connection: a statement, a blob or a backup, from a bug or
+from foreign code such as an extension. The connection stays open. The
+library has already finalized its own statements and emptied its cache.
+
+By then SQLite has also thrown away the changes that full-text tables
+(FTS3, FTS4 and FTS5) had not saved. Plain tables and RTREE tables keep
+theirs. So roll an open transaction back; never commit it. A full-text
+index committed this way, or by a write that was still running, no longer
+matches its rows. For an ordinary full-text table `t`, its own rebuild
+command, `insert into t(t) values ('rebuild')`, made such an index whole
+again in our tests.
+
 ```scheme run
 (let ((db (open-database ":memory:")))
   (close-database! db)

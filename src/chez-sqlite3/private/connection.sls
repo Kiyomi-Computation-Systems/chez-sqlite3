@@ -56,13 +56,28 @@
 ;;;               takes its message from sqlite3_errstr (decision 4)
 ;;;   the close   every statement the connection tracks is finalized, oldest
 ;;;               first, keeping the first failure a finalize reported (M2;
-;;;               ADR-0014, decision 8). Then sqlite3_next_stmt must find no
-;;;               statement: one found is a defect of chez-sqlite3's, an
-;;;               assertion violation naming the count, and the connection
-;;;               stays open. Then sqlite3_close, never sqlite3_close_v2; an
-;;;               answer but SQLITE_OK is &sqlite-error, and the connection
-;;;               stays open and counted (decision 5). Once it is closed, the
-;;;               first finalize failure is raised (R1)
+;;;               ADR-0014, decision 8). Then sqlite3_close, never
+;;;               sqlite3_close_v2. Once it is closed, the first finalize
+;;;               failure is raised (R1). The close vouches only for the
+;;;               statements it tracks, and judges none it did not make (the
+;;;               maintainer's "Vouch only for ours", 2026-11-17). An answer
+;;;               but SQLITE_OK means something else left work open on the
+;;;               connection, a statement, a blob or a backup: a defect of
+;;;               chez-sqlite3's, or foreign code's, such as a loaded
+;;;               extension's. The connection stays open and counted, and
+;;;               only then does sqlite3_next_stmt count what is left, as a
+;;;               diagnostic: one or more, an assertion violation naming the
+;;;               count; none, a backup's, sqlite3_close's own &sqlite-error
+;;;               (decision 5). The count names every statement left,
+;;;               SQLite's own among them: a virtual table's module, FTS3's,
+;;;               FTS4's, FTS5's or RTREE's, keeps statements on the
+;;;               connection, which sqlite3_close finalizes as it disconnects
+;;;               the table, before it looks for statements, but not for a
+;;;               table a statement left open still holds. sqlite3_close has
+;;;               by then also rolled back each virtual table a transaction
+;;;               wrote, which is the other work's affair, not the library's
+;;;               (the maintainer's "Close first, count on failure",
+;;;               2026-11-17)
 ;;;
 ;;; A connection tracks its live statements (ADR-0012, amended; ADR-0014,
 ;;; decision 8). (chez-sqlite3 private statement) makes them and imports this
@@ -95,13 +110,13 @@
 ;;;                  the flag once the record exists; close-connection runs
 ;;;                  its work through interrupt-latch-close!, which clears it
 ;;;                  before the first finalize and sets it again when the
-;;;                  work left the connection open: a statement found
-;;;                  untracked, or sqlite3_close failing. interrupt-database!
-;;;                  is the one verb another thread may call: it checks only
-;;;                  that its argument is a database, and calls
-;;;                  sqlite3_interrupt through the latch, holding its mutex,
-;;;                  while the flag is set; the call itself is made inside
-;;;                  the latch, never after it returns. Its work is
+;;;                  work left the connection open: sqlite3_close failing,
+;;;                  with a statement found untracked or none.
+;;;                  interrupt-database! is the one verb another thread may
+;;;                  call: it checks only that its argument is a database, and
+;;;                  calls sqlite3_interrupt through the latch, holding its
+;;;                  mutex, while the flag is set; the call itself is made
+;;;                  inside the latch, never after it returns. Its work is
 ;;;                  interrupt-database/with's, which takes the foreign call,
 ;;;                  so the suites run it on a stand-in. It lives here because
 ;;;                  the record and its handle do, and the handle's one
@@ -109,8 +124,8 @@
 ;;;                  this verb must not (ADR-0012, decision 2; ADR-0010,
 ;;;                  amended). call-with-latch-shut runs with-transaction's
 ;;;                  exits through interrupt-latch-shut!, which clears the
-;;;                  flag around them and puts it back after (the
-;;;                  maintainer's "Shut the latch on exit", 2026-11-17)
+;;;                  flag around them and puts it back after (the maintainer's
+;;;                  "Shut the latch on exit", 2026-11-17)
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
@@ -531,8 +546,8 @@
 
   ;; close-left-open? : (Pairof Symbol Any) -> Boolean
   ;; Whether a close's OUTCOME, as close-connection's work answers it, left
-  ;; the connection open: a statement found untracked, or sqlite3_close
-  ;; failing (ADR-0019, decision 2). Raises nothing.
+  ;; the connection open: sqlite3_close failing, with a statement found
+  ;; untracked after it, or none (ADR-0019, decision 2). Raises nothing.
   (define (close-left-open? outcome)
     (and (memq (car outcome) '(untracked failed)) #t))
 
@@ -547,14 +562,25 @@
   ;; tracked statement finalized, oldest first, the first failure kept; the
   ;; cache emptied, its statements among those finalized, whether or not
   ;; the connection then closes, so it never holds a freed one (ADR-0020,
-  ;; decision 9); sqlite3_next_stmt; sqlite3_close; the handle cleared and
-  ;; the count down; then, when a statement was found untracked or
-  ;; sqlite3_close failed, the latch made interruptible again. After it, by
-  ;; what the work answered: a statement found untracked, or sqlite3_close's
-  ;; failure, each raised in place of a finalize's failure, with the
-  ;; connection open and counted; else, the connection closed, the first
-  ;; finalize failure (R1), then a count-down that found the count at zero,
-  ;; count-down!'s double free. The work raises nothing.
+  ;; decision 9); sqlite3_close; on SQLITE_OK, the handle cleared and the
+  ;; count down; on any other answer, the connection left open and counted,
+  ;; and only then sqlite3_next_stmt's count of the statements left on it,
+  ;; and the latch made interruptible again. sqlite3_close comes before the
+  ;; count because it disconnects every virtual table first, finalizing the
+  ;; statements a module such as FTS5 keeps on the connection, which a
+  ;; count before it found as untracked (the maintainer's "Close first,
+  ;; count on failure", 2026-11-17). The close judges no statement it did
+  ;; not make ("Vouch only for ours", 2026-11-17): a refusal means work
+  ;; something else left open, a defect of chez-sqlite3's or foreign
+  ;; code's, and the count is a diagnostic of every statement left, a
+  ;; module's among them while a leftover statement holds its table. After
+  ;; it, by what the work answered:
+  ;; with sqlite3_close failed, a statement found untracked, an assertion
+  ;; violation naming the count, or with none, sqlite3_close's failure,
+  ;; each raised in place of a finalize's failure, with the connection open
+  ;; and counted; else, the connection closed, the first finalize failure
+  ;; (R1), then a count-down that found the count at zero, count-down!'s
+  ;; double free. The work raises nothing.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
@@ -566,19 +592,19 @@
                     '(already-closed)
                     (let* ((failure (finalize-tracked! db handle))
                            (emptied (statement-cache-clear! (unchecked-database-cache db)))
-                           (untracked (statements-on handle)))
-                      (if (> untracked 0)
-                          (list 'untracked untracked)
-                          (let ((rc (sqlite3-close handle)))
-                            (if (eqv? rc sqlite-ok)
-                                (begin
-                                  (set-database-handle! db #f)
-                                  (let ((double-free (guard (c (#t c))
-                                                       (count-down! 'connection)
-                                                       #f)))
-                                    (cond (failure (list 'finalize-failed failure))
-                                          (double-free (list 'double-free double-free))
-                                          (else '(closed)))))
+                           (rc (sqlite3-close handle)))
+                      (if (eqv? rc sqlite-ok)
+                          (begin
+                            (set-database-handle! db #f)
+                            (let ((double-free (guard (c (#t c))
+                                                 (count-down! 'connection)
+                                                 #f)))
+                              (cond (failure (list 'finalize-failed failure))
+                                    (double-free (list 'double-free double-free))
+                                    (else '(closed)))))
+                          (let ((untracked (statements-on handle)))
+                            (if (> untracked 0)
+                                (list 'untracked untracked)
                                 (cons 'failed (details-of rc handle)))))))))
             close-left-open?)))
       (case (car outcome)
