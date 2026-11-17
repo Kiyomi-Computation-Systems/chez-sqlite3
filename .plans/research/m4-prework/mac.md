@@ -8,14 +8,15 @@ SQLite, so we can read what each binding does there. On Linux both bindings agre
 Everything below is for zsh, in your chez-sqlite3 clone. The commands carry no comments. They
 write only under `build/m4pre-mac/`, which git ignores.
 
-## 1. Fetch the probes
+## 1. Get the probes
 
-Start from a clean tree: `git status --short` should print nothing.
+They're on `main`, merged in #27. Start from a clean tree: `git status --short` should print
+nothing.
 
 ```
 git status --short
-git fetch origin
-git switch --detach origin/m4-prework
+git switch main
+git pull --ff-only
 ```
 
 ## 2. Name things
@@ -67,11 +68,10 @@ cc -Wall -I$(brew --prefix sqlite)/include -o $O/constants-brew $P/constants.c
 $O/constants-brew < $O/varargs-brew.txt > $O/constants-brew.txt 2>&1; echo "(exit $?)" >> $O/constants-brew.txt
 ```
 
-## 6. Send back, then go back
+## 6. Send back
 
 ```
 tar czf m4pre-mac.tgz $O/*.txt
-git switch -
 ```
 
 Send `m4pre-mac.tgz`. It holds every `.txt` file in `build/m4pre-mac/`: `system.txt`, the three
