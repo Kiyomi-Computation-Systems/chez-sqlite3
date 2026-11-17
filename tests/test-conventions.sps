@@ -7,8 +7,16 @@
 ;;;   the table      written-out names and conventions, so a table loosened
 ;;;                  with the binding it holds still fails; each row's shape;
 ;;;                  every cited record exists; the allowlists, written out,
-;;;                  are the types the table uses and void as a result
-;;;   src/           no violation, and the 41 forms are all native's
+;;;                  are the types the table uses and void as a result; its
+;;;                  names are (library-loading)'s every-entry, the required
+;;;                  entry points, then its optional-entries, whole and in
+;;;                  order, and the optional rows alone say so
+;;;   conventions    convention-of reads exactly nothing as plain,
+;;;                  __collect_safe alone as collect-safe, and the list of
+;;;                  __varargs_after and 2 alone as variadic; anything else,
+;;;                  a count of 3 and __collect_safe beside the count among
+;;;                  it, as other, which no row holds
+;;;   src/           no violation, and the 44 forms are all native's
 ;;;   fixtures       tests/fixtures/conventions/<case>/, each the one fault it
 ;;;                  names, and the whole list of violations asserted: a form
 ;;;                  outside native, an entry that is no string literal, type
@@ -17,7 +25,12 @@
 ;;;                  with no form, a C name bound twice, a file that cannot be
 ;;;                  read, words that are no form, and the symbol
 ;;;                  foreign-procedure anywhere but a form's head, the import
-;;;                  entry and bind-required's fender: a stray reference
+;;;                  entry and one fender each of bind-required and
+;;;                  bind-optional: a stray reference; sqlite3_db_config bound
+;;;                  plain, with a count of 3, with __collect_safe beside its
+;;;                  count either way, and the count's words written bare;
+;;;                  sqlite3_load_extension bound plain through bind-optional
+;;;                  and sqlite3_free bound __collect_safe
 ;;;   sweeps         each row of the table, changed in each field in turn,
 ;;;                  held against the real src/; each row removed in turn
 ;;;   the allowlist  against its whole complement: every type Chez 10.4
@@ -35,7 +48,8 @@
         (srfi :64)
         (only (chezscheme) directory-list load-shared-object machine-type)
         (chez-sqlite3-testing)
-        (foreign-conventions))
+        (foreign-conventions)
+        (only (library-loading) every-entry optional-entries))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -60,7 +74,8 @@
 ;; expected-names : (Listof String)
 ;; ADR-0002's amended order: the report's three, the threadsafe answer,
 ;; sqlite3_initialize, then the rest of M1's required list, then M2's 21
-;; (ADR-0002's M2 amendment), then M3's five (ADR-0002's M3 amendment).
+;; (ADR-0002's M2 amendment), then M3's five (ADR-0002's M3 amendment), then
+;; M4's two required and its one optional (ADR-0002's M4 amendment).
 (define expected-names
   '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"
     "sqlite3_threadsafe" "sqlite3_initialize"
@@ -75,15 +90,25 @@
     "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
     "sqlite3_column_bytes" "sqlite3_error_offset"
     "sqlite3_changes64" "sqlite3_total_changes64" "sqlite3_last_insert_rowid"
-    "sqlite3_get_autocommit" "sqlite3_interrupt"))
+    "sqlite3_get_autocommit" "sqlite3_interrupt"
+    "sqlite3_db_config" "sqlite3_free" "sqlite3_load_extension"))
 
 ;; collect-safe-names : (Listof String)
 ;; The calls that can block (ADR-0011, decision 5): open and close from M1,
-;; and M2's four, prepare, step, reset and finalize (ADR-0011, amended).
-;; Every other is plain.
+;; M2's four, prepare, step, reset and finalize, and M4's load (ADR-0011,
+;; amended). The one variadic binding is sqlite3_db_config's. Every other is
+;; plain.
 (define collect-safe-names
   '("sqlite3_open_v2" "sqlite3_close"
-    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"))
+    "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"
+    "sqlite3_load_extension"))
+
+(define variadic-names '("sqlite3_db_config"))
+
+;; optional-names : (Listof String)
+;; The entry points a library may lack, and native binds by bind-optional
+;; (ADR-0002, amended 2026-11-17).
+(define optional-names '("sqlite3_load_extension"))
 
 ;; accepted-types : (Listof Any)
 ;; Every foreign type Chez 10.4 accepts (CSUG 4.2) that the table does not
@@ -188,17 +213,49 @@
 ;; An allowed type that is not T.
 (define (other-type t) (if (eq? t 'int) 'uptr 'int))
 
+;; list-head-of : (Listof Any) Natural -> (Listof Any)
+;; The first N elements of LST.
+(define (list-head-of lst n)
+  (if (or (= n 0) (null? lst)) '() (cons (car lst) (list-head-of (cdr lst) (- n 1)))))
+
+;; flipped : Symbol -> Symbol
+;; Another convention than C: plain's is collect-safe, and every other's,
+;; collect-safe's and variadic's, plain.
+(define (flipped c) (if (eq? c 'plain) 'collect-safe 'plain))
+
+;; named-parameters : (Listof String) -> (Listof String)
+;; A prototype's parameters before a closing "...": all of them for a
+;; function that is not variadic.
+(define (named-parameters parameters)
+  (if (and (pair? parameters) (equal? (list-ref parameters (- (length parameters) 1)) "..."))
+      (reverse (cdr (reverse parameters)))
+      parameters))
+
+;; variadic-prototype? : (Listof String) -> Boolean
+(define (variadic-prototype? parameters)
+  (not (= (length (named-parameters parameters)) (length parameters))))
+
 (define native-file "chez-sqlite3/private/native.sls")
 
 (test-begin "conventions")
 
 ;; --- the table ---------------------------------------------------------------------------
 
-(test-equal "table: it has a row for each of M1's 15 entry points, M2's 21 and M3's five, in ADR-0002's order, and no other"
+(test-equal "table: it has a row for each of M1's 15 entry points, M2's 21, M3's five and M4's three, in ADR-0002's order, and no other"
   expected-names
   (map row-name table))
 
-(test-equal "table: every row is (NAME (RESULT (PARAMETER ...)) (ARGUMENT ...) RESULT CONVENTION (RECORD ...)), and its prototype and its argument types have as many parameters"
+;; (library-loading)'s every-entry is what the pattern of five deals and
+;; missing-api-rows makes a row for, the required entry points alone, and
+;; optional-entries follows it (the M4 plan, section 4.6). Held whole and in
+;; order, as merge-halves' row holds the parts: an optional entry point
+;; joined to every-entry would be dealt a missing-api row for a library that
+;; must load.
+(test-equal "table: its names are (library-loading)'s every-entry, the 43 required entry points, then its optional-entries, sqlite3_load_extension, whole and in order"
+  (list (map row-name table) 43 '("sqlite3_load_extension"))
+  (list (append every-entry optional-entries) (length every-entry) optional-entries))
+
+(test-equal "table: every row is (NAME (RESULT (PARAMETER ...)) (ARGUMENT ...) RESULT CONVENTION (RECORD ...)); its argument types are as many as its prototype's parameters, or, for a prototype that ends \"...\", more than the parameters before it"
   '()
   (filter (lambda (row)
             (not (and (list? row) (= (length row) 6)
@@ -206,16 +263,33 @@
                       (let ((p (row-prototype row)))
                         (and (list? p) (= (length p) 2) (string? (car p))
                              (list? (cadr p)) (for-all string? (cadr p))
-                             (= (length (cadr p)) (length (row-arguments row)))))
+                             (if (variadic-prototype? (cadr p))
+                                 (< (length (named-parameters (cadr p))) (length (row-arguments row)))
+                                 (= (length (cadr p)) (length (row-arguments row))))))
                       (list? (row-arguments row)) (for-all symbol? (row-arguments row))
                       (symbol? (row-result row))
-                      (memq (row-convention row) '(plain collect-safe))
+                      (memq (row-convention row) '(plain collect-safe variadic))
                       (pair? (row-records row)) (for-all string? (row-records row)))))
           table))
 
-(test-equal "table: sqlite3_open_v2, sqlite3_close, sqlite3_prepare_v3, sqlite3_finalize, sqlite3_step and sqlite3_reset are collect-safe, and every other row is plain (ADR-0011, decision 5, amended)"
-  (map (lambda (name) (if (member name collect-safe-names) 'collect-safe 'plain)) expected-names)
+(test-equal "table: sqlite3_open_v2, sqlite3_close, sqlite3_prepare_v3, sqlite3_finalize, sqlite3_step, sqlite3_reset and sqlite3_load_extension are collect-safe, sqlite3_db_config alone is variadic, and every other row is plain (ADR-0011, decision 5, amended; ADR-0021, decision 4)"
+  (map (lambda (name)
+         (cond ((member name collect-safe-names) 'collect-safe)
+               ((member name variadic-names) 'variadic)
+               (else 'plain)))
+       expected-names)
   (map row-convention table))
+
+;; ADR-0002's M4 amendment: the optional entry point's row says it is
+;; optional, and no required one's does. The words, not "optional" alone,
+;; which "bind-optional" holds too.
+(test-equal "table: the rows whose records say \"an optional entry point\" are exactly the optional entry points', sqlite3_load_extension's"
+  optional-names
+  (map row-name
+       (filter (lambda (row)
+                 (exists (lambda (record) (index-of record "an optional entry point"))
+                         (row-records row)))
+               table)))
 
 (test-equal "table: the allowlists are int, uptr, integer-64, unsigned-int, double, unsigned-64 and unsigned-8 as arguments, and int, uptr, integer-64, double and void as results"
   '((int uptr integer-64 unsigned-int double unsigned-64 unsigned-8)
@@ -265,6 +339,27 @@
                           numbers)))))
    table))
 
+;; --- conventions --------------------------------------------------------------------------
+
+;; Written out, so a reader loosened with its table still fails.
+(test-equal "conventions: plain is nothing before the entry, collect-safe is __collect_safe alone, and variadic is the list of __varargs_after and 2 alone"
+  '((plain) (collect-safe __collect_safe) (variadic (__varargs_after 2)))
+  convention-forms)
+
+(test-equal "conventions: convention-of reads nothing as plain, __collect_safe alone as collect-safe, and the list of __varargs_after and 2 alone as variadic"
+  '(plain collect-safe variadic)
+  (map convention-of '(() (__collect_safe) ((__varargs_after 2)))))
+
+(test-equal "conventions: convention-of reads anything else as other, whole: a count of 3, of 1 or of 0, __collect_safe on either side of the count of 2, the count's two words bare, the count twice, the count written \"2\", a convention unknown, and __collect_safe twice"
+  '((other (__varargs_after 3)) (other (__varargs_after 1)) (other (__varargs_after 0))
+    (other __collect_safe (__varargs_after 2)) (other (__varargs_after 2) __collect_safe)
+    (other __varargs_after 2) (other (__varargs_after 2) (__varargs_after 2))
+    (other (__varargs_after "2")) (other __collect_unsafe) (other __collect_safe __collect_safe))
+  (map convention-of '(((__varargs_after 3)) ((__varargs_after 1)) ((__varargs_after 0))
+                       (__collect_safe (__varargs_after 2)) ((__varargs_after 2) __collect_safe)
+                       (__varargs_after 2) ((__varargs_after 2) (__varargs_after 2))
+                       ((__varargs_after "2")) (__collect_unsafe) (__collect_safe __collect_safe))))
+
 ;; --- src/ ----------------------------------------------------------------------------------
 
 (define src-items (checked (lambda () (scan-tree "src"))))
@@ -275,7 +370,7 @@
   (let ((r (reverse (cdr form))))
     (if (>= (length r) 3) (caddr r) 'no-entry)))
 
-(test-equal "src: every foreign-procedure form under src/ is one of the 41 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
+(test-equal "src: every foreign-procedure form under src/ is one of the 44 bindings of (chez-sqlite3 private native), in its one file and its one library, once each"
   (list (list native-file) '((chez-sqlite3 private native)) (sorted-strings expected-names))
   (if (and (list? src-items) (for-all (lambda (i) (eq? (car i) 'binding)) src-items))
       (list (unique (map cadr src-items))
@@ -324,6 +419,14 @@
   '()
   (found-in "permitted" (rows-named '("sqlite3_errcode"))))
 
+(test-equal "fixture permitted-optional: bind-required's and bind-optional's one fender mention each, the import entry and two forms' heads, and nothing fails"
+  '()
+  (found-in "permitted-optional" (rows-named '("sqlite3_errcode" "sqlite3_load_extension"))))
+
+(test-equal "fixture stray-optional-syntax: a second (syntax foreign-procedure) in bind-optional's fender fails, though no bind-required is there to have used its allowance"
+  `((stray-reference ,native-file))
+  (found-in "stray-optional-syntax" (rows-named '("sqlite3_load_extension"))))
+
 (test-equal "fixture plain-open: sqlite3_open_v2 bound plain fails, by name"
   '((mismatch "sqlite3_open_v2" convention collect-safe plain))
   (found-in "plain-open" (rows-named '("sqlite3_open_v2"))))
@@ -335,6 +438,39 @@
 (test-equal "fixture safe-other: sqlite3_errmsg bound __collect_safe fails, by name"
   '((mismatch "sqlite3_errmsg" convention plain collect-safe))
   (found-in "safe-other" (rows-named '("sqlite3_errmsg"))))
+
+(test-equal "fixture variadic: sqlite3_db_config bound as the M4 plan's section 4.2 writes it, the count of 2 before its entry, holds to its row"
+  '()
+  (found-in "variadic" (rows-named '("sqlite3_db_config"))))
+
+(test-equal "fixture variadic-plain: sqlite3_db_config bound plain fails, by name: what check-variadic's mutant must show"
+  '((mismatch "sqlite3_db_config" convention variadic plain))
+  (found-in "variadic-plain" (rows-named '("sqlite3_db_config"))))
+
+(test-equal "fixture variadic-3: sqlite3_db_config bound with a count of 3 fails, by name, the count read whole"
+  '((mismatch "sqlite3_db_config" convention variadic (other (__varargs_after 3))))
+  (found-in "variadic-3" (rows-named '("sqlite3_db_config"))))
+
+(test-equal "fixture variadic-safe: sqlite3_db_config bound __collect_safe beside its count fails, by name"
+  '((mismatch "sqlite3_db_config" convention variadic (other __collect_safe (__varargs_after 2))))
+  (found-in "variadic-safe" (rows-named '("sqlite3_db_config"))))
+
+(test-equal "fixture variadic-safe-after: and with __collect_safe after the count, the same"
+  '((mismatch "sqlite3_db_config" convention variadic (other (__varargs_after 2) __collect_safe)))
+  (found-in "variadic-safe-after" (rows-named '("sqlite3_db_config"))))
+
+(test-equal "fixture variadic-bare: the count's words written bare fail, and the count twice, on another binding, fails against its plain row"
+  '((mismatch "sqlite3_db_config" convention variadic (other __varargs_after 2))
+    (mismatch "sqlite3_errcode" convention plain (other (__varargs_after 2) (__varargs_after 2))))
+  (found-in "variadic-bare" (rows-named '("sqlite3_db_config" "sqlite3_errcode"))))
+
+(test-equal "fixture load-plain: sqlite3_load_extension bound plain through bind-optional is read as bind-required's forms are, and fails, by name"
+  '((mismatch "sqlite3_load_extension" convention collect-safe plain))
+  (found-in "load-plain" (rows-named '("sqlite3_load_extension"))))
+
+(test-equal "fixture free-safe: sqlite3_free bound __collect_safe fails, by name"
+  '((mismatch "sqlite3_free" convention plain collect-safe))
+  (found-in "free-safe" (rows-named '("sqlite3_free"))))
 
 (test-equal "fixture outside: a form in another library fails, naming the file, the library and the entry"
   '((outside-native "chez-sqlite3/private/other.sls" (chez-sqlite3 private other) "sqlite3_errcode"))
@@ -394,7 +530,7 @@
 
 ;; --- rows against the real src/, changed in turn ---------------------------------------------
 
-(test-equal "sweep: a row removed fails, by name, for each of the 41 rows"
+(test-equal "sweep: a row removed fails, by name, for each of the 44 rows"
   (map (lambda (name) (list (list 'no-row name))) expected-names)
   (map (lambda (name)
          (checked (lambda ()
@@ -407,20 +543,30 @@
   (checked (lambda ()
              (violations "src" (append table (list (synthetic "sqlite3_extra" '() 'int)))))))
 
-(test-equal "sweep: a row's convention flipped fails, by name, for each of the 41 rows"
+(test-equal "sweep: a row's convention flipped fails, by name, for each of the 44 rows: plain to collect-safe, and collect-safe and variadic to plain"
   (map (lambda (row)
-         (let ((flipped (if (eq? (row-convention row) 'plain) 'collect-safe 'plain)))
-           (list (list 'mismatch (row-name row) 'convention flipped (row-convention row)))))
+         (list (list 'mismatch (row-name row) 'convention (flipped (row-convention row))
+                     (row-convention row))))
        table)
   (map (lambda (row)
-         (let ((flipped (if (eq? (row-convention row) 'plain) 'collect-safe 'plain)))
-           (checked (lambda ()
-                      (violations "src" (replace-row table (row-name row)
-                                                     (with-field row 'convention flipped)))))))
+         (checked (lambda ()
+                    (violations "src" (replace-row table (row-name row)
+                                                   (with-field row 'convention
+                                                               (flipped (row-convention row))))))))
        table))
 
-(test-equal "sweep: a row's result type changed fails, by name, for each of the 41 rows: int to uptr, and uptr, integer-64, double and void to int"
-  (list 41
+(test-equal "sweep: sqlite3_db_config's row made plain, and made collect-safe, each fails, by name, against the real src/"
+  '(((mismatch "sqlite3_db_config" convention plain variadic))
+    ((mismatch "sqlite3_db_config" convention collect-safe variadic)))
+  (map (lambda (c)
+         (checked (lambda ()
+                    (violations "src" (replace-row table "sqlite3_db_config"
+                                                   (with-field (car (rows-named '("sqlite3_db_config")))
+                                                               'convention c))))))
+       '(plain collect-safe)))
+
+(test-equal "sweep: a row's result type changed fails, by name, for each of the 44 rows: int to uptr, and uptr, integer-64, double and void to int"
+  (list 44
         (map (lambda (row)
                (list (list 'mismatch (row-name row) 'result (other-type (row-result row)) (row-result row))))
              table))
@@ -466,10 +612,11 @@
            (list name (row-arguments row) (row-result row) (row-convention row))))
        (map car m3-five)))
 
-(test-equal "table: M3's five are the last five rows, in ADR-0002's M3 order, after M2's sqlite3_error_offset"
+(test-equal "table: M3's five follow M2's sqlite3_error_offset, in ADR-0002's M3 order, at 36 to 40"
   (list "sqlite3_error_offset" (map car m3-five))
   (let ((names (map row-name table)))
-    (list (list-ref names 35) (list-tail names 36))))
+    (list (list-ref names 35)
+          (map (lambda (i) (list-ref names i)) '(36 37 38 39 40)))))
 
 (test-equal "sweep: M3's five made __collect_safe each fail, by name: a binding that held the lock-free counters or the interrupt through a collection would let another thread's collection wait on them"
   (map (lambda (entry) (list (list 'mismatch (car entry) 'convention 'collect-safe 'plain)))
@@ -496,6 +643,32 @@
          ("sqlite3_last_insert_rowid" . int) ("sqlite3_get_autocommit" . integer-64)
          ("sqlite3_interrupt" . int))))
 
+;; M4's three, written out (ADR-0021, decisions 4, 8 and 9): sqlite3_db_config
+;; in the shape (db op int int*), variadic and plain; sqlite3_free of a
+;; pointer, plain; sqlite3_load_extension of a handle, a path, an entry point
+;; and a message's slot, __collect_safe.
+(define m4-three
+  '(("sqlite3_db_config" (uptr int int uptr) int variadic)
+    ("sqlite3_free" (uptr) void plain)
+    ("sqlite3_load_extension" (uptr uptr uptr uptr) int collect-safe)))
+
+(test-equal "table: M4's three are written out: sqlite3_db_config in the shape (db op int int*), answering int, variadic; sqlite3_free of a pointer, answering void, plain; sqlite3_load_extension of four pointers, answering int, collect-safe"
+  m4-three
+  (map (lambda (name)
+         (let ((row (car (rows-named (list name)))))
+           (list name (row-arguments row) (row-result row) (row-convention row))))
+       (map car m4-three)))
+
+(test-equal "table: M4's three are the last three rows, after M3's sqlite3_interrupt, the two required before the optional one"
+  (list "sqlite3_interrupt" (map car m4-three))
+  (let ((names (map row-name table)))
+    (list (list-ref names 40) (list-tail names 41))))
+
+(test-equal "table: sqlite3_db_config's prototype is int (sqlite3*, int, ...), as sqlite3.h writes it, its two named parameters the leading two of its four argument types"
+  '(("int" ("sqlite3*" "int" "...")) (uptr int))
+  (let ((row (car (rows-named '("sqlite3_db_config")))))
+    (list (row-prototype row) (list-head-of (row-arguments row) 2))))
+
 ;; every argument of every row, changed at its own position
 (define argument-cases
   (apply append
@@ -512,8 +685,8 @@
                                   found)))))
               table)))
 
-(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 66 arguments"
-  (list 66
+(test-equal "sweep: a row's argument type changed at each position fails, by name, for each of the 75 arguments"
+  (list 75
         (map (lambda (c)
                (list (list 'mismatch (row-name (car c)) 'arguments (caddr c) (row-arguments (car c)))))
              argument-cases))

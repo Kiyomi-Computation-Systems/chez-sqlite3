@@ -32,12 +32,29 @@
 ;;;   prototypes   each row of the convention table (tests/foreign-conventions.sls)
 ;;;                holds its C prototype to sqlite3.h: the C program asks
 ;;;                _Generic whether the function's type is exactly the row's.
+;;;                The optional entry points' rows, (library-loading)'s
+;;;                optional-entries, are asked in a compile of their own each:
+;;;                a header may mark one unavailable, as Apple's SDK sqlite3.h
+;;;                is believed to mark sqlite3_load_extension, which fails any
+;;;                compile that names it. Where that compile fails and native
+;;;                records the library without the entry point, the row prints
+;;;                UNAVAILABLE and asserts both, in place of the prototype;
+;;;                where it fails and the library has it, the row fails. Only
+;;;                then is native reached, through eval: where every compile
+;;;                runs, this suite loads no libsqlite3.
 ;;;                A map written here, from each C type the rows write to
 ;;;                its one Chez type (int, unsigned int, sqlite3_int64,
 ;;;                sqlite3_uint64, double, unsigned char, and any pointer, a
 ;;;                destructor among them, to uptr), holds the row's Chez
-;;;                types to its C types. A wrong row fails by name, and each
-;;;                kind of wrong row is planted in the suite.
+;;;                types to its C types. A prototype that ends "..." is a
+;;;                variadic function's (M4): its named parameters map to the
+;;;                row's leading arguments, at least one argument follows
+;;;                them, its row's convention must be variadic, and the
+;;;                count that convention-forms writes for variadic must be
+;;;                the named parameters' count; a row that is variadic must
+;;;                have such a prototype (ADR-0001, amended 2026-11-17). A
+;;;                wrong row fails by name, and each kind of wrong row is
+;;;                planted in the suite.
 ;;;
 ;;; The C program is compiled with $CC and no -I flag: the compiler's own
 ;;; search path must find sqlite3.h. A missing compiler or header fails a
@@ -54,7 +71,8 @@
         (only (chezscheme) getenv)
         (chez-sqlite3-testing)
         (only (foreign-conventions) conventions-table row-name row-prototype row-arguments
-              row-result)
+              row-result row-convention convention-forms)
+        (only (library-loading) optional-entries)
         (only (floors) read-floors floor-numbers))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -101,6 +119,10 @@
     (sqlite-null . "SQLITE_NULL")
     (sqlite-utf8 . "SQLITE_UTF8")
     (sqlite-prepare-persistent . "SQLITE_PREPARE_PERSISTENT")
+    (sqlite-dbconfig-enable-load-extension . "SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION")
+    (sqlite-dbconfig-defensive . "SQLITE_DBCONFIG_DEFENSIVE")
+    (sqlite-dbconfig-dqs-dml . "SQLITE_DBCONFIG_DQS_DML")
+    (sqlite-dbconfig-dqs-ddl . "SQLITE_DBCONFIG_DQS_DDL")
     (sqlite-result-codes . (each "SQLITE_"))
     (sqlite-result-code-name . procedure)
     (sqlite-primary-code-name . procedure)))
@@ -505,7 +527,15 @@
 ;; prototype-ask : Row -> (List String String)
 (define (prototype-ask row) (list (row-name row) (function-type row)))
 
-(define prototype-asks (map prototype-ask conventions-table))
+;; required-rows, optional-rows : (Listof Row)
+;; The table's rows of required entry points, which the one compile below
+;; asks, and of the optional ones, each asked in a compile of its own.
+(define required-rows
+  (filter (lambda (row) (not (member (row-name row) optional-entries))) conventions-table))
+(define optional-rows
+  (filter (lambda (row) (member (row-name row) optional-entries)) conventions-table))
+
+(define prototype-asks (map prototype-ask required-rows))
 
 ;; ends-with? : String String -> Boolean
 (define (ends-with? text suffix)
@@ -540,18 +570,70 @@
 (define (result-type c-type)
   (if (string=? c-type "void") 'void (chez-type c-type)))
 
-;; map-problems : Table -> (Listof (List String Any Any Any Any))
-;; Each row whose Chez types are not the map of its C types:
-;; (NAME MAPPED-ARGUMENTS MAPPED-RESULT ARGUMENTS RESULT).
-(define (map-problems rows)
-  (filter (lambda (m) m)
-          (map (lambda (row)
-                 (let ((arguments (map chez-type (cadr (row-prototype row))))
-                       (result (result-type (car (row-prototype row)))))
-                   (if (and (equal? arguments (row-arguments row)) (eq? result (row-result row)))
-                       #f
-                       (list (row-name row) arguments result (row-arguments row) (row-result row)))))
-               rows)))
+;; variadic-after : (Listof (Pairof Symbol (Listof Any))) -> (U Natural #f)
+;; N, when FORMS writes variadic as exactly the one convention
+;; (__varargs_after N); else #f.
+(define (variadic-after forms)
+  (let ((entry (assq 'variadic forms)))
+    (and entry (list? entry) (= (length entry) 2)
+         (let ((c (cadr entry)))
+           (and (list? c) (= (length c) 2) (eq? (car c) '__varargs_after)
+                (integer? (cadr c)) (exact? (cadr c)) (>= (cadr c) 0)
+                (cadr c))))))
+
+;; ellipsis? : (Listof String) -> Boolean
+;; Whether a prototype's parameters end "...": a variadic function's.
+(define (ellipsis? parameters)
+  (and (pair? parameters) (equal? (list-ref parameters (- (length parameters) 1)) "...")))
+
+;; take : (Listof Any) Natural -> (Listof Any)
+;; LST's first N elements, or all of it when it is shorter.
+(define (take lst n)
+  (if (or (= n 0) (null? lst)) '() (cons (car lst) (take (cdr lst) (- n 1)))))
+
+;; map-problems : Table [(Listof (Pairof Symbol (Listof Any)))] -> (Listof (Pairof String Any))
+;; Each row whose Chez types are not the map of its C types, and each row the
+;; variadic rule refuses, by FORMS' count for variadic, convention-forms' when
+;; none is given:
+;;   (NAME MAPPED-ARGUMENTS MAPPED-RESULT ARGUMENTS RESULT) for a prototype
+;;     without "..." whose types differ;
+;;   (NAME variadic-without-ellipsis) for one whose types match, held by a
+;;     variadic row, whose prototype must end "...";
+;;   (NAME ellipsis CONVENTION AFTER NAMED MAPPED-NAMED ARGUMENTS MAPPED-RESULT
+;;     RESULT) for a prototype that ends "...", unless its convention is
+;;     variadic, AFTER, the count FORMS writes, is NAMED, the count of its
+;;     named parameters, the map of those is the row's first NAMED arguments,
+;;     at least one argument follows them, and the result maps.
+(define map-problems
+  (case-lambda
+    ((rows) (map-problems rows convention-forms))
+    ((rows forms)
+     (let ((after (variadic-after forms)))
+       (filter (lambda (m) m)
+               (map (lambda (row)
+                      (let* ((parameters (cadr (row-prototype row)))
+                             (result (result-type (car (row-prototype row)))))
+                        (if (ellipsis? parameters)
+                            (let* ((named (reverse (cdr (reverse parameters))))
+                                   (mapped (map chez-type named))
+                                   (n (length named)))
+                              (if (and (eq? (row-convention row) 'variadic)
+                                       (eqv? after n)
+                                       (equal? mapped (take (row-arguments row) n))
+                                       (> (length (row-arguments row)) n)
+                                       (eq? result (row-result row)))
+                                  #f
+                                  (list (row-name row) 'ellipsis (row-convention row) after n mapped
+                                        (row-arguments row) result (row-result row))))
+                            (let ((arguments (map chez-type parameters)))
+                              (cond ((not (and (equal? arguments (row-arguments row))
+                                               (eq? result (row-result row))))
+                                     (list (row-name row) arguments result (row-arguments row)
+                                           (row-result row)))
+                                    ((eq? (row-convention row) 'variadic)
+                                     (list (row-name row) 'variadic-without-ellipsis))
+                                    (else #f))))))
+                    rows))))))
 
 (define facts (header-facts asked-names prototype-asks))
 
@@ -653,8 +735,18 @@
 (test-equal "values: every question got an answer"
   '() (filter (lambda (c) (eq? (answer-for c) 'no-answer)) asked-names))
 
-(test-equal "values: the table asks 108 codes, and the checks ask 124 names: those, the 9 open flags, the 5 type codes, SQLITE_UTF8 and SQLITE_PREPARE_PERSISTENT; SQLITE_ROW and SQLITE_DONE are the table's own"
-  '(108 124) (list (length table) (length asked-names)))
+(test-equal "values: the table asks 108 codes, and the checks ask 128 names: those, the 9 open flags, the 5 type codes, SQLITE_UTF8, SQLITE_PREPARE_PERSISTENT and M4's four db_config ops; SQLITE_ROW and SQLITE_DONE are the table's own"
+  '(108 128) (list (length table) (length asked-names)))
+
+;; The four ops, written out (the M4 plan, section 4.1; ADR-0021, decision
+;; 1), beside the header's own check above: a constant and its row's C name
+;; changed together would still meet the header.
+(test-equal "values: M4's four db_config ops are 1005, 1010, 1013 and 1014, ENABLE_LOAD_EXTENSION, DEFENSIVE, DQS_DML and DQS_DDL, and the header agrees"
+  '((1005 1010 1013 1014) (1005 1010 1013 1014))
+  (list (map constant-value '(sqlite-dbconfig-enable-load-extension sqlite-dbconfig-defensive
+                              sqlite-dbconfig-dqs-dml sqlite-dbconfig-dqs-ddl))
+        (map answer-for '("SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION" "SQLITE_DBCONFIG_DEFENSIVE"
+                          "SQLITE_DBCONFIG_DQS_DML" "SQLITE_DBCONFIG_DQS_DDL"))))
 
 ;; --- the table's own shape ------------------------------------------------------------
 
@@ -843,18 +935,114 @@
                rows)
           f))))
 
-(test-equal "prototypes: the table has a row for each of M1's 15 entry points, M2's 21 and M3's five"
-  41 (length conventions-table))
+(test-equal "prototypes: the table has a row for each of M1's 15 entry points, M2's 21, M3's five and M4's three"
+  44 (length conventions-table))
 
-(test-equal "prototypes: the header declares each row's prototype exactly: the rows it does not, each by name"
+(test-equal "prototypes: the one compile asks every required row and no optional one: 43 and sqlite3_load_extension apart"
+  (list 43 '("sqlite3_load_extension"))
+  (list (length prototype-asks) (map row-name optional-rows)))
+
+(test-equal "prototypes: the header declares each required row's prototype exactly: the rows it does not, each by name"
   '()
   (map car (filter (lambda (row) (not (eqv? (prototype-answer (row-name row)) 1)))
-                   conventions-table)))
+                   required-rows)))
 
 (test-equal "prototypes: every question got an answer, 1 or 0"
   '()
   (map car (filter (lambda (row) (eq? (prototype-answer (row-name row)) 'no-answer))
-                   conventions-table)))
+                   required-rows)))
+
+;; --- the optional entry points' prototypes, each in a compile of its own --------------
+
+;; optional-records : (Listof (Pairof String Symbol))
+;; Each optional entry point, and the name of native's record of it.
+(define optional-records '(("sqlite3_load_extension" . load-extension-available?)))
+
+;; optional-near-misses : (Listof (Pairof String Prototype))
+;; Each optional entry point's prototype written as its near miss, which a
+;; header that declares the entry point must answer 0.
+(define optional-near-misses
+  '(("sqlite3_load_extension" . ("int" ("sqlite3 *" "const char *" "const char *" "const char **")))))
+
+;; native-record : Symbol -> Any
+;; Native's record NAME, reached through eval under a guard, which loads
+;; libsqlite3 into this process; (raised TEXT) when native cannot be reached.
+(define (native-record name)
+  (guard (e (#t (list 'raised (describe e))))
+    (eval name (environment '(chez-sqlite3 private native)))))
+
+;; answer-in : String (Listof Answer) -> (U 0 1 'no-answer)
+(define (answer-in name answers)
+  (let ((entry (find (lambda (a) (and (eq? (car a) 'prototype) (string=? (cadr a) name))) answers)))
+    (if entry (caddr entry) 'no-answer)))
+
+;; optional-verdict : String Facts (-> Any) -> Verdict
+;; What an optional entry point's own compile, FACTS, says, with RECORD,
+;; native's record of it, asked only when the compile failed:
+;;   (declared)                      the header declares it exactly
+;;   (not-declared ANSWER)           the compile ran and the prototype is
+;;                                   another, or went unanswered
+;;   (unavailable)                   the compile failed, and the library has
+;;                                   no such entry point: named, not failed
+;;   (compile-failed WHY STEP)       the compile failed, and the library has
+;;                                   it (WHY the-library-has-it), or its
+;;                                   record could not be read (WHY the record)
+(define (optional-verdict name facts record)
+  (if (eq? (car facts) 'facts)
+      (let ((answer (answer-in name (cadr facts))))
+        (if (eqv? answer 1) '(declared) (list 'not-declared answer)))
+      (let ((r (record)))
+        (cond ((eq? r #f) '(unavailable))
+              ((eq? r #t) (list 'compile-failed 'the-library-has-it (car facts)))
+              (else (list 'compile-failed r (car facts)))))))
+
+;; The rule, on facts and records written here: native is asked only when the
+;; compile failed, and only its #f makes a failed compile unavailable.
+(test-equal "the optional rule: a compile that declares the entry point exactly is declared, and native's record is never asked; one that answers 0, or no answer, is not declared; a compile that failed is unavailable where native records the entry point absent, and fails where it records it there or cannot be read"
+  '(((declared) not-asked) ((not-declared 0) not-asked) ((not-declared no-answer) not-asked)
+    ((unavailable) asked) ((compile-failed the-library-has-it compile) asked)
+    ((compile-failed (raised "native refused") compile) asked))
+  (map (lambda (c)
+         (let* ((asked 'not-asked)
+                (verdict (optional-verdict "sqlite3_load_extension" (car c)
+                                           (lambda () (set! asked 'asked) (cadr c)))))
+           (list verdict asked)))
+       (list (list '(facts ((prototype "sqlite3_load_extension" 1)) "") #t)
+             (list '(facts ((prototype "sqlite3_load_extension" 0)) "") #t)
+             (list '(facts ((prototype "sqlite3_free" 1)) "") #t)
+             (list '(compile 1 "" "error: unavailable") #f)
+             (list '(compile 1 "" "error: unavailable") #t)
+             (list '(compile 1 "" "error: unavailable") '(raised "native refused")))))
+
+(for-each
+ (lambda (row)
+   (let* ((name (row-name row))
+          (record-name (cdr (assoc name optional-records)))
+          (own (guard (e (#t (list 'raised (describe e))))
+                 (header-facts '() (list (prototype-ask row)))))
+          (verdict (optional-verdict name own (lambda () (native-record record-name)))))
+     (if (equal? verdict '(unavailable))
+         (begin
+           (display "UNAVAILABLE test-constants: ")
+           (display name)
+           (display "'s prototype: its own compile against this sqlite3.h failed, and native records the library without it")
+           (newline)
+           (test-equal (string-append "prototypes: unavailable, in place of " name
+                                      "'s: its own compile failed, and native's "
+                                      (symbol->string record-name) " is #f")
+             (list 'compile #f)
+             (list (car own) (native-record record-name))))
+         (test-equal (string-append "prototypes: the optional " name
+                                    "'s, in a compile of its own: the header declares it exactly, and its near miss it answers 0")
+           (list '(declared) (list (list name 0)))
+           (list verdict
+                 (let ((miss (header-facts '() (list (list name (function-type
+                                                                 (list name (cdr (assoc name optional-near-misses))
+                                                                       '() 'int 'plain '())))))))
+                   (if (eq? (car miss) 'facts)
+                       (list (list name (answer-in name (cadr miss))))
+                       (list 'near-miss (car miss)))))))))
+ optional-rows)
 
 (test-equal "prototypes: each row's Chez types are the map of its C types, the rows that are not each by name"
   '()
@@ -1009,6 +1197,71 @@
           (list "sqlite3_last_insert_rowid" '("sqlite3_int64" ("sqlite3 *")) '(uptr) 'integer-64 'plain '())
           (list "sqlite3_get_autocommit" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
           (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'void 'plain '())))))
+
+;; M4's two required near their misses: a variadic prototype is no other.
+;; The optional sqlite3_load_extension's near miss is asked in its own
+;; compile, above.
+(test-equal "the prototype check refuses each of M4's two required entry points written as its near miss: sqlite3_db_config without its \"...\", its variadic tail's int and int* written in its place, and with one named parameter fewer; sqlite3_free's void* as const void*, each by name; and answers 1 for each written right"
+  '((("sqlite3_db_config" . 0) ("sqlite3_free" . 0))
+    (("sqlite3_db_config" . 0))
+    (("sqlite3_db_config" . 1) ("sqlite3_free" . 1)))
+  (list
+   (verdicts-of
+    (list (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "int" "int*")) '(uptr int int uptr) 'int 'variadic '())
+          (list "sqlite3_free" '("void" ("const void*")) '(uptr) 'void 'plain '())))
+   (verdicts-of
+    (list (list "sqlite3_db_config" '("int" ("sqlite3*" "...")) '(uptr int int uptr) 'int 'variadic '())))
+   (verdicts-of
+    (list (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'int 'variadic '())
+          (list "sqlite3_free" '("void" ("void*")) '(uptr) 'void 'plain '())))))
+
+;; The variadic rule (the M4 plan, section 4.2), on rows planted here.
+(define db-config-row
+  (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'int 'variadic '()))
+
+(define (db-config-with prototype arguments convention)
+  (list "sqlite3_db_config" prototype arguments 'int convention '()))
+
+(test-equal "the variadic rule: convention-forms writes variadic as the count of 2, and the table's sqlite3_db_config row, \"...\" after two named parameters, variadic, the named two the leading uptr and int of four, is no problem"
+  '(2 ())
+  (list (variadic-after convention-forms) (map-problems (list db-config-row))))
+
+(test-equal "the variadic rule names a row planted with 3 named parameters, which map to the leading three arguments, and so does the count, and names one planted with the variadic tail's int and int* in the prototype, whose types then match, each by name"
+  '(("sqlite3_db_config" ellipsis variadic 2 3 (uptr int int) (uptr int int uptr) int int)
+    ("sqlite3_db_config" variadic-without-ellipsis))
+  (map-problems
+   (list (db-config-with '("int" ("sqlite3*" "int" "int" "...")) '(uptr int int uptr) 'variadic)
+         (db-config-with '("int" ("sqlite3*" "int" "int" "int*")) '(uptr int int uptr) 'variadic))))
+
+(test-equal "the variadic rule names the row whose convention-forms count is 3, or is written otherwise, or is missing, each by name, the row unchanged"
+  '((("sqlite3_db_config" ellipsis variadic 3 2 (uptr int) (uptr int int uptr) int int))
+    (("sqlite3_db_config" ellipsis variadic #f 2 (uptr int) (uptr int int uptr) int int))
+    (("sqlite3_db_config" ellipsis variadic #f 2 (uptr int) (uptr int int uptr) int int))
+    (("sqlite3_db_config" ellipsis variadic #f 2 (uptr int) (uptr int int uptr) int int)))
+  (list (map-problems (list db-config-row) '((plain) (collect-safe __collect_safe) (variadic (__varargs_after 3))))
+        (map-problems (list db-config-row) '((plain) (collect-safe __collect_safe) (variadic __varargs_after 2)))
+        (map-problems (list db-config-row) '((plain) (collect-safe __collect_safe) (variadic (__varargs_after "2"))))
+        (map-problems (list db-config-row) '((plain) (collect-safe __collect_safe)))))
+
+(test-equal "the variadic rule names a \"...\" row held plain or collect-safe, one whose leading arguments are not its named parameters' map, one with no argument after them, and one whose result does not map, each by name"
+  '(("sqlite3_db_config" ellipsis plain 2 2 (uptr int) (uptr int int uptr) int int)
+    ("sqlite3_db_config" ellipsis collect-safe 2 2 (uptr int) (uptr int int uptr) int int)
+    ("sqlite3_db_config" ellipsis variadic 2 2 (uptr int) (int int int uptr) int int)
+    ("sqlite3_db_config" ellipsis variadic 2 2 (uptr int) (uptr int) int int)
+    ("sqlite3_db_config" ellipsis variadic 2 2 (uptr int) (uptr int int uptr) int uptr))
+  (map-problems
+   (list (db-config-with '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'plain)
+         (db-config-with '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'collect-safe)
+         (db-config-with '("int" ("sqlite3*" "int" "...")) '(int int int uptr) 'variadic)
+         (db-config-with '("int" ("sqlite3*" "int" "...")) '(uptr int) 'variadic)
+         (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'uptr 'variadic '()))))
+
+(test-equal "the variadic rule passes a row that is not variadic and holds no \"...\", whatever its convention, plain or collect-safe"
+  '()
+  (map-problems
+   (list (list "sqlite3_free" '("void" ("void*")) '(uptr) 'void 'plain '())
+         (list "sqlite3_load_extension" '("int" ("sqlite3 *" "const char *" "const char *" "char **"))
+               '(uptr uptr uptr uptr) 'int 'collect-safe '()))))
 
 (test-equal "the map check maps a void result to void and nothing else to it: sqlite3_interrupt written void is no problem, written int, or with a void argument, it is, and so is a counter written void"
   '(()

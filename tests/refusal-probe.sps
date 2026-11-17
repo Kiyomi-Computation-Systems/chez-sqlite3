@@ -6,6 +6,7 @@
 ;;; tests/test-*.sps glob, so make test never runs it directly (ADR-0007).
 ;;;
 ;;;   refusal-probe.sps [--then-override PATH] [--marker NAME] [--message yes]
+;;;                     [--extension-loading yes]
 ;;;
 ;;; It references loaded-libsqlite3 three times, each inside its guard. The
 ;;; first reference prints what happened:
@@ -13,7 +14,10 @@
 ;;;   loaded:   (loaded . PATH) (source . SYMBOL) (version . STRING)
 ;;;             (version-number . N) (source-id . STRING), the report's
 ;;;             fields; then (threadsafe . N), (chez-sqlite3 private
-;;;             native)'s loaded-threadsafe; and the exit status is 0
+;;;             native)'s loaded-threadsafe; with --extension-loading,
+;;;             (load-extension-available? . BOOLEAN), native's record of
+;;;             the optional sqlite3_load_extension (M4); and the exit
+;;;             status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
 ;;;             (detail . D) (candidates . LIST) (library . L)
 ;;;             (irritants . LIST), and the exit status is 1. WHO is the
@@ -179,6 +183,10 @@
        (show 'source-id (list-ref fields 4))
        (show 'threadsafe (guard (e (#t (cons 'raised (raised-facts e))))
                            (eval '(loaded-threadsafe) native)))
+       (when (option "--extension-loading")
+         (show 'load-extension-available?
+               (guard (e (#t (cons 'raised (raised-facts e))))
+                 (eval 'load-extension-available? native))))
        0))
     ((refused)
      (let ((e (cdr first)))
