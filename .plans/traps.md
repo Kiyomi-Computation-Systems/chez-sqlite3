@@ -340,6 +340,14 @@ told in chez-curl's `.plans/traps.md`.
   statement's run count stayed 0. The same statement stepped again normally read 1. A row that
   counts steps by RUN can't see a step that failed before it ran: count those through the
   statement's state or the connection's extended code. (M3 slice 4's review, chez-sqlite3)
+- **An interrupt sent as a statement starts stops it before its busy wait.** SQLite clears a
+  connection's interrupt when a statement starts with none running, but one that lands after the
+  clear, before the statement reaches the busy handler, stops it at once with SQLITE_INTERRUPT.
+  M3 slice 6's busy-wait row, meant to show interrupts don't stop the wait, failed 2 plain runs of
+  30 this way: its watchdog's first interrupt raced the step's start, and `BEGIN IMMEDIATE`
+  answered INTERRUPT at 0 ms where it waited 1502 ms otherwise. A row about the wait sends its
+  interrupts only once the wait has surely begun, as that row does from 200 ms.
+  (M3 slice 6, chez-sqlite3)
 
 ## Checks and environment
 
@@ -567,8 +575,9 @@ told in chez-curl's `.plans/traps.md`.
   life, and must never fail a row by itself: the latency is the scheduler's. (M3 slice 4's review,
   chez-sqlite3)
   - **Against a prepare, a watchdog may not run at all.** Under Valgrind, a watchdog against a
-    prepare of 4 MB of comments stopped none of 15 prepares in M3 slice 6's runs, sending 0
-    interrupts in 14 of them. Plain, it stopped 8 of 9, in about 170 ms each.
+    prepare of 4 MB of comments, interrupting with no sleep, stopped none of 15 prepares in M3
+    slice 6's runs, sending no interrupt in 14 of them; one sleeping 1 ms a round stopped none of
+    3. Plain, the first stopped 8 of 9, in about 170 ms each, and the second 0 of 3.
   - **A thread blocked on a mutex lets the others run.** So M3 slice 6's watchdog takes SQLite's
     memory mutex, `SQLITE_MUTEX_STATIC_MEM`, sleeps 1 ms holding it, interrupts, then lets it
     go. The owner's next allocation inside SQLite blocks, and the interrupt lands there: 3 of 3
@@ -605,6 +614,17 @@ told in chez-curl's `.plans/traps.md`.
   against the fuels swept, not as a fixed total: slice 4's guard of 1,000 trials failed at 647
   once part D halved the call's fuel.
   (M3 slice 5's part D, chez-sqlite3)
+- **A stand-in that only notes its call may cost an engine no tick, so no fuel splits it from the
+  code before it.** M3 slice 6's sweep of `interrupt-database/with` on a stand-in was to catch a
+  call made after the latch returns, an expiry between the latch and the call. With a stand-in
+  that only noted its call, the probe found no fuel at which the planted call came after the
+  close, bare or wrapped, and the suite one fuel of 14, by its own guard's ticks. With 20 turns of
+  a loop before the note, the probe found 20 fuels of 26, alike at the floor, and the suite 21 of
+  34. Which code costs a tick is the compiler's. Give a stand-in ticks of its own before the
+  effect a row reads, and watch the plant fail at more than one fuel. Inside a critical section
+  the loop costs no tick, so the right code completes at the same fuel
+  ([research/m3-slice-6/](research/m3-slice-6/README.md), `a2-engine-trials.sps`).
+  (M3 slice 6's review, chez-sqlite3)
 - **A comma inside a make function's arguments splits them, and the recipe's shell then fails.**
   M3 slice 6's first refusal of a shard's list from outside wrote "to run other suites, give …"
   inside `$(foreach … $(if …,echo "…",))`. Make read the comma as the end of the `$(if)`'s

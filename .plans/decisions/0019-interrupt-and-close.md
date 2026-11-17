@@ -190,8 +190,8 @@ adversarial review ([ADR-0018](0018-the-settings-list.md), amended in M3 slice 5
 
 ## Amendment, 2026-11-16: the interrupt and contention, as built (M3 slice 6)
 
-Proposed in M3 slice 6, from its builders' reports and the lead's checks (the slice's
-[mutation log](../m3-slice-6-mutation-log.md), parts A and B;
+Proposed in M3 slice 6, from its builders' reports, the lead's checks and the slice's review (the
+slice's [mutation log](../m3-slice-6-mutation-log.md), parts A and B, and part A's follow-up 2;
 [research/m3-slice-6/](../research/m3-slice-6/README.md)).
 
 - **`interrupt-database!` lives in `(chez-sqlite3 private connection)`,** beside the record and
@@ -199,6 +199,15 @@ Proposed in M3 slice 6, from its builders' reports and the lead's checks (the sl
   must not (ADR-0012, decision 2), so anywhere else it would need a second accessor.
   - The handle is read inside the latch's call, holding its mutex, only while the flag is set.
     The close clears the flag before it can clear the handle, so a set flag means a live handle.
+  - **The call is made there too, never after the latch returns.** A call made after it, the
+    handle read inside, can be stopped between the two, by an engine's expiry or by another
+    thread, and then made after a close has freed the connection. The slice's review planted that
+    (P-a): every row passed it, plain and under the gate, yet a probe that closed the connection at
+    an engine's expiry and resumed the remainder had Valgrind report "Invalid write of size 4 at
+    sqlite3_interrupt", inside the freed block.
+  - **Its work is `interrupt-database/with`,** which takes the foreign call, so the suites run the
+    record's wiring on a stand-in, as slice 1's suite runs the latch's. It is exported from the
+    private library only; `interrupt-database!` is it, given `sqlite3_interrupt`.
   - The verb answers nothing, and checks only that its argument is a database.
 - **Decision 2, as built:**
   - the record holds slice 1's latch, made not interruptible;
@@ -216,17 +225,45 @@ Proposed in M3 slice 6, from its builders' reports and the lead's checks (the sl
   floor and of 840 on 3.53.1. But the gate's race row can't see a missing exclusion:
   - the plant, the flag's read made true, hands Chez `#f` once the close has cleared the handle,
     and Chez refuses it before C;
-  - a plant that read the handle before the latch passed the race's 200 rounds with no error.
+  - a plant that read the handle before the latch and ignored the flag, calling whenever the
+    handle it read was not `#f` (the log's P5b), passed the race's 200 rounds under the gate with
+    no error.
 
-  So, as the consequences foresaw, the gate's row sees nothing. The exclusion's failing tests are
-  `test-interrupt-database`'s rows inside the close, on one thread with no timing, and slice 1's
-  stand-in row, the one that fails a latch without its mutex.
+  So, as the consequences foresaw, the gate's race row sees nothing. The exclusion's failing tests
+  are these:
+  - `test-interrupt-database`'s rows inside the close, on one thread with no timing;
+  - its sweep of `interrupt-database/with` in an engine, a fresh connection and engine each trial,
+    at every fuel from 1 until the call completes unexpired, the connection closed at the first
+    expiry and the remainder resumed. Its stand-in must never be called after the close. The
+    stand-in spins 20 turns before it notes its call, since one that only notes may cost an engine
+    no tick, and then no fuel splits a call made after the latch from its note (`traps.md`);
+  - the same sweep through `interrupt-database!` itself. Plain it reads only answers and raises,
+    since a write into freed memory is silent, but under the gate Valgrind reports the write of a
+    verb that calls after the latch;
+  - a row holding a stand-in in flight on another thread, through `interrupt-database/with`, while
+    the owner closes: the close's work must start only once the stand-in has ended. It alone fails
+    a call made after the latch but inside a critical section of the record's own, which no expiry
+    splits;
+  - slice 1's stand-in row, the one that fails a latch without its mutex.
+
+  The plants and their results are in the log's part A, follow-up 2. P-a fails the stand-in sweep
+  and the two-thread row, plain; a P-a written into the verb itself, `interrupt-database/with`
+  left right, fails only the verb's sweep under the gate. `test-interrupt-database` takes 10 to
+  11 s under the gate, as before.
+- **An interrupt that lands as a statement starts stops it, before any busy wait.** SQLite
+  clears a connection's interrupt when a statement starts with none running. One sent after that,
+  before the statement reaches its busy wait, stops it at once: the busy row's first send raced
+  the step's start and failed it in 2 plain runs of 30. So that row's watchdog stays quiet for the
+  wait's first 200 ms, and still must send from 250 ms. The record's title, "a busy wait ends only
+  at its timeout", holds of an interrupt sent during the wait.
 - **The race row runs 20 rounds.** Its plant fails at 1, but under the gate 1, 20 and 200 rounds
   each cost 10 to 11 s, so 20 buys coverage at no cost.
 - **The suites' watchdog under the gate:** Valgrind runs one thread at a time, and a thread running
   C keeps it.
-  - A watchdog against a prepare of 4 MB of comments stopped none of 15 prepares under Valgrind,
-    in the slice's runs, sending 0 interrupts in 14 of them. Plain, it stopped 8 of 9.
+  - Against a prepare of 4 MB of comments, under Valgrind, in the slice's runs, a watchdog
+    interrupting with no sleep stopped none of 15 prepares, sending no interrupt in 14 of them,
+    and one sleeping 1 ms a round stopped none of 3, sending none. Plain, the first stopped 8 of 9,
+    and the second 0 of 3.
   - So each round the suites' watchdog takes SQLite's memory mutex, `SQLITE_MUTEX_STATIC_MEM`,
     sleeps 1 ms holding it, calls the verb, then lets the mutex go. The owner's call blocks at
     its next allocation inside SQLite, and the interrupt lands there. Under Valgrind it stopped 3

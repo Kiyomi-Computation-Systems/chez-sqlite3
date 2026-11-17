@@ -682,6 +682,17 @@ alike; none of its code is copied.
     here.
   - Slice 6's CI run reads every suite's `time:` line in both jobs. Shards that drift apart are
     rebalanced in the slice that sees it.
+- **An open risk, `test-transaction-interrupt`:**
+  - under the gate here it took 434 s alone and 429 s in shard 1, of the 450 s threshold, and
+    225 s once. On CI it has taken 20 s to 149 s in four runs;
+  - its watchdog is slice 4's, a plain thread interrupting every 5 ms. Under Valgrind, which runs
+    one thread at a time, how soon it runs is the scheduler's;
+  - the remedies are slice 6's watchdog device, which takes SQLite's memory mutex each round
+    (ADR-0019's slice 6 amendment), or a split. The device binds the owner to calls that are
+    `__collect_safe` or take none of SQLite's memory while the mutex may be held, and this suite's
+    owner runs inserts that allocate, so it is no drop-in;
+  - slice 6's CI run reads the suite's time in shard 1. A time on CI past a third of the
+    threshold, 150 s, is a finding for M3's closing review.
 - **What no check holds:**
   - an empty shard list passes `check-memory-shards` when the other holds every suite. Only its CI
     job fails, through `test-memory`'s refusal;

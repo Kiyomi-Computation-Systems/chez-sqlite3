@@ -206,7 +206,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **`interrupt-database!` calls `sqlite3_interrupt` alone, bound plain, holding the record's
   mutex, and only while the connection is interruptible.** The close clears that under the same
   mutex before it finalizes anything. The mutex is held only inside a critical section, never
-  across a call that can block (ADR-0019).
+  across a call that can block. The handle is read and the call made inside the latch's one
+  section, never after it returns: an expiry or another thread between the two lets the call
+  land on a freed connection. Rows hold the record's wiring through `interrupt-database/with` on
+  a stand-in, in an engine sweep and across two threads (ADR-0019, amended in M3 slice 6).
 - **A flag that decides an exit is read inside the section of the step it guards,** never in an
   earlier one: an engine's expiry between them runs the after thunk, and the resumed caller would
   step what it had planned. **An engine row sweeps fuel from 1 until the call completes without

@@ -206,7 +206,9 @@
   name when too few trials have both runs past the call's first section:
   one remainder reused across trials sweeps nothing past the first. An
   engine's fuel names no fixed point in the code, so sweep every pair of
-  fuels (`.plans/traps.md`).
+  fuels (`.plans/traps.md`). A stand-in a sweep reads spins before the
+  effect it notes: one that only notes may cost no tick, and then no fuel
+  splits it from the code before it (`.plans/traps.md`).
 * Chez's foreign `int` takes −2³¹ to 2³²−1, hands 2³¹ and above to C as
   negatives, and raises beyond, inside the section that makes the call.
   Check that each value fits its C type before the section (ADR-0011,
