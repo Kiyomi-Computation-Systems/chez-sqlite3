@@ -14,7 +14,7 @@
   [amendment](#amendment-2026-11-15-m3s-bindings-m3s-plan)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's bindings
   ([amendment](#amendment-2026-11-17-m4s-bindings-m4s-plan)).
-  Amended 2026-11-17 in M4 slice 2, proposed: the int cell, and the load's FIFO row
+  Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): the int cell, and the load's FIFO row
   ([amendment](#amendment-2026-11-17-the-int-cell-and-the-loads-fifo-row-m4-slice-2)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
@@ -260,7 +260,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: the int cell, and the load's FIFO row (M4 slice 2)
 
-Proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
 
 - **`call-with-int-cell`,** native's: a counted block of an `int`'s size, written with the
   caller's fill, passed to a procedure, read back as a signed `int` after it returns, and freed on

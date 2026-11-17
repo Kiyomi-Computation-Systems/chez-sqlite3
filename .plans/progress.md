@@ -82,8 +82,9 @@ newest first.
     job. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
-  - **Slice 2,** the bindings and `check-variadic`, is PR #37, below. **Slice 5,** FTS5 and JSON,
-    is built; it rebases onto the close fix and drops its workaround.
+  - **Slice 2,** the bindings and `check-variadic`, is PR #37, below; the maintainer accepted its
+    amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept all"). **Slice 5,** FTS5
+    and JSON, is built; it rebases onto the close fix and drops its workaround.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own

@@ -9,7 +9,7 @@
   [amendment](#amendment-2026-11-15-m3s-required-entry-points-m3s-plan)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's entry points, and where extension loading's guarantee lives
   ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
-  Amended 2026-11-17 in M4 slice 2, proposed: the optional entry point's prototype
+  Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): the optional entry point's prototype
   ([amendment](#amendment-2026-11-17-the-optional-entry-points-prototype-m4-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
@@ -261,7 +261,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: the optional entry point's prototype (M4 slice 2)
 
-Proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
 
 - **`test-constants` asks `sqlite3_load_extension`'s prototype in a compile of its own,** and the
   one compile asks the 43 required entry points alone. A header may mark the optional entry point

@@ -4,7 +4,7 @@
   2026-11-13: a threaded Chez is required ([amendment](#amendment-2026-11-13-a-threaded-chez-is-required)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the variadic binding, measured, and its check
   ([amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
-  Amended 2026-11-17 in M4 slice 2, proposed: `check-variadic` as built
+  Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): `check-variadic` as built
   ([amendment](#amendment-2026-11-17-check-variadic-as-built-m4-slice-2)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
@@ -128,7 +128,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
 
 ## Amendment, 2026-11-17: `check-variadic` as built (M4 slice 2)
 
-Proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 [its mutation log](../m4-slice-2-mutation-log.md), from the slice and its review (Opus).
 
 - **Written fresh.** The review found 82 of the first script's 150 distinct code lines verbatim in
   chez-curl's `tests/check-variadic.sh`, against this record's "None of its code is copied". The
