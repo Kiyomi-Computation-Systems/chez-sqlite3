@@ -11,6 +11,7 @@ and ADR-0004 ask. The machine: macOS 26.7.1, arm64, Chez 10.4.1. The libraries: 
 |---|---|
 | [mac-apple.txt](mac-apple.txt) | `make test`, whole, with Apple's library |
 | [mac-brew.txt](mac-brew.txt) | `make test`, whole, with Homebrew's |
+| [mac-apple-2.txt](mac-apple-2.txt), [mac-brew-2.txt](mac-brew-2.txt) | The rerun of the eight suites on PR #30's branch, with each library |
 | [memory-management.sh](memory-management.sh) | S3's Mac case, reproduced on Linux: 3.54.1 built six ways |
 | [memory-management.txt](memory-management.txt) | Its output, for the fixed suite and for `main`'s |
 
@@ -120,9 +121,19 @@ they passed in full on Homebrew's library, on the same Mac.
   both cases everywhere it was run. The plants are in
   [the mutation log](../../m3-mac-mutation-log.md).
 
-## Still to run
+## The rerun, with the fixes
 
-- **The eight suites, again on the Mac,** with both libraries, once this PR's fixes are on a
-  branch: `make test SUITES="…"` with the eight names.
-- **M4's pre-work probes** ran on the Mac the same day. Their results are in PR #28, in
-  `../m4-prework/`.
+The maintainer reran the eight suites on the same Mac on 2026-11-17, from PR #30's branch, after
+its review's fixes.
+- **Both libraries:** `test: ran 8, passed 8, failed 0, hung 0`.
+- **Apple's library:**
+  - **The seven gated suites:** passes 6/6/8/8/5/6/7 and skips 2/2/3/3/2/2/4 (execute, fold,
+    query-row, query, script-even, script-odd, open-interleave), the same as plant P1 on Linux.
+  - **`UNAVAILABLE` lines naming `sqlite3_auto_extension`:** 33, 18 for rows skipped whole and
+    15 for checks dropped.
+  - **`test-transaction-nomem`:** 6 passes, and its 19 NOMEM rows `UNAVAILABLE`, as before.
+- **Homebrew's library:** no `UNAVAILABLE` line, and S3 printed "the NOMEM left the transaction
+  open", outer and nested.
+
+M4's pre-work probes ran on the Mac the same day. Their results are in PR #28, in
+`../m4-prework/`.

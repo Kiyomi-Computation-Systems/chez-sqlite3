@@ -1,0 +1,66 @@
+deps: vendor/chez-srfi linked into build/scheme-libs/srfi
+check-suites: every suite ends with (exit (suite-exit-status runner)) (8 checked)
+check-seam: the seam holds (29 libraries in 29 files checked)
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+=== tests/test-conveniences-pending-execute.sps
+%%%% Starting test conveniences-pending-execute
+  execute!: completed without expiring at fuel 42; trials with R1 820; past the first section 715; both past it 325; the last fuel at which the control made a whole new call 8, below the refused call's 72
+  execute!, a timer handler raising: completed before it ran at tick 36; raised at 35 ticks
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-execute.sps
+=== tests/test-conveniences-pending-fold.sps
+%%%% Starting test conveniences-pending-fold
+  query-fold: completed without expiring at fuel 154; trials with R1 11834; past the first section 9760; both past it 4040; the last fuel at which the control made a whole new call 8, below the refused call's 94
+  query-fold, a timer handler raising: completed before it ran at tick 148; raised at 147 ticks
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-fold.sps
+=== tests/test-conveniences-pending-query-row.sps
+%%%% Starting test conveniences-pending-query-row
+  query-row: completed without expiring at fuel 46; trials with R1 990; past the first section 885; both past it 435; the last fuel at which the control made a whole new call 8, below the refused call's 72
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+# of expected passes      11
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-query-row.sps
+=== tests/test-conveniences-pending-query.sps
+%%%% Starting test conveniences-pending-query
+  query: completed without expiring at fuel 72; trials with R1 2485; past the first section 2380; both past it 1540; the last fuel at which the control made a whole new call 8, below the refused call's 72
+  query-failing: completed without expiring at fuel 84; trials with R1 3403; past the first section 3298; both past it 2278; the last fuel at which the control made a whole new call 8, below the refused call's 72
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+# of expected passes      11
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-query.sps
+=== tests/test-conveniences-pending-script-even.sps
+%%%% Starting test conveniences-pending-script-even
+  execute-script!: completed without expiring at fuel 431; trials with R1 25460; past the first section 8449; both past it 0; the last fuel at which the control made a whole new call 8, below the refused call's 75
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-even.sps
+=== tests/test-conveniences-pending-script-odd.sps
+%%%% Starting test conveniences-pending-script-odd
+  execute-script!: completed without expiring at fuel 431; trials with R1 25817; past the first section 8568; both past it 0; the last fuel at which the control made a whole new call 8, below the refused call's 75
+  execute-script!, a timer handler raising: completed before it ran at tick 425; raised at 424 ticks
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-odd.sps
+=== tests/test-open-interleave.sps
+%%%% Starting test open-interleave
+  open-database: completed without expiring at fuel 75; trials 2775; trials answering 2775; whole new calls 630; the last fuel at which the control made a whole new call 9
+  call-with-database: completed without expiring at fuel 99; trials 5732; trials answering 1224; whole new calls 288; the last fuel at which the control made a whole new call 9
+  open-database, failing, resumed twice: completed without expiring at fuel 134; second resumes ((new . 9) (refused . 83) (again . 41))
+  call-with-database, failing, resumed twice: completed without expiring at fuel 156; second resumes ((new . 9) (refused . 95) (again . 51))
+# of expected passes      11
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-interleave.sps
+=== tests/test-transaction-nomem.sps
+%%%% Starting test transaction-nomem
+    S3, outer: the NOMEM left the transaction open
+    S3, nested: the NOMEM left the transaction open
+# of expected passes      25
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-transaction-nomem.sps
+test: ran 8, passed 8, failed 0, hung 0
