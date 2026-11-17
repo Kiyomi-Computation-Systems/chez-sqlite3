@@ -259,8 +259,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   answer.** Its cell holds a sentinel, neither 0 nor 1, before the call. Code 0 and the value
   written match; another cell raises `&sqlite-setting-mismatch`; another code raises
   `&sqlite-error`, its code that answer and its message `sqlite3_errstr`'s, never the
-  connection's, since `db_config` sets no error there. The connection is closed first (ADR-0021,
-  decision 3).
+  connection's, since `db_config` sets no error there; but a code whose low byte is 0, 100 or 101,
+  which names no error, an assertion violation from the verb called, `(not-an-error CODE)`. The
+  cell is filled with the core's `db-config-sentinel`, never a literal. The connection is closed
+  first (ADR-0021, decision 3, amended in M4 slice 1).
 - **The opt-in is checked before anything opens:** on a library without
   `sqlite3_load_extension`, `&sqlite-extensions-unavailable`, and no C call (ADR-0021, decision 5).
 - **The guarantee lives in Scheme.** `(enable-load-extension . #t)` lets `load-extension!` work;

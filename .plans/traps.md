@@ -221,6 +221,13 @@ told in chez-curl's `.plans/traps.md`.
   cache that compared keys by their first 4096 characters passed all 73 suites. Its verdict also
   flipped between compiled code and `interpret`. Now `let*` (`suites/cache-order.sps`).
   (M3's closing review, chez-sqlite3)
+- **A program that names an unbound identifier dies before its first line.** Chez refuses it at
+  expansion, even inside a procedure body that is never called: `(define (f) (nosuch-variable
+  1))` after `(display "before\n")` printed only `Exception: attempt to reference unbound
+  identifier nosuch-variable`, exit 255, and never `before`, and a `guard` around the call caught
+  nothing. So a suite run against a library that lacks a new export dies naming no test, and a
+  new row can't be watched failing that way. Watch it fail against the exports stubbed, each
+  present and wrong, as M4 slice 1's red run did. (M4 slice 1, chez-sqlite3)
 
 ## SQLite
 
@@ -805,6 +812,12 @@ told in chez-curl's `.plans/traps.md`.
   to 15 s pinned to two; slice 6 had measured 429 to 434 s, and CI 31 to 318 s. Valgrind runs one
   thread at a time, so a watchdog's turn is the scheduler's. With the memory-mutex device it took
   10 to 16 s in every run. (M3's closing review, chez-sqlite3)
+- **A complement built from the library's own list breaks when a later slice changes the list
+  correctly.** M4 slice 1's rows that hold the four `db_config` names apart from the seven
+  settings read the library's `setting-names`, one of them in a top-level definition: slice 3's
+  join, done right, would have failed them, and an improper `setting-names` killed the suite,
+  rc 255, naming no test (the review's P-TOP). Build a row's complement from the suite's own
+  written-out list, and read the library inside a row. (M4 slice 1's review, chez-sqlite3)
 
 ## Editing the records
 

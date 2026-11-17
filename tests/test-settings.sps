@@ -22,6 +22,13 @@
 ;;;   the read-back    each setting's reader over its table and outside it,
 ;;;                    and the comparison over every expected value against
 ;;;                    every read-back
+;;;   db_config        M4 slice 1: the four sqlite3_db_config settings, held
+;;;                    out of setting-names until slice 3 joins them
+;;;                    (ADR-0021; ADR-0018, amended for M4): the table, its
+;;;                    names against every other op's and the list's, each
+;;;                    domain against the universe, each step written out,
+;;;                    the sentinel, and the set's verdict over codes, cells
+;;;                    and values
 ;;;
 ;;; Every procedure but raise-setting-refusal answers data and raises
 ;;; nothing, so every call is made under a guard with a sentinel of its own,
@@ -199,9 +206,11 @@
 
 (test-begin "settings")
 
-(test-equal "(chez-sqlite3 private settings) exports exactly the names, the rules, the split, the plan, the refusal's raise, the reader and the comparison"
+(test-equal "(chez-sqlite3 private settings) exports exactly the names, the rules, the split, the plan, the refusal's raise, the reader and the comparison; and db_config's table, names, sentinel, step and verdict"
   (sorted-names '(setting-names setting-refusal-rules split-open-arguments settings-plan
-                  raise-setting-refusal read-back-value read-back-comparison))
+                  raise-setting-refusal read-back-value read-back-comparison
+                  db-config-settings db-config-setting-names db-config-sentinel db-config-step
+                  db-config-verdict))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private settings)))))
 
@@ -824,6 +833,257 @@
                                        (compared (car step) (cadddr step) (car pair)))
                                      p)))))
               read-back-table)))
+
+;; --- db_config's four (M4 slice 1; ADR-0021, decisions 1 to 3 and 5) --------------------
+;; Slice 1 builds them beside setting-names, not in it: open.sls runs every
+;; step settings-plan answers as SQL, so slice 3 joins them, with the open's
+;; calls (the M4 plan, section 5, item 1).
+
+;; dc-step : Any Any -> Any
+;; db-config-step's answer, or (raised TEXT).
+(define (dc-step name value)
+  (guard (e (#t (list 'raised (describe e)))) (db-config-step name value)))
+
+;; dc-verdict : Any Any Any Any -> Any
+;; db-config-verdict's answer, or (raised TEXT).
+(define (dc-verdict name value code cell)
+  (guard (e (#t (list 'raised (describe e)))) (db-config-verdict name value code cell)))
+
+;; The four, written out from ADR-0021's decision 1 and the M4 plan's section
+;; 4.1: each setting's name, its op's value in C, and its domain.
+(define db-config-written
+  '((enable-load-extension 1005 (#t #f)) (defensive 1010 (#t #f)) (dqs-dml 1013 (#t #f))
+    (dqs-ddl 1014 (#t #f))))
+
+(define db-config-names-written '(enable-load-extension defensive dqs-dml dqs-ddl))
+
+;; Every SQLITE_DBCONFIG_ op of the floor's sqlite3.h, 3.45.1's (sha256
+;; 41e066ccd4f89e938f136ceb48c996c54dc381b59fe566dea48864c3750b779e), and of
+;; the current lane's, 3.54.1's (sha256
+;; d6c84557261893439b341d2e6c35187ae3ea24fbfd843ad94616f72d89242b8c), each
+;; by its name under ADR-0021's rule, SQLITE_DBCONFIG_ dropped, lower-cased,
+;; _ turned to -, and its value. SQLITE_DBCONFIG_MAX, which bounds the ops,
+;; is none. 3.45.1 has 1000 to 1019; 3.54.1 adds 1020 to 1023.
+(define dbconfig-ops
+  '((maindbname . 1000) (lookaside . 1001) (enable-fkey . 1002) (enable-trigger . 1003)
+    (enable-fts3-tokenizer . 1004) (enable-load-extension . 1005) (no-ckpt-on-close . 1006)
+    (enable-qpsg . 1007) (trigger-eqp . 1008) (reset-database . 1009) (defensive . 1010)
+    (writable-schema . 1011) (legacy-alter-table . 1012) (dqs-dml . 1013) (dqs-ddl . 1014)
+    (enable-view . 1015) (legacy-file-format . 1016) (trusted-schema . 1017)
+    (stmt-scanstatus . 1018) (reverse-scanorder . 1019) (enable-attach-create . 1020)
+    (enable-attach-write . 1021) (enable-comments . 1022) (fp-digits . 1023)))
+
+(define other-ops
+  (filter (lambda (p) (not (memq (car p) db-config-names-written))) dbconfig-ops))
+
+;; step-expected : Symbol Any -> Any
+;; The step for one of the four and VALUE, written out from ADR-0021's
+;; decisions 3 and 5: #t is (name op 1 #t); #f is (name op 0 #f), but
+;; enable-load-extension's #f makes no call, no-call (Q15); any other value
+;; is outside the domain.
+(define (step-expected name value)
+  (let ((op (cdr (assq name dbconfig-ops))))
+    (cond ((eq? value #t) (list name op 1 #t))
+          ((and (eq? value #f) (eq? name 'enable-load-extension)) 'no-call)
+          ((eq? value #f) (list name op 0 #f))
+          (else 'out-of-domain))))
+
+(test-equal "db-config-settings, written out: the four, each its name, its op and its domain, #t or #f, in the plan's table order"
+  db-config-written
+  db-config-settings)
+
+(test-equal "db-config-setting-names, written out: the four, in the table's order"
+  '(enable-load-extension defensive dqs-dml dqs-ddl)
+  db-config-setting-names)
+
+(test-equal "the ops of 3.45.1's and 3.54.1's headers: 24 names, each distinct, each value distinct, the four among them at the table's ops"
+  '(24 24 24 ((enable-load-extension . 1005) (defensive . 1010) (dqs-dml . 1013) (dqs-ddl . 1014)))
+  (list (length dbconfig-ops)
+        (length (fold-left (lambda (acc p) (if (memq (car p) acc) acc (cons (car p) acc))) '()
+                           dbconfig-ops))
+        (length (fold-left (lambda (acc p) (if (memv (cdr p) acc) acc (cons (cdr p) acc))) '()
+                           dbconfig-ops))
+        (filter (lambda (p) (memq (car p) db-config-names-written)) dbconfig-ops)))
+
+(test-equal "the four stay out of the live list until slice 3: setting-names holds none of them, nor they one of its, and settings-plan refuses each, #t and #f, as an unknown setting, naming it"
+  (list '() '()
+        (map (lambda (s) (list 'refused 'unknown-setting (car s)))
+             '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t)
+               (defensive . #f) (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f))))
+  (list (filter (lambda (n) (memq n setting-names)) db-config-setting-names)
+        (filter (lambda (n) (memq n db-config-setting-names)) setting-names)
+        (map (lambda (s) (plan (list s)))
+             '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t)
+               (defensive . #f) (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))))
+
+(test-equal "each step, written out: #t sets 1 and #f 0, each to its op, the value asked expected; enable-load-extension's #f makes no call (Q15)"
+  '((enable-load-extension 1005 1 #t) no-call
+    (defensive 1010 1 #t) (defensive 1010 0 #f)
+    (dqs-dml 1013 1 #t) (dqs-dml 1013 0 #f)
+    (dqs-ddl 1014 1 #t) (dqs-ddl 1014 0 #f))
+  (list (dc-step 'enable-load-extension #t) (dc-step 'enable-load-extension #f)
+        (dc-step 'defensive #t) (dc-step 'defensive #f)
+        (dc-step 'dqs-dml #t) (dc-step 'dqs-dml #f)
+        (dc-step 'dqs-ddl #t) (dc-step 'dqs-ddl #f)))
+
+(test-equal "each of the four against every value of the universe: #t and #f alone accepted, each with its step, or no call; every other value, 0 and 1, the other settings' words, strings, (), pairs, chars and flonums among them, outside the domain"
+  '()
+  (apply append
+         (map (lambda (name)
+                (differences universe
+                             (lambda (v) (step-expected name v))
+                             (lambda (v) (dc-step name v))))
+              db-config-names-written)))
+
+;; Names near the four's: case, separators, plurals, C's spelling and the
+;; prefix, the verb's name, and a space or a U+0000.
+(define db-config-near-names
+  (append
+   '(ENABLE-LOAD-EXTENSION Enable-Load-Extension enable_load_extension enable-load-extensions
+     enable-load-extension? load-extension load-extension! enable-extensions extensions extension
+     enable-extension-loading SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION ENABLE_LOAD_EXTENSION
+     DEFENSIVE Defensive defensive? defense defensive-mode SQLITE_DBCONFIG_DEFENSIVE
+     DQS-DML dqs_dml dqs-dmls dqs dqs-dml-ddl dqs-ddl-dml dqs-DML DQS-DDL dqs_ddl dqs-ddls
+     SQLITE_DBCONFIG_DQS_DML SQLITE_DBCONFIG_DQS_DDL db-config dbconfig db-config-settings)
+   (map string->symbol '("defensive " " defensive" "dqs dml" "dqs-ddl\x0;"
+                         "enable-load-extension\x0;"))))
+
+;; Every other name: the list's own seven, every other op's by the rule,
+;; trusted-schema among them, the near names, every PRAGMA in both
+;; spellings, every name (chezscheme) exports; and names that are no
+;; symbol, the four's own as strings among them. The seven are the suite's
+;; own, names, written out, never the library's setting-names: read here, at
+;; top level, a setting-names that is no list would raise and end the suite
+;; with no row named, and slice 3's join puts the four in it.
+(define not-db-config-names
+  (append names (map car other-ops) db-config-near-names left-out
+          (if (list? chez-names) chez-names '())
+          (list "defensive" "dqs-dml" "enable-load-extension" 1005 1010 #t #f '() '(defensive)
+                (cons 'defensive #t) #\d (vector 'defensive))))
+
+(test-equal "the names, against the whole complement: no name but the four is a db_config setting, at #t or at #f: the list's seven, every other op of the headers by the rule, the near names, every PRAGMA, every name (chezscheme) exports, and the four's names as strings"
+  '()
+  (differences not-db-config-names
+               (lambda (n) '(not-db-config not-db-config))
+               (lambda (n) (list (dc-step n #t) (dc-step n #f)))))
+
+(test-equal "a name that is none of the four is no db_config setting at every value of the universe, the name told before the value: the list's seven, every other op of the headers, a near name, the four's names as strings, a number and ()"
+  '()
+  (apply append
+         (map (lambda (n)
+                (differences universe (lambda (v) 'not-db-config) (lambda (v) (dc-step n v))))
+              (append names (map car other-ops)
+                      (list 'DEFENSIVE 'enable_load_extension "defensive" "dqs-dml" 1010 '())))))
+
+(test-equal "every other op of the headers, named by the rule, is refused by settings-plan as an unknown setting, but trusted-schema, which stays ADR-0018's PRAGMA (Q7)"
+  '()
+  (differences (map car other-ops)
+               (lambda (n)
+                 (if (eq? n 'trusted-schema)
+                     (list 'settings 32 (list (step-of 'trusted-schema #t)))
+                     (list 'refused 'unknown-setting n)))
+               (lambda (n) (plan (list (cons n #t))))))
+
+;; sentinel-shape : Any -> Any
+;; Whether S can be the cell's sentinel: an exact integer a C int holds,
+;; -2^31 to 2^31-1, so the cell holds it as written, and neither 0 nor 1,
+;; which a set writes; else why not.
+(define (sentinel-shape s)
+  (cond ((not (and (integer? s) (exact? s))) (list 'no-exact-integer s))
+        ((memv s '(0 1)) (list 'a-value-a-set-writes s))
+        ((or (< s (- two31)) (> s (- two31 1))) (list 'outside-a-c-int s))
+        (else 'a-sentinel)))
+
+(test-equal "db-config-sentinel, what the cell holds before the call: an exact integer within a C int, so the cell holds it as written, and neither 0 nor 1, which a set writes (ADR-0021, decision 3)"
+  'a-sentinel
+  (sentinel-shape db-config-sentinel))
+
+(test-equal "the verdict, written out: code 0 and the value written match; code 0 and another cell mismatch, the value read #t for 1, #f for 0, any other integer as itself; any other code is an error with that code, whatever the cell: 1, an op the library lacks; Apple's 21; -1"
+  '(match match match match
+    (mismatch defensive #t #f) (mismatch defensive #f #t)
+    (mismatch dqs-dml #t 2) (mismatch dqs-ddl #f -2) (mismatch enable-load-extension #t 1005)
+    (error 1) (error 1) (error 21) (error 21) (error -1))
+  (list (dc-verdict 'defensive #t 0 1) (dc-verdict 'defensive #f 0 0)
+        (dc-verdict 'enable-load-extension #t 0 1) (dc-verdict 'dqs-ddl #f 0 0)
+        (dc-verdict 'defensive #t 0 0) (dc-verdict 'defensive #f 0 1)
+        (dc-verdict 'dqs-dml #t 0 2) (dc-verdict 'dqs-ddl #f 0 -2)
+        (dc-verdict 'enable-load-extension #t 0 1005)
+        (dc-verdict 'dqs-dml #t 1 1) (dc-verdict 'defensive #f 1 0)
+        (dc-verdict 'enable-load-extension #t 21 db-config-sentinel)
+        (dc-verdict 'enable-load-extension #t 21 1)
+        (dc-verdict 'dqs-ddl #f -1 0)))
+
+(test-equal "a cell the call left at its sentinel, with code 0, is a mismatch whose value read is (), nothing read, for each of the four and each value"
+  '((mismatch enable-load-extension #t ()) (mismatch enable-load-extension #f ())
+    (mismatch defensive #t ()) (mismatch defensive #f ())
+    (mismatch dqs-dml #t ()) (mismatch dqs-dml #f ())
+    (mismatch dqs-ddl #t ()) (mismatch dqs-ddl #f ()))
+  (list (dc-verdict 'enable-load-extension #t 0 db-config-sentinel)
+        (dc-verdict 'enable-load-extension #f 0 db-config-sentinel)
+        (dc-verdict 'defensive #t 0 db-config-sentinel) (dc-verdict 'defensive #f 0 db-config-sentinel)
+        (dc-verdict 'dqs-dml #t 0 db-config-sentinel) (dc-verdict 'dqs-dml #f 0 db-config-sentinel)
+        (dc-verdict 'dqs-ddl #t 0 db-config-sentinel) (dc-verdict 'dqs-ddl #f 0 db-config-sentinel)))
+
+(test-equal "a value asked outside the domain matches no cell: code 0 with 1, 0, #f, the sentinel or the value itself is a mismatch, the value asked as given; another code is still an error"
+  '((mismatch defensive 1 #t) (mismatch defensive 0 #f) (mismatch defensive on #t)
+    (mismatch defensive () ()) (mismatch defensive x x) (mismatch defensive #f #f) (error 1))
+  (list (dc-verdict 'defensive 1 0 1) (dc-verdict 'defensive 0 0 0) (dc-verdict 'defensive 'on 0 1)
+        (dc-verdict 'defensive '() 0 db-config-sentinel) (dc-verdict 'defensive 'x 0 'x)
+        (dc-verdict 'defensive #f 0 #f) (dc-verdict 'defensive 1 1 1)))
+
+;; The codes and cells the verdict is held over: 0 and SQLite's codes, ok,
+;; error, busy, cantopen, row, done and an extended ok among them; the
+;; edges of a C int and past them; inexact zeros and a fraction; and values
+;; no int is. Each cell beside 0, 1 and the sentinel.
+(define verdict-codes
+  (list 0 1 21 5 14 100 101 256 -1 (- two31) (- two31 1) two31 (expt 2 64)
+        0.0 -0.0 1.5 'ok 'error "0" #f #t '() '(0)))
+
+(define verdict-cells
+  (list 0 1 db-config-sentinel 2 -2 5 100 1005 (- two31 1) (- two31) (expt 2 32)
+        0.0 1.0 #t #f '() 'x "1"))
+
+;; verdict-expected : Symbol Boolean Any Any -> Any
+;; ADR-0021's decision 3, written out: any code but 0 is an error with that
+;; code, whatever the cell; code 0 and the cell the value written, 1 for #t,
+;; 0 for #f, match; code 0 and any other cell mismatch, the value read ()
+;; for the sentinel, #t for 1, #f for 0, and anything else as itself.
+(define (verdict-expected name value code cell)
+  (cond ((not (eqv? code 0)) (list 'error code))
+        ((eqv? cell (if value 1 0)) 'match)
+        (else (list 'mismatch name value
+                    (cond ((eqv? cell db-config-sentinel) '())
+                          ((eqv? cell 1) #t)
+                          ((eqv? cell 0) #f)
+                          (else cell))))))
+
+(test-equal "the verdict, for each of the four and each value asked, over every code against every cell: the whole answer"
+  '()
+  (apply append
+         (map (lambda (name)
+                (apply append
+                       (map (lambda (value)
+                              (apply append
+                                     (map (lambda (code)
+                                            (differences verdict-cells
+                                                         (lambda (cell)
+                                                           (verdict-expected name value code cell))
+                                                         (lambda (cell)
+                                                           (dc-verdict name value code cell))))
+                                          verdict-codes)))
+                            '(#t #f))))
+              db-config-names-written)))
+
+(test-equal "the step and the verdict raise nothing for any value, as any name, value, code or cell"
+  '()
+  (filter (lambda (r) (and (pair? r) (eq? (car r) 'raised)))
+          (apply append
+                 (map (lambda (v)
+                        (list (dc-step v v) (dc-step 'defensive v) (dc-step 'enable-load-extension v)
+                              (dc-step v #t) (dc-verdict v v v v) (dc-verdict 'defensive #t v v)
+                              (dc-verdict 'defensive v 0 v) (dc-verdict 'dqs-dml #f 0 v)
+                              (dc-verdict 'dqs-ddl #t v 1) (dc-verdict v #f 0 0)))
+                      (append universe (list cyclic))))))
 
 ;; --- total ----------------------------------------------------------------------------
 

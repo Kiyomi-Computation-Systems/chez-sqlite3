@@ -9,6 +9,9 @@
 ;;;                and after are zero, and no file is made. '() is accepted,
 ;;;                and a list of options, '(read-only), refused as
 ;;;                not-an-association-list
+;;;   db_config    M4 slice 1: each of the four db_config settings, #t and #f,
+;;;                refused as unknown-setting, nothing opened, until slice 3
+;;;                joins them to the live list and replaces the row
 ;;;   the order    the split first, a second list; then M2's checks, the
 ;;;                filename, the options, file: without uri; then the list's
 ;;;   together     options and a list, the list at each position among two
@@ -375,6 +378,46 @@
          (c (attempt-open (lambda () (open-database ":memory:" '(read-only)))))
          (d (attempt (lambda () (call-with-database ":memory:" '(read-only) database-cache-capacity)))))
     (list a b c d (native-counts))))
+
+;; The four db_config settings (ADR-0021, decision 1) are held out of the live
+;; list until M4 slice 3: settings-plan's steps are SQL, and open.sls runs
+;; every one as SQL, so a name joined early would reach SQLite as a PRAGMA
+;; (the M4 plan, section 5, item 1). Slice 3 replaces this row with its sets'.
+(define db-config-cases
+  '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t) (defensive . #f)
+    (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))
+
+(test-equal "each of db_config's four, #t and #f, is refused by open-database on :memory: as an unknown setting, an assertion violation naming it, before anything opens: the counts zero at the raise and after"
+  (map (lambda (s)
+         (list (list (list 'assertion-violation 'open-database (list 'unknown-setting (car s)))
+                     zero-counts)
+               zero-counts))
+       db-config-cases)
+  (let loop ((rest db-config-cases) (found '()))
+    (if (null? rest)
+        (reverse found)
+        (let* ((r (at-raise (lambda () (open-database ":memory:" (list (car rest))))))
+               (after (native-counts)))
+          (loop (cdr rest) (cons (list r after) found))))))
+
+;; An open that closed before it raised would leave the counts zero at the
+;; raise, and :memory: leaves nothing behind, so the same refusal on a file:
+;; no file is made.
+(test-equal "each of db_config's four, #t and #f, is refused the same on a file, and no file is made"
+  (map (lambda (s)
+         (list (list (list 'assertion-violation 'open-database (list 'unknown-setting (car s)))
+                     zero-counts)
+               zero-counts 'not-made))
+       db-config-cases)
+  (in-dir (lambda (dir)
+            (let ((path (string-append dir "/d.db")))
+              (let loop ((rest db-config-cases) (found '()))
+                (if (null? rest)
+                    (reverse found)
+                    (let* ((r (at-raise (lambda () (open-database path (list (car rest))))))
+                           (after (native-counts))
+                           (file (made path)))
+                      (loop (cdr rest) (cons (list r after file) found)))))))))
 
 ;; --- the order of the refusals ---------------------------------------------------------------
 

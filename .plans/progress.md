@@ -66,14 +66,26 @@ newest first.
 - **M3's closing review is done,** the last of M3's done conditions
   ([the M3 plan](2026-11-15-m3-plan.md), §6), as PR #32, by the M3 session, squash-merged with CI
   passing in every job. **M3 is done.**
-- **Now: M4,** extensions and `db_config`. Its slice 0, the plan, ADR-0021 and their amendments, is
-  PR #31, by the M4 session, written beside M3's closing review, plans and records only (the
-  maintainer, 2026-11-17).
+- **M4 slice 0 is done:** the plan, ADR-0021 and their amendments, as PR #31, `87e762c`, by the
+  M4 session, written beside M3's closing review, plans and records only, squash-merged with CI
+  passing in every job (the maintainer, 2026-11-17).
   - **The plan's questions:** the maintainer settled Q14 to Q16 on 2026-11-17, each the
     recommendation: "The rule's names", "Same as leaving it out" and "An absolute path". Asked
     again about Q14 and Q15 together, from a user's side, the answer was "Yes, as shown".
   - **The records:** the maintainer accepted ADR-0021 and the plan's amendments the same day
     ("Accept all").
+- **Now: M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
+  2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
+  of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
+  - **M4 slice 1,** the pure core of the four `db_config` settings and
+    `&sqlite-extensions-unavailable`, is PR #35, below. The maintainer accepted its ADR-0021
+    amendment ("Accept"), with a code that names no error raising an assertion violation
+    ("Assertion violation"), 2026-11-17.
+  - **Slice 2,** the bindings and `check-variadic`, and **slice 5,** FTS5 and JSON, are built and
+    in verification.
+  - **The close fix:** slice 5's FTS5 suite found `close-database!` refusing every connection that
+    had used an FTS5 table, FTS5's own statements counted as untracked. The maintainer chose
+    "Close first, count on failure", in a PR of its own before slice 5 (2026-11-17).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -136,6 +148,79 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M4 slice 1: the pure core (PR #35)
+
+- **Built,** with no foreign code and no new suite:
+  - `settings.sls`: the four `db_config` settings as a table and procedures of their own, beside
+    `setting-names` and not in it, so nothing reaches `open.sls`'s SQL path before slice 3:
+    `db-config-settings` (each name, op and domain), `db-config-setting-names`,
+    `db-config-sentinel`, -1, `db-config-step`, `(name op written expected)` or `no-call` for
+    `(enable-load-extension . #f)`, and `db-config-verdict`, a match, a mismatch's fields or an
+    error's code. Each is total, so slice 3 can call it inside a critical section: the review
+    made 13,689 hostile calls inside `critical-section`, and none raised;
+  - `conditions.sls`: `&sqlite-extensions-unavailable` under `&chez-sqlite3-error`, its maker,
+    its predicate, and `raise-extensions-unavailable`, which gives the `&who` and the fixed
+    `&message`;
+  - rows in `test-settings` (74), `test-conditions` (93) and `test-open-settings` (25): the four
+    refused by `open-database` as `unknown-setting`, on `:memory:` and on a file, nothing opened,
+    until slice 3 joins them; each domain against every kind of value; the verdict over every code
+    and cell; the complement against the other 20 ops of 3.45.1's and 3.54.1's headers; every
+    fixed `&message` a non-empty string of its own.
+- **Watched failing:** against `87e762c`'s libraries the two suites died at expansion, naming no
+  test, so their rows were watched failing against the exports stubbed and wrong: 12 and 9
+  failures. The builder's 67 plants caught all but V15, which reorders the verdict's disjoint
+  cell tests and is equivalent. My 10 plants were all caught, among them a code of 0.0 read as 0,
+  the DQS ops swapped, a partial join and the `&who` dropped.
+- **Reviewed** (Opus, read-only), seven findings, no blocker:
+  - fixed: a top-level definition and two rows that read the library's `setting-names`, which
+    slice 3's correct join would have failed (P-TOP killed the suite); the fixed `&message` held by
+    no row (P-MSG, P-MSG2); the log's base and its driver, now in
+    [research/m4-slice-1/scripts/](research/m4-slice-1/scripts/). The review's plants now fail by
+    name;
+  - decided: a code that names no error, in ADR-0021's amendment;
+  - moved to slice 2: the counted `int` cell, which only `native.sls` may make;
+  - moved to slice 3: the ops checked against `sqlite3.h`, and the join's changes, below.
+
+  The M4 session's conformance check of the PR (Opus, read-only), seven findings, no blocker:
+  the amendment's raise named `raise-sqlite-error`, not the verb called, so the amendment now has
+  the open test the code itself; the global constraints carry the amendment; slice 3's list gains
+  `test-settings`' three rows and the stand-in row; and the log's nits are fixed.
+- **Times:** 0.3 s, 0.3 s and 2.1 s plain on Guix's 3.53.1 and the floor; 10 s, 9 s and 14 s
+  under the gate on both, none `SLOW`.
+- **For slice 3:**
+  - fill the cell with `db-config-sentinel`, through slice 2's `call-with-int-cell`, which reads
+    it back as a signed C `int`, never a literal;
+  - take the ops from `constants.sls`'s four, which `test-constants` holds to the header, or hold
+    `db-config-settings`' ops to them by a row: today only the suite's copies back them;
+  - the join: `settings-plan` maps `db-config-step`'s answers onto its refusals, and a `no-call`
+    still marks the name seen, for `setting-given-twice`. The two step shapes are told apart only
+    by the `cadr`, an integer op or a string of SQL, so tag them if a stand-in could hand the
+    wrong kind. `unknown-setting`'s and `setting-out-of-domain`'s messages list the seven;
+  - replace `test-open-settings`' two hold-out rows with the sets' rows, and in `test-settings`,
+    which the plan's §5 item 3 leaves out of slice 3's files, `s-out`, the hold-out row, and M3's
+    `s-setting-names` and `s-no-row`, which hold `setting-names` whole: the join, done right,
+    fails all three (J1). If the plan's answer gains the opt-in, M3's `(settings capacity steps)`
+    rows there move too;
+  - a code that names no error: test it before `raise-sqlite-error`, and raise from the verb
+    called. The stand-in row answers 100 and asserts the verb's `&who` and `(not-an-error 100)`
+    (ADR-0021, amended);
+  - derive the record's opt-in from the step `(enable-load-extension 1005 1 #t)`, not from the
+    name, so `#f`, which makes no step, holds none (the M4 session's check of PR #35).
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder, two rounds | Opus | 417k and 473k | 132 and 36 | 34 and 9 min |
+  | The review | Opus | 252k | 66 | 14 min |
+
+- **Learned:**
+  - **A pure core can need a primitive only the shell may make.** The plan named a counted `int`
+    cell for the set, and only `native.sls` may touch foreign memory, which no slice's file list
+    gave it. The review found it before slice 3 met it.
+  - **A complement from the library's own list fails a later slice's correct change** (traps.md).
+  - **A row for a new export can't fail against the old library:** the program dies at
+    expansion. Stub the exports, present and wrong (traps.md).
 
 ### 2026-11-17 — M4 slice 0: the plan and the records (PR #31)
 
