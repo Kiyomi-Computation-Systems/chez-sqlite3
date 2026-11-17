@@ -81,7 +81,18 @@ fix, and planting the lead's own mutants, each in a copy of that part's tree.
     the ended condition, as the reference says.
 - **Each part's suites, rerun:** they pass plain on 3.53.1 and at the floor, and pass under the
   gate on 3.53.1.
+- **The handshake, against the old first round:**
+  - **`prepare-race.sps`,** under the gate's Valgrind options, at the floor, pinned to two cores,
+    with the prepare called 200 ms late: the old round left 1 of 20 prepares unstopped, and the
+    handshake none of 20.
+  - **The whole reach suite,** with the same late prepare, 8 gate runs each, pinned: both
+    passed 8 of 8. So the lead's runs didn't reproduce part S's 6 of 20 for the old round, on a
+    quieter machine: part S's ran while two other builders loaded it. CI's failure, the probe's
+    1 of 20 and part S's counts are the red runs.
 - **The merged tree:** `make test` ran 73 and passed 73 on 3.53.1, and 73 of 73 at the floor.
+- **CI,** run 44112097972 on `17a975c`: all six jobs passed. `test-transaction-interrupt` took
+  11 s, `test-interrupt-reach` 17 s, and `test-transaction-engine` 57 s; the shards' suites took
+  900 s and 986 s.
 
 ## Part T: `with-transaction` and the latch
 

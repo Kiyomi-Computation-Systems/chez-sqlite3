@@ -33,7 +33,8 @@ newest first.
   ADR-0017 and ADR-0020, on 2026-11-16 ("Accept all"); and, the same day, slice 2's to ADR-0002
   and ADR-0005, slice 4's to ADR-0017, and slice 5's to ADR-0012, ADR-0016, ADR-0018 and
   ADR-0020 ("Accept all"), and to ADR-0019's decision 11 ("Keep, amend"); and slice 6's to
-  ADR-0005, ADR-0017 and ADR-0019, on 2026-11-17 ("Accept all").
+  ADR-0005, ADR-0017 and ADR-0019, on 2026-11-17 ("Accept all"); and M3's closing review's to
+  ADR-0005 and ADR-0016 to ADR-0020, the same day ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All six jobs are
   required: `main`, `memory-1`, `memory-2` and `nothreads`, and, since slice 5 merged, `floor` and
   `current`. M3 slice 6 replaced `memory` with `memory-1` and `memory-2`, and the required checks
@@ -123,8 +124,9 @@ newest first.
       caused for real.
 - **Open:**
   - **`test-transaction-interrupt`** took 318 s on CI on `main` at `c0a5408` (run 44083802043),
-    past the 150 s that ADR-0005's slice 6 amendment made a finding: M3's closing review takes
-    it up. Over seven two-shard runs it took 31 to 318 s.
+    past the 150 s that ADR-0005's slice 6 amendment made a finding. On the memory-mutex device,
+    from M3's closing review, it took 11 s on PR #32's CI. One run is one sample: read it on the
+    next runs of `memory-1` before calling the risk closed.
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
@@ -185,7 +187,11 @@ newest first.
   - part T's 34 plants, all caught;
   - part C's and part S's, each caught or argued in the log;
   - the lead's 10, all caught but K2, which is equivalent.
-- **CI:** CI_PENDING
+- **CI:** run 44112097972 on `17a975c`: all six jobs passed. `memory-1` took 20m37s and `memory-2`
+  22m0s, their suites 900 s and 986 s. `test-transaction-interrupt` took 11 s, against 318 s on
+  `c0a5408`, and `test-interrupt-reach` 17 s.
+- **The maintainer accepted** the review's amendments to ADR-0005 and ADR-0016 to ADR-0020, on
+  2026-11-17 ("Accept all").
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

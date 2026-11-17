@@ -11,7 +11,7 @@
   2026-11-16 in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): the interrupt and
   contention as built, and probes P4 and P5
   ([amendment](#amendment-2026-11-16-the-interrupt-and-contention-as-built-m3-slice-6)).
-  Amended 2026-11-17 in M3's closing review: the latch's shut, its third user, and the busy wait's
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the latch's shut, its third user, and the busy wait's
   grain in the suites
   ([amendment](#amendment-2026-11-17-the-latchs-shut-and-the-busy-waits-grain-m3s-closing-review)).
 - **Date:** 2026-11-15
@@ -313,7 +313,7 @@ slice's [mutation log](../m3-slice-6-mutation-log.md), parts A and B, and part A
 
 ## Amendment, 2026-11-17: the latch's shut, and the busy wait's grain (M3's closing review)
 
-Proposed in M3's closing review ([the review's log](../m3-closing-review-mutation-log.md)).
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review ([the review's log](../m3-closing-review-mutation-log.md)).
 
 - **The latch gains a third user, the shut,** for `with-transaction`'s exits: the maintainer's
   "Shut the latch on exit", 2026-11-17 (ADR-0017, amended the same day).

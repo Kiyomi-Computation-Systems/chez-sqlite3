@@ -13,7 +13,7 @@
   the checks' section, decision 7's failed close, the maintainer's "Setting's error wins", a
   claim on every call, the engine rows' fuels, the lock rows, and the context's leaving WAL
   ([amendment](#amendment-2026-11-16-what-m3-slice-5-built)).
-  Amended 2026-11-17 in M3's closing review: the open's claim held whole, and its sweeps' bound
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open's claim held whole, and its sweeps' bound
   ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
@@ -288,7 +288,7 @@ builders' reports and its adversarial review
 
 ## Amendment, 2026-11-17: the open's claim, held whole (M3's closing review)
 
-Proposed in M3's closing review, from reviewer B's findings
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer B's findings
 ([the review's log](../m3-closing-review-mutation-log.md)).
 
 - **`made-claim` is exported** from `(chez-sqlite3 private open)`, for the suites alone. A pure

@@ -31,7 +31,7 @@
   [amendment](#amendment-2026-11-16-the-halves-split-in-three-m3-slice-2)). Amended 2026-11-16
   by the maintainer's choice, "Shard in slice 6": the memory job split in two (M3 slice 6,
   [amendment](#amendment-2026-11-16-the-memory-job-split-in-two-m3-slice-6)), and accepted on
-  2026-11-17 ("Accept all"). Amended 2026-11-17 in M3's closing review: the open risk met and
+  2026-11-17 ("Accept all"). Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the open risk met and
   closed, the watchdog's handshake, and the gates no row read
   ([amendment](#amendment-2026-11-17-the-open-risk-met-and-the-gates-no-row-read-m3s-closing-review)).
 - **Date:** 2026-11-13
@@ -709,7 +709,7 @@ alike; none of its code is copied.
 
 ## Amendment, 2026-11-17: the open risk met, and the gates no row read (M3's closing review)
 
-Proposed in M3's closing review, from reviewer B's findings and the fixes' measurements
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer B's findings and the fixes' measurements
 ([the review's log](../m3-closing-review-mutation-log.md)).
 
 - **The open risk was met.** `test-transaction-interrupt` took 318 s in `memory-1` on `main` at
@@ -720,7 +720,8 @@ Proposed in M3's closing review, from reviewer B's findings and the fixes' measu
     77 s on 18 cores, 11 to 15 s pinned to two, and 429 to 434 s in slice 6.
   - **The fix:** the suite now uses the memory-mutex device (ADR-0019, amended the same day), with
     its statements prepared before the watched call. It took 10 to 16 s under the gate in every
-    local run, on both libraries, so no split was needed. This PR's CI reads it against the line.
+    local run, on both libraries, so no split was needed. On PR #32's CI, run 44112097972, it
+    took 11 s.
 - **The device's first round is a handshake.** `main`'s run 44087748537, on `e590fdc`, failed
   `memory-2` on `test-interrupt-reach`'s 3 MB prepare, which ran unstopped: the first round's
   interrupt landed before the parse cleared it (ADR-0019, amended the same day). The handshake

@@ -24,7 +24,7 @@
   in M3 slice 6, and accepted on 2026-11-17 ("Accept all"): a deferred transaction's first
   write, and the default under contention
   ([amendment](#amendment-2026-11-16-a-deferred-transactions-first-write-m3-slice-6)).
-  Amended 2026-11-17 in M3's closing review: the call's claim, the BEGIN's plan read in its own
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the call's claim, the BEGIN's plan read in its own
   section, and the exits' rollback with the interrupt latch shut, the maintainer's "Shut the latch
   on exit"
   ([amendment](#amendment-2026-11-17-the-claim-the-begins-section-and-the-shut-latch-m3s-closing-review)).
@@ -456,7 +456,7 @@ builder's report and the lead's checks (the slice's
 
 ## Amendment, 2026-11-17: the claim, the BEGIN's section and the shut latch (M3's closing review)
 
-Proposed in M3's closing review, from reviewer A's three findings and reviewer B's, each
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer A's three findings and reviewer B's, each
 reproduced by the lead ([the review's log](../m3-closing-review-mutation-log.md)). The third is
 the maintainer's choice, "Shut the latch on exit" (2026-11-17), over documenting the race.
 

@@ -20,7 +20,7 @@
   in M3 slice 5's part D, and accepted by the maintainer that day: the claim of `execute!`,
   `query` and `query-row`, and P6's fuels again
   ([amendment](#amendment-2026-11-16-the-conveniences-claim-m3-slice-5-part-d)).
-  Amended 2026-11-17 in M3's closing review: the script's claim on its byte offsets, `made-claim`
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the script's claim on its byte offsets, `made-claim`
   held whole, and the sweeps' bound on a whole new call
   ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
 - **Date:** 2026-11-15
@@ -480,7 +480,7 @@ maintainer's choice, 2026-11-16 ("In slice 5's PR").
 
 ## Amendment, 2026-11-17: the script's claim, and the sweeps' bound (M3's closing review)
 
-Proposed in M3's closing review, from reviewer A's finding and reviewer B's, each reproduced by
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer A's finding and reviewer B's, each reproduced by
 the lead ([the review's log](../m3-closing-review-mutation-log.md)).
 
 - **`execute-script!` claims each statement's byte offset.**

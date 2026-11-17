@@ -16,7 +16,7 @@
   2026-11-16 in M3 slice 5's part D, and accepted by the maintainer that day: the check-out and
   the return claim
   ([amendment](#amendment-2026-11-16-the-check-out-and-the-return-claim-m3-slice-5-part-d)).
-  Amended 2026-11-17 in M3's closing review: decision 7's check of the SQL is inside the section
+  Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: decision 7's check of the SQL is inside the section
   ([amendment](#amendment-2026-11-17-where-the-sql-is-checked-m3s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: the statements the conveniences reuse
@@ -257,7 +257,7 @@ Accepted by the maintainer on 2026-11-16 ("Accept all"), proposed in M3 slice 5'
 
 ## Amendment, 2026-11-17: where the SQL is checked (M3's closing review)
 
-Proposed in M3's closing review, from reviewer A's reading, which the lead checked against the
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M3's closing review, from reviewer A's reading, which the lead checked against the
 code.
 
 - **Decision 7 says the SQL is checked to be a string, and copied, before the section.** That held
