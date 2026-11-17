@@ -17,7 +17,13 @@
 ;;; too. Only the peer row holds the soft lift.
 ;;;
 ;;;   S1 to S4   a step!: a SELECT reading a table, one reading none, a
-;;;              multi-row INSERT ... SELECT, a one-row INSERT
+;;;              multi-row INSERT ... SELECT, a one-row INSERT. S3's case is
+;;;              the build's: its NOMEM ended the transaction at the floor,
+;;;              with Guix's 3.53.1 and CI's 3.54.1, and left it open in a
+;;;              build with -DSQLITE_ENABLE_MEMORY_MANAGEMENT, Homebrew's among
+;;;              them (.plans/research/m3-mac/). So S3 takes the case its
+;;;              body's autocommit shows, and holds with-transaction's exit to
+;;;              that case, whole
 ;;;   R1 to R4   a column-value of 100,000 bound bytes, by a SELECT reading a
 ;;;              table or none, then reset! or finalize-statement!
 ;;;   R1u        R1's statement left failed through with-transaction's exit
@@ -316,16 +322,19 @@
                    ("COMMIT" . ready))
                  later lifted)))))
 
-;; rows : (Listof (List String Symbol String Symbol (List Any ...) Boolean))
+;; rows : (Listof (List String Symbol String Symbol (List Any ...) (U Boolean 'either)))
 ;; NAME, KIND, SQL, FINISH, what the body records, and whether the
-;; transaction has ended by the exit.
+;; transaction has ended by the exit; or, for S3, either, and the two
+;; records, the ended case's then the open case's.
 (define rows
   (list (list "S1" 'step "select randomblob(100000) from src limit 1" 'finalize-statement!
               (list nomem-step kept lifted 'failed 1 'no-value 1) #t)
         (list "S2" 'step "select randomblob(100000)" 'finalize-statement!
               (list nomem-step kept lifted 'failed 0 'no-value 0) #f)
         (list "S3" 'step "insert into b select randomblob(100000) from src limit 3" 'finalize-statement!
-              (list nomem-step kept lifted 'failed 1 'no-value 1) #t)
+              (list (list nomem-step kept lifted 'failed 1 'no-value 1)
+                    (list nomem-step kept lifted 'failed 0 'no-value 0))
+              'either)
         (list "S4" 'step "insert into b values (randomblob(100000))" 'finalize-statement!
               (list nomem-step kept lifted 'failed 1 'no-value 1) #t)
         (list "R1" 'read "select ?1 from src limit 1" 'reset!
@@ -336,6 +345,29 @@
               (list nomem-read kept lifted 'failed 0 'no-value 0) #f)
         (list "R4" 'read "select ?1" 'finalize-statement!
               (list nomem-read kept lifted 'failed 0 'no-value 0) #f)))
+
+;; either-case : Any (List Any ...) (List Any ...) Boolean String -> Any
+;; For a row whose case is the build's: its outcome A, compared whole with
+;; each case's. ENDED-RECORD is the body's record when the NOMEM ended the
+;; transaction, autocommit 1 straight after the call and after the finish;
+;; OPEN-RECORD when it left it open, 0 and 0. Prints which case LABEL met,
+;; and answers as-its-record-shows; else A, with both cases' outcomes.
+(define (either-case a ended-record open-record nested label)
+  (let ((as-ended (expected ended-record #t nested 'finished-in-the-body))
+        (as-open (expected open-record #f nested 'finished-in-the-body)))
+    (cond ((equal? a as-ended)
+           (display "    ")
+           (display label)
+           (display ": the NOMEM ended the transaction")
+           (newline)
+           'as-its-record-shows)
+          ((equal? a as-open)
+           (display "    ")
+           (display label)
+           (display ": the NOMEM left the transaction open")
+           (newline)
+           'as-its-record-shows)
+          (else (list a 'neither 'ended as-ended 'open as-open)))))
 
 (test-begin "transaction-nomem")
 
@@ -362,17 +394,27 @@
  (lambda (row)
    (for-each
     (lambda (nested)
-      (let ((name (string-append (car row) (if nested ", nested" ", outer")
-                                 ": " (symbol->string (cadr row)) " of " (caddr row)
-                                 " under the heap limit, then " (symbol->string (cadddr row))
-                                 (if (list-ref row 5)
-                                     ": the transaction has ended, so with-transaction issues nothing"
-                                     ": the transaction is open, so with-transaction rolls the level back")
-                                 "; the body's NOMEM reaches the caller; both limits read 0 after")))
+      (let* ((label (string-append (car row) (if nested ", nested" ", outer")))
+             (name (string-append label
+                                  ": " (symbol->string (cadr row)) " of " (caddr row)
+                                  " under the heap limit, then " (symbol->string (cadddr row))
+                                  (case (list-ref row 5)
+                                    ((either)
+                                     ": the transaction has ended, so with-transaction issues nothing, or is open, so with-transaction rolls the level back, as the body's autocommit shows")
+                                    ((#t)
+                                     ": the transaction has ended, so with-transaction issues nothing")
+                                    (else
+                                     ": the transaction is open, so with-transaction rolls the level back"))
+                                  "; the body's NOMEM reaches the caller; both limits read 0 after")))
         (available! name)
-        (test-equal name
-          (expected (list-ref row 4) (list-ref row 5) nested 'finished-in-the-body)
-          (nomem-row (cadr row) (caddr row) (cadddr row) nested))))
+        (if (eq? (list-ref row 5) 'either)
+            (test-equal name
+              'as-its-record-shows
+              (either-case (nomem-row (cadr row) (caddr row) (cadddr row) nested)
+                           (car (list-ref row 4)) (cadr (list-ref row 4)) nested label))
+            (test-equal name
+              (expected (list-ref row 4) (list-ref row 5) nested 'finished-in-the-body)
+              (nomem-row (cadr row) (caddr row) (cadddr row) nested)))))
     '(#f #t)))
  rows)
 

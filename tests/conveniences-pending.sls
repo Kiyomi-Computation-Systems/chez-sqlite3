@@ -44,6 +44,11 @@
 ;;; sqlite3_prepare_v3, which are. They answer data and raise nothing. A
 ;;; suite registers them first, through tell-registered, and unregisters
 ;;; them last, through tell-reset, as tests/test-open-interleave.sps does.
+;;; A libsqlite3 can refuse the registration: Apple's 3.51.0 answers 21,
+;;; SQLITE_MISUSE, for an entry point upstream takes. With no tell, no
+;;; prepare is noted, so each row that reads the notes, or raises SIGINT
+;;; from the authorizer, goes through tell-available!, which prints
+;;; UNAVAILABLE and skips it: never passed (ADR-0005, amended).
 ;;;
 ;;; The control: at each fuel, on a connection whose statement cache holds
 ;;; none, so every call prepares its statement, R is taken and resumed to its
@@ -102,10 +107,11 @@
 ;;; sqlite3_auto_extension, sqlite3_reset_auto_extension, sqlite3_trace_v2 and
 ;;; C's raise after the load, each under a guard of its own.
 (library (conveniences-pending)
-  (export public-load tell-registered tell-reset zero-counts clean-call sweep reported
-          timer-sweep timer-reported taken-sweep keyboard-in)
+  (export public-load tell-registered tell-answered? tell-available! tell-reset zero-counts
+          clean-call sweep reported timer-sweep timer-reported taken-sweep keyboard-in)
   (import (rnrs)
           (rnrs eval)
+          (only (srfi :64) test-skip)
           (only (chezscheme) make-engine foreign-procedure foreign-callable
                 foreign-callable-entry-point lock-object unlock-object foreign-ref
                 collect collect-trip-bytes set-timer timer-interrupt-handler
@@ -253,19 +259,58 @@
   (define reset-auto-extension
     (bound 'sqlite3_reset_auto_extension (foreign-procedure "sqlite3_reset_auto_extension" () void)))
 
-  ;; tell-registered : -> (U 'registered (List Any ...))
+  ;; tell-registered : -> (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
   ;; The entry point registered, the two callbacks locked, for every new
-  ;; connection.
+  ;; connection; or the code sqlite3_auto_extension refused it with, the
+  ;; callbacks unlocked again, since nothing will call them. Raises nothing.
   (define (tell-registered)
     (guard (e (#t (list 'raised (describe e))))
       (lock-object authorizer)
       (lock-object entry-point)
       (let ((rc (auto-extension (foreign-callable-entry-point entry-point))))
-        (if (eqv? rc 0) 'registered (list 'auto-extension-answered rc)))))
+        (if (eqv? rc 0)
+            'registered
+            (begin
+              (unlock-object entry-point)
+              (unlock-object authorizer)
+              (list 'auto-extension-answered rc))))))
+
+  ;; tell-refused : Any -> (U Integer #f)
+  ;; The code of ANSWER, tell-registered's, when it is a refusal, a nonzero
+  ;; integer; else #f.
+  (define (tell-refused answer)
+    (and (pair? answer) (eq? (car answer) 'auto-extension-answered)
+         (pair? (cdr answer)) (null? (cddr answer))
+         (let ((rc (cadr answer)))
+           (and (integer? rc) (exact? rc) (not (eqv? rc 0)) rc))))
+
+  ;; tell-answered? : Any -> Boolean
+  ;; Whether ANSWER, tell-registered's, is registered, or a refusal with its
+  ;; code: not a raise, nor anything else.
+  (define (tell-answered? answer)
+    (or (eq? answer 'registered) (and (tell-refused answer) #t)))
+
+  ;; tell-available! : Any String -> Void
+  ;; The gate of a row that depends on the tell, NAME: where ANSWER,
+  ;; tell-registered's, is a refusal, prints that the row is unavailable,
+  ;; and skips it, so it is never passed (ADR-0005, amended). Anything else
+  ;; runs the row: registered, or a raise, which the registration row fails.
+  (define (tell-available! answer name)
+    (let ((rc (tell-refused answer)))
+      (when rc
+        (display "UNAVAILABLE ")
+        (display name)
+        (display ": this libsqlite3 refused sqlite3_auto_extension (")
+        (display rc)
+        (display "), so the tell can't note a prepare")
+        (newline)
+        (test-skip name))))
 
   ;; tell-reset : -> (U (List 'reset Natural) (List 'raised Any))
   ;; The entry point unregistered and the callbacks unlocked; then how many
-  ;; prepares a fresh connection's select noted: 0, the tell gone.
+  ;; prepares a fresh connection's select noted: 0, the tell gone. Harmless
+  ;; after a refusal: no entry point of this library is registered, and
+  ;; unlocking an unlocked object does nothing in Chez.
   (define (tell-reset)
     (guard (e (#t (list 'raised (describe e))))
       (reset-auto-extension)

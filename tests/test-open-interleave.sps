@@ -65,7 +65,11 @@
 ;;; read. Both callbacks are __collect_safe: SQLite calls them inside
 ;;; sqlite3_open_v2 and sqlite3_prepare_v3, which are. They answer data and
 ;;; raise nothing. The entry point is unregistered, and both unlocked, at
-;;; the end.
+;;; the end. A libsqlite3 can refuse the registration: Apple's 3.51.0
+;;; answers 21, SQLITE_MISUSE, for an entry point upstream takes. With no
+;;; tell, nothing is noted, so each row that reads the notes, or raises
+;;; SIGINT from the callbacks, goes through tell-available!, which prints
+;;; UNAVAILABLE and skips it: never passed (ADR-0005, amended).
 ;;;
 ;;; Which fuels lie before the call's first expression is measured, not
 ;;; assumed: at each fuel, a control takes R and resumes it to its end
@@ -221,13 +225,52 @@
   (guard (e (#t #f))
     (and (foreign-entry? "raise") (foreign-procedure "raise" (int) int))))
 
-;; registered : (U 'registered (List Any ...))
+;; registered : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
+;; The entry point registered, the two callbacks locked, for every new
+;; connection; or the code sqlite3_auto_extension refused it with, the
+;; callbacks unlocked again, since nothing will call them.
 (define registered
   (guard (e (#t (list 'raised (describe e))))
     (lock-object authorizer)
     (lock-object entry-point)
     (let ((rc (auto-extension (foreign-callable-entry-point entry-point))))
-      (if (eqv? rc 0) 'registered (list 'auto-extension-answered rc)))))
+      (if (eqv? rc 0)
+          'registered
+          (begin
+            (unlock-object entry-point)
+            (unlock-object authorizer)
+            (list 'auto-extension-answered rc))))))
+
+;; tell-refused : Any -> (U Integer #f)
+;; The code of ANSWER, registered's, when it is a refusal, a nonzero
+;; integer; else #f.
+(define (tell-refused answer)
+  (and (pair? answer) (eq? (car answer) 'auto-extension-answered)
+       (pair? (cdr answer)) (null? (cddr answer))
+       (let ((rc (cadr answer)))
+         (and (integer? rc) (exact? rc) (not (eqv? rc 0)) rc))))
+
+;; tell-answered? : Any -> Boolean
+;; Whether ANSWER, registered's, is registered, or a refusal with its code:
+;; not a raise, nor anything else.
+(define (tell-answered? answer)
+  (or (eq? answer 'registered) (and (tell-refused answer) #t)))
+
+;; tell-available! : Any String -> Void
+;; The gate of a row that depends on the tell, NAME: where ANSWER,
+;; registered's, is a refusal, prints that the row is unavailable, and
+;; skips it, so it is never passed (ADR-0005, amended). Anything else runs
+;; the row: registered, or a raise, which the registration row fails.
+(define (tell-available! answer name)
+  (let ((rc (tell-refused answer)))
+    (when rc
+      (display "UNAVAILABLE ")
+      (display name)
+      (display ": this libsqlite3 refused sqlite3_auto_extension (")
+      (display rc)
+      (display "), so the tell can't note a prepare")
+      (newline)
+      (test-skip name))))
 
 ;; --- helpers ------------------------------------------------------------------------------
 
@@ -638,32 +681,38 @@
   'loaded
   public-load)
 
-(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension"
-  'registered
-  registered)
+(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
+  'registered-or-refused
+  (if (tell-answered? registered) 'registered-or-refused registered))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts
   (native-counts))
 
-(test-equal "the tell: an open with the two settings is noted once, then each PRAGMA it prepares, in the plan's order, busy-timeout's first, its value and none for a read"
-  (list 1 plan as-asked zero-counts)
-  (begin
-    (set! noted '())
-    (let* ((db (open-database ":memory:" settings))
-           (conns (connections-of (reverse noted)))
-           (c (latest-of (handle-of db) conns))
-           (read (readings db)))
-      (close-answer db)
-      (list (length conns) (and c (cadr c)) read (native-counts)))))
+(let ((name "the tell: an open with the two settings is noted once, then each PRAGMA it prepares, in the plan's order, busy-timeout's first, its value and none for a read"))
+  (tell-available! registered name)
+  (test-equal name
+    (list 1 plan as-asked zero-counts)
+    (begin
+      (set! noted '())
+      (let* ((db (open-database ":memory:" settings))
+             (conns (connections-of (reverse noted)))
+             (c (latest-of (handle-of db) conns))
+             (read (readings db)))
+        (close-answer db)
+        (list (length conns) (and c (cadr c)) read (native-counts))))))
 
-(test-equal "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted"
-  (list '() 'some-answered zero-counts)
-  (reported 'open-database (sweep 'open-database)))
+(let ((name "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted"))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'some-answered zero-counts)
+    (reported 'open-database (sweep 'open-database))))
 
-(test-equal "call-with-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the procedure's answer or &sqlite-closed, a refused run touching nothing; at most one connection a call is opened, and none is left open; each setting is applied once, in the plan's order, and wholly on the connection the procedure was given, which tracks no statement there; nothing is counted after"
-  (list '() 'some-answered zero-counts)
-  (reported 'call-with-database (sweep 'call-with-database)))
+(let ((name "call-with-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the procedure's answer or &sqlite-closed, a refused run touching nothing; at most one connection a call is opened, and none is left open; each setting is applied once, in the plan's order, and wholly on the connection the procedure was given, which tracks no statement there; nothing is counted after"))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'some-answered zero-counts)
+    (reported 'call-with-database (sweep 'call-with-database))))
 
 ;; --- a failing open, resumed twice ------------------------------------------------------------
 
@@ -773,13 +822,17 @@
         (let ((p (assq 'refused (caddr run)))) (if (and p (> (cdr p) 0)) 'some-refused 'none-refused))
         (cadddr run)))
 
-(test-equal "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only where the control makes a whole new call does it open a connection, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after"
-  (list '() 'some-refused zero-counts)
-  (failing-reported 'open-database (failing-sweep 'open-database)))
+(let ((name "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only where the control makes a whole new call does it open a connection, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after"))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'some-refused zero-counts)
+    (failing-reported 'open-database (failing-sweep 'open-database))))
 
-(test-equal "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, or raises the mismatch again, noting nothing; only where the control makes a whole new call does it open a connection; nothing is counted after"
-  (list '() 'some-refused zero-counts)
-  (failing-reported 'call-with-database (failing-sweep 'call-with-database)))
+(let ((name "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, or raises the mismatch again, noting nothing; only where the control makes a whole new call does it open a connection; nothing is counted after"))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'some-refused zero-counts)
+    (failing-reported 'call-with-database (failing-sweep 'call-with-database))))
 
 ;; --- an interrupt that escapes, at each of call-with-database's sections --------------------
 
@@ -815,27 +868,31 @@
 (define (first-of items n)
   (if (or (= n 0) (null? items)) '() (cons (car items) (first-of (cdr items) (- n 1)))))
 
-(test-equal "an interrupt that escapes from call-with-database, raised inside each of its sections in turn: its open's, then each setting's prepare: each time the keyboard interrupt is handled as that section ends, the handler leaves the call, and the call's extent closes the connection, the statement just prepared among what it finalizes; no later section runs, the procedure is never called, and nothing is counted"
-  (let loop ((k 1) (expected '()))
-    (if (> k 5)
-        (reverse expected)
-        (loop (+ k 1) (cons (list 'escaped 1 (first-of plan (- k 1)) 'proc-not-called zero-counts)
-                            expected))))
-  (let loop ((k 1) (found '()))
-    (if (> k 5)
-        (reverse found)
-        (loop (+ k 1) (cons (escaped-at k) found)))))
+(let ((name "an interrupt that escapes from call-with-database, raised inside each of its sections in turn: its open's, then each setting's prepare: each time the keyboard interrupt is handled as that section ends, the handler leaves the call, and the call's extent closes the connection, the statement just prepared among what it finalizes; no later section runs, the procedure is never called, and nothing is counted"))
+  (tell-available! registered name)
+  (test-equal name
+    (let loop ((k 1) (expected '()))
+      (if (> k 5)
+          (reverse expected)
+          (loop (+ k 1) (cons (list 'escaped 1 (first-of plan (- k 1)) 'proc-not-called zero-counts)
+                              expected))))
+    (let loop ((k 1) (found '()))
+      (if (> k 5)
+          (reverse found)
+          (loop (+ k 1) (cons (escaped-at k) found))))))
 
-(test-equal "the entry point is unregistered once the sweeps are done: an open after it is not noted"
-  '(reset ())
-  (guard (e (#t (list 'raised (describe e))))
-    (reset-auto-extension)
-    (unlock-object entry-point)
-    (unlock-object authorizer)
-    (set! noted '())
-    (let ((db (open-database ":memory:" settings)))
-      (close-answer db)
-      (list 'reset noted))))
+(let ((name "the entry point is unregistered once the sweeps are done: an open after it is not noted"))
+  (tell-available! registered name)
+  (test-equal name
+    '(reset ())
+    (guard (e (#t (list 'raised (describe e))))
+      (reset-auto-extension)
+      (unlock-object entry-point)
+      (unlock-object authorizer)
+      (set! noted '())
+      (let ((db (open-database ":memory:" settings)))
+        (close-answer db)
+        (list 'reset noted)))))
 
 (test-equal "every count is zero at the end"
   zero-counts

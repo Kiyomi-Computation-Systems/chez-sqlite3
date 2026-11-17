@@ -33,6 +33,10 @@
 ;;; expiry there frees the block, so no trial has both runs past its first
 ;;; section. Its code is unchanged by part D, and the rows hold it so.
 ;;;
+;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
+;;; there is no tell, so each row that depends on it prints UNAVAILABLE and
+;;; is skipped, never passed: (conveniences-pending)'s tell-available!.
+;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise (AGENTS.md).
 (import (rnrs)
@@ -72,27 +76,38 @@
   'loaded
   public-load)
 
-(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension"
-  'registered
-  (tell-registered))
+;; registration : (U 'registered (List 'auto-extension-answered Integer) (List 'raised Any))
+;; The tell's registration, which every row that depends on the tell is
+;; gated by, through tell-available!.
+(define registration (tell-registered))
+
+(test-equal "the authorizer is registered for every new connection, through sqlite3_auto_extension, or the call is refused with its code; registering raises nothing"
+  'registered-or-refused
+  (if (tell-answered? registration) 'registered-or-refused registration))
 
 (test-equal "every count is zero once the load has returned"
   zero-counts
   (native-counts))
 
-(test-equal "the tell: one execute-script! outside any engine inserts its two rows once, the authorizer noting each of its two inserts prepared once; nothing is tracked or cached, and nothing is counted once the connection is closed"
-  (list 'no-value 2 '(1 2 3 7 8) '() 0 zero-counts)
-  (guard (e (#t (list 'raised (describe e))))
-    (clean-call 'execute-script!)))
+(let ((name "the tell: one execute-script! outside any engine inserts its two rows once, the authorizer noting each of its two inserts prepared once; nothing is tracked or cached, and nothing is counted once the connection is closed"))
+  (tell-available! registration name)
+  (test-equal name
+    (list 'no-value 2 '(1 2 3 7 8) '() 0 zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (clean-call 'execute-script!))))
 
-(test-equal "execute-script!'s remainder R, taken at every even fuel from 2 until the call completes without expiring, the odd fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block"
-  (list '() 'interleavings-reached zero-counts)
-  (guard (e (#t (list 'raised (describe e))))
-    (reported 'execute-script! (sweep 'execute-script! 'even) past-a-fuel both-a-fuel)))
+(let ((name "execute-script!'s remainder R, taken at every even fuel from 2 until the call completes without expiring, the odd fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block"))
+  (tell-available! registration name)
+  (test-equal name
+    (list '() 'interleavings-reached zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (reported 'execute-script! (sweep 'execute-script! 'even) past-a-fuel both-a-fuel))))
 
-(test-equal "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"
-  '(reset 0)
-  (tell-reset))
+(let ((name "the entry point is unregistered once the sweep is done: a select prepared after it is not noted"))
+  (tell-available! registration name)
+  (test-equal name
+    '(reset 0)
+    (tell-reset)))
 
 (test-equal "every count is zero at the end"
   zero-counts

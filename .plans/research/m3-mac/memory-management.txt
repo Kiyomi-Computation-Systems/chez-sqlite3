@@ -1,0 +1,35 @@
+# The suite as fixed
+== defaults
+    S3, outer: the NOMEM ended the transaction
+    S3, nested: the NOMEM ended the transaction
+test: ran 1, passed 1, failed 0, hung 0
+== brew-all
+    S3, outer: the NOMEM left the transaction open
+    S3, nested: the NOMEM left the transaction open
+test: ran 1, passed 1, failed 0, hung 0
+== mm
+    S3, outer: the NOMEM left the transaction open
+    S3, nested: the NOMEM left the transaction open
+test: ran 1, passed 1, failed 0, hung 0
+== stat4
+    S3, outer: the NOMEM ended the transaction
+    S3, nested: the NOMEM ended the transaction
+test: ran 1, passed 1, failed 0, hung 0
+
+# main's suite, fcc9e7c, before the fix
+== defaults
+test: ran 1, passed 1, failed 0, hung 0
+== brew-all
+FAIL S3, outer: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after
+  actual:   (((sqlite-error step! nomem nomem) the-limit-in-force-when-the-call-returned (hard 0 soft 0) failed 0 no-value 0) not-nested (raised (sqlite-error step! nomem nomem)) no "(none)" "(none)" (("BEGIN DEFERRED" . ready) ("ROLLBACK" . ready)) finished-in-the-body (hard 0 soft 0))
+FAIL S3, nested: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after
+  actual:   (((sqlite-error step! nomem nomem) the-limit-in-force-when-the-call-returned (hard 0 soft 0) failed 0 no-value 0) (raised (sqlite-error step! nomem nomem)) outer-returned no "outer" "outer" (("BEGIN DEFERRED" . ready) ("SAVEPOINT chez_sqlite3_1" . ready) ("ROLLBACK TO chez_sqlite3_1" . ready) ("RELEASE chez_sqlite3_1" . ready) ("COMMIT" . ready)) finished-in-the-body (hard 0 soft 0))
+test: ran 1, passed 0, failed 1, hung 0
+== mm
+FAIL S3, outer: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after
+  actual:   (((sqlite-error step! nomem nomem) the-limit-in-force-when-the-call-returned (hard 0 soft 0) failed 0 no-value 0) not-nested (raised (sqlite-error step! nomem nomem)) no "(none)" "(none)" (("BEGIN DEFERRED" . ready) ("ROLLBACK" . ready)) finished-in-the-body (hard 0 soft 0))
+FAIL S3, nested: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after
+  actual:   (((sqlite-error step! nomem nomem) the-limit-in-force-when-the-call-returned (hard 0 soft 0) failed 0 no-value 0) (raised (sqlite-error step! nomem nomem)) outer-returned no "outer" "outer" (("BEGIN DEFERRED" . ready) ("SAVEPOINT chez_sqlite3_1" . ready) ("ROLLBACK TO chez_sqlite3_1" . ready) ("RELEASE chez_sqlite3_1" . ready) ("COMMIT" . ready)) finished-in-the-body (hard 0 soft 0))
+test: ran 1, passed 0, failed 1, hung 0
+== stat4
+test: ran 1, passed 1, failed 0, hung 0

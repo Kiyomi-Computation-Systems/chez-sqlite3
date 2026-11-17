@@ -1,0 +1,572 @@
+deps: vendor/chez-srfi linked into build/scheme-libs/srfi
+check-suites: every suite ends with (exit (suite-exit-status runner)) (73 checked)
+check-seam: the seam holds (29 libraries in 29 files checked)
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+check-memory-shards: MEMORY_SUITES_1 and MEMORY_SUITES_2 run each of the 73 suites once between them
+=== tests/test-blocks.sps
+%%%% Starting test blocks
+# of expected passes      11
+test: pass tests/test-blocks.sps
+=== tests/test-change-counters.sps
+%%%% Starting test change-counters
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-change-counters.sps
+=== tests/test-check-ci.sps
+%%%% Starting test check-ci
+# of expected passes      439
+test: pass tests/test-check-ci.sps
+=== tests/test-check-floors.sps
+%%%% Starting test check-floors
+# of expected passes      461
+test: pass tests/test-check-floors.sps
+=== tests/test-check-memory-shards.sps
+%%%% Starting test check-memory-shards
+# of expected passes      28
+test: pass tests/test-check-memory-shards.sps
+=== tests/test-check-nothreads.sps
+%%%% Starting test check-nothreads
+# of expected passes      18
+test: pass tests/test-check-nothreads.sps
+=== tests/test-check-seam.sps
+%%%% Starting test check-seam
+# of expected passes      68
+test: pass tests/test-check-seam.sps
+=== tests/test-chez-sqlite3-testing.sps
+%%%% Starting test chez-sqlite3-testing
+# of expected passes      76
+test: pass tests/test-chez-sqlite3-testing.sps
+=== tests/test-ci-sqlite.sps
+%%%% Starting test ci-sqlite
+# of expected passes      80
+test: pass tests/test-ci-sqlite.sps
+=== tests/test-conditions.sps
+%%%% Starting test conditions
+# of expected passes      83
+test: pass tests/test-conditions.sps
+=== tests/test-connection-cache.sps
+%%%% Starting test connection-cache
+  the race completed without expiring at fuel 102
+# of expected passes      21
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-connection-cache.sps
+=== tests/test-connection.sps
+%%%% Starting test connection
+# of expected passes      63
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-connection.sps
+=== tests/test-constants.sps
+%%%% Starting test constants
+test-constants: completeness checked against a subset only: header 3051000 is newer than the floor 3045001
+# of expected passes      44
+test: pass tests/test-constants.sps
+=== tests/test-contention.sps
+%%%% Starting test contention
+    timed: BEGIN IMMEDIATE, waited out: 1598 ms
+    timed: with-transaction, waited out: 1583 ms
+    timed: BEGIN IMMEDIATE, ended mid-wait: 568 ms
+    timed: BEGIN IMMEDIATE, from the other's commit to its return: 63 ms
+    timed: the deferred upgrade, after the other's commit: 0 ms
+    timed: the writer's autocommit insert, beside the read: 1 ms
+    timed: the writer's BEGIN IMMEDIATE and insert, beside the read: 0 ms
+    timed: the writer's COMMIT, beside the read: 0 ms
+    timed: with-transaction, immediate: the second's call to its first read: 577 ms
+    timed: with-transaction, deferred: the second's call to its first read: 0 ms
+    timed: BEGIN IMMEDIATE, a 250 ms timeout waited out: 284 ms
+    P4: SQLite 3.51.0 sleeps in milliseconds: a 250 ms busy timeout answered busy after 284 ms
+# of expected passes      10
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-contention.sps
+=== tests/test-conveniences-counters.sps
+%%%% Starting test conveniences-counters
+# of expected passes      21
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences-counters.sps
+=== tests/test-conveniences-engines.sps
+%%%% Starting test conveniences-engines
+  execute! completed without expiring at fuel 43
+  query completed without expiring at fuel 82
+  query-row completed without expiring at fuel 47
+  an abandoned query-fold completed without expiring at fuel 117
+  an abandoned query completed in one slice at fuel 60
+  query-fold completed without expiring at fuel 117
+  execute-script! completed without expiring at fuel 640
+  the two engines completed without expiring at fuel 126
+# of expected passes      12
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences-engines.sps
+=== tests/test-conveniences-pending-execute.sps
+%%%% Starting test conveniences-pending-execute
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one execute! outside any engine inserts its row once, the authorizer noting its insert prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed
+  expected: (no-value 1 (1 2 3 9) (("insert into t values (?)" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (no-value 0 (1 2 3 9) (("insert into t values (?)" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  execute!: completed without expiring at fuel 42; trials with R1 820; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 72
+    deviations by kind: ((prepares . 862) (rows . 300))
+FAIL execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((862 ((1 1 ((prepares 0) (rows (1 2 3 9 9)))) (1 2 ((prepares 0) (rows (1 2 3 9 9)))) (1 3 ((prepares 0) (rows (1 2 3 9 9)))))) (too-few-interleavings past 0 both 0 fuel 42) ((block . 0) (connection . 0) (statement . 0)))
+  execute!, a timer handler raising: completed before it ran at tick 36; raised at 35 ticks
+# of expected passes      5
+# of unexpected failures  3
+suite-exit-status: exit 1 (pass 5, fail 3, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-execute.sps (exit 1)
+=== tests/test-conveniences-pending-fold.sps
+%%%% Starting test conveniences-pending-fold
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one query-fold outside any engine answers the sum of t's rows, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed
+  expected: (6 1 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (6 0 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  query-fold: completed without expiring at fuel 154; trials with R1 11834; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 94
+    deviations by kind: ((prepares . 11988))
+FAIL query-fold's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the sum or &sqlite-closed from query-fold, or a re-entry's refusal; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, an expiry inside the fold's wind having finalized it; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((11988 ((1 1 ((prepares 0))) (1 2 ((prepares 0))) (1 3 ((prepares 0))))) (too-few-interleavings past 0 both 0 fuel 154) ((block . 0) (connection . 0) (statement . 0)))
+  query-fold, a timer handler raising: completed before it ran at tick 148; raised at 147 ticks
+# of expected passes      5
+# of unexpected failures  3
+suite-exit-status: exit 1 (pass 5, fail 3, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-fold.sps (exit 1)
+=== tests/test-conveniences-pending-query-row.sps
+%%%% Starting test conveniences-pending-query-row
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one query-row outside any engine answers t's first row, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed
+  expected: (#(1) 1 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (#(1) 0 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  query-row: completed without expiring at fuel 46; trials with R1 990; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 72
+    deviations by kind: ((prepares . 1036))
+FAIL query-row's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the first row or &sqlite-closed from query-row; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((1036 ((1 1 ((prepares 0))) (1 2 ((prepares 0))) (1 3 ((prepares 0))))) (too-few-interleavings past 0 both 0 fuel 46) ((block . 0) (connection . 0) (statement . 0)))
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+FAIL a keyboard interrupt that comes pending inside query-row's check-out, SIGINT raised from SQLite's authorizer as the miss's prepare runs: the keyboard handler, run as the check-out's section ends, raises before the call has its statement in hand; the raise reaches the caller, and the call gives the statement back all the same, noted inside the section: the cache holds it, ready, and nothing is counted once the connection is closed
+  expected: (interrupt #f 1 (("select x from t where x > ?" . ready)) 1 counts-kept)
+  actual:   (#(1) #f 1 (("select x from t where x > ?" . ready)) 1 counts-kept)
+# of expected passes      7
+# of unexpected failures  4
+suite-exit-status: exit 1 (pass 7, fail 4, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-query-row.sps (exit 1)
+=== tests/test-conveniences-pending-query.sps
+%%%% Starting test conveniences-pending-query
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one query outside any engine answers t's three rows, the authorizer noting its select prepared once; the cache keeps its statement, ready, and nothing is counted once the connection is closed
+  expected: ((#(1) #(2) #(3)) 1 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((#(1) #(2) #(3)) 0 (1 2 3) (("select x from t where x > ?" . ready)) 1 ((block . 0) (connection . 0) (statement . 0)))
+  query: completed without expiring at fuel 72; trials with R1 2485; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 72
+    deviations by kind: ((prepares . 2557))
+FAIL query's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the three rows or &sqlite-closed from query; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((2557 ((1 1 ((prepares 0))) (1 2 ((prepares 0))) (1 3 ((prepares 0))))) (too-few-interleavings past 0 both 0 fuel 72) ((block . 0) (connection . 0) (statement . 0)))
+FAIL the tell, for a query that fails: one query outside any engine of a select whose second step overflows raises SQLite's error from query, the authorizer noting the select's four selects, once; the failed statement is finalized at its return, never kept, and nothing is counted once the connection is closed
+  expected: ((raised (sqlite-error query error error)) 4 (1 2 3) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((raised (sqlite-error query error error)) 0 (1 2 3) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  query-failing: completed without expiring at fuel 84; trials with R1 3403; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 72
+    deviations by kind: ((prepares . 3487) (failures . 1231))
+FAIL a query that fails, its remainder R taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: the second step's failure is raised by one run, and again by each run taken past the call's give-back, every other run raising &sqlite-closed from query, a refused run's own raise never; the select is prepared once, twice only where the control makes a whole new call; the failed statement is finalized, nothing tracked; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((3487 ((1 1 ((prepares 0) (failures 2 past-the-give-back 0))) (1 2 ((prepares 0) (failures 2 past-the-give-back 0))) (1 3 ((prepares 0) (failures 2 past-the-give-back 0))))) (too-few-interleavings past 0 both 0 fuel 84) ((block . 0) (connection . 0) (statement . 0)))
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+# of expected passes      6
+# of unexpected failures  5
+suite-exit-status: exit 1 (pass 6, fail 5, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-query.sps (exit 1)
+=== tests/test-conveniences-pending-script-even.sps
+%%%% Starting test conveniences-pending-script-even
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one execute-script! outside any engine inserts its two rows once, the authorizer noting each of its two inserts prepared once; nothing is tracked or cached, and nothing is counted once the connection is closed
+  expected: (no-value 2 (1 2 3 7 8) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (no-value 0 (1 2 3 7 8) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  execute-script!: completed without expiring at fuel 431; trials with R1 25460; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 75
+    deviations by kind: ((rows . 944))
+FAIL execute-script!'s remainder R, taken at every even fuel from 2 until the call completes without expiring, the odd fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((944 ((1 1 ((rows (1 2 3 7 7 8 8)))) (2 1 ((rows (1 2 3 7 7 8 8)))) (2 2 ((rows (1 2 3 7 7 8 8)))))) (too-few-interleavings past 0 both 0 fuel 431) ((block . 0) (connection . 0) (statement . 0)))
+# of expected passes      4
+# of unexpected failures  3
+suite-exit-status: exit 1 (pass 4, fail 3, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-script-even.sps (exit 1)
+=== tests/test-conveniences-pending-script-odd.sps
+%%%% Starting test conveniences-pending-script-odd
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: one execute-script! outside any engine inserts its two rows once, the authorizer noting each of its two inserts prepared once; nothing is tracked or cached, and nothing is counted once the connection is closed
+  expected: (no-value 2 (1 2 3 7 8) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (no-value 0 (1 2 3 7 8) () 0 ((block . 0) (connection . 0) (statement . 0)))
+  execute-script!: completed without expiring at fuel 431; trials with R1 25817; past the first section 0; both past it 0; the last fuel at which the control made a whole new call 0, below the refused call's 75
+    deviations by kind: ((rows . 948))
+FAIL execute-script!'s remainder R, taken at every odd fuel from 1 until the call completes without expiring, the even fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block
+  expected: (() interleavings-reached ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((948 ((1 1 ((rows (1 2 3 7 7 8 8)))) (1 2 ((rows (1 2 3 7 7 8 8)))) (1 3 ((rows (1 2 3 7 7 8 8)))))) (too-few-interleavings past 0 both 0 fuel 431) ((block . 0) (connection . 0) (statement . 0)))
+  execute-script!, a timer handler raising: completed before it ran at tick 425; raised at 424 ticks
+# of expected passes      5
+# of unexpected failures  3
+suite-exit-status: exit 1 (pass 5, fail 3, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-conveniences-pending-script-odd.sps (exit 1)
+=== tests/test-conveniences-reentry.sps
+%%%% Starting test conveniences-reentry
+# of expected passes      11
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences-reentry.sps
+=== tests/test-conveniences-resumed.sps
+%%%% Starting test conveniences-resumed
+  query, cold, alone completed without expiring at fuel 72
+  query, warm, another engine holding its statement at a row completed without expiring at fuel 72
+  query-row, cold, alone completed without expiring at fuel 46
+  query-row, warm, another engine holding its statement at a row completed without expiring at fuel 46
+  execute!, cold, alone completed without expiring at fuel 51
+  execute!, warm, another engine holding its statement at a row completed without expiring at fuel 51
+  query-row, its return failing, resumed twice completed without expiring at fuel 78
+  query-fold, resumed twice completed without expiring at fuel 150
+  continuations captured: 150
+  execute-script!, resumed twice, completed without expiring at fuel 638; whole new calls at fuels (1 2 3 4 5 6 7); the refused call completes at fuel 75
+# of expected passes      10
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences-resumed.sps
+=== tests/test-conveniences-who.sps
+%%%% Starting test conveniences-who
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences-who.sps
+=== tests/test-conveniences.sps
+%%%% Starting test conveniences
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-conveniences.sps
+=== tests/test-conventions.sps
+%%%% Starting test conventions
+# of expected passes      45
+test: pass tests/test-conventions.sps
+=== tests/test-counters.sps
+%%%% Starting test counters
+# of expected passes      17
+test: pass tests/test-counters.sps
+=== tests/test-discovery.sps
+%%%% Starting test discovery
+# of expected passes      66
+test: pass tests/test-discovery.sps
+=== tests/test-docs.sps
+%%%% Starting test docs
+# of expected passes      101
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-docs.sps
+=== tests/test-execute-script.sps
+%%%% Starting test execute-script
+# of expected passes      18
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-execute-script.sps
+=== tests/test-interrupt-close.sps
+%%%% Starting test interrupt-close
+    the race: 2550 interrupts, 1977 on a closed connection, over 20 opens and closes
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-interrupt-close.sps
+=== tests/test-interrupt-database.sps
+%%%% Starting test interrupt-database
+  interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+  interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+# of expected passes      18
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-interrupt-database.sps
+=== tests/test-interrupt-reach.sps
+%%%% Starting test interrupt-reach
+    timed: the busy wait, interrupted: 1570 ms
+# of expected passes      13
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-interrupt-reach.sps
+=== tests/test-interrupt.sps
+%%%% Starting test interrupt
+# of expected passes      19
+test: pass tests/test-interrupt.sps
+=== tests/test-library-loading-decoys.sps
+%%%% Starting test library-loading-decoys
+# of expected passes      39
+test: pass tests/test-library-loading-decoys.sps
+=== tests/test-library-loading-missing.sps
+%%%% Starting test library-loading-missing
+# of expected passes      34
+test: pass tests/test-library-loading-missing.sps
+=== tests/test-library-loading-real.sps
+%%%% Starting test library-loading-real
+# of expected passes      41
+test: pass tests/test-library-loading-real.sps
+=== tests/test-libsqlite3-info.sps
+%%%% Starting test libsqlite3-info
+# of expected passes      9
+test: pass tests/test-libsqlite3-info.sps
+=== tests/test-load-state.sps
+%%%% Starting test load-state
+# of expected passes      16
+test: pass tests/test-load-state.sps
+=== tests/test-manifest.sps
+%%%% Starting test manifest
+# of expected passes      79
+test: pass tests/test-manifest.sps
+=== tests/test-memory-check.sps
+%%%% Starting test memory-check
+# of expected passes      15
+test: pass tests/test-memory-check.sps
+=== tests/test-native.sps
+%%%% Starting test native
+# of expected passes      100
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-native.sps
+=== tests/test-never-loads.sps
+%%%% Starting test never-loads
+# of expected passes      5
+test: pass tests/test-never-loads.sps
+=== tests/test-open-engines.sps
+%%%% Starting test open-engines
+  open-database with settings, resumed at its fuel completed without expiring at fuel 221
+  the refused call completes at fuel 68
+  open-database resumed twice: completed without expiring at fuel 221; second resumes ((refused . 190) (same . 21) (new . 9))
+  the refused call takes 71 ticks
+  call-with-database re-entered: its procedure started at tick 233; re-entries ((refused . 202) (again . 22) (new . 8))
+  call-with-database with settings, resumed: completed without expiring at fuel 446; kinds ((as-asked . 47) (closed-in-proc . 218) (closed . 181))
+  call-with-database re-entered with its close refused: its procedure started at tick 233
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-open-engines.sps
+=== tests/test-open-interleave.sps
+%%%% Starting test open-interleave
+FAIL the authorizer is registered for every new connection, through sqlite3_auto_extension
+  expected: registered
+  actual:   (auto-extension-answered 21)
+FAIL the tell: an open with the two settings is noted once, then each PRAGMA it prepares, in the plan's order, busy-timeout's first, its value and none for a read
+  expected: (1 (("busy_timeout" "1234") ("busy_timeout" #f) ("foreign_keys" "1") ("foreign_keys" #f)) (1234 1) ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (0 #f (1234 1) ((block . 0) (connection . 0) (statement . 0)))
+  open-database: completed without expiring at fuel 75; trials 2775; trials answering 2775; whole new calls 630; the last fuel at which the control made a whole new call 0
+    deviations by kind: ((answered-not-the-plan . 2775) (opened . 2775) (new-where-the-control-made-none . 630))
+FAIL open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted
+  expected: (() some-answered ((block . 0) (connection . 0) (statement . 0)))
+  actual:   ((2775 ((open-database 1 1 ((answered-not-the-plan #f) (answered-not-the-plan #f) (opened 0 answered 2) (new-where-the-control-made-none 2))) (open-database 1 2 ((answered-not-the-plan #f) (answered-not-the-plan #f) (opened 0 answered 2) (new-where-the-control-made-none 2))) (open-database 1 3 ((answered-not-the-plan #f) (answered-not-the-plan #f) (opened 0 answered 2) (new-where-the-control-made-none 2))))) some-answered ((block . 0) (connection . 0) (statement . 0)))
+  call-with-database: completed without expiring at fuel 99; trials 5732; trials answering 0; whole new calls 0; the last fuel at which the control made a whole new call 0
+FAIL call-with-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the procedure's answer or &sqlite-closed, a refused run touching nothing; at most one connection a call is opened, and none is left open; each setting is applied once, in the plan's order, and wholly on the connection the procedure was given, which tracks no statement there; nothing is counted after
+  expected: (() some-answered ((block . 0) (connection . 0) (statement . 0)))
+  actual:   (() none-answered ((block . 0) (connection . 0) (statement . 0)))
+  open-database, failing, resumed twice: completed without expiring at fuel 134; second resumes ((again . 50) (refused . 83))
+  call-with-database, failing, resumed twice: completed without expiring at fuel 156; second resumes ((again . 60) (refused . 95))
+FAIL an interrupt that escapes from call-with-database, raised inside each of its sections in turn: its open's, then each setting's prepare: each time the keyboard interrupt is handled as that section ends, the handler leaves the call, and the call's extent closes the connection, the statement just prepared among what it finalizes; no later section runs, the procedure is never called, and nothing is counted
+  expected: ((escaped 1 () proc-not-called ((block . 0) (connection . 0) (statement . 0))) (escaped 1 (("busy_timeout" "1234")) proc-not-called ((block . 0) (connection . 0) (statement . 0))) (escaped 1 (("busy_timeout" "1234") ("busy_timeout" #f)) proc-not-called ((block . 0) (connection . 0) (statement . 0))) (escaped 1 (("busy_timeout" "1234") ("busy_timeout" #f) ("foreign_keys" "1")) proc-not-called ((block . 0) (connection . 0) (statement . 0))) (escaped 1 (("busy_timeout" "1234") ("busy_timeout" #f) ("foreign_keys" "1") ("foreign_keys" #f)) proc-not-called ((block . 0) (connection . 0) (statement . 0))))
+  actual:   ((#<void> 0 no-connection proc-called ((block . 0) (connection . 0) (statement . 0))) (#<void> 0 no-connection proc-called ((block . 0) (connection . 0) (statement . 0))) (#<void> 0 no-connection proc-called ((block . 0) (connection . 0) (statement . 0))) (#<void> 0 no-connection proc-called ((block . 0) (connection . 0) (statement . 0))) (#<void> 0 no-connection proc-called ((block . 0) (connection . 0) (statement . 0))))
+# of expected passes      6
+# of unexpected failures  5
+suite-exit-status: exit 1 (pass 6, fail 5, xpass 0): a suite needs a pass, and no fail or xpass
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: FAIL tests/test-open-interleave.sps (exit 1)
+=== tests/test-open-locks.sps
+%%%% Starting test open-locks
+    timed: exclusive, journal-mode wal: 1586 ms
+    timed: exclusive, journal-mode delete: 1599 ms
+    timed: read, journal-mode wal: 1585 ms
+    timed: exclusive, journal-mode then synchronous: 1 ms
+    timed: exclusive, synchronous then journal-mode: 1 ms
+    timed: exclusive, journal-mode then synchronous, call-with-database: 0 ms
+    timed: exclusive, synchronous then journal-mode, call-with-database: 0 ms
+    timed: exclusive, foreign-keys: 0 ms
+    timed: exclusive, temp-store: 1 ms
+    timed: exclusive, trusted-schema: 0 ms
+    timed: exclusive, busy-timeout alone: 0 ms
+    timed: read, all but journal-mode wal: 0 ms
+    timed: reserved, all but journal-mode wal: 0 ms
+    timed: reserved, journal-mode wal: 0 ms
+    timed: WAL, idle, journal-mode delete: 1 ms
+    timed: WAL, idle, journal-mode truncate: 0 ms
+    timed: WAL, unused, journal-mode delete: 1 ms
+    timed: exclusive, let go mid-wait: 578 ms
+    timed: read, let go mid-wait: 571 ms
+    timed: WAL on WAL, idle: 1 ms
+    timed: WAL on WAL, read: 0 ms
+    timed: WAL on WAL, reserved: 0 ms
+    timed: WAL on WAL, exclusive: 1 ms
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-open-locks.sps
+=== tests/test-open-options.sps
+%%%% Starting test open-options
+# of expected passes      23
+test: pass tests/test-open-options.sps
+=== tests/test-open-settings.sps
+%%%% Starting test open-settings
+# of expected passes      22
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-open-settings.sps
+=== tests/test-public.sps
+%%%% Starting test public
+# of expected passes      22
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-public.sps
+=== tests/test-reference.sps
+%%%% Starting test reference
+# of expected passes      20
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-reference.sps
+=== tests/test-require-threaded.sps
+%%%% Starting test require-threaded
+# of expected passes      77
+test: pass tests/test-require-threaded.sps
+=== tests/test-script.sps
+%%%% Starting test script
+# of expected passes      22
+test: pass tests/test-script.sps
+=== tests/test-settings.sps
+%%%% Starting test settings
+# of expected passes      59
+test: pass tests/test-settings.sps
+=== tests/test-sql-tail.sps
+%%%% Starting test sql-tail
+# of expected passes      33
+test: pass tests/test-sql-tail.sps
+=== tests/test-statement-block.sps
+%%%% Starting test statement-block
+# of expected passes      6
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-block.sps
+=== tests/test-statement-cache.sps
+%%%% Starting test statement-cache
+# of expected passes      32
+test: pass tests/test-statement-cache.sps
+=== tests/test-statement-sections.sps
+%%%% Starting test statement-sections
+# of expected passes      4
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-sections.sps
+=== tests/test-statement-state.sps
+%%%% Starting test statement-state
+# of expected passes      23
+test: pass tests/test-statement-state.sps
+=== tests/test-statement-tail.sps
+%%%% Starting test statement-tail
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-tail.sps
+=== tests/test-statement-values-nomem.sps
+%%%% Starting test statement-values-nomem
+UNAVAILABLE a 100,000-byte TEXT read back through select ?1 under a heap limit of the memory used plus 1,000: column-value raises &sqlite-error nomem, nomem, with the SQL, no offset, and sqlite3_errmsg's message straight after; the statement is failed; the limit reads 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE after the NOMEM read, column-value, column-bytevector and step! are refused, naming failed; reset! raises nothing and leaves it ready; it steps and reads its 100,000 bytes again, its binding kept: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE after the NOMEM read, finalize-statement! raises nothing, and the statement is finalized and counted down: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE column-bytevector reads TEXT through sqlite3_column_text, so the same read under the limit raises &sqlite-error nomem from column-bytevector, and the statement is failed: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE inside a transaction, after the NOMEM read of a statement that reads a table, reset! and finalize-statement! raise nothing, and the transaction has been rolled back: autocommit 1, the marker row gone; a statement that reads no table keeps it: autocommit 0, the marker there: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE column-name, its name converted in place by sqlite3_column_name16, under the limit: sqlite3_column_name answers NULL and sets no code, so column-name raises &sqlite-error nomem, nomem, with sqlite3_errstr's message, the SQL and no offset; the state stays ready, or row, and the name then reads whole: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE an empty BLOB read after another statement's NOMEM read on the same connection (the connection's last code is 7): column-value and column-bytevector answer #vu8(), the statement stays row, and its other column reads: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE an empty BLOB read after another statement's NOMEM bind on the same connection: column-value and column-bytevector answer #vu8(), the statement stays row: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE each NOMEM is raised after its section: column-value's, column-bytevector's and column-name's reach a handler at depth 1: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE each NOMEM through M3's who-taking internals names the who it was given, the-convenience, and is raised after its section: column-value/who's, column-bytevector/who's, column-name/who's and bind!/who's reach a handler at depth 1, the read's statement failed: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE after the NOMEM rows, a second connection reads beside a write transaction that has read a table, and gets its row, not busy: the limits' lift, the hard then the soft, left no memory pressure behind; both limits read 0: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+# of expected passes      4
+# of skipped tests        11
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-values-nomem.sps
+=== tests/test-statement-values-sections.sps
+%%%% Starting test statement-values-sections
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-values-sections.sps
+=== tests/test-statement-values.sps
+%%%% Starting test statement-values
+# of expected passes      47
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-values.sps
+=== tests/test-statement-who.sps
+%%%% Starting test statement-who
+  bind-each!/who completed without expiring at fuel 151
+# of expected passes      29
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement-who.sps
+=== tests/test-statement.sps
+%%%% Starting test statement
+# of expected passes      76
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-statement.sps
+=== tests/test-transaction-engine.sps
+%%%% Starting test transaction-engine
+  the outer sweep: completed without expiring at fuel 71; each outcome from the fuel ((1 ended-after-a-later-write) (59 rolled-back) (69 committed))
+  the nested sweep: completed without expiring at fuel 71; each outcome from the fuel ((1 ended-after-a-later-write) (59 rolled-back) (69 committed))
+  the outer level: first slices that expired before begun: 25
+  nested: first slices that expired before begun: 25
+  the outer level: fuels 1 to 36; first slices that began the level: 10; remainders resumed twice: 303; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  nested: fuels 1 to 36; first slices that began the level: 10; remainders resumed twice: 303; their second answers: (42 (raised (assertion-violation with-transaction (re-entered))) (raised (transaction-ended with-transaction))); that touched a statement: 0
+  the outer level: every first remainder, fuels 1 to 35, resumed twice; resumes that tracked other SQL or left a code: 0
+  nested: every first remainder, fuels 1 to 35, resumed twice; resumes that tracked other SQL or left a code: 0
+  O7 nested under an engine: completed without expiring at fuel 192; each outcome from the fuel ((1 ended) (129 lost) (142 busy))
+  O7 nested, nothing left behind: completed without expiring at fuel 192; each outcome from the fuel ((1 not-lost) (129 lost) (142 not-lost) (143 lost) (144 not-lost))
+  the re-entries: the handler fired at 59 of 63 ticks
+  the failed begins: cases that failed the nested begin: 600
+  pending, the outer level: 2504 trials, the call completed unexpired at fuel 58
+  pending, nested: 2504 trials, the call completed unexpired at fuel 58
+  the siblings: A's first slice expired at fuels 1 to 57, and completed at fuel 58
+# of expected passes      15
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-transaction-engine.sps
+=== tests/test-transaction-interrupt.sps
+%%%% Starting test transaction-interrupt
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-transaction-interrupt.sps
+=== tests/test-transaction-nomem.sps
+%%%% Starting test transaction-nomem
+UNAVAILABLE S1, outer: step of select randomblob(100000) from src limit 1 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S1, nested: step of select randomblob(100000) from src limit 1 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S2, outer: step of select randomblob(100000) under the heap limit, then finalize-statement!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S2, nested: step of select randomblob(100000) under the heap limit, then finalize-statement!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S3, outer: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S3, nested: step of insert into b select randomblob(100000) from src limit 3 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S4, outer: step of insert into b values (randomblob(100000)) under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE S4, nested: step of insert into b values (randomblob(100000)) under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R1, outer: read of select ?1 from src limit 1 under the heap limit, then reset!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R1, nested: read of select ?1 from src limit 1 under the heap limit, then reset!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R2, outer: read of select ?1 from src limit 1 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R2, nested: read of select ?1 from src limit 1 under the heap limit, then finalize-statement!: the transaction has ended, so with-transaction issues nothing; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R3, outer: read of select ?1 under the heap limit, then reset!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R3, nested: read of select ?1 under the heap limit, then reset!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R4, outer: read of select ?1 under the heap limit, then finalize-statement!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R4, nested: read of select ?1 under the heap limit, then finalize-statement!: the transaction is open, so with-transaction rolls the level back; the body's NOMEM reaches the caller; both limits read 0 after: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE R1u: R1's statement left failed through with-transaction's exit: the read's NOMEM left autocommit 0, so with-transaction rolls back beside it, ROLLBACK, or ROLLBACK TO and RELEASE, each kept; the statement's later finalize raises nothing, and leaves the extended code nomem: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE [F] beside a statement a column read's NOMEM failed, with-transaction refuses to begin: an assertion violation from with-transaction, statement-not-finished, failed and the statement's own SQL, raised before anything reaches C; the body never runs, and the extended code and in-transaction? stay as the read left them: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+UNAVAILABLE after the NOMEM rows, inside with-transaction, immediate, a write and a read of src, a second connection's read beside it answers its row, not busy: the rig's lift, the hard then the soft, left no memory pressure behind: this libsqlite3 keeps no memory count, so a hard heap limit is not enforced
+# of expected passes      6
+# of skipped tests        19
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-transaction-nomem.sps
+=== tests/test-transaction-plan.sps
+%%%% Starting test transaction-plan
+# of expected passes      37
+test: pass tests/test-transaction-plan.sps
+=== tests/test-transaction.sps
+%%%% Starting test transaction
+# of expected passes      48
+suite-exit-status: the sqlite3_memory_used check is unavailable: the count was 0 bytes before the control's :memory: open and 0 while it was open, so this libsqlite3 keeps no memory count
+test: pass tests/test-transaction.sps
+=== tests/test-utf8.sps
+%%%% Starting test utf8
+# of expected passes      43
+test: pass tests/test-utf8.sps
+=== tests/test-values.sps
+%%%% Starting test values
+# of expected passes      42
+test: pass tests/test-values.sps
+=== tests/test-verify.sps
+%%%% Starting test verify
+# of expected passes      20
+test: pass tests/test-verify.sps
+test: ran 73, passed 66, failed 7, hung 0
+make: *** [test] Error 1
