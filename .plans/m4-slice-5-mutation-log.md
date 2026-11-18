@@ -139,15 +139,15 @@ raised.
 Under the gate, by its `time:` lines: `test-fts5` 11 s, 10 s and 10 s on Guix's, the floor and
 the FTS5 build; `test-json` 9 s, 10 s and 10 s. None `SLOW`, each passing.
 
-**The plants, rerun on the rebased tree** with the drivers in
-[research/m4-slice-5/scripts/](research/m4-slice-5/scripts/), unchanged: all but F10, F11, X01
-and X02, which planted the workaround and the candidate fix. 50 mutants, 48 caught, F07 and V02
-surviving as before, with the same arguments (below). The counts move with the close's row, now
+**The plants, rerun on the rebased tree before the review's fixes,** with the drivers in
+[research/m4-slice-5/scripts/](research/m4-slice-5/scripts/), unchanged then: all but F10, F11,
+X01 and X02, which planted the workaround and the candidate fix. 50 mutants, 48 caught, F07 and
+V02 surviving as before, with the same arguments (below). The head's rerun, 49 caught, is
+[on the head](#on-the-head-the-lead-after-the-m4-sessions-check). The counts move with the close's row, now
 an ordinary row: F01 and F02 fail 15 rows on the floor and the plain 3.54.1, the 15 FTS5 rows,
 the close's row among them, while the counts row passes; and each FV plant fails its row alone,
 18 passing, on Guix's library and the FTS5 build. Every other count is as the tables below give
-it. The rerun's summary, by `summarize.py`, is
-[research/m4-slice-5/plants-rerun.txt](research/m4-slice-5/plants-rerun.txt). The builder's tables are of the tree before the rebase.
+it. The builder's tables are of the tree before the rebase.
 
 ## The red runs
 
@@ -309,6 +309,10 @@ Each ran on Guix's library and the floor, and failed its own row alone on both, 
 ### The FTS5 rows' values, planted one at a time
 
 Each ran on Guix's library and the FTS5 build, and failed its own row alone on both, 17 passing.
+The planted values are the builder's, of the rows before the review, so FV01's and FV02's "3
+then 2" is now the rows' expected value. On the head, FV01 and FV02 plant rowid order, 2 then 3;
+FV07 the AND's answer, the reversed phrase matching 2; FV10 café lost, each row's typeof kept;
+and J03 the string unchanged, its typeof kept (the driver's header).
 
 | Mutation | Row | The planted value |
 |---|---|---|
@@ -383,7 +387,8 @@ in the repository; a comment on the close row's cleanup, which runs only where t
 and the ledger's items: the merge order with PR #37, the shard choice read on a second run, the
 CI run and the Mac run owed.
 
-**The lead's plants of the fixed tree,** each in `build/lead-mut/`:
+**The lead's plants of the fixed tree,** each in `build/lead-mut/`, before the rebase onto
+`1735a66` (the head's run is below):
 
 | Mutation | Guards | Failed |
 |---|---|---|
@@ -397,6 +402,47 @@ On the fixed tree, `make test` ran 76 and passed 76 on Guix's, the floor, 3.54.1
 3.45.1 with every module; `test-fts5` passed 19 on the four FTS5 libraries and 5 on the floor
 and the plain 3.54.1, `test-json` 16 on all six. Under the gate on Guix's library, `test-fts5`
 11 s and `test-json` 10 s.
+
+## On the head (the lead, after the M4 session's check)
+
+The M4 session checked PR #40 against the plan and the records, read-only: no blocker, no
+major, three minors in the evidence and records, and five nits. The lead then:
+- **Rows:** the agreement row holds `(#f 2)` beside `(#t 2)`, so a no that takes any count but 1
+  fails on both sides; the bound `MATCH` asserts `typeof(?1)`, `text`, so a string bound as a
+  BLOB, which FTS5 reads as text, fails `test-fts5` too.
+- **The driver:** FV01, FV02, FV07, FV08, FV10 and J03 moved to the head's rows, FV08's anchor
+  lengthened since its old text now matched the phrase row too, and the four workaround plants
+  retired from the default run.
+- **The lead's plants,** kept as scripts in [research/m4-slice-5/lead/](research/m4-slice-5/lead/):
+  `plants.json` for `plant.py`, `old-close.sh` for the copy with `d1792e4`'s close, and `run.sh`,
+  which runs each on the libraries it touches.
+- **Rebased** onto `1735a66`, slice 2's merge, the ledger's Now line and close-outs resolved by
+  hand.
+
+**The rerun on the head,** every run from the scripts:
+
+| Run | Result |
+|---|---|
+| the driver, 50 mutants ([plants-rerun.txt](research/m4-slice-5/plants-rerun.txt)) | 49 caught; F07 survives, equivalent; V02 caught by `test-fts5`'s bound `MATCH` and `test-json`'s bound string |
+| the lead's LR01 to LR05 ([lead/results.txt](research/m4-slice-5/lead/results.txt)) | each caught: LR01 2 rows, LR02, LR03 and LR04 1 each, on both of their libraries; LR05 `test-json`'s bound row on Guix's and the floor, and `test-fts5`'s bound `MATCH` on Guix's and the FTS5 build |
+| the old close, `X-old-close` | `test-fts5` 15 failed and 4 passed on Guix's, the FTS5 build and 3.45.1 with every module |
+| `make test` | 77 of 77 on Guix's, the floor, 3.54.1 with FTS5 and 3.45.1 with every module |
+| the two suites on the other two | `test-fts5` 5 on the plain 3.54.1 and 19 on 3.54.1 with every module; `test-json` 16 on both |
+| under the gate, Guix's library | `test-fts5` 10 s, `test-json` 10 s |
+
+**On CI,** run 44211896445 at `1b2d6a0`, the lanes' lines as "For the records" gives them, and
+`memory-1` timed `test-fts5` at 11 s and `test-json` at 10 s. The shards' sums on three runs, shard
+1 against shard 2: 900 and 986 s (44112097972), 1186 and 1268 s (44204326637), and 936 and 874 s
+on this one, 915 s without the two new suites. Shard 1 is the lesser on two of three, so the
+choice stands, by a narrow margin; slice 3's new suites go in shard 2.
+
+**Two nits, answered rather than changed:**
+- The plan's Q2 and §4.5 put the agreement row, and `test-json`'s `OMIT_JSON` row, first; each is
+  third, after the load and counts rows, so a library that doesn't load is named before the
+  agreement is read. Nothing fails from the order.
+- `test-json`'s bound BLOB that is no JSONB, `x'0102'`, passes V03, a bytevector bound as TEXT,
+  since both are malformed JSON at step. V03 is caught by the row that binds `#vu8(12)`, JSONB's
+  empty object, which `json()` reads as `{}` only from a BLOB.
 
 ## For the records
 

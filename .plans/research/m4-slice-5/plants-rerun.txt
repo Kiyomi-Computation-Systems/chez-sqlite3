@@ -2,32 +2,32 @@
   tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps floor: exit 1; pass 4 fail 15 xfail 0 xpass 0
      - create virtual table ... using fts5 prepares, and its step answers done
-     - MATCH with order by rank: sqlite matches 2 then 3
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
      - unicode61 folds diacritics: cafe, café and creme each match document 1
      - with remove_diacritics 0, cafe matches no café, and café matches it
      - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
      - a prefix query: searc* matches 2 and 3
-     - a phrase query: "full text" matches 2
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
      - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
      - NOT: sqlite NOT fts5 matches 3 alone
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
      - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
      - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
      - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
      - a connection that made and queried an FTS5 table closes, with no drop first
   tests/test-fts5.sps current: exit 1; pass 4 fail 15 xfail 0 xpass 0
      - create virtual table ... using fts5 prepares, and its step answers done
-     - MATCH with order by rank: sqlite matches 2 then 3
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
      - unicode61 folds diacritics: cafe, café and creme each match document 1
      - with remove_diacritics 0, cafe matches no café, and café matches it
      - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
      - a prefix query: searc* matches 2 and 3
-     - a phrase query: "full text" matches 2
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
      - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
      - NOT: sqlite NOT fts5 matches 3 alone
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
      - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
      - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
      - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
@@ -38,32 +38,32 @@
      - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
   tests/test-fts5.sps floor: exit 1; pass 4 fail 15 xfail 0 xpass 0
      - create virtual table ... using fts5 prepares, and its step answers done
-     - MATCH with order by rank: sqlite matches 2 then 3
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
      - unicode61 folds diacritics: cafe, café and creme each match document 1
      - with remove_diacritics 0, cafe matches no café, and café matches it
      - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
      - a prefix query: searc* matches 2 and 3
-     - a phrase query: "full text" matches 2
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
      - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
      - NOT: sqlite NOT fts5 matches 3 alone
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
      - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
      - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
      - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
      - a connection that made and queried an FTS5 table closes, with no drop first
   tests/test-fts5.sps current: exit 1; pass 4 fail 15 xfail 0 xpass 0
      - create virtual table ... using fts5 prepares, and its step answers done
-     - MATCH with order by rank: sqlite matches 2 then 3
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
      - unicode61 folds diacritics: cafe, café and creme each match document 1
      - with remove_diacritics 0, cafe matches no café, and café matches it
      - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
      - a prefix query: searc* matches 2 and 3
-     - a phrase query: "full text" matches 2
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
      - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
      - NOT: sqlite NOT fts5 matches 3 alone
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
      - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
      - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
      - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
@@ -82,22 +82,22 @@
      - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
 == F05: the option and module check reads both (the option alone)
   tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
 == F06: the option and module check reads both (the module alone)
   tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
 == F07: the path is chosen only where they agree (by the option alone)
   tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
@@ -108,22 +108,92 @@
   tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps current: exit 0; pass 5 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps fts5: exit 1; pass 3 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
 == F09: the option probe names ENABLE_FTS5 (ENABLE_FTS4)
   tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps current: exit 0; pass 5 fail 0 xfail 0 xpass 0
   tests/test-fts5.sps fts5: exit 1; pass 3 fail 1 xfail 0 xpass 0
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
+== FV01: MATCH ordered by rank (expected rowid order, 2 then 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+== FV02: bm25's order is rank's (expected rowid order, 2 then 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+== FV03: unicode61 folds creme to crème (expected no match)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+== FV04: remove_diacritics 0 keeps them (expected cafe to match)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+== FV05: highlight() answers the text as stored (expected the folded cafe)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+== FV06: a prefix query (expected searc* as a whole term: nothing)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a prefix query: searc* matches 2 and 3
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a prefix query: searc* matches 2 and 3
+== FV07: a phrase query (expected an AND's answer: the reversed phrase matching 2)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+== FV08: a column filter (expected title:sqlite to match the bodies' 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+== FV09: NOT (expected it ignored: 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - NOT: sqlite NOT fts5 matches 3 alone
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - NOT: sqlite NOT fts5 matches 3 alone
+== FV10: a bound MATCH reaches FTS5 whole (expected café lost: 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+== FV11: a query's syntax error names query (expected step!)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+== FV12: a query's syntax error is code error (expected misuse)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+== FV13: delete and update reach the index (expected neither applied)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+== FV14: the create's step answers done (expected a row)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
 == P01: the load row reads the load (CHEZ_SQLITE3_LIBRARY naming no file)
   tests/test-fts5.sps badlib: exit 1; pass 2 fail 2 xfail 0 xpass 0
      - (chez-sqlite3) loads, reached through eval
-     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module
   tests/test-json.sps badlib: exit 1; pass 2 fail 14 xfail 0 xpass 0
      - (chez-sqlite3) loads, reached through eval
      - the library has JSON: OMIT_JSON is not among its options, where THREADSAFE is
      - json() minifies: a literal's white space dropped, its numbers, string, null and true kept
-     - json() minifies a bound string, and json_valid() answers 1 for it
+     - json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
      - malformed JSON prepares, then raises &sqlite-error at its step, code error
      - malformed JSON through query-row raises &sqlite-error from query-row, code error, with its SQL and no place
      - a bound BLOB that is no JSONB, x'0102', prepares, then raises &sqlite-error at its step, code error
@@ -224,99 +294,6 @@
      - build-sqlite.sh: CC naming another compiler: that one compiles
      - build-sqlite.sh: both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0
      - build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, e
-== D01: the note's block is one Chez can read (a parenthesis dropped)
-  tests/test-docs.sps guix: exit 1; pass 100 fail 1 xfail 0 xpass 0
-     - every fragment's text is data Chez reads, and holds a datum, by page and line
-== D02: the note's block is a plain scheme block (marked scheme run)
-  tests/test-docs.sps guix: exit 1; pass 102 fail 1 xfail 0 xpass 0
-     - docs/reference.md:1165: the runnable example gives the result it states
-== V01: a REAL reads as its flonum (rounded to an integer's)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
-  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
-     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
-== V02: a string binds as TEXT (bound as a BLOB)
-  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
-  tests/test-json.sps guix: exit 0; pass 16 fail 0 xfail 0 xpass 0
-== V03: a bytevector binds as a BLOB (bound as TEXT)
-  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
-  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
-     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
-== V04: TEXT decodes as UTF-8 (each byte a character, as Latin-1)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
-  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
-     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
-== FV01: MATCH ordered by rank (expected 3 then 2)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - MATCH with order by rank: sqlite matches 2 then 3
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - MATCH with order by rank: sqlite matches 2 then 3
-== FV02: bm25's order is rank's (expected 3 then 2)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
-== FV03: unicode61 folds creme to crème (expected no match)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - unicode61 folds diacritics: cafe, café and creme each match document 1
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - unicode61 folds diacritics: cafe, café and creme each match document 1
-== FV04: remove_diacritics 0 keeps them (expected cafe to match)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - with remove_diacritics 0, cafe matches no café, and café matches it
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - with remove_diacritics 0, cafe matches no café, and café matches it
-== FV05: highlight() answers the text as stored (expected the folded cafe)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
-== FV06: a prefix query (expected searc* as a whole term: nothing)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a prefix query: searc* matches 2 and 3
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a prefix query: searc* matches 2 and 3
-== FV07: a phrase query (expected nothing)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a phrase query: "full text" matches 2
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a phrase query: "full text" matches 2
-== FV08: a column filter (expected title:sqlite to match the bodies' 2 and 3)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
-== FV09: NOT (expected it ignored: 2 and 3)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - NOT: sqlite NOT fts5 matches 3 alone
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - NOT: sqlite NOT fts5 matches 3 alone
-== FV10: a bound MATCH reaches FTS5 whole (expected café lost: 2 and 3)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
-== FV11: a query's syntax error names query (expected step!)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
-== FV12: a query's syntax error is code error (expected misuse)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
-== FV13: delete and update reach the index (expected neither applied)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
-== FV14: the create's step answers done (expected a row)
-  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - create virtual table ... using fts5 prepares, and its step answers done
-  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
-     - create virtual table ... using fts5 prepares, and its step answers done
 == J01: OMIT_JSON's row reads the predicate (expected #f for both, as a predicate answering #f to all)
   tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
      - the library has JSON: OMIT_JSON is not among its options, where THREADSAFE is
@@ -329,9 +306,9 @@
      - json() minifies: a literal's white space dropped, its numbers, string, null and true kept
 == J03: json() minifies a bound string (expected it unchanged)
   tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
-     - json() minifies a bound string, and json_valid() answers 1 for it
+     - json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
   tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
-     - json() minifies a bound string, and json_valid() answers 1 for it
+     - json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
 == J04: malformed JSON fails at step (expected at prepare)
   tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
      - malformed JSON prepares, then raises &sqlite-error at its step, code error
@@ -382,3 +359,28 @@
      - json_extract answers 9223372036854775807 as an exact integer, and 9223372036854775808, past 64 bits, as a flonum
   tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
      - json_extract answers 9223372036854775807 as an exact integer, and 9223372036854775808, past 64 bits, as a flonum
+== D01: the note's block is one Chez can read (a parenthesis dropped)
+  tests/test-docs.sps guix: exit 1; pass 100 fail 1 xfail 0 xpass 0
+     - every fragment's text is data Chez reads, and holds a datum, by page and line
+== D02: the note's block is a plain scheme block (marked scheme run)
+  tests/test-docs.sps guix: exit 1; pass 102 fail 1 xfail 0 xpass 0
+     - docs/reference.md:1165: the runnable example gives the result it states
+== V01: a REAL reads as its flonum (rounded to an integer's)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
+== V02: a string binds as TEXT (bound as a BLOB)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
+== V03: a bytevector binds as a BLOB (bound as TEXT)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
+== V04: TEXT decodes as UTF-8 (each byte a character, as Latin-1)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
