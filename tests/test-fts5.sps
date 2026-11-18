@@ -7,8 +7,9 @@
 ;;;   the check     (sqlite-compile-option? "ENABLE_FTS5") held to
 ;;;                 select count(*) from pragma_module_list where name =
 ;;;                 'fts5', either way; the check that compares them is
-;;;                 held, in the same row, to an option without the module
-;;;                 and the module without the option, each named
+;;;                 held, in the same row, to an option without the module,
+;;;                 the module without the option, a probe that raised, and
+;;;                 a count neither 0 nor 1, each named
 ;;;   the rows      where both say yes (Guix's library, the current lane):
 ;;;                 MATCH with order by rank, bm25()'s order, never its
 ;;;                 exact REAL; diacritics folded by unicode61, and not with
@@ -29,20 +30,22 @@
 ;;;
 ;;; FTS5 prepares statements of its own on the connection, for its shadow
 ;;; tables, from the create on, and finalizes them only when its table is
-;;; disconnected: by a drop, or by sqlite3_close, which disconnects every
-;;; virtual table before it looks for statements. close-database! looks
-;;; first, with sqlite3_next_stmt, finds them, and refuses the close as
-;;; "statements chez-sqlite3 does not track", the connection left open
-;;; (ADR-0012, decision 5; the slice's log). So every row here drops its
-;;; FTS5 tables before its close, through with-fts5. One row asserts the
-;;; close of a connection that used FTS5 with no drop, and is marked as an
-;;; expected failure: SRFI-64 counts it neither way while the close refuses,
-;;; and once the close succeeds it is an unexpected pass, which fails the
-;;; suite, and the mark and the drops go.
+;;; disconnected: by a drop, or by sqlite3_close. close-database! finalizes
+;;; its own statements and calls sqlite3_close before it counts any, and
+;;; counts only when SQLite refuses (ADR-0012, amended), so every row here
+;;; closes with its FTS5 tables in place. One row closes, outside
+;;; call-with-database, a connection that made, filled and queried one.
 ;;;
 ;;; Every value a row asserts is the research's (.plans/research/m4-plan/,
 ;;; F1 and F2), the same on Guix's 3.53.1 and the FTS5 build of 3.54.1, and
-;;; the refusal the same on 3.45.1 and the plain 3.54.1. The rows go through
+;;; the refusal the same on 3.45.1 and the plain 3.54.1, but two, measured in
+;;; the slice's review on those libraries and on 3.45.1 with FTS5
+;;; (.plans/m4-slice-5-mutation-log.md): "sqlite OR rank" ranks 3 before 2,
+;;; where rowid order is 2 then 3, so the rank rows can tell the orders
+;;; apart; and the phrase "text full" matches nothing, where the words'
+;;; AND matches 2, so the phrase row can tell a phrase from an AND. The
+;;; agreement row holds the check against its complement: a probe that
+;;; raised, and a module count neither 0 nor 1. The rows go through
 ;;; the conveniences and the statement verbs, so they test the values' path
 ;;; through the library, not SQLite: UTF-8 in SQL text and bound strings,
 ;;; rows read back as vectors of exact integers, flonums and strings.
@@ -182,9 +185,15 @@
   zero-counts
   (native-counts))
 
-(test-equal "ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a module without the option"
-  '(agree (disagree #t 0) (disagree #f 1))
-  (list (agreement fts5-option fts5-module) (agreement #t 0) (agreement #f 1)))
+(test-equal "ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, a module without the option, a probe that raised, and a count neither 0 nor 1"
+  '(agree (disagree #t 0) (disagree #f 1)
+          (disagree #f (raised "x")) (disagree #t (raised "x"))
+          (disagree (raised "x") 0) (disagree (raised "x") 1)
+          (disagree #t 2))
+  (list (agreement fts5-option fts5-module) (agreement #t 0) (agreement #f 1)
+        (agreement #f '(raised "x")) (agreement #t '(raised "x"))
+        (agreement '(raised "x") 0) (agreement '(raised "x") 1)
+        (agreement #t 2)))
 
 ;; --- the rows, where FTS5 is ---------------------------------------------------------------
 
@@ -197,24 +206,10 @@
    " (2, 'Second', 'sqlite full text search with fts5'),"
    " (3, 'Third', 'search engines rank documents and sqlite ranks them too')"))
 
-;; with-fts5 : (Listof String) (Database -> A) -> (U A RAISED)
-;; PROC on a fresh :memory: database: its answer, or what it raised, as
-;; what-raised names it. Then each of TABLES dropped, whether PROC returned
-;; or raised, so the close finds none of FTS5's own statements (the header),
-;; and the database closed.
-(define (with-fts5 tables proc)
-  (with-db
-   (lambda (db)
-     (let ((result (answer (lambda () (proc db)))))
-       (for-each (lambda (table) (execute! db (string-append "drop table if exists " table)))
-                 tables)
-       result))))
-
-;; with-docs : (Database -> A) -> (U A RAISED)
-;; with-fts5's answer for PROC on a database holding the table, docs, and
-;; t2 when PROC makes it.
+;; with-docs : (Database -> A) -> A
+;; PROC's answer on a fresh :memory: database holding the table docs.
 (define (with-docs proc)
-  (with-fts5 '("docs" "t2")
+  (with-db
    (lambda (db)
      (execute! db docs-create)
      (execute! db docs-insert)
@@ -245,23 +240,23 @@
     '(prepared done)
     (answer
      (lambda ()
-       (with-fts5 '("probe")
+       (with-db
         (lambda (db) (stepped db "create virtual table probe using fts5(body)"))))))
 
-  (test-equal "MATCH with order by rank: sqlite matches 2 then 3"
-    '(#(2) #(3))
+  (test-equal "MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order"
+    '(#(3) #(2))
     (answer
      (lambda ()
        (with-docs
-        (lambda (db) (query db "select rowid from docs where docs match 'sqlite' order by rank"))))))
+        (lambda (db) (query db "select rowid from docs where docs match 'sqlite OR rank' order by rank"))))))
 
-  (test-equal "order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next"
-    '((2 3) #t)
+  (test-equal "order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next"
+    '((3 2) #t)
     (answer
      (lambda ()
        (with-docs
         (lambda (db)
-          (let ((rows (query db "select rowid, bm25(docs) from docs where docs match 'search' order by rank")))
+          (let ((rows (query db "select rowid, bm25(docs) from docs where docs match 'sqlite OR rank' order by rank")))
             (list (map (lambda (row) (vector-ref row 0)) rows)
                   (ascending-negative-reals? (map (lambda (row) (vector-ref row 1)) rows)))))))))
 
@@ -280,7 +275,7 @@
     '(#(0) #(1))
     (answer
      (lambda ()
-       (with-fts5 '("t2")
+       (with-db
         (lambda (db)
           (execute! db "create virtual table t2 using fts5(x, tokenize = 'unicode61 remove_diacritics 0')")
           (execute! db "insert into t2 values ('café')")
@@ -303,9 +298,15 @@
     '(#(2) #(3))
     (answer (lambda () (with-docs (lambda (db) (matching db "searc*"))))))
 
-  (test-equal "a phrase query: \"full text\" matches 2"
-    '(#(2))
-    (answer (lambda () (with-docs (lambda (db) (matching db "\"full text\""))))))
+  (test-equal "a phrase query: \"full text\" matches 2, and \"text full\" nothing, though both words are in 2"
+    '((#(2)) ())
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db)
+          (let* ((phrase (matching db "\"full text\""))
+                 (reversed (matching db "\"text full\"")))
+            (list phrase reversed)))))))
 
   (test-equal "a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite"
     '((#(2)) ())
@@ -360,9 +361,6 @@
             (execute! db "insert into docs(docs) values ('integrity-check')")
             (list found (query-row db "select count(*) from docs"))))))))
 
-  ;; Expected to fail while close-database! refuses FTS5's own statements
-  ;; (the header): an unexpected pass fails the suite.
-  (test-expect-fail 1)
   (test-equal "a connection that made and queried an FTS5 table closes, with no drop first"
     'closed
     (answer
@@ -375,6 +373,9 @@
                           (matching db "sqlite")
                           (close-database! db)
                           'closed))))
+         ;; Only where the close refused, as the old close did: the drop
+         ;; lets a second close finish, so the counts row judges the rows
+         ;; after this one, not this one's connection.
          (unless (eq? outcome 'closed)
            (execute! db "drop table if exists docs")
            (close-database! db))
@@ -390,7 +391,7 @@
     (step-error "create virtual table probe using fts5(body)")
     (answer
      (lambda ()
-       (with-fts5 '("probe")
+       (with-db
         (lambda (db) (stepped db "create virtual table probe using fts5(body)"))))))
   'ran)
 

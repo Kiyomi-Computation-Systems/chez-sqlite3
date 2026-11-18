@@ -6,7 +6,9 @@ names ([the M4 plan](2026-11-17-m4-plan.md) §5, slice 5, §4.5, and §4.7's FTS
 
 An Opus agent built the slice from the lead's brief, in its worktree, on `m4-slice-5-fts5-json`
 from slice 0's head `fd4831c`, beside slices 1 and 2 in worktrees of their own. Every run was in
-the Guix container: Chez 10.4.0 (`ta6le`, threaded), gcc 16.2.0, Valgrind 3.27.0, x86_64.
+the Guix container: Chez 10.4.0 (`ta6le`, threaded), gcc 16.2.0, Valgrind 3.27.0, x86_64. The lead
+then rebased it onto `3488963`, the close fix, and took its workaround out
+([after the close fix](#after-the-close-fix-the-lead)).
 
 ## What the slice adds
 
@@ -30,12 +32,13 @@ the Guix container: Chez 10.4.0 (`ta6le`, threaded), gcc 16.2.0, Valgrind 3.27.0
 - **`tests/test-fts5.sps`, new,** 19 rows on a library with FTS5, 5 on one without (below).
 - **`tests/test-json.sps`, new,** 16 rows on every library.
 - **The Makefile:** both suites in `MEMORY_SUITES_1`, the shard whose suites took less time on CI,
-  900 s against 986 s on run 44112097972 (the lead's figures). Shard 1 holds 37 suites, shard 2 38.
+  900 s against 986 s on run 44112097972 (the lead's figures). Shard 1 held 37 suites, shard 2 38;
+  on `3488963`, with the close fix's `test-connection-close`, each holds 38.
 - **`docs/reference.md`:** under `sqlite-compile-option?`, FTS5 is an option SQLite's own build
   leaves out, so check `(sqlite-compile-option? "ENABLE_FTS5")` before using it; a plain `scheme`
   block, since its output depends on the library.
 
-## The trap the slice found: FTS5's own statements and the close
+## The trap the slice found: FTS5's own statements and the close (fixed by PR #36)
 
 **`close-database!` can't close a connection that has used an FTS5 table.** FTS5 prepares
 statements of its own on the connection for its shadow tables, from the `create virtual table` on,
@@ -81,8 +84,8 @@ defect in chez-sqlite3").
 
   It prints `(close-database! (untracked-statements 2))`, then `closed-after-the-drop`; the same
   with `CHEZ_SQLITE3_LIBRARY` naming `build/m4-current-fts5`'s library.
-- **What the suite does about it.** The slice touches no file under `src/`, so `test-fts5` works
-  around it and pins it:
+- **What the suite did about it, until the close fix.** The slice touches no file under `src/`, so
+  `test-fts5` worked around it and pinned it:
   - every FTS5 row runs through `with-fts5`, which drops the row's FTS5 tables before the close;
   - one row, "a connection that made and queried an FTS5 table closes, with no drop first", asserts
     the close the library should make, and is marked `(test-expect-fail 1)`. SRFI-64 counts it as
@@ -99,7 +102,52 @@ defect in chez-sqlite3").
   `test-fts5` passed 19 of 19 on both FTS5 libraries, and `make test` ran 75 and passed 75 on
   Guix's library. It was not run at the floor, under the gate, or through the engine sweeps'
   reasoning about the close's section, and ADR-0012's decision 5 would need amending first: it is
-  the maintainer's to decide.
+  the maintainer's to decide. The maintainer chose that order, "Close first, count on failure",
+  built in a PR of its own: PR #36, merged as `3488963`, which also finalizes the tracked statements
+  and empties the cache before `sqlite3_close`, and amends ADR-0012 ("close first, and vouch only
+  for ours").
+
+## After the close fix (the lead)
+
+The lead committed the builder's tree, rebased it onto `3488963`, PR #36's merge, with no
+conflict, and took the workaround out in a commit of its own:
+- `with-fts5` is gone: each row runs on `with-db`, `call-with-database` on `:memory:`, and closes
+  with its FTS5 tables in place; `with-docs` makes `docs` there;
+- the close's row, "a connection that made and queried an FTS5 table closes, with no drop first",
+  is an ordinary row, its `(test-expect-fail 1)` and comment gone;
+- the header says what the close does now, and why the rows can leave their tables.
+
+**Watched failing,** in a copy, `build/lead-mut/X-old-close/`, with `connection.sls` as it was at
+`d1792e4`, before the close fix: `test-fts5` failed 15 and passed 4 on Guix's library, on
+`build/m4-current-fts5` and on `build/m4cf-floor-vtab` (3.45.1 with FTS3, FTS4, FTS5 and RTREE).
+The 15 are every FTS5 row whose answer passes through a close, the close's row among them, and the
+counts row after. The one FTS5 row that passed is the syntax error through `query`: its answer is
+the query's raise: `call-with-database` raises a close's failure only when nothing else is being
+raised.
+
+**Green on the rebased tree:**
+
+| Library | `test-fts5` | `test-json` | `make test` |
+|---|---|---|---|
+| Guix's 3.53.1 | 19 of 19, the rows | 16 | 76 of 76 |
+| `build/m3-floor`, 3.45.1 | 5 of 5, the refusal | 16 | 76 of 76 |
+| `build/m4-current`, 3.54.1, no FTS5 | 5 of 5, the refusal | 16 | |
+| `build/m4-current-fts5`, 3.54.1 with FTS5 | 19 of 19 | 16 | 76 of 76 |
+| `build/m4cf-floor-vtab`, 3.45.1 with every module | 19 of 19 | 16 | 76 of 76 |
+| `build/m4cf-current-vtab`, 3.54.1 with every module | 19 of 19 | 16 | |
+
+Under the gate, by its `time:` lines: `test-fts5` 11 s, 10 s and 10 s on Guix's, the floor and
+the FTS5 build; `test-json` 9 s, 10 s and 10 s. None `SLOW`, each passing.
+
+**The plants, rerun on the rebased tree** with the drivers in
+[research/m4-slice-5/scripts/](research/m4-slice-5/scripts/), unchanged: all but F10, F11, X01
+and X02, which planted the workaround and the candidate fix. 50 mutants, 48 caught, F07 and V02
+surviving as before, with the same arguments (below). The counts move with the close's row, now
+an ordinary row: F01 and F02 fail 15 rows on the floor and the plain 3.54.1, the 15 FTS5 rows,
+the close's row among them, while the counts row passes; and each FV plant fails its row alone,
+18 passing, on Guix's library and the FTS5 build. Every other count is as the tables below give
+it. The rerun's summary, by `summarize.py`, is
+[research/m4-slice-5/plants-rerun.txt](research/m4-slice-5/plants-rerun.txt). The builder's tables are of the tree before the rebase.
 
 ## The red runs
 
@@ -192,16 +240,17 @@ once before it is written, and a list of runs. The runs went through the worktre
 `scripts/guix-env`, from `build/mut/NAME`, so the libraries under the worktree's `build/` were in
 reach; each suite under `timeout 300`, six mutants at once; none hung. Rows are read from the
 suites' `FAIL` and `XPASS` lines and counts, never by eye. The driver (`mutants.py`,
-`run-mutants.sh`, `summarize.py`) and every log are in the session's scratchpad, not the
-repository.
+`run-mutants.sh`, `summarize.py`) was in the session's scratchpad; the lead copied it, unchanged,
+into [research/m4-slice-5/scripts/](research/m4-slice-5/scripts/), and its logs stay in
+`build/mut/`.
 
 As first run, F02's refusal row on an FTS5 library failed on its close, which raised FTS5's
-untracked statements, not on the create's `done`. The row now drops its probe table as the others
-do, and every mutant that touches `test-fts5` or the library was made again from the final tree and
+untracked statements, not on the create's `done`. The row then dropped its probe table as the
+others did, until the rebase, and every mutant that touches `test-fts5` or the library was made again from the final tree and
 rerun: F02's row then failed on `(prepared done)`, and the counts row after it passed.
 
-Baselines: `test-fts5` 18 and 1 expected failure on Guix's and the FTS5 build, 5 on the floor and
-the plain 3.54.1; `test-json` 16 everywhere; `test-ci-sqlite` 81; `test-docs` 101. A mutation is
+Baselines, before the rebase: `test-fts5` 18 and 1 expected failure on Guix's and the FTS5 build
+(19 after it), 5 on the floor and the plain 3.54.1; `test-json` 16 everywhere; `test-ci-sqlite` 81; `test-docs` 101. A mutation is
 caught when a row fails, or an expected failure passes, on at least one library.
 
 ### The brief's FTS5 plants, and the check's
@@ -281,9 +330,9 @@ Each ran on Guix's library and the FTS5 build, and failed its own row alone on b
 | P01 | the load row reads the load (`CHEZ_SQLITE3_LIBRARY` naming no file) | `test-fts5` 2: the load row, and the agreement row, so no path ran; `test-json` 14: the load row and every value row |
 | P02 | the counts row at the load (a connection opened before it) | `test-fts5` 2 and `test-json` 2: the counts rows at the load and after |
 | D01 | the note's block is one Chez reads (a parenthesis dropped) | `test-docs` 1: "every fragment's text is data Chez reads" |
-| D02 | the note's block is plain `scheme` (marked `scheme run`) | `test-docs` 1: the runnable example at `docs/reference.md:1152` |
+| D02 | the note's block is plain `scheme` (marked `scheme run`) | `test-docs` 1: the runnable example at `docs/reference.md:1152`, `:1165` after the rebase |
 | V01 | `column-value` reads a REAL as its flonum (rounded) | `test-fts5` 1, the `bm25()` row; `test-json` 1, the `->>` row |
-| V02 | a string binds as TEXT (as a BLOB) | **survived both suites**; `test-statement-values` failed 7 and `test-conveniences` 2 (below) |
+| V02 | a string binds as TEXT (as a BLOB) | **survived both suites on Guix's library**; `test-statement-values` failed 7 and `test-conveniences` 2 (below) |
 | V03 | a bytevector binds as a BLOB (as TEXT) | `test-json` 1, the bound `#vu8(12)` row; `test-fts5` binds none |
 | V04 | TEXT decodes as UTF-8 (each byte a character) | `test-fts5` 1, the `highlight()` row; `test-json` 1, the `->` row |
 
@@ -302,27 +351,61 @@ equivalent.**
   FTS3 nor FTS4. Guix's has all three, the floor and the plain 3.54.1 none, so a probe of the wrong
   module or option agrees with its partner there. CI's `current` lane is that build, so CI catches
   both.
-- **V02, a string bound as a BLOB, survives both suites.** SQLite's JSON functions read a BLOB that
-  holds text JSON, so `json(?1)` of `"[1, 2]"` as a BLOB answered `[1,2]` and `json_valid` 1, as
-  for TEXT; FTS5 reads a BLOB `MATCH` as its text, so `"sqlite OR café"` matched 1, 2 and 3. No row
-  here reads a bound string's storage class, and F3 shows no `typeof` of a bound string to assert.
-  `test-statement-values` (7 rows) and `test-conveniences` (2) hold it.
+- **V02, a string bound as a BLOB, survived both suites on Guix's library,** where it was run.
+  3.53.1's and 3.54.1's JSON functions read a BLOB that holds text JSON, so `json(?1)` of
+  `"[1, 2]"` as a BLOB answered `[1,2]` and `json_valid` 1, as for TEXT; FTS5 reads a BLOB `MATCH`
+  as its text, so `"sqlite OR café"` matched 1, 2 and 3. The review found the argument false at the
+  floor: 3.45.1 raises "malformed JSON" for that BLOB, so `test-json` caught V02 there. Since the
+  review, the bound row asserts `typeof(?1)` too, and catches V02 on every library (below).
+  `test-statement-values` (7 rows) and `test-conveniences` (2) hold it besides.
+
+## The review's fixes
+
+An Opus reviewer read the slice after the rebase, read-only, with mutants of its own in copies:
+no blocker, one major, nine minors, each shown by a mutant or a run. Its mutants R01 to R05 each
+survived the suites as they stood.
+
+| Finding | Mutant that survived | Fix | The fixed row passes on |
+|---|---|---|---|
+| **Major:** the rank rows' `sqlite` and `search` rank 2 then 3, which is rowid order too | R01, `order by rank` as `order by rowid`: 19 of 19 on the four FTS5 libraries | both rows query `sqlite OR rank`, which ranks 3 (bm25 -0.463…) before 2 (-1.05e-6), measured by the reviewer | Guix's, 3.54.1 with FTS5, and 3.45.1 and 3.54.1 with every module |
+| the phrase row can't tell a phrase from an AND | R02, the quotes dropped | also `"text full"`, which matches nothing, where `text full` matches 2 | the same four |
+| the agreement row holds two points of its complement | R03, a module count neither 0 nor 1 taken as no; on 3.54.1 built with `OMIT_INTROSPECTION_PRAGMAS` it printed "neither" with the module never read | five more points: each side a probe that raised, and a count of 2 | all six |
+| `json_each`'s key order is the document's | R04, `order by key` dropped | the object written z, x, y, the expected value unchanged | all six |
+| V02's argument was false at the floor (above) | V02 on 3.53.1 and 3.54.1 | the bound row asserts `typeof(?1)`, `text` | all six |
+
+The minors besides: F01's and F02's count (above); the log's stale prose about the drivers, the
+probe table's drop, the baselines and D02's line, each fixed in place; the rerun's summary kept
+in the repository; a comment on the close row's cleanup, which runs only where the close refuses;
+and the ledger's items: the merge order with PR #37, the shard choice read on a second run, the
+CI run and the Mac run owed.
+
+**The lead's plants of the fixed tree,** each in `build/lead-mut/`:
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| LR01 | the rank rows' `order by rank` (`order by rowid`, in both) | `test-fts5` 2, both rank rows, on Guix's and the FTS5 build |
+| LR02 | the reversed phrase is a phrase (its quotes dropped, an AND) | `test-fts5` 1, the phrase row, on both |
+| LR03 | the agreement's no needs a count of 0 (any count but 1) | `test-fts5` 1, the agreement row, on Guix's |
+| LR04 | `json_each`'s `order by key` (dropped) | `test-json` 1, the key-order row, on Guix's and the floor |
+| LR05 | V02, a string bound as a BLOB | `test-json` 1, the bound row, on Guix's and the floor; `test-fts5` none, as before |
+
+On the fixed tree, `make test` ran 76 and passed 76 on Guix's, the floor, 3.54.1 with FTS5 and
+3.45.1 with every module; `test-fts5` passed 19 on the four FTS5 libraries and 5 on the floor
+and the plain 3.54.1, `test-json` 16 on all six. Under the gate on Guix's library, `test-fts5`
+11 s and `test-json` 10 s.
 
 ## For the records
 
-- **ADR-0012, decision 5, and the trap above.** A statement the library doesn't track isn't always
-  the library's defect: FTS3, FTS4 and FTS5 keep their own, which `sqlite3_close` finalizes and the
-  library's pre-check refuses. FTS5 is unusable with `close-database!` until the decision is
-  amended and the close changed; X01's candidate is one way, measured in a copy. Then `test-fts5`'s
-  expected-failure mark and `with-fts5`'s drops go, and its close row is an ordinary row. The trap
-  belongs in `traps.md`, and the global constraints' close rule moves with the decision.
+- **ADR-0012, decision 5, and the trap above: done** by PR #36, its amendment, its traps and the
+  global constraints' close rules. `test-fts5`'s mark and drops are gone, and its close row is an
+  ordinary row (below).
 - **ADR-0003's amendment** is built: the lane, the lists and the rows, and F0's two outcomes on the
   two 3.54.1 builds. CI's first `current` run on this branch should read `check-sqlite.sh`'s 39
   lines, `ENABLE_FTS5` among them, and `test-fts5` taking its rows; the `floor` job's
   `test-fts5` its refusal.
-- **ADR-0005's shard amendment** lists `MEMORY_SUITES_1` at 35 suites; it is 37 with these two, at
-  about 10 s each under the gate here. Their CI times are for the first runs of `memory-1` to read.
+- **ADR-0005's shard amendment** lists `MEMORY_SUITES_1` at 35 suites, as it was then; it is 38 on
+  `3488963` with these two, at about 10 s each under the gate here. Their CI times are for the first runs of `memory-1` to read.
 - **The brief's §2.6,** amended with M4's plan, says the FTS5 suite runs on every lane, which
-  holds; it doesn't yet say that FTS5 can't be closed over, which the decision above settles.
-- **The ledger:** slice 5's close-out, the trap as an open item blocking FTS5's users, and the
-  merge order with slice 2, which edits the same shard lines and `ci.yml`.
+  holds; with the close fix, nothing about FTS5 needs adding there.
+- **The ledger:** slice 5's close-out, and the merge order with slice 2, which edits the same shard
+  lines and `ci.yml`.

@@ -20,8 +20,13 @@
 ;;;
 ;;; Every value a row asserts is the research's (.plans/research/m4-plan/,
 ;;; F3), the same on all four libraries it read: the floor's 3.45.1, Guix's
-;;; 3.53.1 and 3.54.1, plain and with FTS5. No row uses json_pretty, which
-;;; 3.45.1 lacks. The rows go through the conveniences and the statement
+;;; 3.53.1 and 3.54.1, plain and with FTS5, but two, measured in the
+;;; slice's review on those libraries (.plans/m4-slice-5-mutation-log.md): a
+;;; bound string's typeof is text, so a string bound as a BLOB fails the
+;;; bound row on every library, where 3.53.1 and 3.54.1 read a BLOB's JSON as
+;;; text; and json_each answers an object's keys in the document's order, so
+;;; the key-order row's object is written out of order. No row uses
+;;; json_pretty, which 3.45.1 lacks. The rows go through the conveniences and the statement
 ;;; verbs, so they test the values' path through the library, not SQLite: a
 ;;; row's REAL reads as a flonum, its INTEGER as an exact integer, its TEXT as
 ;;; a string and its BLOB as a bytevector, and each is asserted whole.
@@ -150,9 +155,9 @@
   '#("{\"a\":[1,2.5,\"x\",null,true]}")
   (row-of "select json(' { \"a\" : [1, 2.5, \"x\", null, true] } ')"))
 
-(test-equal "json() minifies a bound string, and json_valid() answers 1 for it"
-  '#("[1,2]" 1)
-  (row-of "select json(?1), json_valid(?1)" "[1, 2]"))
+(test-equal "json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT"
+  '#("[1,2]" 1 "text")
+  (row-of "select json(?1), json_valid(?1), typeof(?1)" "[1, 2]"))
 
 (test-equal "malformed JSON prepares, then raises &sqlite-error at its step, code error"
   (step-error "select json('{')")
@@ -180,7 +185,7 @@
    (lambda ()
      (with-db
       (lambda (db)
-        (query db "select key, value, type from json_each('{\"x\":1,\"y\":[2],\"z\":\"s\"}') order by key"))))))
+        (query db "select key, value, type from json_each('{\"z\":\"s\",\"x\":1,\"y\":[2]}') order by key"))))))
 
 (test-equal "jsonb() answers a BLOB, read as the bytevector #vu8(76 23 97 19 49) for {\"a\":1}, where json() answers TEXT"
   '#(#vu8(76 23 97 19 49) "blob" "text")

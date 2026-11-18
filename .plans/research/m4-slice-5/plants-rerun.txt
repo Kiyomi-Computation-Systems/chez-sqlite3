@@ -1,0 +1,384 @@
+== F01: the FTS5 rows run only where the check says yes (run whatever it says)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 15 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+     - MATCH with order by rank: sqlite matches 2 then 3
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+     - a prefix query: searc* matches 2 and 3
+     - a phrase query: "full text" matches 2
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+     - NOT: sqlite NOT fts5 matches 3 alone
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+     - a connection that made and queried an FTS5 table closes, with no drop first
+  tests/test-fts5.sps current: exit 1; pass 4 fail 15 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+     - MATCH with order by rank: sqlite matches 2 then 3
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+     - a prefix query: searc* matches 2 and 3
+     - a phrase query: "full text" matches 2
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+     - NOT: sqlite NOT fts5 matches 3 alone
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+     - a connection that made and queried an FTS5 table closes, with no drop first
+  tests/test-fts5.sps fts5: exit 0; pass 19 fail 0 xfail 0 xpass 0
+== F02: the check's choice (inverted: the rows where it says no, the refusal where yes)
+  tests/test-fts5.sps guix: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 15 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+     - MATCH with order by rank: sqlite matches 2 then 3
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+     - a prefix query: searc* matches 2 and 3
+     - a phrase query: "full text" matches 2
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+     - NOT: sqlite NOT fts5 matches 3 alone
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+     - a connection that made and queried an FTS5 table closes, with no drop first
+  tests/test-fts5.sps current: exit 1; pass 4 fail 15 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+     - MATCH with order by rank: sqlite matches 2 then 3
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+     - a prefix query: searc* matches 2 and 3
+     - a phrase query: "full text" matches 2
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+     - NOT: sqlite NOT fts5 matches 3 alone
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+     - a connection that made and queried an FTS5 table closes, with no drop first
+  tests/test-fts5.sps fts5: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+== F03: the refusal's code (expected misuse, not error)
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+  tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+== F04: the refusal comes at step (expected at prepare, from call-with-statement)
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+  tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - FTS5 unavailable: create virtual table ... using fts5 prepares, then raises &sqlite-error at its step, code error
+== F05: the option and module check reads both (the option alone)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+== F06: the option and module check reads both (the module alone)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps floor: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps current: exit 1; pass 4 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+== F07: the path is chosen only where they agree (by the option alone)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps current: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps fts5: exit 0; pass 19 fail 0 xfail 0 xpass 0
+== F08: the module probe names fts5 (fts4)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps current: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps fts5: exit 1; pass 3 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+== F09: the option probe names ENABLE_FTS5 (ENABLE_FTS4)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps floor: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps current: exit 0; pass 5 fail 0 xfail 0 xpass 0
+  tests/test-fts5.sps fts5: exit 1; pass 3 fail 1 xfail 0 xpass 0
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+== P01: the load row reads the load (CHEZ_SQLITE3_LIBRARY naming no file)
+  tests/test-fts5.sps badlib: exit 1; pass 2 fail 2 xfail 0 xpass 0
+     - (chez-sqlite3) loads, reached through eval
+     - ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an option without the module, and a mo
+  tests/test-json.sps badlib: exit 1; pass 2 fail 14 xfail 0 xpass 0
+     - (chez-sqlite3) loads, reached through eval
+     - the library has JSON: OMIT_JSON is not among its options, where THREADSAFE is
+     - json() minifies: a literal's white space dropped, its numbers, string, null and true kept
+     - json() minifies a bound string, and json_valid() answers 1 for it
+     - malformed JSON prepares, then raises &sqlite-error at its step, code error
+     - malformed JSON through query-row raises &sqlite-error from query-row, code error, with its SQL and no place
+     - a bound BLOB that is no JSONB, x'0102', prepares, then raises &sqlite-error at its step, code error
+     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
+     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
+     - json_each answers a row for each key, its value as SQL's and its type, in key order
+     - jsonb() answers a BLOB, read as the bytevector #vu8(76 23 97 19 49) for {"a":1}, where json() answers TEXT
+     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
+     - json_extract answers 1e400 and -1e400 as the flonums +inf.0 and -inf.0
+     - json_extract answers 9223372036854775807 as an exact integer, and 9223372036854775808, past 64 bits, as a flonum
+== P02: the counts row at the load reads the counts (a connection opened before it)
+  tests/test-fts5.sps guix: exit 1; pass 17 fail 2 xfail 0 xpass 0
+     - every count is zero once the load has returned
+     - every count is zero after the rows
+  tests/test-json.sps guix: exit 1; pass 14 fail 2 xfail 0 xpass 0
+     - every count is zero once the load has returned
+     - every count is zero after the rows
+== L01: the current lane compiles FTS5 in (the flag dropped from its line)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 79 fail 2 xfail 0 xpass 0
+     - build-sqlite.sh: --current, both digests right, in a tree with no floors file: the pinned release built the same way, then checked with --current
+     - build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, e
+  build-sqlite.sh --current, through the replay shims: exit 1; pass 0 fail 0 xfail 0 xpass 0
+     |  DEFAULT_WORKER_THREADS=0
+     |  DIRECT_OVERFLOW_READ
+     | -ENABLE_FTS5
+     |  MALLOC_SOFT_LIMIT=1024
+     |  MAX_ATTACHED=10
+     |  MAX_COLUMN=2000
+== L02: the floor's line keeps SQLite's defaults (FTS5 added to it too)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 76 fail 5 xfail 0 xpass 0
+     - build-sqlite.sh: both digests right: three members unpacked, one compile with the plan's flags, the headers copied, then check-sqlite.sh's refusal of 
+     - build-sqlite.sh: a compile that writes the library: check-sqlite.sh gets the override and the header's directory, and its first compiler call is its o
+     - build-sqlite.sh: C_INCLUDE_PATH in the env: the compile gets it as it is, and the check gets PREFIX/include before it
+     - build-sqlite.sh: CC naming another compiler: that one compiles
+     - build-sqlite.sh: both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0
+== L03: check-sqlite.sh's current list holds ENABLE_FTS5 (the line dropped)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 76 fail 5 xfail 0 xpass 0
+     - check-sqlite.sh: --current: the pinned release's library passes, with its 39 lines, in a tree with no floors file
+     - check-sqlite.sh: --current: it passes whatever floor the tree has: the floors file is not read
+     - check-sqlite.sh: --current: the pinned release's identity with the floor's 37 options is refused
+     - check-sqlite.sh: --current: the pinned release built without FTS5, its 38 options, is refused, naming ENABLE_FTS5
+     - build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, e
+  check-sqlite.sh --current build/m4-current: exit 0; pass 0 fail 0 xfail 0 xpass 0
+     |   MAX_WORKER_THREADS=8
+     |   MUTEX_PTHREADS
+     |   SYSTEM_MALLOC
+     |   TEMP_STORE=1
+     |   THREADSAFE=1
+     | check-sqlite.sh: /gnu/store/5v2iykmw4z9r6wvq5kqbh2yx1zz1ncan-profile/bin/gcc finds <sqlite3.h> at ROOT/build/m4-current/include/
+  check-sqlite.sh --current build/m4-current-fts5: exit 1; pass 0 fail 0 xfail 0 xpass 0
+     |  DEFAULT_WORKER_THREADS=0
+     |  DIRECT_OVERFLOW_READ
+     | +ENABLE_FTS5
+     |  MALLOC_SOFT_LIMIT=1024
+     |  MAX_ATTACHED=10
+     |  MAX_COLUMN=2000
+== L04: ENABLE_FTS5 in its place in SQLite's order (moved before DIRECT_OVERFLOW_READ)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 76 fail 5 xfail 0 xpass 0
+     - check-sqlite.sh: --current: the pinned release's library passes, with its 39 lines, in a tree with no floors file
+     - check-sqlite.sh: --current: it passes whatever floor the tree has: the floors file is not read
+     - check-sqlite.sh: --current: the pinned release's identity with the floor's 37 options is refused
+     - check-sqlite.sh: --current: the pinned release built without FTS5, its 38 options, is refused, naming ENABLE_FTS5
+     - build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, e
+  check-sqlite.sh --current build/m4-current-fts5: exit 1; pass 0 fail 0 xfail 0 xpass 0
+     | -ENABLE_FTS5
+     |  DIRECT_OVERFLOW_READ
+     | +ENABLE_FTS5
+     |  MALLOC_SOFT_LIMIT=1024
+     |  MAX_ATTACHED=10
+     |  MAX_COLUMN=2000
+== L05: the floor's list keeps SQLite's defaults (ENABLE_FTS5 added to it)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 69 fail 12 xfail 0 xpass 0
+     - check-sqlite.sh: the floor's library, its header and the lane's env pass, with the identity, every option and the header named
+     - check-sqlite.sh: the env names no version: version, number, source_id, floor_source_id and floor_options set to the next release's change nothing
+     - check-sqlite.sh: DEFAULT_MEMSTATUS=0, at its place in SQLite's order, is refused: ADR-0005's lane keeps SQLite's memory count
+     - check-sqlite.sh: an option added before the first is refused
+     - check-sqlite.sh: an option added after the last is refused
+     - check-sqlite.sh: the first option dropped is refused
+     - check-sqlite.sh: an option in the middle dropped is refused
+     - check-sqlite.sh: the last option dropped is refused
+     - check-sqlite.sh: MAX_VARIABLE_NUMBER=250000, Ubuntu's, in place of SQLite's default is refused
+     - check-sqlite.sh: two options swapped are refused: the list is compared in order, not as a set
+     - check-sqlite.sh: COMPILER=gcc-0.0.0, another compiler than CC, is refused: the entry is held whole
+     - build-sqlite.sh: both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0
+  check-sqlite.sh build/m3-floor: exit 1; pass 0 fail 0 xfail 0 xpass 0
+     |  DEFAULT_WORKER_THREADS=0
+     |  DIRECT_OVERFLOW_READ
+     | -ENABLE_FTS5
+     |  MALLOC_SOFT_LIMIT=1024
+     |  MAX_ATTACHED=10
+     |  MAX_COLUMN=2000
+== L06: the flag goes to the current role (given when the role is the floor)
+  tests/test-ci-sqlite.sps guix: exit 1; pass 74 fail 7 xfail 0 xpass 0
+     - build-sqlite.sh: both digests right: three members unpacked, one compile with the plan's flags, the headers copied, then check-sqlite.sh's refusal of 
+     - build-sqlite.sh: --current, both digests right, in a tree with no floors file: the pinned release built the same way, then checked with --current
+     - build-sqlite.sh: a compile that writes the library: check-sqlite.sh gets the override and the header's directory, and its first compiler call is its o
+     - build-sqlite.sh: C_INCLUDE_PATH in the env: the compile gets it as it is, and the check gets PREFIX/include before it
+     - build-sqlite.sh: CC naming another compiler: that one compiles
+     - build-sqlite.sh: both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0
+     - build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, e
+== D01: the note's block is one Chez can read (a parenthesis dropped)
+  tests/test-docs.sps guix: exit 1; pass 100 fail 1 xfail 0 xpass 0
+     - every fragment's text is data Chez reads, and holds a datum, by page and line
+== D02: the note's block is a plain scheme block (marked scheme run)
+  tests/test-docs.sps guix: exit 1; pass 102 fail 1 xfail 0 xpass 0
+     - docs/reference.md:1165: the runnable example gives the result it states
+== V01: a REAL reads as its flonum (rounded to an integer's)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
+== V02: a string binds as TEXT (bound as a BLOB)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-json.sps guix: exit 0; pass 16 fail 0 xfail 0 xpass 0
+== V03: a bytevector binds as a BLOB (bound as TEXT)
+  tests/test-fts5.sps guix: exit 0; pass 19 fail 0 xfail 0 xpass 0
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
+== V04: TEXT decodes as UTF-8 (each byte a character, as Latin-1)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
+== FV01: MATCH ordered by rank (expected 3 then 2)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - MATCH with order by rank: sqlite matches 2 then 3
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - MATCH with order by rank: sqlite matches 2 then 3
+== FV02: bm25's order is rank's (expected 3 then 2)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - order by rank is bm25()'s order: search matches 2 then 3, each bm25 a negative flonum below the next
+== FV03: unicode61 folds creme to crème (expected no match)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - unicode61 folds diacritics: cafe, café and creme each match document 1
+== FV04: remove_diacritics 0 keeps them (expected cafe to match)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - with remove_diacritics 0, cafe matches no café, and café matches it
+== FV05: highlight() answers the text as stored (expected the folded cafe)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three tokens
+== FV06: a prefix query (expected searc* as a whole term: nothing)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a prefix query: searc* matches 2 and 3
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a prefix query: searc* matches 2 and 3
+== FV07: a phrase query (expected nothing)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a phrase query: "full text" matches 2
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a phrase query: "full text" matches 2
+== FV08: a column filter (expected title:sqlite to match the bodies' 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+== FV09: NOT (expected it ignored: 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - NOT: sqlite NOT fts5 matches 3 alone
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - NOT: sqlite NOT fts5 matches 3 alone
+== FV10: a bound MATCH reaches FTS5 whole (expected café lost: 2 and 3)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3
+== FV11: a query's syntax error names query (expected step!)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place
+== FV12: a query's syntax error is code error (expected misuse)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-error at its step, code error
+== FV13: delete and update reach the index (expected neither applied)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and integrity-check leave 2 rows
+== FV14: the create's step answers done (expected a row)
+  tests/test-fts5.sps guix: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+  tests/test-fts5.sps fts5: exit 1; pass 18 fail 1 xfail 0 xpass 0
+     - create virtual table ... using fts5 prepares, and its step answers done
+== J01: OMIT_JSON's row reads the predicate (expected #f for both, as a predicate answering #f to all)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - the library has JSON: OMIT_JSON is not among its options, where THREADSAFE is
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - the library has JSON: OMIT_JSON is not among its options, where THREADSAFE is
+== J02: json() minifies (expected the literal as written)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json() minifies: a literal's white space dropped, its numbers, string, null and true kept
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json() minifies: a literal's white space dropped, its numbers, string, null and true kept
+== J03: json() minifies a bound string (expected it unchanged)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json() minifies a bound string, and json_valid() answers 1 for it
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json() minifies a bound string, and json_valid() answers 1 for it
+== J04: malformed JSON fails at step (expected at prepare)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - malformed JSON prepares, then raises &sqlite-error at its step, code error
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - malformed JSON prepares, then raises &sqlite-error at its step, code error
+== J05: malformed JSON through query-row names query-row (expected step!)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - malformed JSON through query-row raises &sqlite-error from query-row, code error, with its SQL and no place
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - malformed JSON through query-row raises &sqlite-error from query-row, code error, with its SQL and no place
+== J06: a bound BLOB that is no JSONB is refused at step (expected read, a row)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound BLOB that is no JSONB, x'0102', prepares, then raises &sqlite-error at its step, code error
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound BLOB that is no JSONB, x'0102', prepares, then raises &sqlite-error at its step, code error
+== J07: -> answers JSON text (expected the SQL value, as ->> answers)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - -> answers JSON text, the string quoted; ->> the SQL value, the string itself, both UTF-8
+== J08: ->> answers a REAL as a flonum (expected the exact 5/2)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - ->> answers a REAL as a flonum and an INTEGER as an exact integer
+== J09: json_each's values keep their types (expected x's 1 as the flonum 1.0)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_each answers a row for each key, its value as SQL's and its type, in key order
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_each answers a row for each key, its value as SQL's and its type, in key order
+== J10: jsonb() answers a BLOB as a bytevector (expected its last byte one more)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - jsonb() answers a BLOB, read as the bytevector #vu8(76 23 97 19 49) for {"a":1}, where json() answers TEXT
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - jsonb() answers a BLOB, read as the bytevector #vu8(76 23 97 19 49) for {"a":1}, where json() answers TEXT
+== J11: a bound bytevector binds as a BLOB (expected it bound as TEXT)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - a bound bytevector #vu8(12), JSONB's empty object, binds as a BLOB that json() reads as {}
+== J12: 1e400 and -1e400 answer +inf.0 and -inf.0 (expected swapped)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_extract answers 1e400 and -1e400 as the flonums +inf.0 and -inf.0
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_extract answers 1e400 and -1e400 as the flonums +inf.0 and -inf.0
+== J13: 9223372036854775808 answers a flonum (expected the exact integer)
+  tests/test-json.sps guix: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_extract answers 9223372036854775807 as an exact integer, and 9223372036854775808, past 64 bits, as a flonum
+  tests/test-json.sps floor: exit 1; pass 15 fail 1 xfail 0 xpass 0
+     - json_extract answers 9223372036854775807 as an exact integer, and 9223372036854775808, past 64 bits, as a flonum
