@@ -17,7 +17,8 @@
 # its SHA3-256 against the role's pin before anything is unpacked. It
 # unpacks only sqlite3.c, sqlite3.h and sqlite3ext.h, and checks sqlite3.c's
 # SHA3-256 against the one sqlite.org's release log publishes. It compiles
-# the amalgamation once, with SQLite's defaults and these flags:
+# the amalgamation once, with these flags; the floor's build is SQLite's
+# defaults, and the current release's adds one option:
 #
 #   -shared -fPIC           a shared object, PREFIX/lib/libsqlite3.so.0,
 #                           named as discovery would name it
@@ -25,6 +26,10 @@
 #   -DSQLITE_THREADSAFE=1   serialized, SQLite's default, written so the
 #                           build depends on no default: the load refuses 0
 #                           (ADR-0010)
+#   -DSQLITE_ENABLE_FTS5    --current only: FTS5, which SQLite's defaults
+#                           leave out, so the current lane runs the FTS5
+#                           suite's rows and the floor lane its refusal
+#                           (ADR-0003, amended)
 #   -Wl,-z,defs             an unresolved symbol fails the build, not a load
 #   -lpthread -lm           SQLite's documented link line
 #
@@ -157,8 +162,13 @@ got=$(sha3_of "$src/sqlite3.c") || exit 1
   fail "$name/sqlite3.c has SHA3-256 $got, but ${role}_source in this script pins $source_pin, the digest sqlite.org's release log publishes"
 
 mkdir -p "$prefix/lib" "$prefix/include"
-"$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -Wl,-z,defs -o "$prefix/lib/libsqlite3.so.0" \
-  "$src/sqlite3.c" -lpthread -lm
+if [ "$role" = current ]; then
+  "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -Wl,-z,defs \
+    -o "$prefix/lib/libsqlite3.so.0" "$src/sqlite3.c" -lpthread -lm
+else
+  "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -Wl,-z,defs -o "$prefix/lib/libsqlite3.so.0" \
+    "$src/sqlite3.c" -lpthread -lm
+fi
 cp "$src/sqlite3.h" "$src/sqlite3ext.h" "$prefix/include/"
 
 # Check what was built, with the lane's env for this call only.

@@ -28,8 +28,10 @@
 #      serialized, to sqlite3_threadsafe(), and lists every compile option
 #      the release lists when build-sqlite.sh builds it, line for line, in
 #      SQLite's order, and no other. A lane tests SQLite's defaults, built
-#      here with known flags: so a build with DEFAULT_MEMSTATUS=0, which
-#      ADR-0005's memory check cannot read, or with THREADSAFE=0, fails.
+#      here with known flags, and the current lane FTS5 besides
+#      (ADR-0003, amended): so a build with DEFAULT_MEMSTATUS=0, which
+#      ADR-0005's memory check cannot read, or with THREADSAFE=0, fails, and
+#      so does a current build without ENABLE_FTS5.
 #
 # The release's version number is computed from its version, X*1000000 +
 # Y*1000 + Z, never written. Its source id is the one sqlite.org's release
@@ -92,7 +94,9 @@ floor_source_id='2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cf
 current_source_id='2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76'
 
 # The compile options each role's library lists, in SQLite's order, as
-# build-sqlite.sh builds it, with $compiler where SQLite lists the compiler.
+# build-sqlite.sh builds it, with $compiler where SQLite lists the compiler:
+# the floor's SQLite's defaults, and the current release's with ENABLE_FTS5,
+# which build-sqlite.sh adds for that role alone (ADR-0003, amended).
 floor_options() {
   cat <<EOF
 ATOMIC_INTRINSICS=1
@@ -153,6 +157,7 @@ DEFAULT_WAL_AUTOCHECKPOINT=1000
 DEFAULT_WAL_SYNCHRONOUS=2
 DEFAULT_WORKER_THREADS=0
 DIRECT_OVERFLOW_READ
+ENABLE_FTS5
 MALLOC_SOFT_LIMIT=1024
 MAX_ATTACHED=10
 MAX_COLUMN=2000

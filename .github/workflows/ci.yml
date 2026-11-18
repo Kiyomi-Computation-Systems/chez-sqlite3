@@ -469,7 +469,8 @@ jobs:
           C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-floor/include
         run: make test
 
-  # SQLite at the current release, compiled here as the floor's is, with
+  # SQLite at the current release, compiled here as the floor's is but with
+  # FTS5, which the floor's build leaves out (ADR-0003, amended), by
   # scripts/ci/build-sqlite.sh --current: the release the script pins, no
   # floor, so it reads no floors file and its cache is not keyed by one. The
   # suites must pass on it as on the floor's. check-sqlite.sh asserts the
