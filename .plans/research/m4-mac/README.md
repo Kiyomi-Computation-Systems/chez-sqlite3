@@ -12,6 +12,7 @@ Mac before slice 4 is written, where the plan left them to the hand run after sl
 | File | What it is |
 |---|---|
 | [mac.md](mac.md) | The maintainer's steps on the Mac, for zsh |
+| [slice-2.md](slice-2.md) | Slice 2's own Mac step, `make test` and `make check-variadic` with both libraries, once PR #37 has merged |
 | [run-mac.sh](run-mac.sh) | Builds the plan's extensions with the Mac's flags, and runs `l1-load-extension.c`, `x1-ffi-load.sps` and `fifo.c` against one library |
 | [fifo.c](fifo.c) | `dlopen` and the load on a FIFO, each in a child process and bounded, with no writer and with one; and `dlopen`'s own reasons for a directory and an empty file. Added after run 1 |
 | [out/run-1/](out/run-1/), [out/run-2/](out/run-2/) | Each run's files, as `run-mac.sh` wrote them |
