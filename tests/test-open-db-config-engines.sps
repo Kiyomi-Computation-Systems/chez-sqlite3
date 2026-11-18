@@ -658,19 +658,24 @@
 
 ;; --- one remainder's runs interleaved ---------------------------------------------------------
 
-;; Trial = (List Symbol Natural (Listof Any))
+;; Trial = (List Symbol Natural (Listof Any) (U 'both 'straddle #f))
 ;; Its kind, completed when R's first slice completed the call, last when
 ;; R's resume completed within G, else interleaved; how many answers were
-;; whole calls' own, databases or applied; and what deviated.
+;; whole calls' own, databases or applied; what deviated; and, for an
+;; interleaved trial, where its remainders lay against the call's first
+;; section, each read at its own expiry: both past it; straddle, R before
+;; it and R1, taken later on R's own resume, past it; or #f, both before.
 
-;; Sweep = (List Any Natural (Listof Any) Natural Natural Natural (U Natural #f) Natural)
+;; Sweep = (List Any Natural (Listof Any) Natural Natural Natural (U Natural #f) Natural Natural)
 ;; The fuel at which the call completes without expiring, or
 ;; no-completion-by-20000; how many trials ran; each trial's deviations,
 ;; with its fuels; the trials whose runs answered the call; those in which
 ;; two runs made whole calls; the last fuel at which the control made a
 ;; whole new call, 0 for none; the first fuel at which the control was
-;; refused before the call's first section, #f for none; and the trials
-;; whose R and R1 were both taken past the call's first section.
+;; refused before the call's first section, #f for none; the trials whose R
+;; and R1 were both taken past the call's first section, each read at its
+;; own expiry; and those whose R was taken before it and R1 past it, which
+;; race R's second run against R1 at that section itself.
 
 ;; interleave-sweep : (Natural -> Any) (Natural Natural Boolean -> Trial) -> Sweep
 ;; At every fuel from 1 until the call completes without expiring, CONTROL,
@@ -683,38 +688,42 @@
 ;; collect request fall all the same.
 (define (interleave-sweep control trial)
   (let floop ((fuel 1) (trials 0) (deviations '()) (answered 0) (new 0) (last-new 0) (was-new #f)
-              (refused-at #f) (past 0))
+              (refused-at #f) (past 0) (straddle 0))
     (let* ((made (begin (quieted!) (control fuel)))
            (made-new (and (pair? made) (car made)))
            (new? (or made-new was-new))
            (refused-at (or refused-at (and (pair? made) (cadr made) fuel))))
       (if (eq? made 'completed)
-          (list fuel trials (reverse deviations) answered new last-new refused-at past)
+          (list fuel trials (reverse deviations) answered new last-new refused-at past straddle)
           (let ((last-new (if made-new fuel last-new)))
             (let gloop ((g 1) (trials trials) (deviations deviations) (answered answered) (new new)
-                        (past past))
+                        (past past) (straddle straddle))
               (let* ((t (trial fuel g new?))
                      (kind (car t))
                      (deviations (if (null? (caddr t)) deviations
                                      (cons (list fuel g (caddr t)) deviations)))
                      (answered (if (> (cadr t) 0) (+ answered 1) answered))
                      (new (if (> (cadr t) 1) (+ new 1) new))
-                     (past (if (cadddr t) (+ past 1) past))
+                     (past (if (eq? (cadddr t) 'both) (+ past 1) past))
+                     (straddle (if (eq? (cadddr t) 'straddle) (+ straddle 1) straddle))
                      (trials (+ trials 1)))
                 (cond ((eq? kind 'completed)
-                       (list fuel trials (reverse deviations) answered new last-new refused-at past))
+                       (list fuel trials (reverse deviations) answered new last-new refused-at past
+                             straddle))
                       ((>= fuel 20000)
                        (list 'no-completion-by-20000 trials (reverse deviations) answered new last-new
-                             refused-at past))
+                             refused-at past straddle))
                       ((eq? kind 'last)
-                       (floop (+ fuel 1) trials deviations answered new last-new made-new refused-at past))
-                      (else (gloop (+ g 1) trials deviations answered new past))))))))))
+                       (floop (+ fuel 1) trials deviations answered new last-new made-new refused-at past
+                              straddle))
+                      (else (gloop (+ g 1) trials deviations answered new past straddle))))))))))
 
 ;; interleave-reported : String Sweep -> (List Any Any Any)
 ;; RUN's deviations, summarized; whether its trials answered the call at
-;; least three a fuel on average and had both remainders past the call's
-;; first section in a trial a fuel at least: a sweep that reused one R
-;; across every G answers at most one a fuel; and whether its control was
+;; least three a fuel on average, had both remainders past the call's first
+;; section in a trial a fuel at least, and R before it with R1 past it in
+;; some: a sweep that reused one R across every G answers at most one a
+;; fuel; and whether its control was
 ;; refused before the call's first section at some fuel, and made every
 ;; whole new call below the first such fuel. Its fuels printed, naming WHAT.
 (define (interleave-reported what run)
@@ -728,6 +737,8 @@
   (write (list-ref run 3))
   (display "; both remainders past the first section in ")
   (write (list-ref run 7))
+  (display "; R before it and R1 past it in ")
+  (write (list-ref run 8))
   (display "; whole new calls ")
   (write (list-ref run 4))
   (display "; the last fuel at which the control made one ")
@@ -737,9 +748,10 @@
   (newline)
   (list (if (integer? (car run)) (summarized (caddr run)) (list (car run) (summarized (caddr run))))
         (if (and (integer? (car run)) (>= (list-ref run 3) (* 3 (car run)))
-                 (>= (list-ref run 7) (car run)))
+                 (>= (list-ref run 7) (car run)) (> (list-ref run 8) 0))
             'answered-three-a-fuel-and-past-the-first-section-one-a-fuel
-            (list 'answered (list-ref run 3) 'past (list-ref run 7) 'over (car run)))
+            (list 'answered (list-ref run 3) 'past (list-ref run 7) 'straddling (list-ref run 8)
+                  'over (car run)))
         (let ((last-new (list-ref run 5)) (refused-at (list-ref run 6)))
           (if (and refused-at (< last-new refused-at))
               'whole-new-calls-below-a-refusal
@@ -831,9 +843,13 @@
               (let ((second (ran-counts (lambda () (finish R)))))
                 (cons 'last (open-judged new? start (list (list (cadr r1) 'counts-kept) second) #f)))
               (let* ((R1 (cadr r1))
+                     (r1-open (> (connection-count) (cdr (assq 'connection start))))
                      (second (ran-counts (lambda () (finish R))))
                      (third (ran-counts (lambda () (finish R1)))))
-                (cons 'interleaved (open-judged new? start (list second third) r-open))))))))
+                (cons 'interleaved (open-judged new? start (list second third)
+                                                (cond ((and r-open r1-open) 'both)
+                                                      (r1-open 'straddle)
+                                                      (else #f))))))))))
 
 ;; open-control : Natural -> (U 'completed (List Boolean Boolean))
 (define (open-control fuel)
@@ -848,7 +864,7 @@
           (when (and (a-database? second) (not (eq? second first))) (close-answer second))
           (list new (and before (not new) (equal? second '(raised (closed open-database)))))))))
 
-(test-equal "open-database's remainder R with the ops among two PRAGMAs on :memory:, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, the counts kept; no connection is left open that a run did not answer; the one answered tracks nothing and reads every setting as asked; trials answer three a fuel on average and have both remainders past the open in one a fuel; and the control is refused before the open at some fuel, every whole new call below the first"
+(test-equal "open-database's remainder R with the ops among two PRAGMAs on :memory:, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, the counts kept; no connection is left open that a run did not answer; the one answered tracks nothing and reads every setting as asked; trials answer three a fuel on average, have both remainders past the open in one a fuel, and R before it with R1 past it in some; and the control is refused before the open at some fuel, every whole new call below the first"
   (list '() 'answered-three-a-fuel-and-past-the-first-section-one-a-fuel
         'whole-new-calls-below-a-refusal zero-counts)
   (let ((run (interleave-sweep open-control open-trial)))
@@ -972,11 +988,13 @@
                   (let ((second (noted-run (lambda () (finish R)) calls)))
                     (cons 'last (once-judged new? db calls (list (list (cadr r1) 0 'counts-kept) second) #f)))
                   (let* ((R1 (cadr r1))
-                         (r1-past r-past)
+                         (r1-past (> (length (calls)) 0))
                          (second (noted-run (lambda () (finish R)) calls))
                          (third (noted-run (lambda () (finish R1)) calls)))
                     (cons 'interleaved (once-judged new? db calls (list second third)
-                                                    (and r-past r1-past)))))))))))
+                                                    (cond ((and r-past r1-past) 'both)
+                                                          (r1-past 'straddle)
+                                                          (else #f))))))))))))
 
 ;; once-control : Natural -> (U 'completed (List Boolean Boolean))
 ;; applied-settings/with at FUEL on a fresh connection: completed; or
@@ -998,7 +1016,7 @@
               (close-answer db)
               (list new (and before (not new) (equal? second '(raised (closed the-suite)))))))))))
 
-(test-equal "applied-settings/with on a connection of the suite's, the four and a PRAGMA, through a stand-in that notes each call and passes it to native's binding, its remainder R taken at every fuel from 1 until the call completes without expiring, R1 from R's resume at every later fuel, then R resumed again to its end, then R1, each trial on a fresh connection, stand-in and engine: each op's set is made once a call, in the list's order, by whichever run reaches it; a refused run notes no call and keeps the counts; the connection stays open and reads every op and the PRAGMA as asked; trials answer three a fuel on average and have both remainders past the first set in one a fuel; and the control is refused before the first set at some fuel, every whole new call below the first"
+(test-equal "applied-settings/with on a connection of the suite's, the four and a PRAGMA, through a stand-in that notes each call and passes it to native's binding, its remainder R taken at every fuel from 1 until the call completes without expiring, R1 from R's resume at every later fuel, then R resumed again to its end, then R1, each trial on a fresh connection, stand-in and engine: each op's set is made once a call, in the list's order, by whichever run reaches it; a refused run notes no call and keeps the counts; the connection stays open and reads every op and the PRAGMA as asked; trials answer three a fuel on average, have both remainders past the first set in one a fuel, and R before it with R1 past it in some; and the control is refused before the first set at some fuel, every whole new call below the first"
   (list '() 'answered-three-a-fuel-and-past-the-first-section-one-a-fuel
         'whole-new-calls-below-a-refusal zero-counts)
   (let ((run (interleave-sweep once-control once-trial)))
@@ -1074,8 +1092,8 @@
                    (counted-up (if (and (eq? (car t) 'refused) (caddr t)) 'refused-past-a-set (car t))
                                kinds)))))))
 
-(test-equal "applied-settings/with whose stand-in fails the second set, its remainder resumed to its end twice at every fuel from 1 until it completes without expiring: the first raises the set's &sqlite-error, the connection closed, the stand-in called twice; the second is refused with &sqlite-closed, at some fuel after a set was made, or raises the error again, past the close; neither calls the stand-in again, nor changes a count"
-  (list '() 'refused-past-a-set zero-counts)
+(test-equal "applied-settings/with whose stand-in fails the second set, its remainder resumed to its end twice at every fuel from 1 until it completes without expiring: the first raises the set's &sqlite-error, the connection closed, the stand-in called twice; the second is refused with &sqlite-closed, at a third of the fuels at least and at some after a set was made, or raises the error again, past the close; neither calls the stand-in again, nor changes a count"
+  (list '() 'refused-at-a-third-of-the-fuels-and-past-a-set zero-counts)
   (let ((r (failing-sweep)))
     (display "  applied-settings/with, failing, resumed twice: completed without expiring at fuel ")
     (write (car r))
@@ -1083,7 +1101,12 @@
     (write (caddr r))
     (newline)
     (list (summarized (cadr r))
-          (if (> (kind-count (caddr r) 'refused-past-a-set) 0) 'refused-past-a-set (caddr r))
+          (let ((refused (+ (kind-count (caddr r) 'refused) (kind-count (caddr r) 'refused-past-a-set))))
+            (if (and (integer? (car r)) (>= (* 3 refused) (car r))
+                     (> (kind-count (caddr r) 'refused-past-a-set) 0))
+                'refused-at-a-third-of-the-fuels-and-past-a-set
+                (list 'refused refused 'past-a-set (kind-count (caddr r) 'refused-past-a-set)
+                      'of (car r))))
           (native-counts))))
 
 (test-equal "every count is zero at the end"

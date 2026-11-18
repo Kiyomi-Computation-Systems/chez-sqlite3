@@ -5,6 +5,11 @@ Evidence that each rule slice 3's rows claim to guard fails through the property
 [the M4 slice 1 log](m4-slice-1-mutation-log.md). An Opus agent built the slice from the lead's
 brief, in the worktree `chez-sqlite3-wt-m4s3`, on `m4-slice-3-settings` from `main` at
 `1735a66`, slices 1 and 2 and the close fix merged there, beside slice 5 in a worktree of its own.
+The lead committed it as `7e5264a` and rebased it onto `main` at `7dac918`, slice 5's merge, which
+adds `test-fts5` and `test-json`: there `make test` runs 79 suites, and ran 77 before this slice.
+The slice's read-only Opus review then found two majors and five smaller items, fixed in a second
+round ([below](#round-2-the-reviews-findings)); every count from "Green" on is the second
+round's, on `7dac918`.
 
 ## What the slice adds
 
@@ -80,7 +85,7 @@ brief, in the worktree `chez-sqlite3-wt-m4s3`, on `m4-slice-3-settings` from `ma
   prepare, a `scheme run` block; the opt-in's refusal, a plain block; Conditions' row and entry
   for the predicate, eight conditions now.
 - **The suites:**
-  - `tests/test-open-db-config.sps`, new, 26 rows: the sets at open, the starts, the opt-in's
+  - `tests/test-open-db-config.sps`, new, 26 rows, 30 after round 2: the sets at open, the starts, the opt-in's
     `#f` beside a switch that starts on, `defensive`, DQS, the stand-in's failures and
     mismatches, the code and the message, once and in order, a failing close, the record's
     opt-in, the refusals and the complement, the four among the six, the depth;
@@ -123,26 +128,30 @@ python3 -I -B $D/mut.py --into build/mut-r2 report all
 
 ## The red runs
 
-The rows were written first, and run against `1735a66`'s code twice: first, red A, on the
-suites as first built, in the worktree before any code changed; then on the final suites, in a
-copy whose `src/` files and `docs/reference.md` are `1735a66`'s (`build/mut-red/REDA/`). No suite
+The rows were written first. In the first round they ran against `1735a66`'s code twice:
+red A, on the suites as first built, in the worktree before any code changed; then on that
+round's final suites, in a copy whose `src/` files and `docs/reference.md` are `1735a66`'s
+(`build/mut-red/REDA/`). After the rebase and the second round, every suite ran again against
+`7dac918`'s `src/` and docs, the base the branch now sits on (`build/mut-red2/RED/`). No suite
 died: every new name is reached through `eval` under a name of the suite's own, as M3 slice 5's
 suites reach theirs, so a library that lacks it fails the rows that use it, by name ([the M4
 slice 1 log](m4-slice-1-mutation-log.md)'s trap).
 
-| Suite | `1735a66`'s own | Red, as first built | Red, final | Green |
-|---|---|---|---|---|
-| `test-settings` | 74 passed | 73 passed, 13 failed | 73 passed, 13 failed | 86 passed |
-| `test-open-settings` | 25 passed | 23 passed, 2 failed | 23 passed, 2 failed | 25 passed |
-| `test-open-db-config` | new | 6 passed, 19 failed | 6 passed, 20 failed | 26 passed |
-| `test-open-db-config-engines` | new | 4 passed, 8 failed | 4 passed, 8 failed | 12 passed |
-| `test-public` | 22 passed | 17 passed, 5 failed | 17 passed, 5 failed | 22 passed |
-| `test-reference` | 20 passed | 20 passed, 1 failed | 20 passed, 1 failed | 21 passed |
-| `test-library-loading-real` | 48 passed | 48 passed, 3 failed | 48 passed, 3 failed | 51 passed |
-| `test-docs` | 101 passed | not run | 101 passed, the base page | 105 passed |
+| Suite | The base's own | Red as first built, `1735a66` | Round 1's final, `1735a66` | Round 2's, `7dac918` | Green |
+|---|---|---|---|---|---|
+| `test-settings` | 74 passed | 73 passed, 13 failed | 73 passed, 13 failed | 73 passed, 13 failed | 86 passed |
+| `test-open-settings` | 25 passed | 23 passed, 2 failed | 23 passed, 2 failed | 23 passed, 2 failed | 25 passed |
+| `test-open-db-config` | new | 6 passed, 19 failed | 6 passed, 20 failed | 8 passed, 22 failed | 30 passed |
+| `test-open-db-config-engines` | new | 4 passed, 8 failed | 4 passed, 8 failed | 4 passed, 8 failed | 12 passed |
+| `test-public` | 22 passed | 17 passed, 5 failed | 17 passed, 5 failed | 17 passed, 5 failed | 22 passed |
+| `test-reference` | 20 passed | 20 passed, 1 failed | 20 passed, 1 failed | 20 passed, 1 failed | 21 passed |
+| `test-library-loading-real` | 48 passed | 48 passed, 3 failed | 48 passed, 3 failed | 48 passed, 3 failed | 51 passed |
+| `test-docs` | 101 passed | not run | 101 passed, the base page | 101 passed, the base page | 105 passed |
 
-`test-open-db-config`'s twentieth failure is `c-switch-on`, the row added after the first round
-of plants (below). The rows that pass red, each watched failing against a plant instead:
+`test-open-db-config`'s twentieth failure in round 1 is `c-switch-on`, the row added after the
+first round of plants (below); round 2 adds `c-start-one`'s wider lists and the four moved-start
+rows, two of which pass red (round 2, below). The rows that pass red, each watched failing against
+a plant instead:
 
 - `test-settings`: `s-ops-const` (J-op-wrong); `s-join-count`, the suite's own fixture
   (F-join-sample); `s-no-row`, M3's row made to read the suite's eleven, which reads `()` for the
@@ -172,12 +181,14 @@ The rows replaced, each named:
 
 ## Green, the libraries and the gate
 
-`make test` ran 77 and passed 77 on each library, inside the container, `CHEZ_SQLITE3_LIBRARY`
+`make test` ran 79 and passed 79 on each library on `7dac918`, after round 2, inside the
+container, `CHEZ_SQLITE3_LIBRARY`
 and `C_INCLUDE_PATH` set there (the first trap below), each lane's version read from its own P4
 line: Guix's 3.53.1, the floor's 3.45.1 (`build/m3-floor/`), the `current` lane's 3.54.1
 (`build/m4-current/`), and the coordinator's `build/m4s5-lib-defensive/`, 3.54.1 built
-`-DSQLITE_DEFAULT_DEFENSIVE`, which the lead offered for the starts. `make test` ran 75 before the
-slice. The starts, as `test-open-db-config` read them through the op, `enable-load-extension`,
+`-DSQLITE_DEFAULT_DEFENSIVE`, which the lead offered for the starts. `make test` ran 77 there
+before the slice; before the rebase, on `1735a66`, it ran 77 with the slice and 75 without. The
+starts, as `test-open-db-config` read them through the op, `enable-load-extension`,
 `defensive`, `dqs-dml`, `dqs-ddl`, each `(code cell)`:
 
 | Library | Starts |
@@ -190,18 +201,19 @@ On the defensive library, the native −1 read and open-database's read both gav
 `DEFAULT_DEFENSIVE` (the third trap below), so only the op tells.
 
 Under `make test-memory`, on Guix's 3.53.1, each suite the slice touched passed, 0 errors and
-nothing definitely lost, none `SLOW`, each time from the gate's `time:` line:
+nothing definitely lost, none `SLOW`, each time from the gate's `time:` line, round 1's on
+`1735a66` and round 2's on `7dac918`:
 
-| Suite | Shard | Rows | Gate |
-|---|---|---|---|
-| `test-settings` | 1 | 86 | 11 s |
-| `test-open-settings` | 1 | 25 | 13 s |
-| `test-open-db-config`, new | 2 | 26 | 12 s |
-| `test-open-db-config-engines`, new | 2 | 12 | 56 s |
-| `test-public` | 2 | 22 | 10 s |
-| `test-reference` | 2 | 21 | 10 s |
-| `test-docs` | 1 | 105 | 34 s |
-| `test-library-loading-real` | 1 | 51 | 177 s |
+| Suite | Shard | Rows | Round 1 | Round 2 |
+|---|---|---|---|---|
+| `test-settings` | 1 | 86 | 11 s | 10 s |
+| `test-open-settings` | 1 | 25 | 13 s | 14 s |
+| `test-open-db-config`, new | 2 | 26, then 30 | 12 s | 12 s |
+| `test-open-db-config-engines`, new | 2 | 12 | 56 s | 56 s |
+| `test-public` | 2 | 22 | 10 s | 10 s |
+| `test-reference` | 2 | 21 | 10 s | 10 s |
+| `test-docs` | 1 | 105 | 34 s | 33 s |
+| `test-library-loading-real` | 1 | 51 | 177 s | 177 s |
 
 Both new suites are in `MEMORY_SUITES_2`, as the brief says: on three CI runs the shards' sums
 read 900 and 986 s, 1186 and 1268 s, 915 and 874 s, shard 1 against shard 2, and since then
@@ -316,7 +328,8 @@ start.
 | X-export | `(chez-sqlite3)` without `sqlite-extensions-unavailable?` | public 3: `p-count`, `p-list`, `p-eq`; reference 3 of 21: 'every entry is an export', 'the entries are the exports', `r-line`; docs 1: the code-span rule |
 | X-docs | the `writable_schema` block's stated result `#(1)` | docs 1 |
 
-**51 plants: all caught.** The M4 plan's §4.7 names P-nocell and P-nocode (a set held without its
+**51 plants: all caught** in the second round; with the review's five and the builder's G1
+after it, 57 plants, 56 caught, R4 argued (round 2, below). The M4 plan's §4.7 names P-nocell and P-nocode (a set held without its
 cell, or its code), P-fill0 and P-fill1 (a sentinel of 0 or 1), P-code-conn (the code from the
 connection), P-errmsg (the message from `sqlite3_errmsg`), the four P-unasked (an op set
 unasked), P-defensive-skipped (`defensive` without effect) and P-opt-in-check (the check
@@ -354,6 +367,109 @@ fail only `l-lacking`, the decoy's: no library this process loads lacks the entr
   Apple's 21, the row prints UNAVAILABLE and asserts 21.
 - No other plant survived either round.
 
+## Round 2: the review's findings
+
+The slice's read-only Opus review, on `7e5264a` rebased onto `7dac918`, found no blocker, two
+majors and five smaller items. Each is fixed or answered here, test first.
+
+1. **Major: an op set unasked beside the opt-in survived.** `c-start-one` held lists of one op
+   for `defensive`, `dqs-dml` and `dqs-ddl` alone, so the review's R3, `checked-open` adding
+   `(defensive 1010 1 #t)` when the opt-in is present and `defensive` isn't named, passed every
+   suite on Guix's library and the floor. The row now takes every list of one op,
+   `single-lists`: each of the four at `#t` and at `#f`, the opt-in's `#t` where `available` is
+   `#t`, and compares each list's other three with `raw-starts`. R3 fails it on Guix's 3.53.1,
+   the floor's 3.45.1 and 3.54.1.
+2. **Major: a set that writes a lane's start can't be seen on that lane,** a flaw the lead's
+   brief shared: "a plant that sets an op unasked fails on every lane" holds only for a plant that
+   moves an op off its start. R1, `defensive` set to 0 at every open, passed every suite on Guix's
+   library; R2, `dqs-dml` set to 1 at every open, passed on Guix's and on `m4s5-lib-defensive`;
+   R6, `configured` skipping `defensive`'s `#f` and answering a match, passed every suite on
+   Guix's library, since `c-held`'s `#f` reads 0 whether or not the call is made. Four new rows,
+   by `c-switch-on`'s method: an entry point `sqlite3_auto_extension` runs at every open,
+   `move-starts`, sets each of the four ops to 1 less this library's start, read through
+   `raw-starts` first;
+   - `c-moved`: the suite's own connection reads every op at its moved value, the control;
+   - `c-moved-unasked`: open-database with no setting and with `()`, and call-with-database with
+     none, keep every moved value;
+   - `c-moved-held`: each list of one op reads its own op back as asked over the moved start, so
+     each value of each op is set off its start in this row or in `c-held`; the opt-in's `#f`
+     keeps the moved value;
+   - `c-moved-others`: each list of one op leaves the other three at their moved values.
+   Where `sqlite3_auto_extension` is refused, Apple's 21, each prints UNAVAILABLE and asserts 21.
+   The start rows stay: they hold each start where nothing moves it.
+3. **Minor: `e-failing`'s guard counted one trial.** It passed on one refusal past a set. It now
+   requires refusals at a third of the fuels at least, some past a set, as `test-open-interleave`
+   counts its own: 17 refused and 9 past a set, 26 of 67. The builder's plant G1, a refused
+   section's run raising the set's error at the call's first section instead of
+   `&sqlite-closed`, left 18 refusals of 67, 9 past a set, and passed the old guard; the new one
+   fails it, `(refused 18 past-a-set 9 of 67)`.
+4. **Minor: the docs' starts table wasn't true on every library.** `m4s5-lib-defensive` starts
+   `defensive` on, and a build `SQLITE_DQS=0`, as SQLite's docs advise, starts DQS off. It now
+   reads "stays as the library was built": `defensive` "off in most libraries; on in Apple's",
+   DQS "on in every library measured", and the sentence that tells a program to name the setting
+   stays after it.
+5. **Minor: the log was stale since the rebase.** The header and "Green" now give `7dac918` and
+   79 suites, 77 before; the first round's red table keeps `1735a66`, which it ran against, and
+   this round's red ran against `7dac918` (below).
+6. **Nit: no row holds the errstr message copied inside the set's section.** The review's R4,
+   rebuilt here, copies it after the section: it survives every suite, and is argued below.
+7. **Nit: `e-once`'s "both remainders past" was R's alone,** `r1-past` bound to `r-past`. Each
+   trial now reads R1's position at R1's own expiry too: both past the first section, or R before
+   it and R1 past it, a straddle, which races R's second run against R1 at that section itself,
+   or neither. The two interleave rows print both counts and require a straddle in some trial, as
+   well as both past in one a fuel: `e-interleave` 5,050 both past and 1,717 straddling of 7,021
+   trials; `e-once` 1,653 and 986 of 2,850.
+
+### The review's plants, rebuilt
+
+Each rebuilt from the review's description into `build/mut-review/NAME/`, by `mutants.py`, then
+run on Guix's 3.53.1 against every slice suite, and `test-open-db-config` against the floor's
+3.45.1, 3.54.1 and `m4s5-lib-defensive`; each also ran `7e5264a`'s `test-open-db-config` and
+`test-open-db-config-engines`, the rows before this round, to reproduce the finding.
+
+| Plant | What it plants | Before this round's rows | With them |
+|---|---|---|---|
+| R1 | `defensive` set to 0 at every open | survived on Guix's, the floor and 3.54.1; failed `c-start`, `c-start-one` on `m4s5-lib-defensive` | `c-moved-unasked`, `c-moved-others` on all three; `c-start`, `c-start-one` on `m4s5-lib-defensive` |
+| R2 | `dqs-dml` set to 1 at every open | survived on all four libraries | `c-moved-unasked`, `c-moved-others` on all four |
+| R3 | `(defensive 1010 1 #t)` added beside the opt-in when `defensive` isn't named | survived on all four | `c-start-one` on Guix's, the floor and 3.54.1; `c-moved-others` on `m4s5-lib-defensive` |
+| R4 | the errstr message copied after the set's section | survived | survived: below |
+| R6 | `configured` skipping `defensive`'s `#f`, answering a match | survived on Guix's, the floor and 3.54.1; failed `c-held`, `c-held-cwd`, `c-writable` on `m4s5-lib-defensive` | `c-moved-held` on all three; the same three on `m4s5-lib-defensive` |
+| G1 | a refused run raising the set's error at the call's first section | `e-once` | `e-once`, `e-failing` |
+
+R4 survives, and is harmless: `sqlite3_errstr` answers a static string, the same address and
+text for a code whatever the connection does, so its copy after the section reads what it would
+have read inside. No expiry or timer between the two can change it, and the plant changes no
+answer of any row, on any library. Should a later SQLite free or reuse that text, a row would
+need a stand-in errstr; the binding is native's, so none is cheap and real today.
+
+### The third round
+
+Every plant, the 51 and the six above, ran again on this round's suites, in `build/mut-r3/`, on
+Guix's 3.53.1: **57 plants, 56 caught, R4 survived, argued above.** The new rows added these
+failures to the second round's: P-defensive-skipped, J-op-wrong and O-steps-dropped `c-moved-held`;
+P-false-call `c-moved-held`; P-opt-in-inverted, J-names, O-value-bool and O-expected-written
+`c-start-one`, `c-moved-held` and `c-moved-others` where they lacked them; no plant's failures
+fell. The P-unasked four fail `c-start` and `c-start-one` alone, as before: each writes the
+value the moved rows move to on Guix's library, the complement of what R1 and R2 write.
+
+### This round's red and green
+
+On `7dac918`'s `src/` and docs, the final suites, in `build/mut-red2/RED/`:
+`test-open-db-config` 8 passed, 22 failed of 30; `test-open-db-config-engines` 4 passed, 8
+failed. Of the new rows, `c-moved-held` and `c-moved-others` fail red, and so do the changed
+`c-start-one` and every engine row; `c-moved`, the suite's own reading, and `c-moved-unasked`
+pass, since `7dac918` sets nothing at open: R1 and R2 watched it fail. The changed `e-failing`
+guard was watched failing against G1, and the straddle counts against nothing: they are
+counted, not planted.
+
+After the round, on `7dac918`: `make test` ran 79 and passed 79 on Guix's 3.53.1, the floor's
+3.45.1, 3.54.1 and `m4s5-lib-defensive`, each library's variables set inside the container's
+`sh -c` and its version read from its P4 line; `test-open-db-config` passed 30 rows on each,
+printing its moves: `(0 1) (0 1) (0 0) (0 0)` on the first three, `(0 1) (0 0) (0 0) (0 0)` on
+`m4s5-lib-defensive`. Under `make test-memory` on Guix's library all eight slice suites passed,
+none `SLOW`: the round's times are the "Round 2" column of "Green" above; the four moved-start
+rows cost `test-open-db-config` nothing measurable, 12 s either way.
+
 ## For the records
 
 - **ADR-0018 and ADR-0021, slice 3's amendment (proposed):**
@@ -378,7 +494,15 @@ fail only `l-lacking`, the decoy's: no library this process loads lacks the entr
 - **The ledger's close-out** (progress.md): the files and signatures above; the rows replaced;
   the counts; the times; for slice 4: `database-extension-loading?`, and `refusal-probe.sps`'
   `--opens`, which a load's rows on the decoy can reuse.
-- **traps.md:** the three traps below; the third confirms an entry M4's pre-work made for
+- **The M4 plan's §4.7** (the lead's edit): its "op set unasked" bullet says each plant is set
+  "the opposite way from the start where CI's libraries start it, so a Linux lane sees it"; it
+  should also record that a row comparing against a library's start cannot see a plant that
+  writes the start's own value, nor a set skipped where the value asked is the start (the
+  review's R1, R2 and R6), and that this slice holds those by moving every start first, through
+  an entry point `sqlite3_auto_extension` runs at every open (round 2, item 2).
+- **ADR-0018 and ADR-0021's slice 3 amendment, round 2:** the moved starts' four rows, and the
+  sweeps' straddle count; `e-failing`'s guard counted against the fuels.
+- **traps.md:** the four traps below; the third confirms an entry M4's pre-work made for
   Apple's library.
 
 ## The traps the slice found
@@ -403,3 +527,13 @@ fail only `l-lacking`, the decoy's: no library this process loads lacks the entr
   `DEFAULT_DEFENSIVE` in `sqlite3_compileoption_get`, and `sqlite3_compileoption_used` of it
   answers 0; its -1 read of `DEFENSIVE` answers `(0 1)`. As Apple's (traps.md, M4's pre-work), so
   a start is read through the op, never from the options.
+- **A row that compares with a start cannot see a set that writes the start.** Slice 3's start
+  rows read each op on the suite's own connection, then on open-database's, and compared them:
+  they held every plant that moves an op off its start, and none that writes the start's own
+  value. On Guix's 3.53.1, `defensive` set to 0 at every open (R1) and `dqs-dml` set to 1 (R2)
+  passed every suite, and so did `defensive`'s `#f` skipped and answered a match (R6), since
+  `c-held`'s read of 0 is the start too. Move each start first, by an entry point
+  `sqlite3_auto_extension` runs at every open, then compare: `c-moved-unasked` and
+  `c-moved-held` fail them. Reproduce: `mut.py --into build/mut-review prepare R1`, from
+  [the driver](research/m4-slice-3/scripts/); its copy passes `7e5264a`'s `test-open-db-config` on
+  Guix's library, and fails this round's.

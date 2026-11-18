@@ -155,12 +155,12 @@ condition is raised. Nothing is set that the list does not name: without
 `busy-timeout`, a lock held by another connection raises busy at once.
 
 The last four are set by one call each, not by SQL, and read back from that
-call's own answer. One the list leaves out stays as the library starts it:
+call's own answer. One the list leaves out stays as the library was built:
 
 | Setting | Starts |
 |---|---|
-| `defensive` | off; on in Apple's library |
-| `dqs-dml`, `dqs-ddl` | on |
+| `defensive` | off in most libraries; on in Apple's |
+| `dqs-dml`, `dqs-ddl` | on in every library measured |
 | `enable-load-extension` | not opted in, whatever the library's own switch says |
 
 So a program that needs one behaviour on every library names the setting.

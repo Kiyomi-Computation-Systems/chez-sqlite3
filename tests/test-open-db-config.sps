@@ -15,11 +15,18 @@
 ;;;   unasked           connection the suite opens itself through native's
 ;;;                     sqlite3_open_v2, outside open-database, then the same
 ;;;                     read on a connection open-database opened with no
-;;;                     setting, (), the six PRAGMAs, the opt-in's #f, or one
-;;;                     op alone, the other three compared (decision 2)
+;;;                     setting, (), the six PRAGMAs, the opt-in's #f, or any
+;;;                     list of one op, the other three compared (decision 2)
 ;;;   the opt-in's #f   beside an entry point sqlite3_auto_extension runs at
 ;;;                     every open, which starts the C switch at 1, as
 ;;;                     Ubuntu's library does: no call of 0 is made (Q15)
+;;;   moved starts      beside an entry point that moves every op off this
+;;;                     library's start at every open: no setting, (), and
+;;;                     call-with-database keep every moved value; each list
+;;;                     of one op reads its own op as asked and leaves the
+;;;                     other three moved; so a set that writes a start's
+;;;                     value unasked, or a set skipped where the value asked
+;;;                     is the start, shows on every library
 ;;;   defensive         under it PRAGMA writable_schema = 1 answers done and
 ;;;                     reads back 0; with it off, 1 (Q6)
 ;;;   DQS               off, a double-quoted name that is no column fails at
@@ -577,17 +584,29 @@
           ((eq? (car (car rest)) name) (loop (cdr rest) (cdr reads) kept))
           (else (loop (cdr rest) (cdr reads) (cons (car reads) kept))))))
 
-(test-equal "a list naming one op leaves the other three at the library's start: each of defensive, dqs-dml and dqs-ddl, at the value other than its start"
+;; single-lists : (Listof (Pairof Symbol Boolean))
+;; Every list of one op: each of the four at #t and at #f, the opt-in's #t
+;; only where the library has sqlite3_load_extension, since it is refused
+;; before anything opens where it lacks it.
+(define single-lists
+  (append (if (eq? available #t) '((enable-load-extension . #t)) '())
+          '((enable-load-extension . #f) (defensive . #t) (defensive . #f) (dqs-dml . #t)
+            (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f))))
+
+;; The review's R3 set defensive to 1 beside the opt-in, unasked, and passed
+;; when the opt-in's list stood outside this row; so every list of one op is
+;; here, each judged by the other three against the library's start.
+(test-equal "a list naming one op leaves the other three at the library's start: each of the four at #t and at #f, the opt-in's #t where the library has sqlite3_load_extension, each list's other three compared with the suite's own connection's"
   (let ((s (raw-starts ":memory:")))
-    (list (others-than 'defensive s) (others-than 'dqs-dml s) (others-than 'dqs-ddl s)))
-  (let* ((s (raw-starts ":memory:"))
-         (other (lambda (name)
-                  (let ((r (and (list? s) (list-ref s (if (eq? name 'defensive) 1 (if (eq? name 'dqs-dml) 2 3))))))
-                    (not (and (list? r) (eqv? (cadr r) 1))))))
-         (a (starts-on (lambda () (open-database ":memory:" (list (cons 'defensive (other 'defensive)))))))
-         (b (starts-on (lambda () (open-database ":memory:" (list (cons 'dqs-dml (other 'dqs-dml)))))))
-         (c (starts-on (lambda () (open-database ":memory:" (list (cons 'dqs-ddl (other 'dqs-ddl))))))))
-    (list (others-than 'defensive a) (others-than 'dqs-dml b) (others-than 'dqs-ddl c))))
+    (let loop ((rest single-lists) (expected '()))
+      (if (null? rest)
+          (reverse expected)
+          (loop (cdr rest) (cons (list (car rest) (others-than (car (car rest)) s)) expected)))))
+  (let loop ((rest single-lists) (found '()))
+    (if (null? rest)
+        (reverse found)
+        (let ((r (starts-on (lambda () (open-database ":memory:" (list (car rest)))))))
+          (loop (cdr rest) (cons (list (car rest) (others-than (car (car rest)) r)) found))))))
 
 ;; --- the opt-in's #f beside a C switch that starts on (Q15) ---------------------------------
 ;; Ubuntu's library starts ENABLE_LOAD_EXTENSION at 1, every other this suite
@@ -677,6 +696,179 @@
       (display "), so its refusal, 21, is asserted in its place")
       (newline))
     switched))
+
+;; --- each set and each start, over moved starts --------------------------------------------
+;; The start rows above hold each start where nothing moves it, so they
+;; cannot see a set that writes the library's own start value: in slice 3's
+;; review, defensive set to 0 at every open (R1) and dqs-dml set to 1 (R2)
+;; passed every row on Guix's library, and so did defensive's #f skipped and
+;; answered as a match (R6), since c-held's #f reads 0 either way. Here an
+;; entry point sqlite3_auto_extension runs at every open moves each of the
+;; four ops off this library's start, read by raw-starts first, through
+;; native's binding, so a value written unasked, or a set not made, shows on
+;; any library, whatever its starts: the moved value is 1 less the start's
+;; cell. open-database's sets run after the entry point, inside its open. The
+;; entry point is __collect_safe, as sqlite3_open_v2, which calls it, is, and
+;; raises nothing. Where the library refuses the registration, Apple's 21,
+;; each row is printed unavailable, and 21 is asserted in its place, as
+;; c-switch-on does. It is unregistered by sqlite3_reset_auto_extension, and
+;; unlocked once.
+
+;; start-cells : Any
+;; The library's starts, as raw-starts reads them, before any entry point.
+(define start-cells (raw-starts ":memory:"))
+
+;; move-to : (U (Listof (Pairof Natural (U 0 1))) #f)
+;; Each op and the value the entry point writes it, 1 less its start's
+;; cell; #f where a start was not read as code 0 and a cell of 0 or 1.
+(define move-to
+  (and (list? start-cells) (= (length start-cells) 4)
+       (for-all (lambda (r) (and (list? r) (eqv? (car r) 0) (memv (cadr r) '(0 1)))) start-cells)
+       (let loop ((rest ops) (cells start-cells) (found '()))
+         (if (null? rest)
+             (reverse found)
+             (loop (cdr rest) (cdr cells) (cons (cons (cdr (car rest)) (- 1 (cadr (car cells)))) found))))))
+
+;; moved-reads : (Listof (List 0 (U 0 1)))
+;; What a -1 read of each op answers once the entry point moved it.
+(define moved-reads
+  (if move-to
+      (let loop ((rest move-to) (found '()))
+        (if (null? rest) (reverse found) (loop (cdr rest) (cons (list 0 (cdr (car rest))) found))))
+      (list 'no-moves start-cells)))
+
+;; int (*xEntryPoint)(sqlite3 *db, const char **pzErrMsg, const sqlite3_api_routines *pThunk)
+;; Each op of the new connection set to move-to's value, in the table's
+;; order, each answer dropped; 0, always.
+(define move-starts
+  (foreign-callable __collect_safe
+    (lambda (db message api)
+      (guard (e (#t 0))
+        (let loop ((rest (or move-to '())))
+          (unless (null? rest)
+            (call-with-values
+             (lambda ()
+               (call-with-int-cell 'test-open-db-config 9
+                 (lambda (c) (sqlite3-db-config db (car (car rest)) (cdr (car rest)) c))))
+             (lambda answers #f))
+            (loop (cdr rest))))
+        0))
+    (uptr uptr uptr) int))
+
+;; moved-run : -> Any
+;; With move-starts registered, read in order: the four on the suite's own
+;; connection; on open-database's with no setting and with (), and
+;; call-with-database's with none; then, for each list of single-lists,
+;; its own op, and the other three. Or (refused CODE).
+(define (moved-run)
+  (lock-object move-starts)
+  (let ((rc (guard (e (#t (list 'raised (describe e))))
+              (auto-extension (foreign-callable-entry-point move-starts)))))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (if (not (eqv? rc 0))
+            (list 'refused rc)
+            (let* ((raw (raw-starts ":memory:"))
+                   (none (starts-on (lambda () (open-database ":memory:"))))
+                   (empty (starts-on (lambda () (open-database ":memory:" '()))))
+                   (cwd (attempt (lambda () (call-with-database ":memory:" op-reads))))
+                   (singles
+                    (let loop ((rest single-lists) (found '()))
+                      (if (null? rest)
+                          (reverse found)
+                          (let* ((name (car (car rest)))
+                                 (r (starts-on (lambda () (open-database ":memory:" (list (car rest))))))
+                                 (own (if (list? r)
+                                          (let find ((rest-ops ops) (reads r))
+                                            (cond ((or (null? rest-ops) (not (pair? reads))) 'no-read)
+                                                  ((eq? (car (car rest-ops)) name) (car reads))
+                                                  (else (find (cdr rest-ops) (cdr reads)))))
+                                          r)))
+                            (loop (cdr rest) (cons (list (car rest) own (others-than name r)) found)))))))
+              (list 'moved raw none empty cwd singles))))
+      (lambda ()
+        (when (eqv? rc 0) (reset-auto-extension))
+        (unlock-object move-starts)))))
+
+(define moved (guard (e (#t (list 'raised (describe e)))) (moved-run)))
+
+;; moved-refused? : -> Boolean
+(define (moved-refused?)
+  (and (pair? moved) (eq? (car moved) 'refused)))
+
+;; moved-part : Natural -> Any
+;; The Kth part of moved's reads, or (refused CODE).
+(define (moved-part k)
+  (if (and (pair? moved) (eq? (car moved) 'moved)) (list-ref moved k) moved))
+
+;; moved-unavailable! : String -> Void
+(define (moved-unavailable! name)
+  (when (moved-refused?)
+    (display "UNAVAILABLE ")
+    (display name)
+    (display ": this libsqlite3 refused sqlite3_auto_extension (")
+    (write (cadr moved))
+    (display "), so its refusal, 21, is asserted in its place")
+    (newline)))
+
+;; or-refused : Any -> Any
+;; EXPECTED, or the refusal 21 where the registration was refused.
+(define (or-refused expected)
+  (if (moved-refused?) '(refused 21) expected))
+
+(let ((name "an entry point every open runs moves each of the four ops off this library's start, each to 1 less its start's cell: the suite's own connection, opened outside open-database, reads every one at its moved value"))
+  (moved-unavailable! name)
+  (test-equal name
+    (or-refused moved-reads)
+    (begin
+      (display "    moved to, enable-load-extension, defensive, dqs-dml, dqs-ddl: ")
+      (write moved-reads)
+      (newline)
+      (moved-part 1))))
+
+(let ((name "over the moved starts, a connection open-database opens with no setting and with (), and one call-with-database opens with none, keep every moved value: no op is set unasked, whatever value it would write"))
+  (moved-unavailable! name)
+  (test-equal name
+    (or-refused (list moved-reads moved-reads moved-reads))
+    (if (moved-refused?) moved (list (moved-part 2) (moved-part 3) (moved-part 4)))))
+
+;; asked-read : (Pairof Symbol Boolean) -> Any
+;; What a list's own op reads back: the value asked, 1 or 0; for the
+;; opt-in's #f, which makes no call, the moved value.
+(define (asked-read entry)
+  (if (equal? entry '(enable-load-extension . #f))
+      (if move-to (list 0 (cdr (car move-to))) (list 'no-moves start-cells))
+      (list 0 (if (cdr entry) 1 0))))
+
+(let ((name "over the moved starts, each list of one op reads its own op back as asked, #t as 1 and #f as 0, so each value is set off its start on one side or the other of these rows and c-held's; the opt-in's #f, which makes no call, keeps the moved value"))
+  (moved-unavailable! name)
+  (test-equal name
+    (or-refused (let loop ((rest single-lists) (expected '()))
+                  (if (null? rest)
+                      (reverse expected)
+                      (loop (cdr rest) (cons (list (car rest) (asked-read (car rest))) expected)))))
+    (if (moved-refused?)
+        moved
+        (let loop ((rest (moved-part 5)) (found '()))
+          (if (not (pair? rest))
+              (reverse found)
+              (loop (cdr rest) (cons (list (car (car rest)) (cadr (car rest))) found)))))))
+
+(let ((name "over the moved starts, each list of one op leaves the other three at their moved values"))
+  (moved-unavailable! name)
+  (test-equal name
+    (or-refused (let loop ((rest single-lists) (expected '()))
+                  (if (null? rest)
+                      (reverse expected)
+                      (loop (cdr rest)
+                            (cons (list (car rest) (others-than (car (car rest)) moved-reads)) expected)))))
+    (if (moved-refused?)
+        moved
+        (let loop ((rest (moved-part 5)) (found '()))
+          (if (not (pair? rest))
+              (reverse found)
+              (loop (cdr rest) (cons (list (car (car rest)) (caddr (car rest))) found)))))))
 
 ;; --- defensive's writable_schema (Q6) ------------------------------------------------------
 

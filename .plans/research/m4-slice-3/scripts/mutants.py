@@ -59,6 +59,25 @@ MUTANTS = [
     {"name": "P-false-call", "edits": [(OPEN, VALUES,
         "(values name flags (cadr plan) (if (member '(enable-load-extension . #f) (caddr split))"
         " (cons '(enable-load-extension 1005 0 #f) (caddr plan)) (caddr plan)) opt-in)")]},
+    # --- the review's (Opus, read-only), rebuilt from its descriptions -------------------
+    {"name": "R1", "edits": unasked("(defensive 1010 0 #f)")},
+    {"name": "R2", "edits": unasked("(dqs-dml 1013 1 #t)")},
+    {"name": "R3", "edits": [(OPEN, VALUES,
+        "(values name flags (cadr plan) (if (and opt-in (not (assq 'defensive (caddr split))))"
+        " (cons '(defensive 1010 1 #t) (caddr plan)) (caddr plan)) opt-in)")]},
+    {"name": "R4", "edits": [
+        (OPEN, FAILED, "(list 'failed code #f)"),
+        (OPEN, "((eq? (car verdict) 'failed) (list 'failed n (cadr verdict) (caddr verdict)))",
+         "((eq? (car verdict) 'failed) (list 'failed n (cadr verdict)"
+         " (or (c-string->string (sqlite3-errstr (cadr verdict))) \"\")))")]},
+    {"name": "R6", "edits": [(OPEN, "    (if (db-config-step? step)\n        (configured who db step claim n db-config)",
+        "    (if (db-config-step? step)\n"
+        "        (if (and (eq? (car step) 'defensive) (eqv? (caddr step) 0))\n"
+        "            (let ((s (in-section claim n (lambda () 'skipped))))\n"
+        "              (if (eq? (car s) 'answered) (list 'done (cadr s) 'match) s))\n"
+        "            (configured who db step claim n db-config))")]},
+    {"name": "G1", "edits": [(OPEN, "            ((refused) (raise-closed who))",
+        "            ((refused) (if (= n 0) (raise-sqlite-error who 1 \"SQL logic error\" #f #f) (raise-closed who)))")]},
     # --- the join, settings.sls -----------------------------------------------------------
     {"name": "J-order", "edits": [(SET, DB_BRANCH, DB_BRANCH.replace(
         "(cons step steps)", "(append steps (list step))"))]},
