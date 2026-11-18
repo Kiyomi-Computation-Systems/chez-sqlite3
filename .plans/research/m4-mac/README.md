@@ -16,6 +16,7 @@ Mac before slice 4 is written, where the plan left them to the hand run after sl
 | [run-mac.sh](run-mac.sh) | Builds the plan's extensions with the Mac's flags, and runs `l1-load-extension.c`, `x1-ffi-load.sps` and `fifo.c` against one library |
 | [fifo.c](fifo.c) | `dlopen` and the load on a FIFO, each in a child process and bounded, with no writer and with one; and `dlopen`'s own reasons for a directory and an empty file. Added after run 1 |
 | [out/run-1/](out/run-1/), [out/run-2/](out/run-2/) | Each run's files, as `run-mac.sh` wrote them |
+| [out/slice-2/](out/slice-2/) | Slice 2's Mac step: `make test` and `make check-variadic`, with each library, as `tee` wrote them |
 
 The probes are the plan's own, [l1-load-extension.c](../m4-plan/l1-load-extension.c) and
 [x1-ffi-load.sps](../m4-plan/x1-ffi-load.sps), with [ext.c](../m4-plan/ext.c) and
@@ -127,14 +128,40 @@ The same Mac, library and tools, at commit `a4eb12e`, this branch's first. The f
   first loads took under 1 ms.
 - **x1:** every file the same as run 1's.
 
+### Slice 2's Mac step, 2026-11-18
+
+The maintainer's Mac, on `main` at `1735a66`, slice 2's merge, by [slice-2.md](slice-2.md)'s steps.
+The files are [out/slice-2/](out/slice-2/). Chez's machine type is `tarm64osx`.
+
+- **Both libraries passed everything:** with Apple's 3.51.0 and with Homebrew's 3.54.1, `make
+  test` ran 75 suites and passed 75, and `make check-variadic` ended "all 7 steps ok, on
+  tarm64osx".
+- **Apple's library:**
+  - `test-native` passed 117, its three load rows unavailable: "this libsqlite3 has no
+    sqlite3_load_extension";
+  - `test-constants`' optional prototype row: "its own compile against this sqlite3.h failed,
+    and native records the library without it". The SDK's header declares no
+    `sqlite3_load_extension`, as its library has none;
+  - on `check-variadic`'s mutant, `test-native` failed 3 rows: the round trips of `DEFENSIVE`,
+    `DQS_DML` and `DQS_DDL`;
+  - every suite named the memory check unavailable, as in M3's Mac run: the library keeps no
+    memory count.
+- **Homebrew's library:**
+  - `test-native` passed 117, the load FIFO row among them, its first run on macOS. The row
+    passes only when the collection finished while the load waited, and the collector released
+    the load before the watchdog's 30 s: run 2's double open, released until the load answered;
+  - on the mutant, `test-native` failed 6 rows: Apple's 3, `ENABLE_LOAD_EXTENSION`'s round trip,
+    and the two load rows, which set `ENABLE_LOAD_EXTENSION` through the binding.
+
 ### What it means for the slices
 
 - **Slice 2, `test-native`'s load FIFO row:** the load waits on a FIFO on the Mac too, so the
   row can measure `__collect_safe` there. By its code, though, it would fail there. Its collector
   opens the FIFO for writing once (`exec 3<>`), and dyld's second open waits until the
   watchdog's, at 30 s: `released-by-the-watchdog`. The row has to release until its loader
-  returns, twice on this Mac. That is a prediction, made from fifo.txt rather than measured;
-  slice 2's Mac step runs the row.
+  returns, twice on this Mac. That was a prediction, made from fifo.txt rather than measured.
+  PR #37 made the row release until the load answers, and slice 2's Mac step ran it: it passed
+  (above).
 - **Slice 4's failure messages:** macOS's text and Linux's differ, and SQLite cuts the Mac's at
   the path's length plus 298 bytes (run 1). Only the init's own message, "error during
   initialization: …", reads the same on both.

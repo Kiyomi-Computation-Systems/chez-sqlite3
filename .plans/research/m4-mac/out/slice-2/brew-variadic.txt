@@ -1,0 +1,15 @@
+deps: vendor/chez-srfi linked into build/scheme-libs/srfi
+check-variadic: ok copy: src/, tests/ and .plans/decisions/ copied to a scratch tree
+check-variadic: ok machine: Chez's machine type is tarm64osx
+check-variadic: ok control: tests/test-conventions.sps passes on the unchanged copy (exit 0)
+check-variadic: ok control: tests/test-native.sps passes on the unchanged copy (exit 0)
+check-variadic: ok mutant: (__varargs_after 2) stood on one line of src/chez-sqlite3/private/native.sls; removed, it stands on none, and no other line changed
+check-variadic: ok static: tests/test-conventions.sps fails on the mutant (exit 1), naming exactly the ten tests that hold the table to src/, its violations exactly ((mismatch "sqlite3_db_config" convention variadic plain))
+check-variadic: ok arm64: on tarm64osx, tests/test-native.sps fails on the mutant (exit 1), naming 6 failing tests
+  FAIL sqlite3_db_config round-trips DEFENSIVE through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after
+  FAIL sqlite3_db_config round-trips DQS_DML through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after
+  FAIL sqlite3_db_config round-trips DQS_DDL through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after
+  FAIL sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after
+  FAIL sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOAD_EXTENSION set to 0 through the binding and then to 1, and the two messages differ; the close answers SQLITE_OK and every count is zero after
+  FAIL sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, it lets another thread's collection finish, returning after it, and that thread releases it; it answers SQLITE_ERROR and a message, freed by sqlite3_free; the handle closes with SQLITE_OK; every count is zero after
+check-variadic: all 7 steps ok, on tarm64osx

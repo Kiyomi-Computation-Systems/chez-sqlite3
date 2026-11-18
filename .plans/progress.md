@@ -265,17 +265,20 @@ newest first.
   11 s in CI's `main` job (run 44189788123). On this PR's CI (run 44193211947): `test-conventions`
   43 s, `test-native` 22 s, `test-check-variadic` 10 s, and the loading suites 155, 163 and 174 s,
   `-real`, `-missing` and `-decoys`, within the 450 s bound.
-- **The Mac step** is owed (ADR-0001's consequence): `make test` and `make check-variadic` with
-  Apple's library and with Homebrew's, on `main` after this merges. With Apple's, `test-native`
-  names the load rows unavailable, and `test-constants`' optional prototype row reports what the
-  SDK's header declares; `check-variadic` must end "all 7 steps ok, on tarm64osx". With Homebrew's,
-  `CHEZ_SQLITE3_LIBRARY=/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib` and
-  `C_INCLUDE_PATH=/opt/homebrew/opt/sqlite/include`, the FIFO row is the first run of the row on
-  macOS. L6 is settled (the M4 session's Mac run 2, PR #38): macOS's dyld opens a FIFO twice, each
-  open waiting for a writer, so the row's collector, its fallback and its watchdog release the
-  FIFO until the load answers, ten times at most, a second apart. One release would have left the
-  Mac's load to the watchdog. `research/m4-slice-2/fifo-double-open.sps` shows one release leaving
-  an opener that opens twice waiting, on Linux too, and the repeated release freeing it.
+- **The Mac step passed** (ADR-0001's consequence), on 2026-11-18, on `main` at `1735a66`, by the
+  M4 session's [research/m4-mac/slice-2.md](research/m4-mac/slice-2.md)
+  ([README](research/m4-mac/README.md), its results): `make test` and `make check-variadic` with
+  Apple's library and with Homebrew's. Each `make test` passed 75 of 75, and each `check-variadic`
+  ended "all 7 steps ok, on tarm64osx", its mutant failing 3 `test-native` rows with Apple's and 6
+  with Homebrew's, whose load rows set `ENABLE_LOAD_EXTENSION` through the binding. With Apple's,
+  `test-native` named the load rows unavailable, and `test-constants`' optional prototype row found
+  no `sqlite3_load_extension` in the SDK's header. With Homebrew's, the FIFO row passed, its first
+  run on macOS, released by the collector through `release-until`. macOS's dyld opens a FIFO twice,
+  each open waiting for a writer (the M4 session's Mac run 2, PR #38), so the row's collector, its
+  fallback and its watchdog release the FIFO until the load answers, ten times at most, a second
+  apart. One release would have left the Mac's load to the watchdog.
+  `research/m4-slice-2/fifo-double-open.sps` shows one release leaving an opener that opens twice
+  waiting, on Linux too, and the repeated release freeing it.
 - **For slice 3:** import the ops from `constants.sls` and hold slice 1's table to them; fill the
   cell with `db-config-sentinel` through `call-with-int-cell`; `load-extension-available?` is the
   opt-in's check.

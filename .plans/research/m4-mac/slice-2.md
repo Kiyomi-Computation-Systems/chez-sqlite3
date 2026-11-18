@@ -6,6 +6,9 @@ merged. These are its commands, for zsh, in your chez-sqlite3 clone. They carry 
 and they write only under `build/m4s2-mac/`, which git ignores. Each `make test` runs every
 suite, and there are two of them, so this takes a while.
 
+It ran on 2026-11-18 and passed on both libraries: [README.md](README.md), "Slice 2's Mac
+step", and the files in [out/slice-2/](out/slice-2/).
+
 ## 1. Get `main`, with slice 2 in it
 
 Start from a clean tree: `git status --short` should print nothing that git tracks. The
