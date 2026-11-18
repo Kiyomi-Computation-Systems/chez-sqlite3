@@ -1,0 +1,74 @@
+LR01-rank-is-rowid test-fts5 guix: exit 1, pass 17, fail 2
+    FAIL MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+    FAIL order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+LR01-rank-is-rowid test-fts5 m4-current-fts5: exit 1, pass 17, fail 2
+    FAIL MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+    FAIL order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+LR02-phrase-as-and test-fts5 guix: exit 1, pass 18, fail 1
+    FAIL a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+LR02-phrase-as-and test-fts5 m4-current-fts5: exit 1, pass 18, fail 1
+    FAIL a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+LR03-agreement-loose test-fts5 guix: exit 1, pass 18, fail 1
+    FAIL ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an 
+LR03-agreement-loose test-fts5 m4-current-fts5: exit 1, pass 18, fail 1
+    FAIL ENABLE_FTS5 and pragma_module_list's fts5 agree on this library, either way; the check that compares them names an 
+LR04-each-unordered test-json guix: exit 1, pass 15, fail 1
+    FAIL json_each answers a row for each key, its value as SQL's and its type, in key order
+LR04-each-unordered test-json m3-floor: exit 1, pass 15, fail 1
+    FAIL json_each answers a row for each key, its value as SQL's and its type, in key order
+LR05-string-as-blob test-json guix: exit 1, pass 15, fail 1
+    FAIL json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
+LR05-string-as-blob test-json m3-floor: exit 1, pass 15, fail 1
+    FAIL json() minifies a bound string, json_valid() answers 1 for it, and it is bound as TEXT
+LR05-string-as-blob test-fts5 guix: exit 1, pass 18, fail 1
+    FAIL a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+LR05-string-as-blob test-fts5 m4-current-fts5: exit 1, pass 18, fail 1
+    FAIL a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+X-old-close test-fts5 guix: exit 1, pass 4, fail 15
+    FAIL create virtual table ... using fts5 prepares, and its step answers done
+    FAIL MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+    FAIL order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+    FAIL unicode61 folds diacritics: cafe, café and creme each match document 1
+    FAIL with remove_diacritics 0, cafe matches no café, and café matches it
+    FAIL highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three to
+    FAIL a prefix query: searc* matches 2 and 3
+    FAIL a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+    FAIL a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+    FAIL NOT: sqlite NOT fts5 matches 3 alone
+    FAIL a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+    FAIL a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-erro
+    FAIL delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and inte
+    FAIL a connection that made and queried an FTS5 table closes, with no drop first
+    FAIL every count is zero after the rows
+X-old-close test-fts5 m4-current-fts5: exit 1, pass 4, fail 15
+    FAIL create virtual table ... using fts5 prepares, and its step answers done
+    FAIL MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+    FAIL order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+    FAIL unicode61 folds diacritics: cafe, café and creme each match document 1
+    FAIL with remove_diacritics 0, cafe matches no café, and café matches it
+    FAIL highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three to
+    FAIL a prefix query: searc* matches 2 and 3
+    FAIL a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+    FAIL a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+    FAIL NOT: sqlite NOT fts5 matches 3 alone
+    FAIL a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+    FAIL a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-erro
+    FAIL delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and inte
+    FAIL a connection that made and queried an FTS5 table closes, with no drop first
+    FAIL every count is zero after the rows
+X-old-close test-fts5 m4cf-floor-vtab: exit 1, pass 4, fail 15
+    FAIL create virtual table ... using fts5 prepares, and its step answers done
+    FAIL MATCH with order by rank: sqlite OR rank matches 3 then 2, not in rowid order
+    FAIL order by rank is bm25()'s order: sqlite OR rank matches 3 then 2, each bm25 a negative flonum below the next
+    FAIL unicode61 folds diacritics: cafe, café and creme each match document 1
+    FAIL with remove_diacritics 0, cafe matches no café, and café matches it
+    FAIL highlight() and snippet() answer UTF-8 text, marked: the body's café, the title's Élan, and a snippet of three to
+    FAIL a prefix query: searc* matches 2 and 3
+    FAIL a phrase query: "full text" matches 2, and "text full" nothing, though both words are in 2
+    FAIL a column filter: title:second matches 2, and title:sqlite nothing, though bodies hold sqlite
+    FAIL NOT: sqlite NOT fts5 matches 3 alone
+    FAIL a MATCH given as a bound parameter, "sqlite OR café", matches 1, 2 and 3, bound as TEXT
+    FAIL a query's syntax error, an unterminated string, an unknown column or a bare AND, prepares, then raises &sqlite-erro
+    FAIL delete and update: after deleting 2 and setting 3's body to fts5 again, fts5 matches 3 alone, and optimize and inte
+    FAIL a connection that made and queried an FTS5 table closes, with no drop first
+    FAIL every count is zero after the rows

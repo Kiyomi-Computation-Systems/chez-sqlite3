@@ -89,7 +89,9 @@ MEMORY_SUITES_1 := \
   tests/test-counters.sps \
   tests/test-docs.sps \
   tests/test-execute-script.sps \
+  tests/test-fts5.sps \
   tests/test-interrupt-database.sps \
+  tests/test-json.sps \
   tests/test-library-loading-missing.sps \
   tests/test-library-loading-real.sps \
   tests/test-load-state.sps \

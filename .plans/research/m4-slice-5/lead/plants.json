@@ -1,0 +1,73 @@
+[
+ {
+  "name": "LR01-rank-is-rowid",
+  "edits": [
+   [
+    "tests/test-fts5.sps",
+    "(query db \"select rowid from docs where docs match 'sqlite OR rank' order by rank\")",
+    "(query db \"select rowid from docs where docs match 'sqlite OR rank' order by rowid\")"
+   ],
+   [
+    "tests/test-fts5.sps",
+    "(query db \"select rowid, bm25(docs) from docs where docs match 'sqlite OR rank' order by rank\")",
+    "(query db \"select rowid, bm25(docs) from docs where docs match 'sqlite OR rank' order by rowid\")"
+   ]
+  ],
+  "suites": [
+   "test-fts5"
+  ]
+ },
+ {
+  "name": "LR02-phrase-as-and",
+  "edits": [
+   [
+    "tests/test-fts5.sps",
+    "(reversed (matching db \"\\\"text full\\\"\"))",
+    "(reversed (matching db \"text full\"))"
+   ]
+  ],
+  "suites": [
+   "test-fts5"
+  ]
+ },
+ {
+  "name": "LR03-agreement-loose",
+  "edits": [
+   [
+    "tests/test-fts5.sps",
+    "          (and (eq? option #f) (eqv? module 0)))",
+    "          (and (eq? option #f) (not (eqv? module 1))))"
+   ]
+  ],
+  "suites": [
+   "test-fts5"
+  ]
+ },
+ {
+  "name": "LR04-each-unordered",
+  "edits": [
+   [
+    "tests/test-json.sps",
+    "json_each('{\\\"z\\\":\\\"s\\\",\\\"x\\\":1,\\\"y\\\":[2]}') order by key\"",
+    "json_each('{\\\"z\\\":\\\"s\\\",\\\"x\\\":1,\\\"y\\\":[2]}')\""
+   ]
+  ],
+  "suites": [
+   "test-json"
+  ]
+ },
+ {
+  "name": "LR05-string-as-blob",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/statement-values.sls",
+    "             (sqlite3-bind-text64 handle index block (bytevector-length bytes)\n                                  sqlite-transient sqlite-utf8)))))",
+    "             (sqlite3-bind-blob64 handle index block (bytevector-length bytes)\n                                  sqlite-transient)))))"
+   ]
+  ],
+  "suites": [
+   "test-json",
+   "test-fts5"
+  ]
+ }
+]

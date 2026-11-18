@@ -36,8 +36,8 @@ newest first.
   ADR-0005, ADR-0017 and ADR-0019, on 2026-11-17 ("Accept all"); and M3's closing review's to
   ADR-0005 and ADR-0016 to ADR-0020, the same day ("Accept all").
 - **Branch protection is on for `main`** (the maintainer asked, 2026-11-14). All six jobs are
-  required: `main`, `memory-1`, `memory-2` and `nothreads`, and, since slice 5 merged, `floor` and
-  `current`. M3 slice 6 replaced `memory` with `memory-1` and `memory-2`, and the required checks
+  required: `main`, `memory-1`, `memory-2` and `nothreads`, and, since M1 slice 5 merged, `floor`
+  and `current`. M3 slice 6 replaced `memory` with `memory-1` and `memory-2`, and the required checks
   were swapped as it merged, 2026-11-17 (the maintainer's, ADR-0005, amended).
   Since M1's closing review, it is strict too: a PR must be up to date with `main` before it
   merges. Force pushes and deletion are refused. Admins can override.
@@ -82,9 +82,10 @@ newest first.
     job. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
-  - **Slice 2,** the bindings and `check-variadic`, is PR #37, below; the maintainer accepted its
-    amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept all"). **Slice 5,** FTS5
-    and JSON, is built; it rebases onto the close fix and drops its workaround.
+  - **Slice 2,** the bindings and `check-variadic`, is done, as PR #37, `1735a66`, below; the
+    maintainer accepted its amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept
+    all"). **Slice 5,** FTS5 and JSON, is PR #40, below, rebased onto the close fix and slice 2,
+    its workaround gone. **Slice 3,** the settings, is being built from `1735a66`.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
@@ -153,6 +154,74 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M4 slice 5: FTS5 and JSON (PR #40)
+
+- **Built** by an Opus builder from slice 0's head, beside slices 1 and 2:
+  - the `current` lane compiles FTS5 in (ADR-0003, amended; the maintainer's Q1):
+    `build-sqlite.sh`'s compile line by role, `-DSQLITE_ENABLE_FTS5` on the current role's alone;
+    `check-sqlite.sh`'s `current_options`, 39 lines, `ENABLE_FTS5` after `DIRECT_OVERFLOW_READ`;
+    the `current` job's comment in `ci.yml`; `test-ci-sqlite`, 80 rows to 81;
+  - `tests/test-fts5.sps`: 19 rows where FTS5 is, chosen by `sqlite-compile-option?
+    "ENABLE_FTS5"` held to `pragma_module_list`, and 5 where it isn't, the refusal asserted and
+    FTS5 named unavailable;
+  - `tests/test-json.sps`: 16 rows on every library;
+  - both suites in `MEMORY_SUITES_1`, the shard whose suites took less time on two of three CI
+    runs: 900 s against 986 s (44112097972), 1186 s against 1268 s (44204326637), and 915 s,
+    without the two, against 874 s on this PR's run 44211896445. The margin is narrow, so slice 3's
+    new suites go in shard 2;
+  - the docs' note under `sqlite-compile-option?`.
+- **Found:** `close-database!` refused every connection that had used an FTS5 table, which
+  became the close fix (PR #36, below).
+- **Rebased onto the close fix** (the lead): the drops before each close and the expected-failure
+  row are gone, and the close's row is an ordinary row. Against `d1792e4`'s close, `test-fts5`
+  fails 15 rows on Guix's library, on 3.54.1 with FTS5, and on 3.45.1 with every module.
+- **Watched failing:** both suites' rows, and the lane's scripts, against the builder's 53 plants
+  on its own tree, and the 50 that still apply rerun by the lead on the head, on `1735a66`, their
+  anchors moved to the rows the review left: 49 caught. F07, the path chosen by the option alone,
+  is equivalent: where the option and the module disagree, the agreement row fails by name
+  either way. V02, a string bound as a BLOB, survived the builder's run on Guix's library, whose
+  JSON and FTS5 read a BLOB as text; both bound rows now assert its `typeof`, and catch it. The
+  lead's five plants of the review's fixes, and the old close, were caught on the head too
+  (`research/m4-slice-5/`).
+- **Reviewed** (Opus, read-only), no blocker. **One major,** fixed: the rank rows ranked 2 then 3,
+  which is rowid order too, so `order by rowid` passed them; they now query `sqlite OR rank`,
+  which ranks 3 first. **Nine minors,** fixed: a phrase row that an AND passed; the agreement row's
+  complement; `json_each`'s key order, which was the document's; V02's argument at the floor; and
+  the log's and the ledger's accuracy. Four values the rows assert are the review's measurements,
+  not the research's, as each suite's header says.
+- **Checked by the M4 session** against the plan and the records, read-only: no blocker, no
+  major. Its three minors, fixed: the committed plant evidence was the pre-review tree's, the CI
+  run's lines weren't read, and records cited files only `build/` held. Of its five nits, three
+  are fixed (the agreement row's `(#f 2)`, the bound `MATCH`'s `typeof`, the FV table's values)
+  and two answered in the log.
+- **Libraries:** on the head, `make test` 77 of 77 on Guix's 3.53.1, the floor, 3.54.1 with
+  FTS5, and 3.45.1 with every module. `test-fts5` passes 19 where FTS5 is and 5 on the floor and
+  the plain 3.54.1; `test-json` 16 everywhere. Under the gate each takes 9 to 11 s here, and on
+  CI's `memory-1` 11 s and 10 s.
+- **CI read** (run 44211896445, both SQLite caches rebuilt): `current`'s `check-sqlite.sh` passed
+  39 compile options, `ENABLE_FTS5` among them, and `test-fts5` ran its 19 rows; `floor`'s passed
+  37, and `test-fts5` printed "FTS5 unavailable" and ran 5; `main` ran the 19 on Ubuntu's 3.45.1,
+  their first run on that library.
+- **F0, the lane's check:** `check-sqlite.sh --current` fails the plain 3.54.1 on the missing
+  `ENABLE_FTS5` and passes the FTS5 build. `build-sqlite.sh --current`, run end to end through
+  replay shims, built that library byte for byte and passed its own check.
+- **After PR #37,** rebased onto `1735a66`: both add to `MEMORY_SUITES_1`, in different
+  hunks, and edit the Now line, resolved by hand.
+- **The Mac run is owed** (the plan, §5): FTS5 and JSON with Apple's library and with Homebrew's,
+  in the hand run after slices 3 to 5.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder | Opus | 425k | 165 | 42 min |
+  | The review | Opus | 280k | 95 | 20 min |
+
+- **Learned:**
+  - **A suite for a feature the library only carries can find the library's defects:** the FTS5
+    rows asserted nothing new about chez-sqlite3's values, and found its close.
+  - **A workaround in a suite needs its own way out.** The expected-failure mark turned the fix
+    into a failing suite, so the drops couldn't outlive it.
 
 ### 2026-11-17 — M4 slice 2: the bindings and `check-variadic` (PR #37)
 
