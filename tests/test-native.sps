@@ -2615,11 +2615,12 @@
 ;; .plans/research/m4-slice-2/fifo-double-open.sps shows a single release
 ;; leaving an opener that opens twice waiting, on Linux too, and
 ;; release-until freeing it. A plain binding holds the collection, and the
-;; collector with it, until the load returns, so only the watchdog shell,
-;; after 30 s, its marker left first, releasing as release-until does, can
-;; release it: the verdict is who released the loader. The loader notes, as its call returns, whether
-;; the collection had finished: a load that never waited, as one that did not
-;; open the FIFO would, returns before it, and fails the row too.
+;; collector with it, until the load returns, so only the watchdog shell can
+;; release it: after 30 s, its marker left first, it opens the FIFO for
+;; writing ten times, a second apart. The verdict is who released the
+;; loader. The loader notes, as its call returns, whether the collection had
+;; finished: a load that never waited, as one that did not open the FIFO
+;; would, returns before it, and fails the row too.
 ;;
 ;; While dlopen waits, glibc's dynamic loader holds its lock, and a thread
 ;; made then waits for it: pthread_create, which fork-thread calls, returned

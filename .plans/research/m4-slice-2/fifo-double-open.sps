@@ -6,9 +6,9 @@
 ;;; read-only TIMES times through a __collect_safe binding, closing each.
 ;;; With no gap between them, Linux's second open mostly found the first
 ;;; release's writer still open, so one release freed both, but not always:
-;;; the Mac's writer had gone before dyld's second open. So each open after the first waits GAP ms, as
-;;; dyld's work between its two opens did, and the release's shell has
-;;; exited by then.
+;;; the Mac's writer had gone before dyld's second open. So each open after
+;;; the first waits GAP ms, as dyld's work between its two opens did, and
+;;; the release's shell has exited by then.
 ;;;
 ;;; Each release opens the FIFO for writing and closes it, as the row's
 ;;; collector does. One release frees a single opener and leaves a double
