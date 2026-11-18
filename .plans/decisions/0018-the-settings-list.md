@@ -17,7 +17,7 @@
   ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: db_config's four settings
   ([amendment](#amendment-2026-11-17-db_configs-four-settings-m4s-plan)).
-  Amended 2026-11-18 in M4 slice 3, proposed: the four in the list, and M3's sweeps moved
+  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"): the four in the list, and M3's sweeps moved
   ([amendment](#amendment-2026-11-18-the-four-in-the-list-and-m3s-sweeps-moved-m4-slice-3)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
@@ -352,7 +352,7 @@ and "SQLite's default, settable" (Q5), 2026-11-16; "Library's start, documented"
 
 ## Amendment, 2026-11-18: the four in the list, and M3's sweeps moved (M4 slice 3)
 
-Proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)). ADR-0021's amendment of
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)). ADR-0021's amendment of
 the same day holds the sets themselves.
 
 - **The list's eleven names:**

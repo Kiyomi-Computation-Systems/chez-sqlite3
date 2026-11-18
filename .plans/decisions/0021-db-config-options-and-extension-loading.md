@@ -18,7 +18,7 @@
   ([amendment](#amendment-2026-11-17-the-sentinel-and-a-code-that-names-no-error-m4-slice-1)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): an extension's open work and the close
   ([amendment](#amendment-2026-11-17-an-extensions-open-work-and-the-close-m4s-close-fix)).
-  Amended 2026-11-18 in M4 slice 3, proposed: the four set at open, the opt-in's check and the
+  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"): the four set at open, the opt-in's check and the
   record's, and the starts held over moved starts
   ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
 - **Date:** 2026-11-17
@@ -325,7 +325,7 @@ chez-sqlite3 tracks ("Vouch only for ours"). Slice 4's Extensions entry says so.
 
 ## Amendment, 2026-11-18: the four set at open (M4 slice 3)
 
-Proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)), from the slice, its review (Opus) and the
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)), from the slice, its review (Opus) and the
 review's fixes.
 
 - **Each set is one section, at the next claimed position** (ADR-0018, amended in M3 slice 5).

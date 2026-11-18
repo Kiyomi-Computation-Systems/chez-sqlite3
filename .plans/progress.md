@@ -229,6 +229,8 @@ newest first.
     amended);
   - the rest 10 to 34 s.
 - **The engine rows' fuels:** ADR-0021, amended 2026-11-18.
+- **The records,** accepted by the maintainer, 2026-11-18 ("Accept all"): ADR-0021's amendment,
+  ADR-0018's, the M4 plan's, and four traps.
 - **For slice 4:**
   - `load-extension!` reads `database-extension-loading?` last of its checks;
   - `refusal-probe.sps`' `--opens` serves the decoy's load rows;
