@@ -942,13 +942,18 @@
 ;; stand-in's calls, the whole call's exactly, once each and in order, or,
 ;; where NEW? lets a whole new call come, twice over, whole each time; and
 ;; DB, still open, reads every op and the PRAGMA as asked. Then DB is
-;; closed, and nothing is counted.
+;; closed, and nothing is counted. The whole calls are counted from the
+;; stand-in's notes, each the first set's call: a whole call makes every
+;; set once, and so its first, a refused run makes none, and a run past
+;; the last set answers applied again making none, as open-database's
+;; past its last section answers the same connection. Counting the runs
+;; that answer applied counted such a run as a second call.
 (define (once-judged new? db calls runs past)
   (let* ((deviations '())
          (noted (calls))
-         (whole (let loop ((rest runs) (n 0))
+         (whole (let loop ((rest noted) (n 0))
                   (cond ((null? rest) n)
-                        ((equal? (car (car rest)) 'applied) (loop (cdr rest) (+ n 1)))
+                        ((equal? (car rest) (car once-calls)) (loop (cdr rest) (+ n 1)))
                         (else (loop (cdr rest) n))))))
     (define (deviate! d) (set! deviations (cons d deviations)))
     (let loop ((rest runs))

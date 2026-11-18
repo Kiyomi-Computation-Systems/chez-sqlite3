@@ -48,7 +48,9 @@
 ;;;                     failure whose own reads constraint-unique; its message
 ;;;                     sqlite3_errstr's, never the connection's sqlite3_errmsg
 ;;;   once, in order    each set made once, in the list's order, a PRAGMA among
-;;;                     them; a set that matched before one that fails made once
+;;;                     them; a set that matched before one that fails made once;
+;;;                     the order across PRAGMAs and sets, by a stand-in that
+;;;                     reads foreign_keys and trusted_schema at each set
 ;;;   a failing close   a close that fails after a set's failure is not raised
 ;;;                     over it
 ;;;   the opt-in        the record holds it after (enable-load-extension . #t),
@@ -82,7 +84,8 @@
         (srfi :64)
         (only (chezscheme) foreign-procedure foreign-ref foreign-set! directory-list
               disable-interrupts enable-interrupts foreign-callable foreign-callable-entry-point
-              lock-object unlock-object)
+              lock-object unlock-object fork-thread make-mutex with-mutex sleep make-time
+              get-thread-id)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3 private constants) sqlite-open-readwrite sqlite-open-create
@@ -93,7 +96,7 @@
               sqlite-setting-mismatch-actual sqlite-extensions-unavailable?)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
               sqlite-error-extended-code sqlite-error-message sqlite-error-sql
-              sqlite-error-offset sqlite-closed?))
+              sqlite-error-offset sqlite-closed? sqlite-wrong-thread?))
 
 (define runner (test-runner-simple))
 (test-runner-current runner)
@@ -207,6 +210,7 @@
          (list 'sqlite-error (who-of e) (sqlite-error-code e) (sqlite-error-extended-code e)
                (sqlite-error-sql e) (sqlite-error-offset e)))
         ((sqlite-closed? e) (list 'closed (who-of e)))
+        ((sqlite-wrong-thread? e) (list 'wrong-thread (who-of e)))
         ((chez-sqlite3-error? e) (list 'chez-sqlite3-error (describe e)))
         ((assertion-violation? e)
          (list 'assertion-violation (who-of e)
@@ -630,14 +634,24 @@
 (define reset-auto-extension
   (bound 'sqlite3_reset_auto_extension (foreign-procedure "sqlite3_reset_auto_extension" () void)))
 
+;; switch-answers : (Listof Any)
+;; What each of switch-on's calls answered, newest first: (code cell), or
+;; (raised TEXT) where the call raised.
+(define switch-answers '())
+
 ;; int (*xEntryPoint)(sqlite3 *db, const char **pzErrMsg, const sqlite3_api_routines *pThunk)
-;; The new connection's op set to 1, its answer dropped; 0, always.
+;; The new connection's op set to 1, the call's answer and cell noted in
+;; switch-answers, a raise noted as (raised TEXT); 0, always.
 (define switch-on
   (foreign-callable __collect_safe
     (lambda (db message api)
-      (guard (e (#t 0))
-        (call-with-int-cell 'test-open-db-config 9
-          (lambda (c) (sqlite3-db-config db sqlite-dbconfig-enable-load-extension 1 c)))
+      (let ((noted (guard (e (#t (list 'raised (describe e))))
+                     (call-with-values
+                      (lambda ()
+                        (call-with-int-cell 'test-open-db-config 9
+                          (lambda (c) (sqlite3-db-config db sqlite-dbconfig-enable-load-extension 1 c))))
+                      list))))
+        (set! switch-answers (cons noted switch-answers))
         0))
     (uptr uptr uptr) int))
 
@@ -684,18 +698,28 @@
 
 (define switched (guard (e (#t (list 'raised (describe e)))) (switched-reads)))
 
-(test-equal "where an entry point every open runs starts enable-load-extension's C switch at 1, as Ubuntu's library does: the suite's own connection reads 1, and so do open-database's with no setting and with (enable-load-extension . #f), and call-with-database's with its #f, no call of 0 made; the opt-in's #t reads 1 too; unregistered, an open reads the library's own start again"
+;; all-answered : (Listof Any) Any -> Any
+;; every-call-answered when ANSWERS holds one or more and each is EXPECTED;
+;; else how many there were and those that are not.
+(define (all-answered answers expected)
+  (let ((others (filter (lambda (a) (not (equal? a expected))) answers)))
+    (if (and (pair? answers) (null? others))
+        'every-call-answered
+        (list 'answers (length answers) 'unlike others))))
+
+(test-equal "where an entry point every open runs starts enable-load-extension's C switch at 1, as Ubuntu's library does: each of its calls answered 0 with the cell 1; the suite's own connection reads 1, and so do open-database's with no setting and with (enable-load-extension . #f), and call-with-database's with its #f, no call of 0 made; the opt-in's #t reads 1 too; unregistered, an open reads the library's own start again"
   (if (and (pair? switched) (pair? (car switched)) (eq? (car (car switched)) 'refused))
-      (list (list 'refused 21) 'not-registered)
+      (list (list 'refused 21) 'not-registered 'no-calls)
       (list (list '(0 1) '(0 1) '(0 1) '(0 1) (if (eq? available #t) '(0 1) 'not-asked))
-            'after-as-before))
+            'after-as-before 'every-call-answered))
   (begin
     (when (and (pair? switched) (pair? (car switched)) (eq? (car (car switched)) 'refused))
       (display "UNAVAILABLE the opt-in's #f beside a C switch that starts on: this libsqlite3 refused sqlite3_auto_extension (")
       (write (cadr (car switched)))
       (display "), so its refusal, 21, is asserted in its place")
       (newline))
-    switched))
+    (append (if (list? switched) switched (list switched))
+            (list (if (null? switch-answers) 'no-calls (all-answered switch-answers '(0 1)))))))
 
 ;; --- each set and each start, over moved starts --------------------------------------------
 ;; The start rows above hold each start where nothing moves it, so they
@@ -737,29 +761,81 @@
         (if (null? rest) (reverse found) (loop (cdr rest) (cons (list 0 (cdr (car rest))) found))))
       (list 'no-moves start-cells)))
 
+;; move-answers : (Listof Any)
+;; What each of move-starts' calls answered, newest first: the four sets'
+;; (code cell), in the table's order, or (raised TEXT) where one raised.
+(define move-answers '())
+
 ;; int (*xEntryPoint)(sqlite3 *db, const char **pzErrMsg, const sqlite3_api_routines *pThunk)
 ;; Each op of the new connection set to move-to's value, in the table's
-;; order, each answer dropped; 0, always.
+;; order, the four answers and cells noted in move-answers, a raise noted
+;; as (raised TEXT); 0, always.
 (define move-starts
   (foreign-callable __collect_safe
     (lambda (db message api)
-      (guard (e (#t 0))
-        (let loop ((rest (or move-to '())))
-          (unless (null? rest)
-            (call-with-values
-             (lambda ()
-               (call-with-int-cell 'test-open-db-config 9
-                 (lambda (c) (sqlite3-db-config db (car (car rest)) (cdr (car rest)) c))))
-             (lambda answers #f))
-            (loop (cdr rest))))
+      (let ((noted (guard (e (#t (list 'raised (describe e))))
+                     (let loop ((rest (or move-to '())) (found '()))
+                       (if (null? rest)
+                           (reverse found)
+                           (loop (cdr rest)
+                                 (cons (call-with-values
+                                        (lambda ()
+                                          (call-with-int-cell 'test-open-db-config 9
+                                            (lambda (c) (sqlite3-db-config db (car (car rest))
+                                                                           (cdr (car rest)) c))))
+                                        list)
+                                       found)))))))
+        (set! move-answers (cons noted move-answers))
         0))
     (uptr uptr uptr) int))
+
+;; six-pragmas : Settings
+;; The six PRAGMAs, each at a value of its domain, and statement-cache.
+(define six-pragmas
+  '((busy-timeout . 5) (foreign-keys . #t) (journal-mode . truncate) (synchronous . off)
+    (temp-store . file) (trusted-schema . #f) (statement-cache . 4)))
+
+;; beside-lists : (Listof (Listof (Pairof Symbol Any)))
+;; Each PRAGMA beside each list of one op, the PRAGMA first, then the op:
+;; the opt-in's #t and #f beside each PRAGMA among them.
+(define beside-lists
+  (let loop ((pragmas (filter (lambda (s) (not (eq? (car s) 'statement-cache))) six-pragmas))
+             (found '()))
+    (if (null? pragmas)
+        (reverse found)
+        (loop (cdr pragmas)
+              (let each ((rest single-lists) (found found))
+                (if (null? rest)
+                    found
+                    (each (cdr rest) (cons (list (car pragmas) (car rest)) found))))))))
+
+;; full-list : Settings
+;; The six PRAGMAs, statement-cache and the four, the opt-in only where the
+;; library has sqlite3_load_extension, the ops among the PRAGMAs.
+(define full-list
+  (append '((foreign-keys . #t) (defensive . #f) (journal-mode . truncate) (dqs-dml . #t)
+            (busy-timeout . 5) (synchronous . off))
+          (if (eq? available #t) '((enable-load-extension . #t)) '())
+          '((dqs-ddl . #f) (temp-store . file) (trusted-schema . #f) (statement-cache . 4))))
+
+;; own-read : Symbol Any -> Any
+;; NAME's read among READS, the four's in the table's order.
+(define (own-read name reads)
+  (if (list? reads)
+      (let find ((rest-ops ops) (reads reads))
+        (cond ((or (null? rest-ops) (not (pair? reads))) 'no-read)
+              ((eq? (car (car rest-ops)) name) (car reads))
+              (else (find (cdr rest-ops) (cdr reads)))))
+      reads))
 
 ;; moved-run : -> Any
 ;; With move-starts registered, read in order: the four on the suite's own
 ;; connection; on open-database's with no setting and with (), and
 ;; call-with-database's with none; then, for each list of single-lists,
-;; its own op, and the other three. Or (refused CODE).
+;; its own op, and the other three; then, each on a file of its own, the
+;; four on a connection opened with the six PRAGMAs and statement-cache;
+;; for each list of beside-lists, its op's own read and the other three;
+;; and the four under full-list. Or (refused CODE).
 (define (moved-run)
   (lock-object move-starts)
   (let ((rc (guard (e (#t (list 'raised (describe e))))
@@ -779,19 +855,45 @@
                           (reverse found)
                           (let* ((name (car (car rest)))
                                  (r (starts-on (lambda () (open-database ":memory:" (list (car rest))))))
-                                 (own (if (list? r)
-                                          (let find ((rest-ops ops) (reads r))
-                                            (cond ((or (null? rest-ops) (not (pair? reads))) 'no-read)
-                                                  ((eq? (car (car rest-ops)) name) (car reads))
-                                                  (else (find (cdr rest-ops) (cdr reads)))))
-                                          r)))
-                            (loop (cdr rest) (cons (list (car rest) own (others-than name r)) found)))))))
-              (list 'moved raw none empty cwd singles))))
+                                 (own (own-read name r)))
+                            (loop (cdr rest) (cons (list (car rest) own (others-than name r)) found))))))
+                   (files
+                    (in-dir
+                     (lambda (dir)
+                       (let* ((path (lambda (i) (string-append dir "/m" (number->string i) ".db")))
+                              (pragmas (starts-on (lambda () (open-database (path 0) six-pragmas))))
+                              (beside
+                               (let loop ((rest beside-lists) (i 1) (found '()))
+                                 (if (null? rest)
+                                     (reverse found)
+                                     (let* ((name (car (cadr (car rest))))
+                                            (r (starts-on (lambda () (open-database (path i) (car rest))))))
+                                       (loop (cdr rest) (+ i 1)
+                                             (cons (list (car rest) (own-read name r) (others-than name r))
+                                                   found))))))
+                              (full (starts-on (lambda () (open-database (path 999) full-list)))))
+                         (list pragmas beside full))))))
+              (list 'moved raw none empty cwd singles files))))
       (lambda ()
         (when (eqv? rc 0) (reset-auto-extension))
         (unlock-object move-starts)))))
 
 (define moved (guard (e (#t (list 'raised (describe e)))) (moved-run)))
+
+;; moves-expected : Any
+;; What each op reads once moved, computed apart from move-to, the entry
+;; point's own values, from a fresh read of the library's starts: 1 for a
+;; start of 0, 0 for a start of 1, in the table's order; (unread STARTS)
+;; where a start is no code 0 with a cell of 0 or 1.
+(define moves-expected
+  (let ((starts (raw-starts ":memory:")))
+    (if (and (list? starts) (= (length starts) 4)
+             (for-all (lambda (r) (and (list? r) (eqv? (car r) 0) (memv (cadr r) '(0 1)))) starts))
+        (let loop ((rest starts) (found '()))
+          (if (null? rest)
+              (reverse found)
+              (loop (cdr rest) (cons (list 0 (if (eqv? (cadr (car rest)) 0) 1 0)) found))))
+        (list 'unread starts))))
 
 ;; moved-refused? : -> Boolean
 (define (moved-refused?)
@@ -817,20 +919,34 @@
 (define (or-refused expected)
   (if (moved-refused?) '(refused 21) expected))
 
-(let ((name "an entry point every open runs moves each of the four ops off this library's start, each to 1 less its start's cell: the suite's own connection, opened outside open-database, reads every one at its moved value"))
+;; every-moved : Any Any -> Any
+;; every-op-moved when each of MOVED's four cells differs from its STARTS'
+;; cell; else the two.
+(define (every-moved moved starts)
+  (if (and (list? moved) (list? starts) (= (length moved) 4) (= (length starts) 4)
+           (for-all (lambda (m s) (and (list? m) (list? s) (= (length m) 2) (= (length s) 2)
+                                       (not (equal? (cadr m) (cadr s)))))
+                    moved starts))
+      'every-op-moved
+      (list 'not-moved moved starts)))
+
+(let ((name "an entry point every open runs moves each of the four ops off this library's start: every one of its calls answered 0 with the cell the value written; the suite's own connection, opened outside open-database, reads each op at 1 less its start's cell, computed apart from the entry point's values, and each differs from the start read before it was registered"))
   (moved-unavailable! name)
   (test-equal name
-    (or-refused moved-reads)
+    (or-refused (list moves-expected 'every-op-moved 'every-call-answered))
     (begin
       (display "    moved to, enable-load-extension, defensive, dqs-dml, dqs-ddl: ")
-      (write moved-reads)
+      (write moves-expected)
       (newline)
-      (moved-part 1))))
+      (if (moved-refused?)
+          moved
+          (list (moved-part 1) (every-moved (moved-part 1) (raw-starts ":memory:"))
+                (all-answered move-answers moves-expected))))))
 
 (let ((name "over the moved starts, a connection open-database opens with no setting and with (), and one call-with-database opens with none, keep every moved value: no op is set unasked, whatever value it would write"))
   (moved-unavailable! name)
   (test-equal name
-    (or-refused (list moved-reads moved-reads moved-reads))
+    (or-refused (list moves-expected moves-expected moves-expected))
     (if (moved-refused?) moved (list (moved-part 2) (moved-part 3) (moved-part 4)))))
 
 ;; asked-read : (Pairof Symbol Boolean) -> Any
@@ -838,7 +954,7 @@
 ;; opt-in's #f, which makes no call, the moved value.
 (define (asked-read entry)
   (if (equal? entry '(enable-load-extension . #f))
-      (if move-to (list 0 (cdr (car move-to))) (list 'no-moves start-cells))
+      (if (and (pair? moves-expected) (pair? (car moves-expected))) (car moves-expected) moves-expected)
       (list 0 (if (cdr entry) 1 0))))
 
 (let ((name "over the moved starts, each list of one op reads its own op back as asked, #t as 1 and #f as 0, so each value is set off its start on one side or the other of these rows and c-held's; the opt-in's #f, which makes no call, keeps the moved value"))
@@ -862,13 +978,44 @@
                   (if (null? rest)
                       (reverse expected)
                       (loop (cdr rest)
-                            (cons (list (car rest) (others-than (car (car rest)) moved-reads)) expected)))))
+                            (cons (list (car rest) (others-than (car (car rest)) moves-expected)) expected)))))
     (if (moved-refused?)
         moved
         (let loop ((rest (moved-part 5)) (found '()))
           (if (not (pair? rest))
               (reverse found)
               (loop (cdr rest) (cons (list (car (car rest)) (caddr (car rest))) found)))))))
+
+;; full-expected : Any
+;; What full-list's connection reads: each op as asked.
+(define full-expected
+  (append (if (eq? available #t) '((0 1)) '()) '((0 0) (0 1) (0 0))))
+
+;; full-reads : Any -> Any
+;; READS without the opt-in's where the library lacks the entry point, so
+;; the four's reads line up with full-expected.
+(define (full-reads reads)
+  (if (and (list? reads) (= (length reads) 4) (not (eq? available #t))) (cdr reads) reads))
+
+(let ((name "over the moved starts, settings beside PRAGMAs, each on a file of its own: the six PRAGMAs and statement-cache leave every op at its moved value; each PRAGMA beside each list of one op, the opt-in's #t and #f among them, reads that op as asked, the opt-in's #f keeping the moved value, and leaves the other three at their moved values; the six, statement-cache and the four together read each op as asked"))
+  (moved-unavailable! name)
+  (test-equal name
+    (or-refused
+     (list moves-expected
+           (let loop ((rest beside-lists) (expected '()))
+             (if (null? rest)
+                 (reverse expected)
+                 (let ((entry (cadr (car rest))))
+                   (loop (cdr rest)
+                         (cons (list (car rest) (asked-read entry) (others-than (car entry) moves-expected))
+                               expected)))))
+           full-expected))
+    (if (moved-refused?)
+        moved
+        (let ((files (moved-part 6)))
+          (if (and (list? files) (= (length files) 3))
+              (list (car files) (cadr files) (full-reads (caddr files)))
+              files)))))
 
 ;; --- defensive's writable_schema (Q6) ------------------------------------------------------
 
@@ -962,10 +1109,14 @@
          '(assertion-violation call-with-database (not-an-error 101)))
    (list 'two-five-six 'open-database (list (step-of 'dqs-ddl #f)) (lambda (op v) (list 256 0))
          '(assertion-violation open-database (not-an-error 256)))
+   (list 'inexact-one 'open-database (list (step-of 'defensive #t)) (lambda (op v) (list 1.0 #f))
+         '(assertion-violation open-database (not-an-error 1.0)))
+   (list 'not-a-number 'call-with-database (list (step-of 'dqs-dml #f)) (lambda (op v) (list 'oops #f))
+         '(assertion-violation call-with-database (not-an-error oops)))
    (list 'misuse 'the-suite (list (step-of 'enable-load-extension #t)) (lambda (op v) (list 21 #f))
          (list (list 'sqlite-error 'the-suite 'misuse 'misuse #f #f) (errstr 21)))))
 
-(test-equal "a set's failures and mismatches through a stand-in, each closing the connection first, every count 0 at the raise and after, no descriptor left open: an answer of 1 is &sqlite-error error, its message sqlite3_errstr's, no SQL and no offset; 0 with the cell left, the mismatch, actual (); 0 with the other value, the mismatch, #f or #t; 0 with 7, 7; 100, 101 and 256 an assertion violation from the who given, (not-an-error CODE); Apple's 21, &sqlite-error misuse; the stand-in called once each"
+(test-equal "a set's failures and mismatches through a stand-in, each closing the connection first, every count 0 at the raise and after, no descriptor left open: an answer of 1 is &sqlite-error error, its message sqlite3_errstr's, no SQL and no offset; 0 with the cell left, the mismatch, actual (); 0 with the other value, the mismatch, #f or #t; 0 with 7, 7; 100, 101 and 256 an assertion violation from the who given, (not-an-error CODE), and so are an inexact 1.0 and a code that is no number; Apple's 21, &sqlite-error misuse; the stand-in called once each"
   (let loop ((rest failure-cases) (expected '()))
     (if (null? rest)
         (reverse expected)
@@ -1070,6 +1221,101 @@
                                            found))))
               reads)))))
 
+;; --- the order across PRAGMAs and sets (ADR-0018, decision 5) -------------------------------
+;; busy-timeout first, then the rest in the list's order, PRAGMAs and the
+;; four alike (the M4 plan, section 4.1). Two PRAGMAs set flags that
+;; sqlite3_db_config reads too: foreign_keys SQLITE_DBCONFIG_ENABLE_FKEY's,
+;; 1002, and trusted_schema SQLITE_DBCONFIG_TRUSTED_SCHEMA's, 1017, as the
+;; ops of 3.45.1's and 3.54.1's headers are listed in tests/test-settings.sps.
+;; So a stand-in for the binding, at each set, reads both by a -1 read
+;; through native's binding on the handle it is given, notes them, and
+;; passes the call on: each note shows which of the two PRAGMAs had applied
+;; when that set was made. The list's steps are settings-plan's, so the
+;; plan's order and the shell's are held together; each PRAGMA is asked off
+;; the connection's own start, read first.
+
+(define settings-plan (reach '(chez-sqlite3 private settings) 'settings-plan))
+
+;; fkey-op, trusted-op : Natural
+(define fkey-op 1002)
+(define trusted-op 1017)
+
+;; cell-of : Natural Natural -> Any
+;; OP's cell on the connection whose handle is H, by a -1 read, or the read
+;; whole where its code is not 0.
+(define (cell-of h op)
+  (let ((r (raw-read h op)))
+    (if (eqv? (car r) 0) (cadr r) r)))
+
+;; ordered-run : (Integer Integer -> Settings) -> Any
+;; On a fresh :memory: connection, the two flags' starts read, then the list
+;; LIST-OF gives for the values off them applied by applied-settings/with,
+;; its steps settings-plan's, through a stand-in that notes, at each set,
+;; its op, the value written and the two flags' cells, then calls native's
+;; binding. Answers the starts, what the apply did, and the notes, in order.
+(define (ordered-run list-of)
+  (with-db (lambda () (open-database ":memory:"))
+    (lambda (db)
+      (let* ((starts (call-with-open-handle 'test-open-db-config db
+                       (lambda (h) (list (cell-of h fkey-op) (cell-of h trusted-op)))))
+             (fk (if (eqv? (car starts) 0) #t #f))
+             (ts (if (eqv? (cadr starts) 0) #t #f))
+             (plan (settings-plan (list-of fk ts)))
+             (notes '())
+             (through (lambda (h op v cell)
+                        (set! notes (cons (list op v (cell-of h fkey-op) (cell-of h trusted-op)) notes))
+                        (sqlite3-db-config h op v cell)))
+             (r (attempt (lambda () (applied-settings/with 'the-suite db (caddr plan) through) 'applied))))
+        (list starts r (reverse notes))))))
+
+;; flag-starts : Any
+;; The two flags' starts on a fresh connection, read apart from any run.
+(define flag-starts
+  (with-db (lambda () (open-database ":memory:"))
+    (lambda (db)
+      (call-with-open-handle 'test-open-db-config db
+        (lambda (h) (list (cell-of h fkey-op) (cell-of h trusted-op)))))))
+
+;; ordered-expected : (Listof (List Natural (U 0 1) Boolean Boolean)) -> Any
+;; What ordered-run answers, given each set's op, value written, and whether
+;; foreign_keys and trusted_schema had applied by then: an applied flag
+;; reads the value asked, 1 less its start; an unapplied one its start.
+(define (ordered-expected sets)
+  (if (not (and (list? flag-starts) (= (length flag-starts) 2)
+                (memv (car flag-starts) '(0 1)) (memv (cadr flag-starts) '(0 1))))
+      (list 'unread-starts flag-starts)
+      (list flag-starts 'applied
+            (let loop ((rest sets) (found '()))
+              (if (null? rest)
+                  (reverse found)
+                  (let ((s (car rest)))
+                    (loop (cdr rest)
+                          (cons (list (car s) (cadr s)
+                                      (if (caddr s) (- 1 (car flag-starts)) (car flag-starts))
+                                      (if (cadddr s) (- 1 (cadr flag-starts)) (cadr flag-starts)))
+                                found))))))))
+
+(define ordered-a
+  (lambda (fk ts)
+    (list (cons 'foreign-keys fk) (cons 'defensive #t) (cons 'trusted-schema ts) (cons 'dqs-dml #f)
+          (cons 'busy-timeout 7) (cons 'dqs-ddl #f))))
+
+(define ordered-b
+  (lambda (fk ts)
+    (list (cons 'defensive #t) (cons 'foreign-keys fk) (cons 'dqs-dml #f) (cons 'trusted-schema ts)
+          (cons 'dqs-ddl #t))))
+
+(test-equal "the order across PRAGMAs and sets is the list's, busy-timeout first: through a stand-in that notes, at each set, whether foreign_keys and trusted_schema had applied, read by their own ops through native, foreign-keys, defensive, trusted-schema, dqs-dml, busy-timeout and dqs-ddl make defensive's set after foreign-keys and before trusted-schema, the DQS sets after both; and defensive, foreign-keys, dqs-dml, trusted-schema, dqs-ddl make defensive's before both, dqs-dml's between, dqs-ddl's after"
+  (list (ordered-expected (list (list sqlite-dbconfig-defensive 1 #t #f)
+                                (list sqlite-dbconfig-dqs-dml 0 #t #t)
+                                (list sqlite-dbconfig-dqs-ddl 0 #t #t)))
+        (ordered-expected (list (list sqlite-dbconfig-defensive 1 #f #f)
+                                (list sqlite-dbconfig-dqs-dml 0 #t #f)
+                                (list sqlite-dbconfig-dqs-ddl 1 #t #t))))
+  (let* ((a (ordered-run ordered-a))
+         (b (ordered-run ordered-b)))
+    (list a b)))
+
 (test-equal "a set that matched before one that fails is made once, and the failing one once, then the connection is closed: two calls, every count 0 at the raise"
   (list (failed-closed '(mismatch the-suite dqs-dml #f () library-condition)) 2
         (list sqlite-dbconfig-defensive sqlite-dbconfig-dqs-dml))
@@ -1161,6 +1407,42 @@
                                                             (trusted-schema . #t) (statement-cache . 2)))))
           (attempt (lambda () (call-with-database ":memory:" '((enable-load-extension . #f))
                                 (lambda (db) (yes-no (database-extension-loading? db)))))))))
+
+;; wait-until : (-> Any) Natural -> (U 'satisfied 'iterations-exhausted)
+;; DONE? asked every 10 ms, at most STEPS times.
+(define (wait-until done? steps)
+  (run-until (lambda () (sleep (make-time 'time-duration 10000000 0))) done? steps))
+
+;; in-thread : (-> Any) -> Any
+;; THUNK's answer on a forked thread, (answer VALUE), whatever it raised
+;; being its answer; the-thread-hung when it gives none within 120 s.
+(define (in-thread thunk)
+  (let ((m (make-mutex)) (answer #f))
+    (fork-thread
+     (lambda ()
+       (let ((a (guard (e (#t (list 'answer (list 'raised (what-raised e)))))
+                  (list 'answer (thunk)))))
+         (with-mutex m (set! answer a)))))
+    (if (eq? (wait-until (lambda () (with-mutex m answer)) 12000) 'satisfied)
+        (with-mutex m answer)
+        'the-thread-hung)))
+
+(let ((name "database-extension-loading? makes the owner check too: called from another thread, on a connection that opted in and on one that did not, it raises &sqlite-wrong-thread, naming itself; on the owner's thread it answers"))
+  (unavailable-noted! name)
+  (test-equal name
+    (list (opt-in-or-refusal 'open-database
+                             '((answer (raised (wrong-thread database-extension-loading?))) yes))
+          '((answer (raised (wrong-thread database-extension-loading?))) no))
+    (list (with-db (lambda () (open-database ":memory:" '((enable-load-extension . #t))))
+                   (lambda (db)
+                     (let* ((other (in-thread (lambda () (yes-no (database-extension-loading? db)))))
+                            (own (yes-no (database-extension-loading? db))))
+                       (list other own))))
+          (with-db (lambda () (open-database ":memory:"))
+                   (lambda (db)
+                     (let* ((other (in-thread (lambda () (yes-no (database-extension-loading? db)))))
+                            (own (yes-no (database-extension-loading? db))))
+                       (list other own)))))))
 
 (test-equal "database-extension-loading? checks its argument first, as every reader of the record does: a value that is no database is an assertion violation, naming its kind"
   '((raised (assertion-violation database-extension-loading? (not-a-database 5)))

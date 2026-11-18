@@ -96,7 +96,8 @@ round's, on `7dac918`.
   - `tests/test-library-loading-real.sps`, 51, from 48: the decoy's opt-in rows, through
     `tests/refusal-probe.sps`' new `--opens` and `tests/library-loading.sls`' `opens-arg` and
     `open-calls`.
-  - Both new suites are in `MEMORY_SUITES_2`, as the brief says (below).
+  - Both new suites were put in `MEMORY_SUITES_2`, as the brief said, and moved to
+    `MEMORY_SUITES_1` in round 3, the lighter shard on CI's last runs (below).
 
 ## How the mutants ran
 
@@ -208,14 +209,15 @@ nothing definitely lost, none `SLOW`, each time from the gate's `time:` line, ro
 |---|---|---|---|---|
 | `test-settings` | 1 | 86 | 11 s | 10 s |
 | `test-open-settings` | 1 | 25 | 13 s | 14 s |
-| `test-open-db-config`, new | 2 | 26, then 30 | 12 s | 12 s |
-| `test-open-db-config-engines`, new | 2 | 12 | 56 s | 56 s |
+| `test-open-db-config`, new | 1, from round 3 | 26, then 30 | 12 s | 12 s |
+| `test-open-db-config-engines`, new | 1, from round 3 | 12 | 56 s | 56 s |
 | `test-public` | 2 | 22 | 10 s | 10 s |
 | `test-reference` | 2 | 21 | 10 s | 10 s |
 | `test-docs` | 1 | 105 | 34 s | 33 s |
 | `test-library-loading-real` | 1 | 51 | 177 s | 177 s |
 
-Both new suites are in `MEMORY_SUITES_2`, as the brief says: on three CI runs the shards' sums
+Both new suites went into `MEMORY_SUITES_2` first, as the brief said, and round 3 moved them to
+`MEMORY_SUITES_1` (below): on three CI runs the shards' sums
 read 900 and 986 s, 1186 and 1268 s, 915 and 874 s, shard 1 against shard 2, and since then
 shard 1 has gained `test-check-variadic`, about 10 s, and slice 5's PR #40 adds `test-fts5` and
 `test-json`, about 10 s each, there. The two add about 68 s here to shard 2. Shard 1 grows too:
@@ -223,14 +225,17 @@ shard 1 has gained `test-check-variadic`, about 10 s, and slice 5's PR #40 adds 
 the 145 to 160 s slice 2 measured here to 177 s, where CI read 142 and 143 s on its last two
 runs of `main`; and the dispatch's ticks lengthen `test-open-interleave`'s sweeps, in shard 2, by
 about a third of its trials, where CI read 33 and 39 s. Each stays far inside the 450 s bound;
-read the new suites' times from more than one CI run before moving either.
+read the new suites' times from more than one CI run before moving either. Round 3's move rests
+on `main`'s last three CI runs at the layout before it, the lead's reading: shard 1 at 1012, 1023
+and 1005 s against shard 2's 836, 1091 and 1441 s (runs 44305936182, 44298034354 and
+44293661574), so shard 1 is the lighter on two of three, by about 110 s on average.
 
 The engine rows, the same on Guix's 3.53.1, the floor's 3.45.1 and 3.54.1, by their own printed
 lines:
 
 | Row | Completes unexpired at | What the sweep saw |
 |---|---|---|
-| `e-fuel`, open-database, the six PRAGMAs, `statement-cache` and the four, on a file | fuel 289 | a PRAGMA's statement held at 40 expiries |
+| `e-fuel`, open-database, the six PRAGMAs, `statement-cache` and the four, on a file | fuel 289 | a PRAGMA's statement held at 39 or 40 expiries, by run (round 3, item N6) |
 | `e-twice`, the same resumed twice | fuel 289 | refused 258, the same connection 21, a whole new call 9; refused before the open first at fuel 10 |
 | `e-reentry`, call-with-database re-entered from a timer's continuation | tick 301, the procedure's start | refused 270, the procedure again 22, a whole new call 8; refused before the open first at tick 9 |
 | `e-cwd`, call-with-database under an engine | fuel 563 | as asked 55, closed 249, closed inside the procedure 259 |
@@ -470,6 +475,109 @@ printing its moves: `(0 1) (0 1) (0 0) (0 0)` on the first three, `(0 1) (0 0) (
 none `SLOW`: the round's times are the "Round 2" column of "Green" above; the four moved-start
 rows cost `test-open-db-config` nothing measurable, 12 s either way.
 
+## Round 3: the M4 session's check of PR #44
+
+The M4 session's read-only check of PR #44, on `435cc78`, rebased onto `main` at `7c6d536`,
+against the plan found no blocker and no major; three minors are the review's major 2 in a
+narrower shape. Each item is fixed or answered here, test first, each new row watched failing
+against a plant in `build/mut-review3/NAME/`, rebuilt from the check's description by
+`mutants.py`, and each also run against `435cc78`'s own `test-open-db-config` and
+`test-open-db-config-engines` to reproduce the finding.
+
+- **M1, a set that writes the start beside a PRAGMA.** The moved starts held `()`,
+  call-with-database with none and lists of one op only; the six PRAGMAs' list was judged against
+  the unmoved start alone. The check's plant, `(dqs-dml 1013 1 #t)` consed onto the steps
+  whenever one is a PRAGMA's and the list doesn't name `dqs-dml`, passed every slice suite, and so
+  did the builder's V-def0-beside-pragma, `(defensive 1010 0 #f)` the same way. A new row,
+  `c-moved-beside`, judges every list of more than one setting over the moved starts, each on a
+  file of its own, since `journal-mode` mismatches on `:memory:`: the six PRAGMAs and
+  `statement-cache`, every op at its moved value; each PRAGMA beside each list of one op, the
+  opt-in's `#t` and `#f` among them, 48 lists with the opt-in, its op as asked, the opt-in's `#f`
+  keeping its moved value, and the other three moved; and the six, `statement-cache` and the four
+  together, each op as asked.
+- **M2, nothing held the moves to moving.** `c-moved`'s expected values came from `move-to`, the
+  same list the entry point writes, so the check's identity plant in the suite,
+  `(- 1 (cadr (car cells)))` made `(cadr (car cells))`, passed all 30 rows, and with R1 on top
+  still passed 30 on Guix's library, the floor and 3.54.1 (reproduced here; only
+  `m4s5-lib-defensive`'s unmoved start rows caught it). Now `moves-expected` is computed apart,
+  from a fresh `raw-starts` read, 1 for a start of 0 and 0 for one of 1, every moved row's
+  expected values come from it, and `c-moved` asserts too that each op's moved read differs from
+  its start.
+- **M3, nothing held the order across PRAGMAs and sets.** The check's plant, `settled`'s loop
+  taking every PRAGMA's step first, then the four's, passed every slice suite. A new row,
+  `c-order`: through applied-settings/with, the steps `settings-plan`'s, a stand-in notes at each
+  set the cells of `ENABLE_FKEY` (1002) and `TRUSTED_SCHEMA` (1017), the flags `foreign_keys` and
+  `trusted_schema` set, read by -1 reads through native's binding on the handle it is given, then
+  passes the call on. Two lists interleave the two PRAGMAs with three sets, each PRAGMA asked off
+  the connection's own start, `busy-timeout` among them, so each note shows which PRAGMAs had
+  applied when the set was made.
+- **N1, `e-once` counted applied answers as whole calls.** A run taken past the last set answers
+  applied again and makes no call, as open-database's past its last section answers the same
+  connection; the check's plant, three idle loop turns after `settled`, made such runs reachable
+  and the row failed falsely, `(new-where-the-control-made-none 2)` at fuel 76 (reproduced:
+  `435cc78`'s `e-once` fails it). Whole calls are now counted from the stand-in's notes, each the
+  first set's call: a whole call makes every set once, a refused run none, a run past the sets
+  none. The plant, Q-idle-turns, now passes every suite, as an equivalent mutant must.
+- **N2, the non-integer code had no row.** `c-failures` gains two cases: a stand-in answering an
+  inexact 1.0, from `open-database`, and the symbol `oops`, from `call-with-database`, each the
+  assertion violation from the who given, `(not-an-error X)`, with the connection closed first
+  and every count 0. The check's plant, `names-error?`'s exact-integer test dropped, fails it:
+  `bitwise-and` refuses 1.0 inside the section, and its own violation, named `bitwise-and`, is
+  raised instead.
+- **N3, `database-extension-loading?`'s owner check wasn't held.** A new row, `c-opt-in-thread`:
+  called from another thread, on a connection that opted in and on one that did not, it raises
+  `&sqlite-wrong-thread`, naming itself; on the owner's thread it answers. The thread's answer is
+  whatever it raised, and the wait is bounded, 120 s. The check's plant, the reader checking
+  `database?` alone, fails it.
+- **N4, the entry points dropped their answers.** `switch-on` notes each call's code and cell, and
+  `move-starts` each open's four, a raise noted as `(raised TEXT)`; `c-switch-on` asserts every
+  call answered `(0 1)`, and `c-moved` every open's four answers are `moves-expected`. Q-switch-raises
+  and Q-move-raises, a cell fill no C int holds, so the entry point's call raises inside it, fail
+  them by name.
+- **N5, `s-messages` checks the names by containment.** It stays so. ADR-0013, decision 9, has
+  tests assert a condition's type, its reason or code and its fields, never its message, and the
+  M4 slice 1 review's `c-messages` held fixed messages only as strings, not empty and unlike each
+  other, never against a text of the suite's. A row that asserts the whole message writes the
+  message into the suite, which that rule forbids; what the brief asked, that the two refusals
+  name the eleven, is a property of the text, and containment of each of the suite's own eleven
+  names is the check that asserts it and nothing the rule leaves free. AGENTS.md's "assert whole
+  outputs" is met where the output is the library's data, as every other row here does.
+- **N6, `e-fuel`'s held count.** The log said 40; the check measured 39 on four libraries. The
+  sweep's fuels begin with no collection, so a collect request can move an expiry by a tick: this
+  slice's runs printed 40 on every library in rounds 1 and 3 and on Guix's in round 2, and 39 on
+  the floor, 3.54.1 and `m4s5-lib-defensive` in round 2; round 3's gate run printed 40. The table under "Green" now says 39 or 40.
+- **The shards.** Both new suites move from `MEMORY_SUITES_2` to `MEMORY_SUITES_1`, in the list's
+  order, by the CI times under "Green".
+
+| Plant | What it plants | `435cc78`'s rows | This round's rows |
+|---|---|---|---|
+| Q-dqs-beside-pragma | the check's M1: `(dqs-dml 1013 1 #t)` beside any PRAGMA, unasked | survived on all four libraries | `c-moved-beside` on all four |
+| V-def0-beside-pragma | `(defensive 1010 0 #f)` beside any PRAGMA, unasked | `c-start` on `m4s5-lib-defensive` alone | `c-moved-beside` on Guix's, the floor and 3.54.1; `c-start` on `m4s5-lib-defensive` |
+| Q-identity | the check's M2, in the suite: each move the start itself | survived on all four | `c-moved`, `c-moved-unasked`, `c-moved-held`, `c-moved-others`, `c-moved-beside` on all four |
+| Q-identity-R1 | the same, with R1 | survived on Guix's, the floor and 3.54.1 | the same five on all four, and `c-start`, `c-start-one` on `m4s5-lib-defensive` |
+| Q-reorder | the check's M3: every PRAGMA's step before the four's | survived | `c-order` on all four |
+| Q-idle-turns | the check's N1: three idle loop turns after `settled` | `e-once` failed falsely | passes, equivalent |
+| Q-not-integer | the check's N2: the exact-integer test dropped | survived | `c-failures` on all four |
+| Q-owner-unchecked | the check's N3: the reader checks `database?` alone | survived | `c-opt-in-thread` on all four |
+| Q-move-raises | `move-starts`' `dqs-dml` call given a fill no C int holds | `c-moved`, `c-moved-unasked`, `c-moved-others` by their reads, on all four | `c-moved` by its answers too, and the moved rows, `c-moved-beside` among them, on all four |
+| Q-switch-raises | `switch-on`'s call given a fill no C int holds | `c-switch-on` by its reads, on all four | `c-switch-on` by its answers too, on all four |
+
+The committed driver ran every plant again on the final tree, in `build/mut-r4/`, on Guix's
+3.53.1: **67 plants, 65 caught; R4 survives, argued in round 2, and Q-idle-turns, which changes
+nothing a caller can see.** The new rows added these failures to the third round's: R1 and R2
+`c-moved-beside`; R6 `c-moved-beside`.
+
+This round's red, the final suites on `7c6d536`'s `src/` and docs (`build/mut-red3/RED/`):
+`test-open-db-config` 8 passed, 25 failed of 33, the new `c-moved-beside`, `c-order` and
+`c-opt-in-thread` among the failures; `test-open-db-config-engines` 4 passed, 8 failed.
+
+After the round, on `435cc78`'s tree with its changes: `make test` ran 79 and passed 79 on Guix's
+3.53.1, the floor's 3.45.1, 3.54.1 and `m4s5-lib-defensive`, each library's variables set inside
+the container's `sh -c` and its version read from its P4 line; `test-open-db-config` passed 33
+rows on each. Under `make test-memory` on Guix's library the two suites this round touched
+passed, none `SLOW`: `test-open-db-config` 14 s, from 12, its three new rows, `c-moved-beside`'s 50 file opens among them; and
+`test-open-db-config-engines` 55 s.
+
 ## For the records
 
 - **ADR-0018 and ADR-0021, slice 3's amendment (proposed):**
@@ -502,6 +610,18 @@ rows cost `test-open-db-config` nothing measurable, 12 s either way.
   an entry point `sqlite3_auto_extension` runs at every open (round 2, item 2).
 - **ADR-0018 and ADR-0021's slice 3 amendment, round 2:** the moved starts' four rows, and the
   sweeps' straddle count; `e-failing`'s guard counted against the fuels.
+- **Round 3, for the lead's records:**
+  - the M4 plan's §4.7 note above holds for lists of more than one setting too: a start row
+    judges only the lists it opens, so every shape of list a plant can key on, a PRAGMA beside an
+    op among them, is judged over moved starts (M1);
+  - an expected value must not come from the code under test's own list, the suite's included:
+    `moves-expected` is computed apart from `move-to` (M2);
+  - ADR-0018, decision 5's order across PRAGMAs and the four is held by `c-order` (M3);
+  - ADR-0021's "a code that is no exact integer is `not-an-error`" is held by `c-failures`' two
+    new cases (N2), and `database-extension-loading?`'s owner check by `c-opt-in-thread` (N3);
+  - a sweep counts whole calls by their effects, never by how many runs answered: a run past the
+    call's last section answers again (N1); traps.md may want the line, beside the merge trap;
+  - the shards: both new suites in `MEMORY_SUITES_1`.
 - **traps.md:** the four traps below; the third confirms an entry M4's pre-work made for
   Apple's library.
 

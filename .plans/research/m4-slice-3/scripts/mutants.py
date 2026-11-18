@@ -8,6 +8,7 @@ SET = "src/chez-sqlite3/private/settings.sls"
 CONN = "src/chez-sqlite3/private/connection.sls"
 PUB = "src/chez-sqlite3.sls"
 DOCS = "docs/reference.md"
+SUITE = "tests/test-open-db-config.sps"
 
 DEFAULT_SUITES = ["test-settings", "test-open-settings", "test-open-db-config",
                   "test-open-db-config-engines", "test-public", "test-reference", "test-docs",
@@ -78,6 +79,35 @@ MUTANTS = [
         "            (configured who db step claim n db-config))")]},
     {"name": "G1", "edits": [(OPEN, "            ((refused) (raise-closed who))",
         "            ((refused) (if (= n 0) (raise-sqlite-error who 1 \"SQL logic error\" #f #f) (raise-closed who)))")]},
+    # --- the M4 session's check of PR #44, and the builder's beside it -----------------------
+    {"name": "Q-dqs-beside-pragma", "edits": [(OPEN, VALUES,
+        "(values name flags (cadr plan) (if (and (exists (lambda (s) (not (db-config-step? s))) (caddr plan))"
+        " (not (assq 'dqs-dml (caddr split)))) (cons '(dqs-dml 1013 1 #t) (caddr plan)) (caddr plan)) opt-in)")]},
+    {"name": "V-def0-beside-pragma", "edits": [(OPEN, VALUES,
+        "(values name flags (cadr plan) (if (and (exists (lambda (s) (not (db-config-step? s))) (caddr plan))"
+        " (not (assq 'defensive (caddr split)))) (cons '(defensive 1010 0 #f) (caddr plan)) (caddr plan)) opt-in)")]},
+    {"name": "Q-identity", "edits": [(SUITE, "(cons (cons (cdr (car rest)) (- 1 (cadr (car cells)))) found)",
+                                      "(cons (cons (cdr (car rest)) (cadr (car cells))) found)")]},
+    {"name": "Q-identity-R1", "edits": [(SUITE, "(cons (cons (cdr (car rest)) (- 1 (cadr (car cells)))) found)",
+                                         "(cons (cons (cdr (car rest)) (cadr (car cells))) found)")]
+                                       + unasked("(defensive 1010 0 #f)")},
+    {"name": "Q-reorder", "edits": [(OPEN, "    (let loop ((rest steps) (n n))",
+        "    (let loop ((rest (append (filter (lambda (s) (not (db-config-step? s))) steps)"
+        " (filter db-config-step? steps))) (n n))")]},
+    {"name": "Q-idle-turns", "edits": [(OPEN,
+        "  (define (applied-settings/with who db steps db-config)\n    (settled who db steps (made-claim) 0 db-config))",
+        "  (define (applied-settings/with who db steps db-config)\n    (settled who db steps (made-claim) 0 db-config)\n"
+        "    (let idle ((i 0)) (when (< i 3) (idle (+ i 1)))))")]},
+    {"name": "Q-not-integer", "edits": [(OPEN, "    (and (integer? code) (exact? code)\n         (not (memv (bitwise-and code 255) '(0 100 101)))))",
+                                         "    (and (not (memv (bitwise-and code 255) '(0 100 101)))))")]},
+    {"name": "Q-owner-unchecked", "edits": [(CONN, "    (check-owned 'database-extension-loading? db)",
+        "    (unless (database? db)\n      (assertion-violation 'database-extension-loading? \"not a database\" 'not-a-database (shown-value db)))")]},
+    {"name": "Q-move-raises", "edits": [(SUITE,
+        "                                          (call-with-int-cell 'test-open-db-config 9\n                                            (lambda (c) (sqlite3-db-config db (car (car rest))",
+        "                                          (call-with-int-cell 'test-open-db-config (if (eqv? (car (car rest)) 1013) (expt 2 40) 9)\n                                            (lambda (c) (sqlite3-db-config db (car (car rest))")]},
+    {"name": "Q-switch-raises", "edits": [(SUITE,
+        "                        (call-with-int-cell 'test-open-db-config 9\n                          (lambda (c) (sqlite3-db-config db sqlite-dbconfig-enable-load-extension 1 c))))",
+        "                        (call-with-int-cell 'test-open-db-config (expt 2 40)\n                          (lambda (c) (sqlite3-db-config db sqlite-dbconfig-enable-load-extension 1 c))))")]},
     # --- the join, settings.sls -----------------------------------------------------------
     {"name": "J-order", "edits": [(SET, DB_BRANCH, DB_BRANCH.replace(
         "(cons step steps)", "(append steps (list step))"))]},
