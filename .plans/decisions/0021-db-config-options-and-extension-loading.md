@@ -18,7 +18,7 @@
   ([amendment](#amendment-2026-11-17-the-sentinel-and-a-code-that-names-no-error-m4-slice-1)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): an extension's open work and the close
   ([amendment](#amendment-2026-11-17-an-extensions-open-work-and-the-close-m4s-close-fix)).
-  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"): the four set at open, the opt-in's check and the
+  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"), with its additions after the M4 session's check ("Accept all"): the four set at open, the opt-in's check and the
   record's, and the starts held over moved starts
   ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
 - **Date:** 2026-11-17
@@ -325,7 +325,7 @@ chez-sqlite3 tracks ("Vouch only for ours"). Slice 4's Extensions entry says so.
 
 ## Amendment, 2026-11-18: the four set at open (M4 slice 3)
 
-Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)), from the slice, its review (Opus) and the
+Accepted by the maintainer on 2026-11-18 ("Accept all"), and its additions after the M4 session's check the same day ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)), from the slice, its review (Opus) and the
 review's fixes.
 
 - **Each set is one section, at the next claimed position** (ADR-0018, amended in M3 slice 5).
@@ -363,6 +363,10 @@ review's fixes.
     `sqlite3_auto_extension` entry point moves every op off this library's start at each open.
     Over that, `open-database` with no settings, and `call-with-database`, keep every moved
     value, and each `#t` and `#f` reads back as asked.
+  - **Every list is judged over moved starts,** a PRAGMA beside an op among them: each op the list
+    doesn't name keeps its moved value (the M4 session's check of the slice, its M1).
+  - **The moves are held on their own:** each moved value is 1 minus the start read through
+    native, never the value the entry point wrote, and differs from it (the check's M2).
   - Where `sqlite3_auto_extension` is refused (Apple's 21), those rows are named unavailable.
 - **The engine rows' fuels,** alike on Guix's 3.53.1, 3.45.1 and 3.54.1, with each sweep bounded
   by refusals it saw itself:

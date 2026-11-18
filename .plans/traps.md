@@ -244,6 +244,13 @@ told in chez-curl's `.plans/traps.md`.
   that expects two whole calls one after the other failed 522 trials of correct code. Judge a
   merge: with distinct calls, each noted exactly twice, the first of each pair in the call's
   order, and the second too. (M4 slice 3, chez-sqlite3)
+- **A sweep counts whole calls by their effects, never by how many runs answered.** M4 slice 3's
+  `e-once` first counted the runs that answered `applied`. A run resumed past the last set
+  answers `applied` again and makes no call. So three idle loop turns after the last section, an
+  equivalent change, let a third run answer, and the row failed correct code at fuel 76,
+  `(new-where-the-control-made-none 2)`. Count each whole call from the stand-in's notes instead.
+  Reproduce: plant `research/m4-slice-3/lead/trap-idle-turns.json` and judge `e-once` by its
+  runs' answers. (M4 slice 3, from the M4 session's check, chez-sqlite3)
 
 ## SQLite
 

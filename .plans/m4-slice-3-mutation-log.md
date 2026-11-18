@@ -5,7 +5,7 @@ Evidence that each rule slice 3's rows claim to guard fails through the property
 [the M4 slice 1 log](m4-slice-1-mutation-log.md). An Opus agent built the slice from the lead's
 brief, in the worktree `chez-sqlite3-wt-m4s3`, on `m4-slice-3-settings` from `main` at
 `1735a66`, slices 1 and 2 and the close fix merged there, beside slice 5 in a worktree of its own.
-The lead committed it as `7e5264a` and rebased it onto `main` at `7dac918`, slice 5's merge, which
+The lead committed it, as first built, and rebased it onto `main` at `7dac918`, slice 5's merge, which
 adds `test-fts5` and `test-json`: there `make test` runs 79 suites, and ran 77 before this slice.
 The slice's read-only Opus review then found two majors and five smaller items, fixed in a second
 round ([below](#round-2-the-reviews-findings)); every count from "Green" on is the second
@@ -186,8 +186,10 @@ The rows replaced, each named:
 container, `CHEZ_SQLITE3_LIBRARY`
 and `C_INCLUDE_PATH` set there (the first trap below), each lane's version read from its own P4
 line: Guix's 3.53.1, the floor's 3.45.1 (`build/m3-floor/`), the `current` lane's 3.54.1
-(`build/m4-current/`), and the coordinator's `build/m4s5-lib-defensive/`, 3.54.1 built
-`-DSQLITE_DEFAULT_DEFENSIVE`, which the lead offered for the starts. `make test` ran 77 there
+(`build/m4-current/`), and the lead's `build/m4s5-lib-defensive/`, 3.54.1 built
+`-DSQLITE_DEFAULT_DEFENSIVE`, which the lead offered for the starts. M4 slice 5's review built it;
+the library isn't kept, and [research/m4-slice-3/lib-defensive.sh](research/m4-slice-3/lib-defensive.sh)
+rebuilds it from the pinned release byte for byte (md5 `9b072bda…`). `make test` ran 77 there
 before the slice; before the rebase, on `1735a66`, it ran 77 with the slice and 75 without. The
 starts, as `test-open-db-config` read them through the op, `enable-load-extension`,
 `defensive`, `dqs-dml`, `dqs-ddl`, each `(code cell)`:
@@ -374,7 +376,7 @@ fail only `l-lacking`, the decoy's: no library this process loads lacks the entr
 
 ## Round 2: the review's findings
 
-The slice's read-only Opus review, on `7e5264a` rebased onto `7dac918`, found no blocker, two
+The slice's read-only Opus review, of the first round's tree rebased onto `7dac918`, found no blocker, two
 majors and five smaller items. Each is fixed or answered here, test first.
 
 1. **Major: an op set unasked beside the opt-in survived.** `c-start-one` held lists of one op
@@ -429,7 +431,7 @@ majors and five smaller items. Each is fixed or answered here, test first.
 
 Each rebuilt from the review's description into `build/mut-review/NAME/`, by `mutants.py`, then
 run on Guix's 3.53.1 against every slice suite, and `test-open-db-config` against the floor's
-3.45.1, 3.54.1 and `m4s5-lib-defensive`; each also ran `7e5264a`'s `test-open-db-config` and
+3.45.1, 3.54.1 and `m4s5-lib-defensive`; each also ran the first round's `test-open-db-config` and
 `test-open-db-config-engines`, the rows before this round, to reproduce the finding.
 
 | Plant | What it plants | Before this round's rows | With them |
@@ -578,6 +580,44 @@ rows on each. Under `make test-memory` on Guix's library the two suites this rou
 passed, none `SLOW`: `test-open-db-config` 14 s, from 12, its three new rows, `c-moved-beside`'s 50 file opens among them; and
 `test-open-db-config-engines` 55 s.
 
+## The lead's verification
+
+The lead reran each round's checks itself, every library's variables set inside the container's
+`sh -c`. It also planted mutants of its own, written from their descriptions, never the
+builder's copies. Its plants are kept in [research/m4-slice-3/lead/](research/m4-slice-3/lead/),
+for `plant.py`, each run from the copy it makes on Guix's library, and on the floor and 3.54.1
+where noted.
+
+| Round | Plant | Guards | Failed |
+|---|---|---|---|
+| 1 | M1 | the DQS ops (swapped) | `test-open-db-config` 4, `test-settings` 8 |
+| 1 | M2 | the opt-in from its step (any set) | the record's row, and two `steps-opt-in?` rows |
+| 1 | M3 | the refusal's `who` (fixed to `open-database`) | `test-library-loading-real`'s decoy row alone: every in-process library has the entry point |
+| 1 | M4 | a mismatch's fields (expected and actual swapped) | `test-open-db-config` 4 |
+| 1 | M5 | the record's opt-in (always `#t`) | the record's row |
+| 2 | N1 | `defensive` set to 0 at every open, unless named (the review's R1) | the moved-start rows, on Guix's, the floor and 3.54.1; the first round's suite passes it 26 of 26 |
+| 2 | N2 | `dqs-dml` set to 1 at every open (R2) | the moved-start rows, on all three |
+| 2 | N3 | `defensive` set to 1 beside the opt-in (R3) | "a list naming one op", on all three |
+| 2 | N4 | `(defensive . #f)` skipped and answered a match (R6) | the moved-start rows, on all three |
+| 3 | K1 | `dqs-dml` set to 1 beside any PRAGMA (the check's M1) | "settings beside PRAGMAs", on all three |
+| 3 | K2 | the moves held on their own (the entry point moving each op to its start) | five moved-start rows, on all three; with N1's code too, the same five |
+| 3 | K3 | the order across PRAGMAs and sets (PRAGMAs first) | the order row, on all three |
+| 3 | K4 | a code that is no exact integer (its test dropped) | the stand-in row |
+| 3 | K5 | the reader's owner check (only `database?`) | the reader's two rows |
+
+M1 to M5 and N1 to N4 were planted again on round 3's tree, and each was still caught. Two of the
+builder's traps were reproduced from their plants: `trap-two-whole.json` fails 522 trials of
+correct code under a sequential judge, and `trap-idle-turns.json`'s equivalent plant fails the
+first round's `e-once` at fuel 76, `(new-where-the-control-made-none 2)`, and passes this round's.
+The host-variable trap was reproduced by its command, and the unlisted option by the FFI, `(0 0)`
+of `DEFAULT_DEFENSIVE` and its prefixed name among 39 options.
+
+| Round | `make test`, each of four libraries | Under the gate, Guix's library |
+|---|---|---|
+| 1, on `7dac918` | 79 of 79 | `test-open-db-config` 12 s, its engines suite 56 s, `test-settings` 10 s, `test-open-settings` 14 s, `test-public` 10 s, `test-reference` 10 s, `test-docs` 34 s, `test-library-loading-real` 175 s, `test-open-engines` 23 s, `test-open-interleave` 37 s |
+| 2, on `7dac918` | 79 of 79 | `test-open-db-config` 12 s, its engines suite 56 s, `test-docs` 34 s |
+| 3, on `7c6d536` | 79 of 79 | `test-open-db-config` 13 s, its engines suite 56 s |
+
 ## For the records
 
 - **ADR-0018 and ADR-0021, slice 3's amendment (proposed):**
@@ -642,7 +682,7 @@ passed, none `SLOW`: `test-open-db-config` 14 s, from 12, its three new rows, `c
   in order, merged. A row that expects two whole calls one after the other fails 522 trials of
   the correct code. Judge a merge: with distinct calls, each noted exactly twice, the first of
   each pair in the call's order, and the second too.
-- **A compile option a library is built with can be unlisted.** The coordinator's
+- **A compile option a library is built with can be unlisted.** The lead's
   `build/m4s5-lib-defensive/`, 3.54.1 built `-DSQLITE_DEFAULT_DEFENSIVE`, lists no
   `DEFAULT_DEFENSIVE` in `sqlite3_compileoption_get`, and `sqlite3_compileoption_used` of it
   answers 0; its -1 read of `DEFENSIVE` answers `(0 1)`. As Apple's (traps.md, M4's pre-work), so
@@ -655,5 +695,5 @@ passed, none `SLOW`: `test-open-db-config` 14 s, from 12, its three new rows, `c
   `c-held`'s read of 0 is the start too. Move each start first, by an entry point
   `sqlite3_auto_extension` runs at every open, then compare: `c-moved-unasked` and
   `c-moved-held` fail them. Reproduce: `mut.py --into build/mut-review prepare R1`, from
-  [the driver](research/m4-slice-3/scripts/); its copy passes `7e5264a`'s `test-open-db-config` on
+  [the driver](research/m4-slice-3/scripts/); its copy passes the first round's `test-open-db-config` on
   Guix's library, and fails this round's.
