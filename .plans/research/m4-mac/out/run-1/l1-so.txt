@@ -1,0 +1,34 @@
+libversion: 3.54.1
+sourceid: 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+constants: ENABLE_LOAD_EXTENSION 1005, SQLITE_OK 0, SQLITE_ERROR 1
+
+L1. The C call off
+  the start: rc 0, ENABLE_LOAD_EXTENSION 0
+  off: ext.so                                  load(DIR/ext.so, NULL) answered 1 (extended 0); pzErrMsg "not authorized"
+  after it                                     chez_half(5): prepare 1 "no such function: chez_half"; chez_inits(): prepare 1 "no such function: chez_inits"
+
+L2. Paths and entry points, the C call on
+  a path that doesn't exist                    load(DIR/nosuch.so, NULL) answered 1 (extended 0); pzErrMsg "dlopen(DIR/nosuch.so.dylib, 0x000A): tried: 'DIR/nosuch.so.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/nosuch.so.dylib' (no such file), '~/github/chez-sqlite3/build/m4"
+  no entry point, NULL given                   load(DIR/noentry.so, NULL) answered 1 (extended 0); pzErrMsg "dlsym(0x75580a40, sqlite3_noentry_init): symbol not found"
+  no entry point, one named                    load(DIR/noentry.so, chez_nothing_init) answered 1 (extended 0); pzErrMsg "dlsym(0x75580a40, chez_nothing_init): symbol not found"
+  an empty file                                load(DIR/empty.so, NULL) answered 1 (extended 0); pzErrMsg "dlopen(DIR/empty.so.dylib, 0x000A): tried: 'DIR/empty.so.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/empty.so.dylib' (no such file), '~/github/chez-sqlite3/build/m4-m"
+  a directory                                  load(DIR/dir.so, NULL) answered 1 (extended 0); pzErrMsg "dlopen(DIR/dir.so.dylib, 0x000A): tried: 'DIR/dir.so.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/dir.so.dylib' (no such file), '~/github/chez-sqlite3/build/m4-mac/s"
+  an init that fails                           load(DIR/ext-failing.so, NULL) answered 1 (extended 0); pzErrMsg "error during initialization: chez_failing refused"
+  after it                                     chez_half(5): prepare 1 "no such function: chez_half"; chez_inits(): prepare 1 "no such function: chez_inits"
+  a named entry point it lacks                 load(DIR/ext-named.so, no_such_init) answered 1 (extended 1); pzErrMsg "dlsym(0x75580a40, no_such_init): symbol not found"
+  ext-named.so, NULL given                     load(DIR/ext-named.so, NULL) answered 1 (extended 1); pzErrMsg "dlsym(0x75580a40, sqlite3_extnamed_init): symbol not found"
+  ext-named.so, its entry named                load(DIR/ext-named.so, chez_named_init) answered 0 (extended 1); pzErrMsg NULL
+  after it                                     chez_half(5): row 2.5; chez_inits(): row 1
+  ext.so, NULL: sqlite3_extension_init         load(DIR/ext.so, NULL) answered 0 (extended 0); pzErrMsg NULL
+  after it                                     chez_half(5): row 2.5; chez_inits(): row 1
+  libchezext.so, NULL: the derived name        load(DIR/libchezext.so, NULL) answered 0 (extended 0); pzErrMsg NULL
+  after it                                     chez_half(5): row 2.5; chez_inits(): row 1
+  DIR/ext, no suffix                           load(DIR/ext, NULL) answered 1 (extended 0); pzErrMsg "dlopen(DIR/ext.dylib, 0x000A): tried: 'DIR/ext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/ext.dylib' (no such file), 'SCRATCH"
+  after it                                     chez_half(5): prepare 1 "no such function: chez_half"; chez_inits(): prepare 1 "no such function: chez_inits"
+  ext.so, a bare name, cwd DIR                 load(ext.so, NULL) answered 0 (extended 0); pzErrMsg NULL
+  ./ext.so, relative, cwd DIR                  load(./ext.so, NULL) answered 0 (extended 0); pzErrMsg NULL
+  after it                                     chez_half(5): row 2.5; chez_inits(): row 2
+
+L3. The error state after a failed load
+  before: errcode 0, errmsg "not an error"
+  a path that doesn't exist                    load(DIR/nosuch.so, NULL) answered 1 (extended 0); pzErrMsg "dlopen(DIR/nosuch.so.dylib, 0x000A): tried:(exit 142)

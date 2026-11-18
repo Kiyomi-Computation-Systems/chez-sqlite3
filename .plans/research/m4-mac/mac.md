@@ -61,6 +61,8 @@ Send `m4-mac.tgz`. In it, your home folder is written `~`, and the probes' folde
   - L4 and L8, the init counts and the held row.
 - **`l1-so.txt`:** whether a `.so` built by `-dynamiclib` loads on the Mac, so whether a suite
   needs a suffix of its own there.
+- **`fifo.txt`:** whether macOS's `dlopen` waits on a FIFO at all, how many writers' opens a
+  load takes, and its own reasons for a FIFO, a directory and an empty file.
 - **`x1-*-dylib.txt`:** the load through Chez's FFI on Apple arm64, `__collect_safe`, with its
   message read and freed by `sqlite3_free`. `gate` and `gate-none` should end at
   `memory-used-after 0`, and `gate-leak` above it.

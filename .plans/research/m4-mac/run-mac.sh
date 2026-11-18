@@ -14,6 +14,8 @@
 #   l1-timing-SUF.txt  .SUF, and its times
 #   x1-MODE-SUF.txt    x1-ffi-load.sps's output in the modes gate, gate-leak
 #                      and gate-none, run without Valgrind
+#   fifo.txt           fifo.c's output: dlopen and the load on a FIFO,
+#                      each bounded, run in the first SUF's directory
 # Each probe's file ends in its exit status. SUF is each of SUFFIXES:
 # "dylib so" on Darwin, whose SQLite retries a path with ".dylib", and "so"
 # elsewhere. Each extension is built with -dynamiclib on Darwin, as SQLite's
@@ -72,6 +74,9 @@ build() {
 l1=$scratch/l1-load-extension
 build -O2 -Wall -I"$inc" -o "$l1" "$here/l1-load-extension.c" "$lib" \
   -Wl,-rpath,"$(dirname "$lib")" -lpthread -lm || l1=
+fifo=$scratch/fifo
+build -O2 -Wall -I"$inc" -o "$fifo" .plans/research/m4-mac/fifo.c "$lib" \
+  -Wl,-rpath,"$(dirname "$lib")" || fifo=
 
 for suf in $suffixes; do
   d=$scratch/l1-$suf.d
@@ -94,6 +99,14 @@ for suf in $suffixes; do
       "$CHEZ" --program "$here/x1-ffi-load.sps" "$lib" "$d" "$m" "$suf" >"$abs/x1-$m-$suf.txt" 2>&1
       echo "(exit $?)" >>"$abs/x1-$m-$suf.txt"
     done
+    if [ ! -e "$abs/fifo.txt" ]; then
+      if [ -n "$fifo" ]; then
+        "$fifo" "$d" "$suf" >"$abs/fifo.txt" 2>&1
+        echo "(exit $?)" >>"$abs/fifo.txt"
+      else
+        echo "(not run: fifo.c didn't compile; see compile.txt)" >"$abs/fifo.txt"
+      fi
+    fi
   else
     echo "(not run: an extension didn't compile; see compile.txt)" >"$abs/l1-$suf.txt"
   fi

@@ -27,10 +27,15 @@
  *   L4  the same file loaded twice, and into a second connection
  *   L5  a connection opened on one thread, loaded on another
  *   L6  a FIFO as the path: whether the call blocks until a writer opens
- *       it (a helper thread opens it for writing after 500 ms)
+ *       it (a helper thread opens it for writing after 500 ms, without
+ *       blocking, every 10 ms until the load returns)
  *   L7  SQL's load_extension() with the C call on
  *   L8  a load beside the connection's own statements: one held at a row,
  *       and a PERSISTENT one reset, read for re-prepares after each load
+ *
+ * Both outputs are line-buffered, so a probe killed midway keeps every line
+ * it wrote: on the Mac's first run, killed in L6 by its alarm, the rest of
+ * L3 to L8 and every time were lost in the buffers (research/m4-mac/).
  *
  * No call with a side effect stands beside another in one argument list
  * (AGENTS.md).
@@ -213,16 +218,37 @@ static void *load_elsewhere(void *arg) {
 
 /* --- L6 ------------------------------------------------------------------ */
 
+/* The writer: from 500 ms, every 10 ms until the load has returned, it
+   opens the FIFO for writing without blocking and closes it at once. An open
+   finds a reader, and releases it, or fails at once, so a load that never
+   opens the FIFO, or opens it again, can't hang the probe: on the Mac's
+   first run one blocking open waited past the 20 s alarm. It counts the
+   opens that found a reader, for TIMING. */
+struct writer { const char *fifo; int opens; };
+static pthread_mutex_t l6_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int l6_returned = 0;
+
 static void *open_writer(void *arg) {
-  const char *fifo = arg;
-  struct timespec half = {0, 500000000};
+  struct writer *w = arg;
+  struct timespec half = {0, 500000000}, tick = {0, 10000000};
   nanosleep(&half, NULL);
-  int fd = open(fifo, O_WRONLY);
-  if (fd >= 0) close(fd);
+  for (int i = 0; i < 1500; i++) {
+    pthread_mutex_lock(&l6_mutex);
+    int returned = l6_returned;
+    pthread_mutex_unlock(&l6_mutex);
+    if (returned) break;
+    int fd = open(w->fifo, O_WRONLY | O_NONBLOCK);
+    if (fd >= 0) {
+      w->opens++;
+      close(fd);
+    }
+    nanosleep(&tick, NULL);
+  }
   return NULL;
 }
 
 int main(int argc, char **argv) {
+  setvbuf(stdout, NULL, _IOLBF, 0);
   if (argc < 3 || argc > 4) {
     fprintf(stderr, "usage: l1-load-extension DIR TIMING [SUFFIX]\n");
     return 2;
@@ -231,6 +257,7 @@ int main(int argc, char **argv) {
   if (argc == 4) suffix = argv[3];
   timing = fopen(argv[2], "w");
   if (!timing) { perror(argv[2]); return 2; }
+  setvbuf(timing, NULL, _IOLBF, 0);
   version_lines();
   printf("constants: ENABLE_LOAD_EXTENSION %d, SQLITE_OK %d, SQLITE_ERROR %d\n",
          SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, SQLITE_OK, SQLITE_ERROR);
@@ -340,15 +367,20 @@ int main(int argc, char **argv) {
   db = open_memory();
   c_call(db, 1);
   pthread_t w;
-  pthread_create(&w, NULL, open_writer, fifo);
+  struct writer wr = {fifo, 0};
+  pthread_create(&w, NULL, open_writer, &wr);
   double t0 = now_ms();
   load(db, "fifo.so", NULL, "a FIFO, a writer after 500 ms");
   double t1 = now_ms();
+  pthread_mutex_lock(&l6_mutex);
+  l6_returned = 1;
+  pthread_mutex_unlock(&l6_mutex);
   pthread_join(w, NULL);
   alarm(0);
   printf("  the load returned %s the writer opened it\n",
          t1 - t0 >= 450.0 ? "after" : "before");
   fprintf(timing, "L6 the FIFO load: %.3f ms\n", t1 - t0);
+  fprintf(timing, "L6 the writer's opens that found a reader: %d\n", wr.opens);
   close_or_die(db);
 
   printf("\nL8. A load beside the connection's own statements\n");
