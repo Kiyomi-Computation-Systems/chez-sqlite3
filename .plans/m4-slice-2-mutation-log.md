@@ -515,7 +515,55 @@ Apple's library and with Homebrew's.
   should report.
 - With Homebrew's, `CHEZ_SQLITE3_LIBRARY=/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib` and
   `C_INCLUDE_PATH=/opt/homebrew/opt/sqlite/include`: every load row runs. The FIFO load is the
-  first measurement of `dlopen` on a FIFO on macOS: a load that never waits fails the row,
-  `returned-before-the-collection`, which would be a finding, not a fault.
+  row's first run on macOS, whose dyld opens a FIFO twice (below): a load that never waits fails
+  the row, `returned-before-the-collection`, which would be a finding, not a fault.
 - `make check-variadic` must end "all 7 steps ok, on tarm64osx" (or `arm64osx`), its arm64 step
   naming `test-native`'s failures through `sqlite3_db_config` on the mutant, or its death.
+
+## The Mac's double open (the lead, after the rebase onto `3488963`)
+
+**macOS's dyld opens a FIFO twice, each open waiting for a writer** (the M4 session's Mac run 2,
+PR #38, Homebrew's 3.54.1, macOS 26.7.1, arm64). With one writer at 500 ms, `dlopen` and
+`sqlite3_load_extension` were both still blocked 3000 ms later; one more open for writing
+released them. `dlopen`'s message tried the path twice, "not a file" each time. Linux's `dlopen`
+opens it once. So the row as first built would have failed on the Mac: the collector released
+once, dyld's second open then waited for the watchdog, and the row ended
+`released-by-the-watchdog`. Its fallback, one release before the close, would have hung the same
+way.
+
+**The fix:** `release-until`, the FIFO opened for writing by a shell, then up to a second's wait
+for the loader's answer, and again, `release-rounds` (10) times at most. The collector answers
+`collected` once the loader has answered, and names `unanswered` or a release's failure
+otherwise. The hung branch's fallback releases through it too. The watchdog shell, after its 30
+s and its marker, opens the FIFO for writing ten times, a second apart. The open's FIFO row is
+unchanged: SQLite opens its file once, and Homebrew's Mac runs passed it.
+
+**`.plans/research/m4-slice-2/fifo-double-open.sps`** puts the method against a stand-in that
+opens a FIFO read-only once or twice through a `__collect_safe` `open(2)`, closing each, with a
+gap before each open after the first, as dyld's work between its opens. Three runs in the
+container:
+
+| Release | Opens, gap | Freed |
+|---|---|---|
+| once | 1, none | every run |
+| once | 2, none | two runs of three; in the third the second open waited, the next release freed it |
+| once | 2, 200 ms | no run: the second open waited every time |
+| until | 1, none | every run, one release |
+| until | 2, none | every run, in one release or two |
+| until | 2, 200 ms | every run, in two releases |
+
+With no gap, Linux's second open found the first release's writer still open and returned, so
+one release freed both, most of the time: the single release was a race even on Linux, and the
+Mac's writer had gone before dyld's second open.
+
+**The plants** (`build/lead-mut/`, from the fixed tree, `test-native` on Guix's library):
+
+| Mutation | Guards | Failed |
+|---|---|---|
+| RU1 | the load bound `__collect_safe` (plain), with the watchdog's repeated release | native 1, the FIFO row: actual `released-by-the-watchdog` |
+| RU2 | `release-rounds` is 10 (1) | **survived**, as it must on Linux: its `dlopen` needs one release |
+| RU3 | the collector answers `collected` only when the loader answered (always `collected`) | **survived**: on Linux the first release frees the load, so `unanswered` is unreachable |
+
+RU2 and RU3 can show only where a load waits twice, the Mac. The probe shows the shape they
+guard against: one release leaves a double opener waiting. The Mac step's FIFO row is their run.
+

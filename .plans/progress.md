@@ -193,18 +193,20 @@ newest first.
 - **Times:** under the gate on Guix's library, `test-conventions` 46 s, `test-native` 24 s,
   `test-check-variadic` 16 s, `test-constants` 13 s, and the three loading suites 145 to 160 s,
   where CI's last run read 136 to 165 s. `make check-variadic` takes 10 to 11 s here, and about
-  11 s in CI's `main` job (run 44189788123). The loading suites' CI times are owed by this PR's
-  memory jobs (the M4 plan, §7).
+  11 s in CI's `main` job (run 44189788123). On this PR's CI (run 44193211947): `test-conventions`
+  43 s, `test-native` 22 s, `test-check-variadic` 10 s, and the loading suites 155, 163 and 174 s,
+  `-real`, `-missing` and `-decoys`, within the 450 s bound.
 - **The Mac step** is owed (ADR-0001's consequence): `make test` and `make check-variadic` with
   Apple's library and with Homebrew's, on `main` after this merges. With Apple's, `test-native`
   names the load rows unavailable, and `test-constants`' optional prototype row reports what the
   SDK's header declares; `check-variadic` must end "all 7 steps ok, on tarm64osx". With Homebrew's,
   `CHEZ_SQLITE3_LIBRARY=/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib` and
-  `C_INCLUDE_PATH=/opt/homebrew/opt/sqlite/include`, the FIFO row is the first measure of `dlopen`
-  on a FIFO on macOS. Run PR #34's `research/m4-mac/mac.md` first: its L6 says whether macOS's
-  `dlopen` waits on a FIFO. If it doesn't, the load's FIFO row needs a Mac allowance first, as
-  the open's FIFO row has one (`fifo-refused`), or `check-variadic`'s control stops before its
-  mutant.
+  `C_INCLUDE_PATH=/opt/homebrew/opt/sqlite/include`, the FIFO row is the first run of the row on
+  macOS. L6 is settled (the M4 session's Mac run 2, PR #38): macOS's dyld opens a FIFO twice, each
+  open waiting for a writer, so the row's collector, its fallback and its watchdog release the
+  FIFO until the load answers, ten times at most, a second apart. One release would have left the
+  Mac's load to the watchdog. `research/m4-slice-2/fifo-double-open.sps` shows one release leaving
+  an opener that opens twice waiting, on Linux too, and the repeated release freeing it.
 - **For slice 3:** import the ops from `constants.sls` and hold slice 1's table to them; fill the
   cell with `db-config-sentinel` through `call-with-int-cell`; `load-extension-available?` is the
   opt-in's check.

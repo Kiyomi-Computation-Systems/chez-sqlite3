@@ -2607,11 +2607,17 @@
 ;; native's sqlite3_db_config, or the load would answer "not authorized"
 ;; without opening anything. dlopen opens the FIFO read-only and waits for a
 ;; writer. The collector, once the loader has called, waits a second, asks
-;; for a collection, notes that it finished, then opens the FIFO for
-;; writing, which releases the loader. A plain binding holds the collection,
-;; and the collector with it, until the load returns, so only the watchdog
-;; shell, after 30 s, its marker left first, can release it: the verdict is
-;; who released the loader. The loader notes, as its call returns, whether
+;; for a collection, notes that it finished, then releases the loader
+;; through release-until: the FIFO opened for writing, and again each second
+;; until the loader answers. Linux's dlopen opens the FIFO once; macOS's
+;; dyld opens it twice, each open waiting for a writer (the M4 session's Mac
+;; run 2, PR #38), so a single release left the Mac's load to the watchdog.
+;; .plans/research/m4-slice-2/fifo-double-open.sps shows a single release
+;; leaving an opener that opens twice waiting, on Linux too, and
+;; release-until freeing it. A plain binding holds the collection, and the
+;; collector with it, until the load returns, so only the watchdog shell,
+;; after 30 s, its marker left first, releasing as release-until does, can
+;; release it: the verdict is who released the loader. The loader notes, as its call returns, whether
 ;; the collection had finished: a load that never waited, as one that did not
 ;; open the FIFO would, returns before it, and fails the row too.
 ;;
@@ -2624,6 +2630,22 @@
 ;; header from the FIFO, and SQLite tries the path with .so appended, which
 ;; isn't there: the load answers SQLITE_ERROR and a message, freed with
 ;; sqlite3_free.
+
+;; release-rounds : Natural
+;; How many releases release-until makes at most, a second apart.
+(define release-rounds 10)
+
+;; release-until : String (-> Any) -> (U (List 'released Natural) (List 'unanswered Natural) (List 'release Any))
+;; FIFO opened for writing by a shell, then up to a second's wait for
+;; ANSWERED?, and again until it answers, release-rounds times at most: the
+;; releases it took, or that it never answered, or a release's own failure.
+(define (release-until fifo answered?)
+  (let loop ((n 1))
+    (let ((released (capture-command (list "sh" "-c" "exec 3<>\"$1\"" "sh" fifo))))
+      (cond ((not (equal? released '(0 "" ""))) (list 'release released))
+            ((eq? (wait-until answered? 100) 'satisfied) (list 'released n))
+            ((< n release-rounds) (loop (+ n 1)))
+            (else (list 'unanswered n))))))
 
 ;; blocking-load : Natural String -> (List Any Any)
 ;; What the loader and the collector each answered, or that it hung.
@@ -2641,9 +2663,8 @@
                         (sleep (make-time 'time-duration 0 1))
                         (collect-rendezvous)
                         (with-mutex m (set! collected #t))
-                        (let ((released (capture-command
-                                         (list "sh" "-c" "exec 3<>\"$1\"" "sh" fifo))))
-                          (if (equal? released '(0 "" "")) 'collected (list 'release released))))
+                        (let ((released (release-until fifo (lambda () (with-mutex m loader-answer)))))
+                          (if (eq? (car released) 'released) 'collected released)))
                       'the-loader-never-called))))
          (with-mutex m (set! collector-answer (list 'answer a))))))
     (fork-thread
@@ -2665,14 +2686,14 @@
                           (list code (if (string? text) 'message (list 'no-message text)) order))))))))
          (with-mutex m (set! loader-answer (list 'answer a))))))
     ;; A loader still waiting once the bound has passed is released here,
-    ;; the FIFO opened for writing, and waited for again, bounded: the
+    ;; through release-until, and waited for again, bounded: the
     ;; connection's close, which follows, would wait for the load, which
     ;; holds the connection's mutex, to TEST_TIMEOUT. So the row fails by
     ;; name, the-loader-hung, and the suite goes on.
     (let* ((loader (wait-until (lambda () (with-mutex m loader-answer)) loader-steps))
            (released (if (eq? loader 'satisfied)
                          'not-needed
-                         (capture-command (list "sh" "-c" "exec 3<>\"$1\"" "sh" fifo))))
+                         (release-until fifo (lambda () (with-mutex m loader-answer)))))
            (returned (if (eq? loader 'satisfied)
                          'satisfied
                          (wait-until (lambda () (with-mutex m loader-answer)) 3000)))
@@ -2701,7 +2722,7 @@
              (list 'mkfifo made)
              (let* ((watchdog (capture-command
                                (list "sh" "-c"
-                                     "(sleep 30; : >\"$2\"; exec 3<>\"$1\") </dev/null >/dev/null 2>&1 & echo $!"
+                                     "(sleep 30; : >\"$2\"; i=0; while [ $i -lt 10 ]; do exec 3<>\"$1\"; exec 3<&-; sleep 1; i=$((i+1)); done) </dev/null >/dev/null 2>&1 & echo $!"
                                      "sh" fifo marker)))
                     (pid (let ((out (cadr watchdog)))
                            (and (= (car watchdog) 0) (> (string-length out) 1)
