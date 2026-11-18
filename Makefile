@@ -132,6 +132,8 @@ MEMORY_SUITES_2 := \
   tests/test-library-loading-decoys.sps \
   tests/test-libsqlite3-info.sps \
   tests/test-manifest.sps \
+  tests/test-open-db-config-engines.sps \
+  tests/test-open-db-config.sps \
   tests/test-open-interleave.sps \
   tests/test-open-locks.sps \
   tests/test-open-options.sps \

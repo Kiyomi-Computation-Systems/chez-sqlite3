@@ -31,6 +31,9 @@
 ;;;                     a suite's scratch directory, and a row on one
 ;;;   the missing-api rows
 ;;;                     one per entry point of a part
+;;;   the opens         M4 slice 3's: a case list as the probe's --opens takes
+;;;                     it, and the entries a failed open writes to the
+;;;                     decoy's log
 ;;;
 ;;; Each suite keeps its own runner, scratch directory and floors, and names
 ;;; the helpers here that take them by the names its rows use. Nothing here
@@ -50,7 +53,8 @@
           entries-dealt
           lacks-build decoy-builds compile-decoys decoy-status decoy-row-in
           read-switch the-report-three threadsafe-call initialize-call log-of memory-used-call
-          loaded-calls every-call code-of missing-api-rows)
+          loaded-calls every-call code-of missing-api-rows
+          opens-arg open-calls)
   (import (rnrs)
           (srfi :64)
           (chez-sqlite3-testing)
@@ -466,6 +470,30 @@
   (define (code-of name)
     (guard (e (#t (list 'no-code name)))
       (cdr (assq name sqlite-result-codes))))
+
+  ;; --- the opens (M4 slice 3) ---------------------------------------------------------
+
+  ;; opens-arg : (Listof (Listof Any)) -> String
+  ;; CASES, each an open's arguments, its filename first, written as the one
+  ;; datum tests/refusal-probe.sps's --opens reads.
+  (define (opens-arg cases)
+    (call-with-string-output-port (lambda (port) (write cases port))))
+
+  ;; open-calls : -> (Listof String)
+  ;; The entries one open with no option writes to the decoy's log, whose
+  ;; sqlite3_open_v2 answers SQLITE_CANTOPEN with no handle: the open, its
+  ;; flags open-database's with no option, read-write, create, the full
+  ;; mutex and extended codes (ADR-0012, decision 3), from (chez-sqlite3
+  ;; private constants), which tests/test-constants.sps holds to sqlite3.h;
+  ;; then the failure's message, sqlite3_errstr of that code, as a failed
+  ;; open with no handle reads it.
+  (define (open-calls)
+    (let ((flags (bitwise-ior sqlite-open-readwrite sqlite-open-create sqlite-open-fullmutex
+                              sqlite-open-exrescode))
+          (cantopen (code-of 'cantopen)))
+      (list (string-append "sqlite3_open_v2(filename,ppDb," (number->string flags) ",NULL)")
+            (string-append "sqlite3_errstr(" (if (integer? cantopen) (number->string cantopen) "?")
+                           ")"))))
 
   ;; missing-api-rows : (String (U String #f) (Listof String) String (String -> Expected) -> Void)
   ;;                    (String -> (Listof Any)) (Listof String) -> Void

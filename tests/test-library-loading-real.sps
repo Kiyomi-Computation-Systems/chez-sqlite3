@@ -23,6 +23,10 @@
 ;;;     4.6): a build without sqlite3_load_extension loads, with no
 ;;;     missing-api, and native records it absent; the control records it
 ;;;     there;
+;;;   - the opt-in's check (M4 slice 3; the M4 plan, section 4.3): on the build
+;;;     without it, an open that opts in is refused by the named condition,
+;;;     after the list's own rules, the open never tried; on the control it is
+;;;     tried, and so is (enable-load-extension . #f) on the lacking build;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
 ;;;     then through the override. What it reports must equal what
 ;;;     tests/libsqlite3-oracle.c reads from the same file;
@@ -243,6 +247,83 @@
   (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
                                   (list (cons 'load-extension-available? #t)))
                         '() '() (loaded-calls "control"))))
+
+;; --- the opt-in's check (M4 slice 3; the M4 plan, section 4.3) -------------------------
+;; An open whose settings opt in, (enable-load-extension . #t), on a library
+;; without sqlite3_load_extension raises &sqlite-extensions-unavailable from
+;; the verb, the fifth of the refusals, after the list's own rules: in the
+;; checks' critical section, caught there and raised after it, so a handler
+;; of it runs at depth 1, every count zero there. The decoy's open always
+;; fails, SQLITE_CANTOPEN, so its log can never show a db_config call: what a
+;; row sees is whether the open was tried, sqlite3_open_v2 in the log, and
+;; each row asserts the log whole. Each case runs through open-database,
+;; then call-with-database, whose procedure is never called.
+
+(define no-counts '((block . 0) (connection . 0) (statement . 0)))
+(define (opt-in-refused who) (list 'extensions-unavailable who 'library-condition 'depth-1 no-counts))
+(define (refused-as who irritants) (list 'assertion who irritants 'depth-1 no-counts))
+(define (cantopen-from who) (list 'sqlite-error who 'cantopen 'depth-1 no-counts))
+
+;; both : (Symbol -> Any) -> (List Any Any Symbol)
+;; A case's result as the probe prints it, the same refusal from each verb,
+;; the procedure never called.
+(define (both refusal) (list (refusal 'open-database) (refusal 'call-with-database) 'not-called))
+
+;; lacking-cases : (Listof (Pairof (Listof Any) (Symbol -> Any)))
+;; Each case's arguments, the filename first, and its refusal from a verb:
+;; the opt-in alone and among the other three, the fifth step; then the
+;; list's own rules, the split's and M2's, each with the opt-in in the list,
+;; which raise their own refusal first, wherever the opt-in stands.
+(define lacking-cases
+  (list
+   (cons '(":memory:" ((enable-load-extension . #t))) opt-in-refused)
+   (cons '(":memory:" ((defensive . #t) (enable-load-extension . #t) (dqs-dml . #f))) opt-in-refused)
+   (cons '(":memory:" ((enable-load-extension . #t) (nosuch . 1)))
+         (lambda (who) (refused-as who '(unknown-setting nosuch))))
+   (cons '(":memory:" ((nosuch . 1) (enable-load-extension . #t)))
+         (lambda (who) (refused-as who '(unknown-setting nosuch))))
+   (cons '(":memory:" ((enable-load-extension . #t) (defensive . 1)))
+         (lambda (who) (refused-as who '(setting-out-of-domain defensive 1))))
+   (cons '(":memory:" ((enable-load-extension . #t) (enable-load-extension . #t)))
+         (lambda (who) (refused-as who '(setting-given-twice enable-load-extension))))
+   (cons '(":memory:" ((enable-load-extension . #t) 5))
+         (lambda (who) (refused-as who '(not-an-association-list 5))))
+   (cons '(":memory:" ((enable-load-extension . #t)) ((dqs-ddl . #t)))
+         (lambda (who) (refused-as who '(second-settings-list))))
+   (cons '(":memory:" bogus ((enable-load-extension . #t)))
+         (lambda (who) (refused-as who '(unknown-option bogus))))
+   (cons '(42 ((enable-load-extension . #t))) (lambda (who) (refused-as who '(not-a-string 42))))
+   (cons '("file:x.db" ((enable-load-extension . #t)))
+         (lambda (who) (refused-as who '(file-uri-without-uri-option (kind string)))))))
+
+(decoy-row "lacks-sqlite3_load_extension" #f
+  (list "--extension-loading" "yes" "--opens" (opens-arg (map car lacking-cases)))
+  "an open that opts in, (enable-load-extension . #t), alone or among the other three, raises &sqlite-extensions-unavailable from open-database and from call-with-database, whose procedure is never called, a library condition, its handler at depth 1 and every count zero; each of the list's own rules, the split's and M2's, with the opt-in beside it, raises its own refusal first; and the log holds the load's entries alone, no sqlite3_open_v2"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #f)
+                                        (cons 'opens (map (lambda (c) (both (cdr c))) lacking-cases))))
+                        '() '() (loaded-calls "control"))))
+
+;; The control, which has sqlite3_load_extension: the same opt-in is tried,
+;; so the refusal above is the entry point's doing. And (enable-load-
+;; extension . #f) on the lacking build is the same as leaving it out (Q15):
+;; the open is tried. Each case opens twice, once by each verb, so the log
+;; holds the open's two entries twice.
+(decoy-row "control" #f
+  (list "--extension-loading" "yes" "--opens" (opens-arg '((":memory:" ((enable-load-extension . #t))))))
+  "the control, with the entry point: the same open that opts in is tried by each verb, sqlite3_open_v2 in the log, and answers &sqlite-error cantopen, the decoy's, its handler at depth 1, every count zero, the procedure never called"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #t)
+                                        (cons 'opens (list (both cantopen-from)))))
+                        '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
+
+(decoy-row "lacks-sqlite3_load_extension" #f
+  (list "--extension-loading" "yes" "--opens" (opens-arg '((":memory:" ((enable-load-extension . #f))))))
+  "(enable-load-extension . #f) on the lacking build is the same as leaving it out (Q15): the open is tried by each verb, sqlite3_open_v2 in the log, and answers &sqlite-error cantopen, the procedure never called"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #f)
+                                        (cons 'opens (list (both cantopen-from)))))
+                        '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
 
 ;; --- the real libsqlite3 ---------------------------------------------------------------
 

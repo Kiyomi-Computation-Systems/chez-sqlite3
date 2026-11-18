@@ -126,12 +126,23 @@
 ;;;                  exits through interrupt-latch-shut!, which clears the
 ;;;                  flag around them and puts it back after (the maintainer's
 ;;;                  "Shut the latch on exit", 2026-11-17)
+;;;
+;;; M4 adds (ADR-0012, amended for M4; ADR-0021, decision 5):
+;;;
+;;;   the opt-in     the record holds the connection's opt-in to extension
+;;;                  loading, fixed when it is made, as the cache's capacity
+;;;                  is: connection-outcome is given it, from the settings'
+;;;                  plan, whether its steps hold (enable-load-extension . #t)'s.
+;;;                  database-extension-loading? reads it, for the suites and
+;;;                  for M4 slice 4's load-extension!, which reads it last of
+;;;                  its checks. A set that fails closes the connection, so no
+;;;                  caller holds a record whose opt-in the C call lacks
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
           call-with-open-handle failure-details check-database-owner
           track-statement! untrack-statement! tracked-statements first-finalize-failure
-          database-cache-capacity database-cache-count
+          database-cache-capacity database-cache-count database-extension-loading?
           database-cache-check-out! database-cache-return!
           changes total-changes last-insert-rowid in-transaction?
           interrupt-database! interrupt-database/with call-with-latch-shut
@@ -158,7 +169,9 @@
   ;; capacity the record is made with, which never changes (ADR-0020). DEPTH
   ;; is how many with-transaction levels are open on it, from 0 (ADR-0017,
   ;; decision 3). LATCH is its interrupt latch, made not interruptible: the
-  ;; open sets it, in its section (ADR-0019, decision 2).
+  ;; open sets it, in its section (ADR-0019, decision 2). OPT-IN is whether
+  ;; it opted in to extension loading, #t or #f, fixed when it is made, as
+  ;; CACHE's capacity is (ADR-0012, amended for M4).
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
             (immutable owner unchecked-database-owner)
@@ -166,11 +179,12 @@
             (mutable serial unchecked-database-serial set-database-serial!)
             (immutable cache unchecked-database-cache)
             (mutable depth unchecked-database-depth set-unchecked-database-depth!)
-            (immutable latch unchecked-database-latch))
+            (immutable latch unchecked-database-latch)
+            (immutable opt-in unchecked-database-opt-in))
     (protocol (lambda (new)
-                (lambda (handle owner capacity)
+                (lambda (handle owner capacity opt-in)
                   (new handle owner (make-eq-hashtable) 0 (make-statement-cache capacity) 0
-                       (make-interrupt-latch)))))
+                       (make-interrupt-latch) (and opt-in #t)))))
     (sealed #t)
     (opaque #t))
 
@@ -388,6 +402,19 @@
     (check-owned 'database-cache-capacity db)
     (statement-cache-capacity (unchecked-database-cache db)))
 
+  ;; database-extension-loading? : Database -> Boolean
+  ;; Whether DB opted in to extension loading at open: its settings list
+  ;; held (enable-load-extension . #t), so its plan held the opt-in's step,
+  ;; and that set matched; #f for its #f, which makes no call, and for no
+  ;; setting (ADR-0021, decisions 5 and 6). Fixed when the record was made,
+  ;; read whether DB is open or closed. DB checked by check-owned first, from
+  ;; database-extension-loading?, as database-cache-capacity is. For the
+  ;; suites, and for M4 slice 4's load-extension!, which makes its own owner
+  ;; check first and reads this last of its checks.
+  (define (database-extension-loading? db)
+    (check-owned 'database-extension-loading? db)
+    (unchecked-database-opt-in db))
+
   ;; database-cache-count : Database -> Natural
   ;; How many statements DB's cache holds now, read in one critical section;
   ;; 0 once DB is closed. DB checked by check-owned first, from
@@ -478,13 +505,13 @@
                                   'file-uri-without-uri-option (shown-value copy)))
            (values copy flags))))))
 
-  ;; connection-outcome : Symbol String Natural Natural (U (-> Any) #f)
+  ;; connection-outcome : Symbol String Natural Natural Boolean (U (-> Any) #f)
   ;;                -> (U (List 'opened Database) (List 'failed Integer String)
   ;;                      (List 'raised Any) (List 'refused))
   ;; NAME, a checked copy, opened with FLAGS and owned by this thread, its
-  ;; cache of CAPACITY, checked: the database; or the failure's extended
-  ;; code and message, its handle closed; or what a call raised,
-  ;; call-with-c-string's refusal of U+0000, from WHO before anything is
+  ;; cache of CAPACITY and its opt-in OPT-IN, checked: the database; or the
+  ;; failure's extended code and message, its handle closed; or what a call
+  ;; raised, call-with-c-string's refusal of U+0000, from WHO before anything is
   ;; allocated, among them. One critical section holds the C string's whole
   ;; extent: the open, the read of its out-pointer, the count, the record
   ;; and its latch made interruptible (ADR-0019, decision 2), or else the
@@ -499,7 +526,7 @@
   ;; remainder makes, or a continuation a timer's handler took, one alone
   ;; opens: none opens a connection that nothing would return or close
   ;; ((chez-sqlite3 private open); ADR-0018, amended in M3 slice 5).
-  (define (connection-outcome who name flags capacity refused?)
+  (define (connection-outcome who name flags capacity opt-in refused?)
     (critical-section
      (if (and refused? (refused?))
          '(refused)
@@ -514,7 +541,7 @@
                    (else
                     (count-up! 'connection)
                     (if (eqv? rc sqlite-ok)
-                        (let ((db (make-database handle (get-thread-id) capacity)))
+                        (let ((db (make-database handle (get-thread-id) capacity opt-in)))
                           (interrupt-latch-open! (unchecked-database-latch db))
                           (list 'opened db))
                         (let ((details (details-of rc handle)))

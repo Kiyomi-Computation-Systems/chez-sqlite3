@@ -9,9 +9,10 @@
 ;;;                and after are zero, and no file is made. '() is accepted,
 ;;;                and a list of options, '(read-only), refused as
 ;;;                not-an-association-list
-;;;   db_config    M4 slice 1: each of the four db_config settings, #t and #f,
-;;;                refused as unknown-setting, nothing opened, until slice 3
-;;;                joins them to the live list and replaces the row
+;;;   db_config    each of the four db_config settings, #t and #f, accepted
+;;;                and opened, on :memory: and on a file: M4 slice 3 joined
+;;;                them to the live list and replaced slice 1's two rows that
+;;;                held them out; their sets are test-open-db-config's
 ;;;   the order    the split first, a second list; then M2's checks, the
 ;;;                filename, the options, file: without uri; then the list's
 ;;;   together     options and a list, the list at each position among two
@@ -61,7 +62,7 @@
         (chez-sqlite3 private counters)
         (only (chez-sqlite3 private conditions) sqlite-setting-mismatch?
               sqlite-setting-mismatch-setting sqlite-setting-mismatch-expected
-              sqlite-setting-mismatch-actual)
+              sqlite-setting-mismatch-actual sqlite-extensions-unavailable?)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
               sqlite-error-extended-code sqlite-error-sql sqlite-busy? sqlite-closed?))
 
@@ -379,45 +380,65 @@
          (d (attempt (lambda () (call-with-database ":memory:" '(read-only) database-cache-capacity)))))
     (list a b c d (native-counts))))
 
-;; The four db_config settings (ADR-0021, decision 1) are held out of the live
-;; list until M4 slice 3: settings-plan's steps are SQL, and open.sls runs
-;; every one as SQL, so a name joined early would reach SQLite as a PRAGMA
-;; (the M4 plan, section 5, item 1). Slice 3 replaces this row with its sets'.
+;; The four db_config settings (ADR-0021, decision 1) joined the live list in
+;; M4 slice 3, which replaced slice 1's two rows here that held them out,
+;; refused as unknown-setting: each is accepted now, and opens. Their sets,
+;; each read back, are tests/test-open-db-config.sps's.
 (define db-config-cases
   '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t) (defensive . #f)
     (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))
 
-(test-equal "each of db_config's four, #t and #f, is refused by open-database on :memory: as an unknown setting, an assertion violation naming it, before anything opens: the counts zero at the raise and after"
-  (map (lambda (s)
-         (list (list (list 'assertion-violation 'open-database (list 'unknown-setting (car s)))
-                     zero-counts)
-               zero-counts))
-       db-config-cases)
-  (let loop ((rest db-config-cases) (found '()))
-    (if (null? rest)
-        (reverse found)
-        (let* ((r (at-raise (lambda () (open-database ":memory:" (list (car rest))))))
-               (after (native-counts)))
-          (loop (cdr rest) (cons (list r after) found))))))
+;; extension-loading : Any
+;; native's record of sqlite3_load_extension: where it is not #t, the
+;; opt-in's #t is refused before anything opens (ADR-0021, decision 5).
+(define extension-loading
+  (guard (e (#t (list 'unreached (describe e))))
+    (eval 'load-extension-available? (environment '(chez-sqlite3 private native)))))
 
-;; An open that closed before it raised would leave the counts zero at the
-;; raise, and :memory: leaves nothing behind, so the same refusal on a file:
-;; no file is made.
-(test-equal "each of db_config's four, #t and #f, is refused the same on a file, and no file is made"
+;; accepted-expected : (Pairof Symbol Boolean) -> Symbol
+(define (accepted-expected s)
+  (if (and (equal? s '(enable-load-extension . #t)) (not (eq? extension-loading #t)))
+      'extensions-unavailable
+      'opened))
+
+;; accepted-run : (-> Any) -> Any
+;; opened, the database THUNK answered closed; extensions-unavailable; or
+;; what else THUNK raised.
+(define (accepted-run thunk)
+  (let ((r (guard (e ((sqlite-extensions-unavailable? e) 'extensions-unavailable)
+                     (#t (list 'raised (what-raised e))))
+             (thunk))))
+    (if (guard (e (#t #f)) (database? r))
+        (begin (close-answer r) 'opened)
+        r)))
+
+(test-equal "each of db_config's four, #t and #f, is accepted by open-database on :memory: and opens, nothing left counted once it is closed; where the library lacks sqlite3_load_extension, the opt-in's #t is refused instead, before anything opens"
+  (map (lambda (s) (list (accepted-expected s) zero-counts)) db-config-cases)
+  (begin
+    (unless (eq? extension-loading #t)
+      (display "UNAVAILABLE the opt-in's open: this libsqlite3 has no sqlite3_load_extension, so its refusal is asserted in its place")
+      (newline))
+    (let loop ((rest db-config-cases) (found '()))
+      (if (null? rest)
+          (reverse found)
+          (let* ((r (accepted-run (lambda () (open-database ":memory:" (list (car rest))))))
+                 (after (native-counts)))
+            (loop (cdr rest) (cons (list r after) found)))))))
+
+(test-equal "each of db_config's four, #t and #f, is accepted the same on a file of its own, which the open makes; a refused opt-in makes none"
   (map (lambda (s)
-         (list (list (list 'assertion-violation 'open-database (list 'unknown-setting (car s)))
-                     zero-counts)
-               zero-counts 'not-made))
+         (let ((e (accepted-expected s)))
+           (list e zero-counts (if (eq? e 'opened) 'made 'not-made))))
        db-config-cases)
   (in-dir (lambda (dir)
-            (let ((path (string-append dir "/d.db")))
-              (let loop ((rest db-config-cases) (found '()))
-                (if (null? rest)
-                    (reverse found)
-                    (let* ((r (at-raise (lambda () (open-database path (list (car rest))))))
-                           (after (native-counts))
-                           (file (made path)))
-                      (loop (cdr rest) (cons (list r after file) found)))))))))
+            (let loop ((rest db-config-cases) (i 0) (found '()))
+              (if (null? rest)
+                  (reverse found)
+                  (let* ((path (string-append dir "/d" (number->string i) ".db"))
+                         (r (accepted-run (lambda () (open-database path (list (car rest))))))
+                         (after (native-counts))
+                         (file (made path)))
+                    (loop (cdr rest) (+ i 1) (cons (list r after file) found))))))))
 
 ;; --- the order of the refusals ---------------------------------------------------------------
 

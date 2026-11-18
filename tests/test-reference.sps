@@ -509,6 +509,11 @@
   (list (entry-line "with-transaction") (entry-line "sqlite-transaction-ended?")
         (comments-of "with-transaction") (comments-of "sqlite-transaction-ended?")))
 
+(test-equal "sqlite-extensions-unavailable?'s entry holds its signature, written out from the M4 plan's section 4.8, and it is its source comment"
+  '("sqlite-extensions-unavailable? : Any -> Boolean"
+    ("sqlite-extensions-unavailable? : Any -> Boolean"))
+  (list (entry-line "sqlite-extensions-unavailable?") (comments-of "sqlite-extensions-unavailable?")))
+
 (test-end "reference")
 
 ;; SRFI-64 sets no exit status; this is the shared form.

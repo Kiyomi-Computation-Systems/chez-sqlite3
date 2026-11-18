@@ -173,7 +173,8 @@
     (last-insert-rowid chez-sqlite3 private connection)
     (in-transaction? chez-sqlite3 private connection)
     (with-transaction chez-sqlite3 private transaction)
-    (sqlite-transaction-ended? chez-sqlite3 private conditions)))
+    (sqlite-transaction-ended? chez-sqlite3 private conditions)
+    (sqlite-extensions-unavailable? chez-sqlite3 private conditions)))
 
 (test-begin "public")
 
@@ -181,8 +182,8 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 68 names, counted from the library itself, not from this suite's list"
-  68
+(test-equal "(chez-sqlite3) exports 69 names, counted from the library itself, not from this suite's list"
+  69
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
@@ -191,7 +192,7 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!, and interrupt-database/with, the verb's procedure that takes the foreign call, for the suites; the cache's four procedures; the transaction depth's two, with-transaction's; and call-with-latch-shut, with-transaction's exits' shut"
+(test-equal "(chez-sqlite3 private connection) exports exactly the two public procedures, the seven the statements' library uses: call-with-open-handle, failure-details, check-database-owner, first-finalize-failure, track-statement!, tracked-statements and untrack-statement!; the four parts of the open the open verbs use: prepared-open, connection-outcome, opened-database and close-connection; M3's four counters; interrupt-database!, and interrupt-database/with, the verb's procedure that takes the foreign call, for the suites; the cache's four procedures; the transaction depth's two, with-transaction's; call-with-latch-shut, with-transaction's exits' shut; and database-extension-loading?, the record's opt-in, for the suites and M4 slice 4's verb"
   (sorted-names '(close-database! database? interrupt-database! interrupt-database/with
                   call-with-latch-shut call-with-open-handle
                   failure-details check-database-owner first-finalize-failure track-statement!
@@ -199,13 +200,13 @@
                   prepared-open connection-outcome opened-database close-connection
                   changes total-changes last-insert-rowid in-transaction?
                   database-cache-check-out! database-cache-return! database-cache-capacity
-                  database-cache-count
+                  database-cache-count database-extension-loading?
                   database-depth set-database-depth!))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private connection)))))
 
-(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings! and made-claim, for the suites"
-  (sorted-names '(open-database call-with-database applied-settings! made-claim))
+(test-equal "(chez-sqlite3 private open) exports exactly the two open verbs, which (chez-sqlite3) exports, and applied-settings!, applied-settings/with, its form that takes the db_config binding, and made-claim, for the suites"
+  (sorted-names '(open-database call-with-database applied-settings! applied-settings/with made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private open)))))
 

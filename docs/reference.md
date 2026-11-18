@@ -125,6 +125,10 @@ and its value, each name at most once, in any order. `'()` sets nothing.
 | `temp-store` | `default`, `file` or `memory` | Where temporary tables and indexes are kept. |
 | `trusted-schema` | `#t` or `#f` | Whether the schema's own SQL, its views and triggers among it, may use any function. |
 | `statement-cache` | an exact integer, 0 to 1024 | How many statements the conveniences keep for reuse: 32 when absent, and 0 keeps none. SQLite never sees it. |
+| `enable-load-extension` | `#t` or `#f` | `#t` opts the connection in to loading SQLite extensions. `#f` is the same as leaving it out. |
+| `defensive` | `#t` or `#f` | SQLite's defensive mode: SQL can't corrupt the file, as by writing the schema itself. |
+| `dqs-dml` | `#t` or `#f` | Whether a double-quoted word that names no column is a string in `select`, `insert`, `update` and `delete`. |
+| `dqs-ddl` | `#t` or `#f` | The same in `create table`, `create index` and the rest. |
 
 A name not in the table, a name given twice, a value not in its row, a list
 that is not such pairs, and a second list are assertion violations, and
@@ -149,6 +153,52 @@ database keeps its journal in memory.
 When a setting fails, or reads back wrong, the connection is closed, then the
 condition is raised. Nothing is set that the list does not name: without
 `busy-timeout`, a lock held by another connection raises busy at once.
+
+The last four are set by one call each, not by SQL, and read back from that
+call's own answer. One the list leaves out stays as the library starts it:
+
+| Setting | Starts |
+|---|---|
+| `defensive` | off; on in Apple's library |
+| `dqs-dml`, `dqs-ddl` | on |
+| `enable-load-extension` | not opted in, whatever the library's own switch says |
+
+So a program that needs one behaviour on every library names the setting.
+
+Under `defensive`, `PRAGMA writable_schema = 1` runs, and does nothing:
+
+```scheme run
+(call-with-database ":memory:" '((defensive . #t))
+  (lambda (db)
+    (execute! db "PRAGMA writable_schema = 1")
+    (query-row db "PRAGMA writable_schema")))
+;; => #(0)
+```
+
+With `dqs-dml` or `dqs-ddl` off, a double-quoted word that names no column
+fails when the statement is prepared, with code `error`. SQLite's message for
+it differs by version. On, the word is a string:
+
+```scheme run
+(list (call-with-database ":memory:" '((dqs-dml . #t))
+        (lambda (db) (query db "select \"x\"")))
+      (call-with-database ":memory:" '((dqs-dml . #f))
+        (lambda (db)
+          (guard (e ((sqlite-error? e) (sqlite-error-code e)))
+            (query db "select \"x\"")))))
+;; => ((#("x")) error)
+```
+
+A library built without extension loading, as Apple's is, refuses
+`(enable-load-extension . #t)` before anything opens: the open raises a
+condition that `sqlite-extensions-unavailable?` holds. The list's own
+mistakes are found first.
+
+```scheme
+(guard (e ((sqlite-extensions-unavailable? e) 'no-extension-loading))
+  (open-database "app.db" '((enable-load-extension . #t))))
+;; on Apple's library: no-extension-loading
+```
 
 Beside another connection, some settings wait for its lock, up to
 `busy-timeout`, then raise busy; if it lets go meanwhile, the open goes on.
@@ -1179,7 +1229,7 @@ gives a fresh list.
 
 ## Conditions
 
-Everything this library raises on purpose is one of seven conditions, and
+Everything this library raises on purpose is one of eight conditions, and
 each is a `chez-sqlite3-error?`. An `sqlite-error?` can also be a busy, a
 constraint, a read-only or an interrupt one. Catch the family with it, or
 one kind with its own predicate:
@@ -1194,6 +1244,7 @@ one kind with its own predicate:
 | `sqlite-transaction-ended?` | `with-transaction`'s procedure returned after its transaction had already ended. |
 | `sqlite-invalid-text?` | TEXT, or a column's name, that is not well-formed UTF-8. |
 | `sqlite-setting-mismatch?` | A setting read back as other than asked, as a connection opened. |
+| `sqlite-extensions-unavailable?` | An open opted in to extension loading, on a library built without it. |
 
 A caller's mistake is not one of these. A name that is not a string, a bad
 option or setting, a value that is not a connection, or an accessor given the wrong
@@ -1510,3 +1561,14 @@ sqlite-setting-mismatch-actual : SqliteSettingMismatch -> Any
 The value read back, in the list's words where it has one: `memory` for an
 in-memory database's journal, `#t` or `#f` for 1 or 0. Any other value is
 given as SQLite read it, and `()` when it read none.
+
+### `sqlite-extensions-unavailable?`
+
+```text
+sqlite-extensions-unavailable? : Any -> Boolean
+```
+
+Whether the value says an open asked for `(enable-load-extension . #t)` on a
+library built without extension loading, as Apple's is. Nothing was opened.
+It is a `chez-sqlite3-error?`, but no `sqlite-error?`. To load extensions
+there, name another library with `CHEZ_SQLITE3_LIBRARY`.
