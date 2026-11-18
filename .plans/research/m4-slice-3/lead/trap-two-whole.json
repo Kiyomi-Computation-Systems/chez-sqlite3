@@ -1,0 +1,1 @@
+[{"name":"T2-back-to-back","edits":[["tests/test-open-db-config-engines.sps","                (and new? (two-whole? noted)))","                (and new? (equal? noted (append once-calls once-calls))))"]],"suites":["test-open-db-config-engines"]}]

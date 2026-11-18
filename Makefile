@@ -98,6 +98,8 @@ MEMORY_SUITES_1 := \
   tests/test-memory-check.sps \
   tests/test-native.sps \
   tests/test-never-loads.sps \
+  tests/test-open-db-config-engines.sps \
+  tests/test-open-db-config.sps \
   tests/test-open-engines.sps \
   tests/test-open-settings.sps \
   tests/test-require-threaded.sps \

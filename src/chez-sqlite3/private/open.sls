@@ -2,7 +2,8 @@
 ;;; (chez-sqlite3 private open): the open verbs, open-database and
 ;;; call-with-database, and the settings list they take (ADR-0012, decisions
 ;;; 3 and 8; ADR-0018). (chez-sqlite3) exports the two; applied-settings! is
-;;; exported for the suites, and made-claim, which they hold whole: no
+;;; exported for the suites, with applied-settings/with, its form that takes
+;;; the db_config binding, and made-claim, which they hold whole: no
 ;;; position a call has passed is claimed again, 0 included.
 ;;;
 ;;; They live here, not in (chez-sqlite3 private connection), because the
@@ -24,27 +25,46 @@
 ;;;                      string, the options, a file: name without uri
 ;;;   3. the list        settings-plan's rules: its shape, then each entry's
 ;;;                      name, a repeat, its value's domain
+;;;   4. the opt-in      (enable-load-extension . #t) on a library without
+;;;                      sqlite3_load_extension, native's record at its load:
+;;;                      &sqlite-extensions-unavailable (ADR-0021, decision 5;
+;;;                      ADR-0012 and ADR-0018, amended for M4)
 ;;;
 ;;; The split comes first, since it is what tells an option from the list.
 ;;; M2's checks come next, so each of M2's refusals stands as it was, with a
-;;; list or without one. The list's come last: its settings run only once the
+;;; list or without one. The list's come after: its settings run only once the
 ;;; connection is open (M3 slice 5's choice; ADR-0018, amended in slice 1).
-;;; The three run in one critical section, what they raise caught there and
-;;; raised again after it, so no engine's expiry and no timer's handler falls
-;;; inside them (below).
+;;; The opt-in's is last: it reads the plan's steps, so a list refused anyway
+;;; raises its own refusal first, opt-in or not. The four run in one critical
+;;; section, what they raise caught there and raised again after it, so no
+;;; engine's expiry and no timer's handler falls inside them (below).
 ;;;
 ;;; Then the open, its statement cache of the list's statement-cache, 32 when
-;;; it gives none, fixed in the record when it is made, before any PRAGMA
-;;; runs (ADR-0018, decision 4; ADR-0020, decision 1). Then each of SQLite's
-;;; settings the list gives, busy-timeout first, then the rest in the list's
-;;; order (decision 5): set by one statement, then read back by a second,
-;;; PRAGMA and its name, and compared by settings' read-back-comparison
-;;; (decision 4). Each statement is prepared with no flags through the
-;;; statement tier, never the cache (ADR-0020, decision 3), run, and
-;;; finalized before the next is prepared. A mismatch raises
-;;; &sqlite-setting-mismatch, its setting, the value asked for and the value
-;;; read; a statement's failure raises its own condition, &sqlite-busy under
-;;; another's lock among them. Either way the connection is closed first,
+;;; it gives none, and its opt-in, whether the plan's steps hold the opt-in's
+;;; step, each fixed in the record when it is made, before any setting runs
+;;; (ADR-0018, decision 4; ADR-0020, decision 1; ADR-0012, amended for M4).
+;;; Then each of SQLite's settings the list gives, busy-timeout first, then
+;;; the rest in the list's order (decision 5). A PRAGMA is set by one
+;;; statement, then read back by a second, PRAGMA and its name, and compared
+;;; by settings' read-back-comparison (decision 4). Each statement is
+;;; prepared with no flags through the statement tier, never the cache
+;;; (ADR-0020, decision 3), run, and finalized before the next is prepared.
+;;; One of db_config's four is one sqlite3_db_config call, in a critical
+;;; section of its own (ADR-0021, decision 3): through call-with-open-handle,
+;;; its cell native's call-with-int-cell, filled with the core's
+;;; db-config-sentinel, never a literal; the call made; and the core's
+;;; db-config-verdict read from its own answer and cell, never a second
+;;; call. A mismatch raises &sqlite-setting-mismatch, its setting, the value
+;;; asked for and the value read; a statement's failure raises its own
+;;; condition, &sqlite-busy under another's lock among them; a set's code
+;;; but 0 raises &sqlite-error of that code, the call's own, never the
+;;; connection's, which a refused set leaves at another call's or at 0, and
+;;; its message sqlite3_errstr's, read in the set's section, since db_config
+;;; sets no error on its connection (M4's research, D3, rv2); but a code that
+;;; names no error, its low byte 0, 100 or 101, or no exact integer, is an
+;;; assertion violation from the verb, (not-an-error CODE), tested here
+;;; before raise-sqlite-error, whose own refusal would name it (ADR-0021,
+;;; amended in M4 slice 1). Either way the connection is closed first,
 ;;; then the condition raised (decision 7). A close that fails then is not
 ;;; raised over it: the setting's condition reaches the caller, and the
 ;;; connection stays open and counted, for the gate to see, as
@@ -71,7 +91,7 @@
 ;;; it was. Every section of the call compares the two, inside the section,
 ;;; and claims it by advancing the call's: the open's, at 0; then each of the
 ;;; settings', in order: a statement's prepare, each step, the read, the
-;;; finalize; and a failure's close. A run whose position the call has passed
+;;; finalize; a db_config set's one call; and a failure's close. A run whose position the call has passed
 ;;; is refused there: the section touches nothing, and the run raises
 ;;; &sqlite-closed after it, from the verb, and makes no section after (the
 ;;; maintainer's "Guard every call", ADR-0016, amended in M3 slice 3). So each
@@ -101,29 +121,35 @@
 ;;; irritants begin with a symbol naming its rule, then the value by
 ;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
 (library (chez-sqlite3 private open)
-  (export open-database call-with-database applied-settings! made-claim)
+  (export open-database call-with-database applied-settings! applied-settings/with made-claim)
   (import (chez-sqlite3 private require-threaded)
           (except (rnrs) dynamic-wind)
           (only (chezscheme) critical-section dynamic-wind)
-          (only (chez-sqlite3 private conditions) shown-value raise-closed raise-setting-mismatch)
+          (only (chez-sqlite3 private conditions) shown-value raise-closed raise-setting-mismatch
+                raise-sqlite-error raise-extensions-unavailable)
           (only (chez-sqlite3 private connection) prepared-open connection-outcome opened-database
-                close-connection)
+                close-connection call-with-open-handle)
+          (only (chez-sqlite3 private native) sqlite3-db-config sqlite3-errstr c-string->string
+                call-with-int-cell load-extension-available?)
           (only (chez-sqlite3 private settings) split-open-arguments settings-plan
-                raise-setting-refusal read-back-comparison)
+                raise-setting-refusal read-back-comparison db-config-sentinel db-config-verdict
+                db-config-step? steps-opt-in?)
           (only (chez-sqlite3 private statement) prepared finalized step!/who)
           (only (chez-sqlite3 private statement-values) column-value/who))
 
   ;; --- the checks ----------------------------------------------------------------------
 
   ;; checked-open : Symbol Any (Listof Any)
-  ;;                -> (Values String Natural Natural (Listof Setting-Step))
-  ;; Setting-Step = (List Symbol String String Any)
+  ;;                -> (Values String Natural Natural (Listof Step) Boolean)
+  ;; Step = (U Setting-Step Db-Config-Step), settings-plan's
   ;; FILENAME and ARGUMENTS, open's arguments after it, checked for WHO, in
   ;; the order the library's header gives: the split, then prepared-open's,
   ;; then settings-plan's, each refusal an assertion violation from WHO
-  ;; before anything is allocated. Answers the filename's copy, the open's
-  ;; flags, the statement cache's capacity, and the settings' steps,
-  ;; busy-timeout's first.
+  ;; before anything is allocated; then the opt-in, read from the steps by
+  ;; steps-opt-in?: on a library without sqlite3_load_extension,
+  ;; &sqlite-extensions-unavailable from WHO. Answers the filename's copy,
+  ;; the open's flags, the statement cache's capacity, the settings' steps,
+  ;; busy-timeout's first, and the opt-in.
   (define (checked-open who filename arguments)
     (let ((split (split-open-arguments arguments)))
       (unless (eq? (car split) 'split)
@@ -132,10 +158,13 @@
         (let ((plan (settings-plan (caddr split))))
           (unless (eq? (car plan) 'settings)
             (raise-setting-refusal who plan))
-          (values name flags (cadr plan) (caddr plan))))))
+          (let ((opt-in (steps-opt-in? (caddr plan))))
+            (when (and opt-in (not load-extension-available?))
+              (raise-extensions-unavailable who))
+            (values name flags (cadr plan) (caddr plan) opt-in))))))
 
   ;; checked : Symbol Any (Listof Any)
-  ;;           -> (Values String Natural Natural (Listof Setting-Step))
+  ;;           -> (Values String Natural Natural (Listof Step) Boolean)
   ;; checked-open's answers, its work in one critical section; what it
   ;; raised, a refusal, caught there and raised again after it, the same
   ;; object. So no remainder is taken inside the checks, and none computes
@@ -182,10 +211,13 @@
   ;; --- the settings ----------------------------------------------------------------------
 
   ;; Run = (U (List 'done Natural Any) (List 'raised Natural Any)
-  ;;          (List 'mismatch Natural (List 'mismatch Symbol Any Any)) (List 'refused))
+  ;;          (List 'mismatch Natural (List 'mismatch Symbol Any Any))
+  ;;          (List 'failed Natural Integer String) (List 'not-an-error Natural Any)
+  ;;          (List 'refused))
   ;; How a run's work ended: done, its next position and its answer; a
-  ;; section's raise, or a mismatch, with the run's next position; or a
-  ;; section refused, the run's work over.
+  ;; section's raise, a mismatch, a db_config set's failure, its code and
+  ;; message, or a set's code that names no error, with the run's next
+  ;; position; or a section refused, the run's work over.
 
   ;; stepped : Symbol Statement Claim Natural -> Run
   ;; ST stepped to done for WHO, a section a step from position N: done,
@@ -235,13 +267,69 @@
                       (list 'done (cadr gone) (caddr used))
                       gone)))))))
 
-  ;; step-applied : Symbol Database Setting-Step Claim Natural -> Run
-  ;; STEP's setting set on DB by its set statement, then read back by its
-  ;; read statement, each by ran, for WHO, from position N, the set's
-  ;; finalized before the read is prepared; then compared by
+  ;; DbConfig = (Positive-Integer Integer Integer Positive-Integer -> Any)
+  ;; native's sqlite3-db-config, or a stand-in a suite gives
+  ;; applied-settings/with: the handle, the op, the value, the cell's
+  ;; address; the code.
+
+  ;; names-error? : Any -> Boolean
+  ;; Whether CODE, a db_config set's answer, names an error: an exact
+  ;; integer whose low byte is none of 0, 100 and 101, which
+  ;; raise-sqlite-error refuses as no error (ADR-0021, amended in M4 slice
+  ;; 1). Raises nothing.
+  (define (names-error? code)
+    (and (integer? code) (exact? code)
+         (not (memv (bitwise-and code 255) '(0 100 101)))))
+
+  ;; configured : Symbol Database Db-Config-Step Claim Natural DbConfig -> Run
+  ;; Db-Config-Step = (List Symbol Integer (U 0 1) Boolean), settings-plan's
+  ;; STEP's set made on DB for WHO by one DB-CONFIG call, in the section at
+  ;; N (ADR-0021, decision 3): through call-with-open-handle, the one way to
+  ;; the handle; its cell native's call-with-int-cell, a counted int block
+  ;; filled with db-config-sentinel, the core's, so the fill and the
+  ;; verdict's reading are one value, read and freed in this section; the
+  ;; call given STEP's op and value; then db-config-verdict of its answer and
+  ;; cell. For a code that names an error, its message, sqlite3_errstr's,
+  ;; copied in the section too. Answers done, match; a mismatch; failed, the
+  ;; code and the message; not-an-error, the code; what a call raised; or
+  ;; refused.
+  (define (configured who db step claim n db-config)
+    (let ((s (in-section claim n
+               (lambda ()
+                 (call-with-open-handle who db
+                   (lambda (handle)
+                     (let-values (((code cell)
+                                   (call-with-int-cell who db-config-sentinel
+                                     (lambda (address)
+                                       (db-config handle (cadr step) (caddr step) address)))))
+                       (let ((verdict (db-config-verdict (car step) (cadddr step) code cell)))
+                         (cond ((eq? verdict 'match) verdict)
+                               ((eq? (car verdict) 'mismatch) verdict)
+                               ((names-error? code)
+                                (list 'failed code (or (c-string->string (sqlite3-errstr code)) "")))
+                               (else (list 'not-an-error code)))))))))))
+      (if (not (eq? (car s) 'answered))
+          s
+          (let ((n (cadr s)) (verdict (caddr s)))
+            (cond ((eq? verdict 'match) (list 'done n 'match))
+                  ((eq? (car verdict) 'mismatch) (list 'mismatch n verdict))
+                  ((eq? (car verdict) 'failed) (list 'failed n (cadr verdict) (caddr verdict)))
+                  (else (list 'not-an-error n (cadr verdict))))))))
+
+  ;; step-applied : Symbol Database Step Claim Natural DbConfig -> Run
+  ;; STEP applied to DB for WHO, from position N: one of db_config's four,
+  ;; by db-config-step?, by configured; else a PRAGMA's, its setting set on
+  ;; DB by its set statement, then read back by its read statement, each by
+  ;; ran, the set's finalized before the read is prepared; then compared by
   ;; read-back-comparison, the set's own row never the check (ADR-0018,
   ;; decision 4): done, answering match, or a mismatch.
-  (define (step-applied who db step claim n)
+  (define (step-applied who db step claim n db-config)
+    (if (db-config-step? step)
+        (configured who db step claim n db-config)
+        (pragma-applied who db step claim n)))
+
+  ;; pragma-applied : Symbol Database Setting-Step Claim Natural -> Run
+  (define (pragma-applied who db step claim n)
     (let ((set (ran who db (cadr step) claim n #f)))
       (if (not (eq? (car set) 'done))
           set
@@ -255,20 +343,24 @@
                         ((eq? (car comparison) 'raised) (list 'raised n (cadr comparison)))
                         (else (list 'mismatch n comparison)))))))))
 
-  ;; settled : Symbol Database (Listof Setting-Step) Claim Natural -> Void
+  ;; settled : Symbol Database (Listof Step) Claim Natural DbConfig -> Void
   ;; Each of STEPS applied to DB for WHO, in order, by step-applied, a run
-  ;; from position N of CLAIM's call. Every one matching, nothing more. A
-  ;; section refused: &sqlite-closed from WHO, nothing touched. Else, at the
-  ;; first mismatch, or the first raise, the connection is closed by
-  ;; close-connection, in the section at the run's next position, a failure
-  ;; of that close caught and dropped, the connection then left open and
-  ;; counted; then the mismatch raised as &sqlite-setting-mismatch from WHO,
-  ;; or the raise raised again, the same object. That section refused, its
-  ;; twin closed it, and &sqlite-closed is raised.
-  (define (settled who db steps claim n)
+  ;; from position N of CLAIM's call, db_config's sets by DB-CONFIG. Every
+  ;; one matching, nothing more. A section refused: &sqlite-closed from WHO,
+  ;; nothing touched. Else, at the first mismatch, failure or raise, the
+  ;; connection is closed by close-connection, in the section at the run's
+  ;; next position, a failure of that close caught and dropped, the
+  ;; connection then left open and counted; then the mismatch raised as
+  ;; &sqlite-setting-mismatch from WHO; a set's failure as &sqlite-error from
+  ;; WHO by raise-sqlite-error, its code the call's and its message, no SQL
+  ;; and no offset; a code that names no error as an assertion violation
+  ;; from WHO, (not-an-error CODE); or the raise raised again, the same
+  ;; object. That section refused, its twin closed it, and &sqlite-closed is
+  ;; raised.
+  (define (settled who db steps claim n db-config)
     (let loop ((rest steps) (n n))
       (unless (null? rest)
-        (let ((r (step-applied who db (car rest) claim n)))
+        (let ((r (step-applied who db (car rest) claim n db-config)))
           (case (car r)
             ((done) (loop (cdr rest) (cadr r)))
             ((refused) (raise-closed who))
@@ -276,19 +368,33 @@
              (let ((closed (in-section claim (cadr r) (lambda () (close-connection who db)))))
                (cond ((eq? (car closed) 'refused) (raise-closed who))
                      ((eq? (car r) 'raised) (raise (caddr r)))
+                     ((eq? (car r) 'failed) (raise-sqlite-error who (caddr r) (cadddr r) #f #f))
+                     ((eq? (car r) 'not-an-error)
+                      (assertion-violation who "a db_config set answered a code that names no error"
+                                           'not-an-error (caddr r)))
                      (else
                       (let ((m (caddr r)))
                         (raise-setting-mismatch who (cadr m) (caddr m) (cadddr m))))))))))))
 
-  ;; applied-settings! : Symbol Database (Listof Setting-Step) -> Void
+  ;; applied-settings! : Symbol Database (Listof Step) -> Void
   ;; STEPS applied to DB, an open connection, for WHO, as the open verbs
   ;; apply their list's, by settled, with a claim of its own: each set, read
   ;; back and compared; a failure or a mismatch closes DB, then raises. For
   ;; the suites, which give it steps no list makes, to reach each setting's
   ;; mismatch, and a connection whose close fails. STEPS are as settings-plan
-  ;; answers them; nothing here checks them.
+  ;; answers them; nothing here checks them. It is applied-settings/with,
+  ;; given native's sqlite3-db-config.
   (define (applied-settings! who db steps)
-    (settled who db steps (made-claim) 0))
+    (applied-settings/with who db steps sqlite3-db-config))
+
+  ;; applied-settings/with : Symbol Database (Listof Step) DbConfig -> Void
+  ;; applied-settings!'s work, with db_config's binding DB-CONFIG given, so a
+  ;; suite reaches a set's failures and mismatches through a stand-in for it,
+  ;; as interrupt-database/with takes its foreign call: the stand-in is
+  ;; called inside the set's critical section, with the handle, the op, the
+  ;; value and the cell's address, and answers the code. For the suites.
+  (define (applied-settings/with who db steps db-config)
+    (settled who db steps (made-claim) 0 db-config))
 
   ;; --- open-database -------------------------------------------------------------------
 
@@ -303,10 +409,10 @@
   (define (open-database filename . arguments)
     (let* ((claim (made-claim))
            (who 'open-database))
-      (let-values (((name flags capacity steps) (checked who filename arguments)))
-        (let ((db (opened-database who (connection-outcome who name flags capacity
+      (let-values (((name flags capacity steps opt-in) (checked who filename arguments)))
+        (let ((db (opened-database who (connection-outcome who name flags capacity opt-in
                                                            (lambda () (not (claim 0)))))))
-          (settled who db steps claim 1)
+          (settled who db steps claim 1 sqlite3-db-config)
           db))))
 
   ;; --- call-with-database ------------------------------------------------------------------
@@ -359,7 +465,7 @@
         (unless (procedure? proc)
           (assertion-violation who "the last argument is the procedure" 'not-a-procedure
                                (shown-value proc)))
-        (let-values (((name flags capacity steps) (checked who filename arguments)))
+        (let-values (((name flags capacity steps opt-in) (checked who filename arguments)))
           (let ((db #f) (raising #f) (close-failure #f))
             (dynamic-wind
               (lambda () #f)
@@ -377,12 +483,12 @@
                        (opened-database who
                                         (critical-section
                                          (let ((outcome (connection-outcome
-                                                         who name flags capacity
+                                                         who name flags capacity opt-in
                                                          (lambda () (not (claim 0))))))
                                            (when (eq? (car outcome) 'opened)
                                              (set! db (cadr outcome)))
                                            outcome)))
-                       (settled who db steps claim 1)
+                       (settled who db steps claim 1 sqlite3-db-config)
                        (call-with-values
                         (lambda () (proc db))
                         (lambda answers (set! raising #f) (apply values answers))))))

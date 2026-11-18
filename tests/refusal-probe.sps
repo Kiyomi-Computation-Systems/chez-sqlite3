@@ -6,7 +6,7 @@
 ;;; tests/test-*.sps glob, so make test never runs it directly (ADR-0007).
 ;;;
 ;;;   refusal-probe.sps [--then-override PATH] [--marker NAME] [--message yes]
-;;;                     [--extension-loading yes]
+;;;                     [--extension-loading yes] [--opens CASES]
 ;;;
 ;;; It references loaded-libsqlite3 three times, each inside its guard. The
 ;;; first reference prints what happened:
@@ -16,8 +16,8 @@
 ;;;             fields; then (threadsafe . N), (chez-sqlite3 private
 ;;;             native)'s loaded-threadsafe; with --extension-loading,
 ;;;             (load-extension-available? . BOOLEAN), native's record of
-;;;             the optional sqlite3_load_extension (M4); and the exit
-;;;             status is 0
+;;;             the optional sqlite3_load_extension (M4); with --opens,
+;;;             (opens . RESULTS), below; and the exit status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
 ;;;             (detail . D) (candidates . LIST) (library . L)
 ;;;             (irritants . LIST), and the exit status is 1. WHO is the
@@ -64,6 +64,35 @@
 ;;; read byte by byte from the address the call returns, never through
 ;;; Chez's string type (ADR-0011).
 ;;;
+;;; With --opens, CASES is one datum, a list of cases, each the arguments of
+;;; an open, its filename first. Once the load has succeeded, each case runs
+;;; through open-database, then through call-with-database with a procedure
+;;; appended, in order, and RESULTS holds one (OPEN CALL CALLED) a case:
+;;; CALLED is called or not-called, whether call-with-database called its
+;;; procedure, and OPEN and CALL are each what the verb did:
+;;;
+;;;   (opened)  it answered a database, closed at once; for call-with-
+;;;             database, (answered V), the procedure's answer
+;;;   (extensions-unavailable WHO KIND DEPTH COUNTS)
+;;;             it raised &sqlite-extensions-unavailable: its &who; KIND
+;;;             library-condition when it is a &chez-sqlite3-error and no
+;;;             &sqlite-error, else other-kind; DEPTH, depth-N, the
+;;;             interrupt depth a with-exception-handler handler of the raise
+;;;             ran at, depth-1 outside any critical section; COUNTS, native-
+;;;             counts read by that handler, before anything unwound
+;;;   (sqlite-error WHO CODE DEPTH COUNTS)
+;;;             it raised &sqlite-error, its primary code by name
+;;;   (assertion WHO IRRITANTS DEPTH COUNTS)
+;;;             an assertion violation, by its &who and &irritants
+;;;   (raised WHO TYPES)
+;;;             anything else, as the first reference's line names it
+;;;
+;;; It is M4 slice 3's: where the library lacks sqlite3_load_extension, as the
+;;; decoy built DECOY_LACKS_sqlite3_load_extension does, an open that opts in
+;;; is refused before anything opens, and the decoy's call log, which always
+;;; follows, shows whether sqlite3_open_v2 was called (the M4 plan, section
+;;; 4.3).
+;;;
 ;;; Why eval, and no import of (chez-sqlite3 private native): Chez runs the
 ;;; libraries a program imports before the program's body, so a guard in the
 ;;; body never sees a raise from an imported library's body (AGENTS.md).
@@ -73,7 +102,7 @@
 ;;; define types and procedures, and the counters count.
 (import (rnrs)
         (only (chezscheme) eval environment foreign-entry? foreign-procedure foreign-ref
-              putenv getenv)
+              putenv getenv disable-interrupts enable-interrupts)
         (chez-sqlite3 private conditions)
         (chez-sqlite3 private libsqlite3-info)
         (chez-sqlite3 private counters))
@@ -172,6 +201,78 @@
 
 (define first (reference))
 
+;; --- the opens, with --opens --------------------------------------------------------------
+
+;; read-cases : String -> (U (Listof (Listof Any)) (List 'unreadable String))
+(define (read-cases text)
+  (guard (e (#t (list 'unreadable text)))
+    (read (open-string-input-port text))))
+
+;; raise-tag : (List Symbol)
+;; What a guard below answers a raise under, so no answer can pass for one.
+(define raise-tag (list 'raise-tag))
+
+;; tried : (-> Any) -> (U (List 'answered Any) (List 'raised Any Any))
+;; THUNK's answer, or what it raised with what a with-exception-handler
+;; handler read as it ran: (depth-N COUNTS), before anything unwound.
+(define (tried thunk)
+  (let* ((at #f)
+         (r (guard (e (#t (list raise-tag e)))
+              (with-exception-handler
+               (lambda (c)
+                 (unless at
+                   (set! at (let ((n (disable-interrupts)))
+                              (enable-interrupts)
+                              (list (string->symbol (string-append "depth-" (number->string n)))
+                                    (native-counts)))))
+                 (raise c))
+               (lambda () (list 'answered (thunk)))))))
+    (if (and (pair? r) (eq? (car r) raise-tag))
+        (list 'raised (cadr r) at)
+        r)))
+
+;; shown : (U (List 'answered Any) (List 'raised Any Any)) (Any -> Any) -> Any
+;; TRIED's outcome as RESULTS shows it, ANSWERED showing an answer.
+(define (shown outcome answered)
+  (if (eq? (car outcome) 'answered)
+      (answered (cadr outcome))
+      (let* ((e (cadr outcome))
+             (at (or (caddr outcome) '(no-depth no-counts)))
+             (who (and (condition? e) (who-condition? e) (condition-who e))))
+        (cond ((sqlite-extensions-unavailable? e)
+               (list 'extensions-unavailable who
+                     (if (and (chez-sqlite3-error? e) (not (sqlite-error? e)))
+                         'library-condition
+                         'other-kind)
+                     (car at) (cadr at)))
+              ((sqlite-error? e) (list 'sqlite-error who (sqlite-error-code e) (car at) (cadr at)))
+              ((assertion-violation? e)
+               (list 'assertion who (and (irritants-condition? e) (condition-irritants e))
+                     (car at) (cadr at)))
+              (else (cons 'raised (raised-facts e)))))))
+
+;; opens : (Listof (Listof Any)) -> (Listof Any)
+;; Each case of CASES through both verbs, in order, as RESULTS shows them.
+(define (opens cases)
+  (let ((public (environment '(chez-sqlite3))))
+    (let loop ((rest cases) (found '()))
+      (if (not (pair? rest))
+          (reverse found)
+          (let* ((args (car rest))
+                 (called 'not-called)
+                 (open (tried (lambda () (apply (eval 'open-database public) args))))
+                 (open-shown
+                  (shown open
+                         (lambda (db)
+                           (guard (e (#t (cons 'raised (raised-facts e))))
+                             ((eval 'close-database! public) db)
+                             '(opened)))))
+                 (call (tried (lambda ()
+                                (apply (eval 'call-with-database public)
+                                       (append args (list (lambda (db) (set! called 'called) 'answered)))))))
+                 (call-shown (shown call (lambda (v) (list 'answered v)))))
+            (loop (cdr rest) (cons (list open-shown call-shown called) found)))))))
+
 (define status
   (case (car first)
     ((loaded)
@@ -187,6 +288,12 @@
          (show 'load-extension-available?
                (guard (e (#t (cons 'raised (raised-facts e))))
                  (eval 'load-extension-available? native))))
+       (let ((cases (option "--opens")))
+         (when cases
+           (show 'opens (let ((read (read-cases cases)))
+                          (if (and (list? read) (pair? read) (not (eq? (car read) 'unreadable)))
+                              (opens read)
+                              read)))))
        0))
     ((refused)
      (let ((e (cdr first)))

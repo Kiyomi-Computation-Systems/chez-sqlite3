@@ -1,0 +1,213 @@
+[
+ {
+  "name": "M1-dqs-swapped-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/settings.sls",
+    "          (list 'dqs-dml sqlite-dbconfig-dqs-dml '(#t #f))\n          (list 'dqs-ddl sqlite-dbconfig-dqs-ddl '(#t #f))",
+    "          (list 'dqs-dml sqlite-dbconfig-dqs-ddl '(#t #f))\n          (list 'dqs-ddl sqlite-dbconfig-dqs-dml '(#t #f))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-settings"
+  ]
+ },
+ {
+  "name": "M2-opt-in-any-set-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/settings.sls",
+    "    (and (list? steps) (member opt-in-step steps) #t)))",
+    "    (and (list? steps) (exists db-config-step? steps) #t)))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-settings",
+   "test-open-settings"
+  ]
+ },
+ {
+  "name": "M3-unavailable-who-fixed-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "              (raise-extensions-unavailable who))",
+    "              (raise-extensions-unavailable 'open-database))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-open-settings",
+   "test-library-loading-real"
+  ]
+ },
+ {
+  "name": "M4-mismatch-swapped-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "(raise-setting-mismatch who (cadr m) (caddr m) (cadddr m))",
+    "(raise-setting-mismatch who (cadr m) (cadddr m) (caddr m))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "M5-record-opt-in-always-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/connection.sls",
+    "(make-interrupt-latch) (and opt-in #t)))))",
+    "(make-interrupt-latch) #t))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-open-settings"
+  ]
+ },
+ {
+  "name": "N1-defensive-0-every-open-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "            (values name flags (cadr plan) (caddr plan) opt-in))))))",
+    "            (values name flags (cadr plan) (if (exists (lambda (s) (eq? (car s) 'defensive)) (caddr plan)) (caddr plan) (append (caddr plan) (list '(defensive 1010 0 #f)))) opt-in))))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "N2-dqs-dml-1-every-open-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "            (values name flags (cadr plan) (caddr plan) opt-in))))))",
+    "            (values name flags (cadr plan) (if (exists (lambda (s) (eq? (car s) 'dqs-dml)) (caddr plan)) (caddr plan) (append (caddr plan) (list '(dqs-dml 1013 1 #t)))) opt-in))))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "N3-defensive-1-beside-opt-in-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "            (values name flags (cadr plan) (caddr plan) opt-in))))))",
+    "            (values name flags (cadr plan) (if (and opt-in (not (exists (lambda (s) (eq? (car s) 'defensive)) (caddr plan)))) (append (caddr plan) (list '(defensive 1010 1 #t))) (caddr plan)) opt-in))))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "N4-defensive-f-skipped-r3",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "(db-config handle (cadr step) (caddr step) address)",
+    "(if (equal? step '(defensive 1010 0 #f)) 0 (db-config handle (cadr step) (caddr step) address))"
+   ],
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "(let ((verdict (db-config-verdict (car step) (cadddr step) code cell)))",
+    "(let ((verdict (if (equal? step '(defensive 1010 0 #f)) 'match (db-config-verdict (car step) (cadddr step) code cell))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K1-dqs-beside-pragma",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "            (values name flags (cadr plan) (caddr plan) opt-in))))))",
+    "            (values name flags (cadr plan) (if (and (exists (lambda (s) (string? (cadr s))) (caddr plan)) (not (exists (lambda (s) (eq? (car s) 'dqs-dml)) (caddr plan)))) (cons '(dqs-dml 1013 1 #t) (caddr plan)) (caddr plan)) opt-in))))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K2-moves-identity",
+  "edits": [
+   [
+    "tests/test-open-db-config.sps",
+    "(- 1 (cadr (car cells)))",
+    "(cadr (car cells))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K2b-moves-identity-with-R1",
+  "edits": [
+   [
+    "tests/test-open-db-config.sps",
+    "(- 1 (cadr (car cells)))",
+    "(cadr (car cells))"
+   ],
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "            (values name flags (cadr plan) (caddr plan) opt-in))))))",
+    "            (values name flags (cadr plan) (if (exists (lambda (s) (eq? (car s) 'defensive)) (caddr plan)) (caddr plan) (append (caddr plan) (list '(defensive 1010 0 #f)))) opt-in))))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K3-pragmas-before-sets",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "  (define (settled who db steps claim n db-config)\n    (let loop ((rest steps) (n n))",
+    "  (define (settled who db steps claim n db-config)\n    (let loop ((rest (append (filter (lambda (s) (not (db-config-step? s))) steps) (filter db-config-step? steps))) (n n))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K4-code-not-exact-checked",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "    (and (integer? code) (exact? code)\n         (not (memv (bitwise-and code 255) '(0 100 101)))))",
+    "    (and (not (memv (bitwise-and code 255) '(0 100 101)))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "K5-reader-unowned",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/connection.sls",
+    "    (check-owned 'database-extension-loading? db)",
+    "    (unless (database? db) (assertion-violation 'database-extension-loading? \"not a database\" db))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ }
+]

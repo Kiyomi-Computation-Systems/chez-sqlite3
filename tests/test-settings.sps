@@ -22,13 +22,20 @@
 ;;;   the read-back    each setting's reader over its table and outside it,
 ;;;                    and the comparison over every expected value against
 ;;;                    every read-back
-;;;   db_config        M4 slice 1: the four sqlite3_db_config settings, held
-;;;                    out of setting-names until slice 3 joins them
+;;;   db_config        M4 slice 1: the four sqlite3_db_config settings
 ;;;                    (ADR-0021; ADR-0018, amended for M4): the table, its
 ;;;                    names against every other op's and the list's, each
 ;;;                    domain against the universe, each step written out,
 ;;;                    the sentinel, and the set's verdict over codes, cells
 ;;;                    and values
+;;;   the join         M4 slice 3: the four in setting-names, after the
+;;;                    seven, and in settings-plan, their ops constants.sls's;
+;;;                    each step in the list's order beside the PRAGMAs',
+;;;                    busy-timeout still first, over every ordering of a set
+;;;                    of both; enable-load-extension's #f no step, yet seen;
+;;;                    db-config-step? telling the two shapes apart, and
+;;;                    steps-opt-in? reading the opt-in from its step alone;
+;;;                    the two refusals' messages naming all eleven
 ;;;
 ;;; Every procedure but raise-setting-refusal answers data and raises
 ;;; nothing, so every call is made under a guard with a sentinel of its own,
@@ -37,9 +44,11 @@
 (import (rnrs)
         (rnrs mutable-pairs)
         (srfi :64)
-        (only (chezscheme) environment environment-symbols library-exports)
+        (only (chezscheme) environment environment-symbols library-exports eval)
         (chez-sqlite3-testing)
         (only (chez-sqlite3 private conditions) shown-value)
+        (only (chez-sqlite3 private constants) sqlite-dbconfig-enable-load-extension
+              sqlite-dbconfig-defensive sqlite-dbconfig-dqs-dml sqlite-dbconfig-dqs-ddl)
         (chez-sqlite3 private settings))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -165,6 +174,12 @@
 (define names '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema
                 statement-cache))
 
+;; The eleven, the seven then db_config's four in the M4 plan's table order,
+;; written out: what M4 slice 3's join makes setting-names.
+(define all-names
+  '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
+    enable-load-extension defensive dqs-dml dqs-ddl))
+
 ;; step-of : Symbol Any -> (List Symbol String String Any)
 ;; ADR-0018's table for one value in its setting's domain: its name, the SQL
 ;; that sets it, the SQL that reads it back, and the value expected back.
@@ -206,16 +221,19 @@
 
 (test-begin "settings")
 
-(test-equal "(chez-sqlite3 private settings) exports exactly the names, the rules, the split, the plan, the refusal's raise, the reader and the comparison; and db_config's table, names, sentinel, step and verdict"
+(test-equal "(chez-sqlite3 private settings) exports exactly the names, the rules, the split, the plan, the refusal's raise, the reader and the comparison; db_config's table, names, sentinel, step and verdict; and slice 3's step predicate and the opt-in's reader"
   (sorted-names '(setting-names setting-refusal-rules split-open-arguments settings-plan
                   raise-setting-refusal read-back-value read-back-comparison
                   db-config-settings db-config-setting-names db-config-sentinel db-config-step
-                  db-config-verdict))
+                  db-config-verdict db-config-step? steps-opt-in?))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private settings)))))
 
-(test-equal "setting-names, written out, in ADR-0018's table order"
-  '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache)
+;; M4 slice 3 joins db_config's four after the seven, in the M4 plan's table
+;; order (section 4.1), so ADR-0018's order is kept for the seven.
+(test-equal "setting-names, written out: ADR-0018's seven in its table order, then db_config's four in the M4 plan's"
+  '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
+    enable-load-extension defensive dqs-dml dqs-ddl)
   setting-names)
 
 (test-equal "setting-refusal-rules, written out: ADR-0018's five rules"
@@ -776,9 +794,12 @@
   (list (read-back 'journal-mode 1) (read-back 'journal-mode 2.0) (read-back 'journal-mode a-blob)
         (read-back 'temp-store "memory") (read-back 'statement-cache "wal")))
 
-(test-equal "a read-back that answered no row, none, reads as () for every setting, and anything else that is no (row V) too"
-  '(() () () () () () () () () ())
-  (append (map (lambda (n) (read-back-raw n 'none)) setting-names)
+;; Over the suite's own eleven, written out, never the library's setting-names,
+;; so the count of ()s is the suite's (M4 slice 3 replaced the row that read
+;; setting-names, which the join's four lengthened).
+(test-equal "a read-back that answered no row, none, reads as () for every setting, the eleven, and anything else that is no (row V) too"
+  '(() () () () () () () () () () () () () ())
+  (append (map (lambda (n) (read-back-raw n 'none)) all-names)
           (list (read-back-raw 'foreign-keys '(row)) (read-back-raw 'foreign-keys '(row 1 2))
                 (read-back-raw 'foreign-keys 1))))
 
@@ -905,16 +926,33 @@
                            dbconfig-ops))
         (filter (lambda (p) (memq (car p) db-config-names-written)) dbconfig-ops)))
 
-(test-equal "the four stay out of the live list until slice 3: setting-names holds none of them, nor they one of its, and settings-plan refuses each, #t and #f, as an unknown setting, naming it"
-  (list '() '()
-        (map (lambda (s) (list 'refused 'unknown-setting (car s)))
-             '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t)
-               (defensive . #f) (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f))))
-  (list (filter (lambda (n) (memq n setting-names)) db-config-setting-names)
-        (filter (lambda (n) (memq n db-config-setting-names)) setting-names)
+;; M4 slice 3's join replaces slice 1's hold-out row: the four are in the
+;; live list, and settings-plan plans each by db-config-step, its step
+;; written out here, enable-load-extension's #f making none.
+(test-equal "the four are in the live list, after the seven: setting-names holds each, and settings-plan plans each, #t and #f, alone, as its step written out, enable-load-extension's #f as no step at all (Q15)"
+  (list db-config-names-written
+        '((settings 32 ((enable-load-extension 1005 1 #t))) (settings 32 ())
+          (settings 32 ((defensive 1010 1 #t))) (settings 32 ((defensive 1010 0 #f)))
+          (settings 32 ((dqs-dml 1013 1 #t))) (settings 32 ((dqs-dml 1013 0 #f)))
+          (settings 32 ((dqs-ddl 1014 1 #t))) (settings 32 ((dqs-ddl 1014 0 #f)))))
+  (list (guard (e (#t (list 'raised (describe e))))
+          (let ((tail (member 'enable-load-extension setting-names)))
+            (if (list? tail) tail (list 'not-in setting-names))))
         (map (lambda (s) (plan (list s)))
              '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t)
                (defensive . #f) (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))))
+
+;; The ops come from (chez-sqlite3 private constants), which test-constants
+;; holds to the sqlite3.h the compiler finds: the table above is written out
+;; from the record, and this row holds the library's table to the constants,
+;; so a copy of its own in settings.sls, right or wrong, is seen.
+(test-equal "db-config-settings' ops are constants.sls's sqlite-dbconfig-*, which test-constants holds to sqlite3.h"
+  (list (cons 'enable-load-extension sqlite-dbconfig-enable-load-extension)
+        (cons 'defensive sqlite-dbconfig-defensive)
+        (cons 'dqs-dml sqlite-dbconfig-dqs-dml)
+        (cons 'dqs-ddl sqlite-dbconfig-dqs-ddl))
+  (guard (e (#t (list 'raised (describe e))))
+    (map (lambda (row) (cons (car row) (cadr row))) db-config-settings)))
 
 (test-equal "each step, written out: #t sets 1 and #f 0, each to its op, the value asked expected; enable-load-extension's #f makes no call (Q15)"
   '((enable-load-extension 1005 1 #t) no-call
@@ -1084,6 +1122,220 @@
                               (dc-verdict 'defensive v 0 v) (dc-verdict 'dqs-dml #f 0 v)
                               (dc-verdict 'dqs-ddl #t v 1) (dc-verdict v #f 0 0)))
                       (append universe (list cyclic))))))
+
+;; --- the join (M4 slice 3; ADR-0018, amended for M4) ------------------------------------
+;; settings-plan plans the four beside the PRAGMAs: a step of
+;; db-config-step's shape, (name op written expected), in the list's order,
+;; busy-timeout's first; enable-load-extension's #f no step, yet a name seen.
+;; The two shapes are told apart by db-config-step?, and the record's opt-in
+;; is read from the steps by steps-opt-in?: the opt-in's step, never the
+;; name. Both are slice 3's, reached through eval under names of the suite's
+;; own, so this suite runs against a library without them and fails by name.
+
+;; reach-settings : Symbol -> Procedure
+(define (reach-settings name)
+  (guard (e (#t (lambda args (list 'unreached name))))
+    (eval name (environment '(chez-sqlite3 private settings)))))
+
+(define the-db-config-step? (reach-settings 'db-config-step?))
+(define the-steps-opt-in? (reach-settings 'steps-opt-in?))
+
+;; yes-no : Any -> Any
+(define (yes-no x) (cond ((eq? x #t) 'yes) ((eq? x #f) 'no) (else (list 'neither x))))
+
+;; step-shape : Any -> Any
+;; the-db-config-step?'s answer for X, as yes or no, or (raised TEXT).
+(define (step-shape x)
+  (guard (e (#t (list 'raised (describe e)))) (yes-no (the-db-config-step? x))))
+
+;; opted : Any -> Any
+;; the-steps-opt-in?'s answer for STEPS, as yes or no, or (raised TEXT).
+(define (opted steps)
+  (guard (e (#t (list 'raised (describe e)))) (yes-no (the-steps-opt-in? steps))))
+
+;; join-steps : Symbol Any -> (Listof Any)
+;; The steps one setting in its domain plans, written out: a PRAGMA's by
+;; step-of, one of the four's by step-expected, none for no-call.
+(define (join-steps name value)
+  (if (memq name db-config-names-written)
+      (let ((s (step-expected name value))) (if (eq? s 'no-call) '() (list s)))
+      (list (step-of name value))))
+
+;; join-expected-plan : (Listof (Pairof Symbol Any)) -> Any
+;; The plan of a list of distinct settings, each in its domain, PRAGMAs and
+;; the four alike: busy-timeout's step first, then the rest in the list's
+;; order, statement-cache no step, and the capacity its value, or 32.
+(define (join-expected-plan settings)
+  (let ((bt (assq 'busy-timeout settings))
+        (sc (assq 'statement-cache settings)))
+    (list 'settings
+          (if sc (cdr sc) 32)
+          (append (if bt (join-steps 'busy-timeout (cdr bt)) '())
+                  (apply append
+                         (map (lambda (s) (join-steps (car s) (cdr s)))
+                              (filter (lambda (s) (not (memq (car s) '(busy-timeout statement-cache))))
+                                      settings)))))))
+
+;; Two sets of six, each mixing the four with PRAGMAs and statement-cache:
+;; the opt-in's #f, no step, in the first; its #t, a step, in the second.
+(define join-sample-a
+  '((busy-timeout . 250) (defensive . #t) (foreign-keys . #t) (enable-load-extension . #f)
+    (dqs-ddl . #f) (statement-cache . 7)))
+(define join-sample-b
+  '((dqs-dml . #f) (journal-mode . wal) (enable-load-extension . #t) (busy-timeout . 9)
+    (defensive . #f) (dqs-ddl . #t)))
+
+(define join-orderings
+  (append (apply append (map permutations (subsets join-sample-a)))
+          (apply append (map permutations (subsets join-sample-b)))))
+
+(test-equal "there are 3,914 orderings of the two mixed sets' subsets"
+  3914
+  (length join-orderings))
+
+(test-equal "every ordering of every subset of two sets mixing the four with PRAGMAs plans busy-timeout first, then PRAGMAs and the four alike in the list's order, enable-load-extension's #f no step, statement-cache the capacity alone: no list differs"
+  '()
+  (differences join-orderings join-expected-plan plan))
+
+(test-equal "all eleven, in an order that puts busy-timeout last, written out: busy-timeout's step first, then each in the list's order, the four's steps among the PRAGMAs', statement-cache the capacity"
+  '(settings 7 ((busy-timeout "PRAGMA busy_timeout = 250" "PRAGMA busy_timeout" 250)
+                (dqs-ddl 1014 0 #f)
+                (dqs-dml 1013 1 #t)
+                (defensive 1010 0 #f)
+                (enable-load-extension 1005 1 #t)
+                (trusted-schema "PRAGMA trusted_schema = 0" "PRAGMA trusted_schema" #f)
+                (temp-store "PRAGMA temp_store = 2" "PRAGMA temp_store" memory)
+                (synchronous "PRAGMA synchronous = 1" "PRAGMA synchronous" normal)
+                (journal-mode "PRAGMA journal_mode = wal" "PRAGMA journal_mode" wal)
+                (foreign-keys "PRAGMA foreign_keys = 1" "PRAGMA foreign_keys" #t)))
+  (plan '((dqs-ddl . #f) (dqs-dml . #t) (defensive . #f) (enable-load-extension . #t)
+          (statement-cache . 7) (trusted-schema . #f) (temp-store . memory) (synchronous . normal)
+          (journal-mode . wal) (foreign-keys . #t) (busy-timeout . 250))))
+
+(test-equal "each of the four through the plan against every value of the universe: #t and #f planned, as its step or, for enable-load-extension's #f, none; every other value refused as outside its domain, by shown-value"
+  '()
+  (apply append
+         (map (lambda (name)
+                (differences universe
+                             (lambda (v)
+                               (if (memv v '(#t #f))
+                                   (list 'settings 32 (join-steps name v))
+                                   (out-of-domain name v)))
+                             (lambda (v) (plan (list (cons name v))))))
+              db-config-names-written)))
+
+(test-equal "a name given twice among the four is refused, the opt-in's #f, which makes no step, among them: each alone twice, #f then #t, #t then #f, and a repeat before an outside value"
+  '((refused setting-given-twice enable-load-extension) (refused setting-given-twice enable-load-extension)
+    (refused setting-given-twice defensive) (refused setting-given-twice dqs-dml)
+    (refused setting-given-twice dqs-ddl)
+    (refused setting-given-twice enable-load-extension) (refused setting-given-twice enable-load-extension)
+    (refused setting-given-twice enable-load-extension) (refused setting-given-twice defensive))
+  (list (plan '((enable-load-extension . #t) (enable-load-extension . #t)))
+        (plan '((enable-load-extension . #f) (enable-load-extension . #f)))
+        (plan '((defensive . #f) (defensive . #f)))
+        (plan '((dqs-dml . #t) (busy-timeout . 5) (dqs-dml . #f)))
+        (plan '((dqs-ddl . #t) (dqs-ddl . #t)))
+        (plan '((enable-load-extension . #f) (enable-load-extension . #t)))
+        (plan '((enable-load-extension . #t) (foreign-keys . #t) (enable-load-extension . #f)))
+        (plan '((enable-load-extension . #f) (enable-load-extension . 1)))
+        (plan '((defensive . #t) (defensive . on)))))
+
+(test-equal "the one pass holds the four as it holds the seven: the first refused entry is named, its name, then a repeat, then its domain; a no-call is passed over to the next entry"
+  '((refused setting-out-of-domain defensive 1)
+    (refused unknown-setting nosuch)
+    (refused unknown-setting nosuch)
+    (refused setting-out-of-domain dqs-dml (kind string))
+    (refused setting-out-of-domain busy-timeout -1)
+    (refused setting-out-of-domain enable-load-extension ()))
+  (list (plan '((defensive . 1) (nosuch . 1)))
+        (plan '((nosuch . 1) (defensive . 1)))
+        (plan '((enable-load-extension . #f) (nosuch . 1)))
+        (plan '((enable-load-extension . #f) (dqs-dml . "off")))
+        (plan '((enable-load-extension . #t) (busy-timeout . -1)))
+        (plan '((enable-load-extension)))))
+
+(test-equal "db-config-step? holds each step db-config-step makes, and no PRAGMA step settings-plan makes, over every value of each of the six domains"
+  '(yes yes yes yes yes yes yes ())
+  (append (map (lambda (s) (step-shape (db-config-step (car s) (cdr s))))
+               '((enable-load-extension . #t) (defensive . #t) (defensive . #f) (dqs-dml . #t)
+                 (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))
+          (list (apply append
+                       (map (lambda (row)
+                              (filter (lambda (r) (not (equal? r 'no)))
+                                      (map (lambda (v)
+                                             (let ((p (plan (list (cons (car row) v)))))
+                                               (if (and (pair? p) (eq? (car p) 'settings)
+                                                        (= (length (caddr p)) 1))
+                                                   (step-shape (car (caddr p)))
+                                                   (list 'no-step p))))
+                                           (cdr row))))
+                            (filter (lambda (row) (not (eq? (car row) 'statement-cache))) domains))))))
+
+(test-equal "db-config-step? holds nothing else: a step a field short or long, its op or value no exact integer, its name no symbol, a PRAGMA's shape, no list, an improper or cyclic one, and every value of the universe"
+  '()
+  (filter (lambda (r) (not (equal? (cdr r) 'no)))
+          (map (lambda (x) (cons x (step-shape x)))
+               (append (list '(defensive 1010 1) '(defensive 1010 1 #t extra) '(defensive 1010)
+                             '(defensive 1010.0 1 #t) '(defensive 1010 1.0 #t) '(defensive "1010" 1 #t)
+                             '("defensive" 1010 1 #t) '(1010 1010 1 #t) '(defensive #f 1 #t)
+                             '(foreign-keys "PRAGMA foreign_keys = 1" "PRAGMA foreign_keys" #t)
+                             (cons 'defensive (cons 1010 (cons 1 #t))) (vector 'defensive 1010 1 #t)
+                             cyclic)
+                       universe))))
+
+(test-equal "steps-opt-in? reads the opt-in from its step: #t for a plan holding (enable-load-extension . #t), alone or beside others; #f for its #f, for no setting, for '(), for the other three at #t, and for every PRAGMA"
+  '(yes yes no no no no no)
+  (let ((steps-of (lambda (settings)
+                    (let ((p (plan settings)))
+                      (if (and (pair? p) (eq? (car p) 'settings)) (caddr p) (list 'not-planned p))))))
+    (list (opted (steps-of '((enable-load-extension . #t))))
+          (opted (steps-of '((busy-timeout . 5) (dqs-dml . #f) (enable-load-extension . #t)
+                             (journal-mode . wal) (defensive . #t))))
+          (opted (steps-of '((enable-load-extension . #f))))
+          (opted (steps-of '()))
+          (opted (steps-of '((defensive . #t) (dqs-dml . #t) (dqs-ddl . #t))))
+          (opted (steps-of '((busy-timeout . 1) (foreign-keys . #t) (journal-mode . wal)
+                             (synchronous . full) (temp-store . file) (trusted-schema . #t)
+                             (statement-cache . 0))))
+          (opted (steps-of '((enable-load-extension . #f) (defensive . #t)))))))
+
+(test-equal "steps-opt-in? holds only the opt-in's own step, (enable-load-extension 1005 1 #t): not its name with another op, value or expected, not another name with its op, not a PRAGMA's shape, nor anything that is no list of steps"
+  '((yes) (no no no no no no no no) ())
+  (list (list (opted '((enable-load-extension 1005 1 #t))))
+        (list (opted '((enable-load-extension 1005 0 #f)))
+              (opted '((enable-load-extension 1005 1 #f)))
+              (opted '((enable-load-extension 1005 0 #t)))
+              (opted '((enable-load-extension 1004 1 #t)))
+              (opted '((defensive 1005 1 #t)))
+              (opted '((enable-load-extension "PRAGMA x = 1" "PRAGMA x" #t)))
+              (opted '(enable-load-extension 1005 1 #t))
+              (opted (list (cons 'enable-load-extension #t))))
+        (filter (lambda (r) (not (equal? (cdr r) 'no)))
+                (map (lambda (x) (cons x (opted x)))
+                     (append (list cyclic (cons '(enable-load-extension 1005 1 #t) 5)) universe)))))
+
+;; message-of : Any -> Any
+;; The &message of raise-setting-refusal's raise for REFUSAL, or what else
+;; it did.
+(define (message-of refusal)
+  (guard (e ((message-condition? e) (condition-message e))
+            (#t (list 'raised (describe e))))
+    (raise-setting-refusal 'open-database refusal)
+    'no-raise))
+
+;; names-missing : Any -> Any
+;; The names of the eleven that TEXT does not hold, in order; TEXT itself
+;; when it is no string. Each name is the suite's own, written out: the
+;; message is read only for whether it names them, never compared whole.
+(define (names-missing text)
+  (if (string? text)
+      (filter (lambda (n) (not (contains? text (symbol->string n)))) all-names)
+      (list 'no-message text)))
+
+(test-equal "unknown-setting's and setting-out-of-domain's messages name every one of the eleven, db_config's four among them"
+  '(() ())
+  (list (names-missing (message-of (plan '((nosuch . 1)))))
+        (names-missing (message-of (plan '((defensive . 1)))))))
 
 ;; --- total ----------------------------------------------------------------------------
 

@@ -17,7 +17,10 @@
 ;;; it on every path; the counters are SQLite's, read as it keeps them
 ;;; (ADR-0016, ADR-0020). with-transaction reads autocommit to nest, and again
 ;;; to learn whether its transaction survived its body (ADR-0017). The open
-;;; verbs take a settings list, applied at open and read back (ADR-0018).
+;;; verbs take a settings list, applied at open and read back (ADR-0018),
+;;; db_config's four among it, each one call held by its own answer, and an
+;;; open that opts in to extension loading on a library without it refused
+;;; by sqlite-extensions-unavailable?'s condition (ADR-0021).
 ;;; interrupt-database! is the one verb any thread may call, and the close
 ;;; shuts it out before it finalizes anything (ADR-0019).
 (library (chez-sqlite3)
@@ -176,7 +179,9 @@
    ;; sqlite-setting-mismatch-expected : SqliteSettingMismatch -> Any
    sqlite-setting-mismatch-expected
    ;; sqlite-setting-mismatch-actual : SqliteSettingMismatch -> Any
-   sqlite-setting-mismatch-actual)
+   sqlite-setting-mismatch-actual
+   ;; sqlite-extensions-unavailable? : Any -> Boolean
+   sqlite-extensions-unavailable?)
   (import (chez-sqlite3 private require-threaded)
           (only (chez-sqlite3 private open) open-database call-with-database)
           (only (chez-sqlite3 private connection)
@@ -206,4 +211,5 @@
                 sqlite-closed? sqlite-busy? sqlite-constraint? sqlite-read-only?
                 sqlite-interrupt? sqlite-invalid-text? sqlite-invalid-text-column sqlite-invalid-text-offset
                 sqlite-setting-mismatch? sqlite-setting-mismatch-setting
-                sqlite-setting-mismatch-expected sqlite-setting-mismatch-actual)))
+                sqlite-setting-mismatch-expected sqlite-setting-mismatch-actual
+                sqlite-extensions-unavailable?)))

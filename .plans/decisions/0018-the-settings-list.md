@@ -17,6 +17,8 @@
   ([amendment](#amendment-2026-11-17-the-opens-claim-held-whole-m3s-closing-review)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: db_config's four settings
   ([amendment](#amendment-2026-11-17-db_configs-four-settings-m4s-plan)).
+  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"), with its additions after the M4 session's check ("Accept all"): the four in the list, and M3's sweeps moved
+  ([amendment](#amendment-2026-11-18-the-four-in-the-list-and-m3s-sweeps-moved-m4-slice-3)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `open-database`'s and `call-with-database`'s settings
 - **Settles:** brief §2.7, moved to M3 (the maintainer, 2026-11-13); ADR-0012's consequence "M3's
@@ -347,3 +349,28 @@ and "SQLite's default, settable" (Q5), 2026-11-16; "Library's start, documented"
 - **The engine rows** sweep an open holding the four among the six PRAGMAs until it completes
   unexpired, and interleave one remainder's runs, as M3 slice 5's did; each set is made once a
   call.
+
+## Amendment, 2026-11-18: the four in the list, and M3's sweeps moved (M4 slice 3)
+
+Accepted by the maintainer on 2026-11-18 ("Accept all"), and its additions after the M4 session's check the same day ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)). ADR-0021's amendment of
+the same day holds the sets themselves.
+
+- **The list's eleven names:**
+  - `setting-names` holds the seven, then `enable-load-extension`, `defensive`, `dqs-dml` and
+    `dqs-ddl`, in the plan's table order;
+  - their ops are `constants.sls`', held to `sqlite3.h` by `test-constants` and to the table by a
+    row;
+  - `unknown-setting`'s and `setting-out-of-domain`'s messages list all eleven.
+- **`settings-plan`'s answer keeps M3's shape:**
+  - a `no-call` marks the name seen and plans no step;
+  - a PRAGMA's step and a set's are told apart by `db-config-step?`, untagged, since tagging would
+    have changed M3's rows.
+- **M3's sweeps moved, their rule unchanged:**
+  - the step dispatch costs engine ticks outside any section;
+  - `test-open-engines`' open completes unexpired at fuel 257, not 221;
+  - `test-open-interleave`'s two calls complete at 85 and 109, not the 75 and 99 of this record's
+    slice 5 table (73 and 97 on the tree before the slice);
+  - each sweep is still bounded by refusals it saw itself, as the slice's review checked.
+- **Decision 5's order holds across PRAGMAs and sets:** a stand-in for the binding reads two
+  PRAGMAs' flags at each set, on a list that interleaves them, so a plan that ran every PRAGMA
+  first fails it (the M4 session's check of the slice, its M3).

@@ -18,6 +18,9 @@
   ([amendment](#amendment-2026-11-17-the-sentinel-and-a-code-that-names-no-error-m4-slice-1)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): an extension's open work and the close
   ([amendment](#amendment-2026-11-17-an-extensions-open-work-and-the-close-m4s-close-fix)).
+  Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"), with its additions after the M4 session's check ("Accept all"): the four set at open, the opt-in's check and the
+  record's, and the starts held over moved starts
+  ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
 - **Settles:** brief §2.5 and §2.8, as the M4 plan amends them
@@ -319,3 +322,64 @@ disconnects them first ([ADR-0012](0012-explicit-close-and-the-handle.md), amend
 blob or a backup an extension leaves open on the connection makes `close-database!` refuse, and is
 the extension's, with what SQLite's refused close does to it: the close vouches only for what
 chez-sqlite3 tracks ("Vouch only for ours"). Slice 4's Extensions entry says so.
+
+## Amendment, 2026-11-18: the four set at open (M4 slice 3)
+
+Accepted by the maintainer on 2026-11-18 ("Accept all"), and its additions after the M4 session's check the same day ("Accept all"), proposed in M4 slice 3 ([its mutation log](../m4-slice-3-mutation-log.md)), from the slice, its review (Opus) and the
+review's fixes.
+
+- **Each set is one section, at the next claimed position** (ADR-0018, amended in M3 slice 5).
+  In it:
+  - the claim is compared;
+  - `call-with-int-cell` is filled with `db-config-sentinel`;
+  - the call is made, and `db-config-verdict` reads its answer and cell;
+  - for a code that names an error, its message is read: `sqlite3_errstr`'s, copied inside the
+    same section.
+
+  The verdict is answered as data. A refusal closes the connection in the next section, then
+  raises from the verb called. The section's copy of the message is the rule, though no row can
+  hold it, since `sqlite3_errstr` answers static text (the log's R4).
+- **A code that is no exact integer is `not-an-error`,** as is a code whose low byte is 0, 100 or
+  101. Only a stand-in for the binding can answer one. This adds to the M4 slice 1 amendment,
+  which names the low bytes alone.
+- **The opt-in is the step, not the name.**
+  - `steps-opt-in?` is true only when the plan holds the exact step `(enable-load-extension 1005
+    1 #t)`, so `(enable-load-extension . #f)`, a `no-call`, holds none.
+  - The fifth check reads that answer in the checks' section, after the list's own rules, before
+    anything is allocated.
+  - The record's opt-in is an immutable field, fixed when the record is made.
+  - `database-extension-loading?`, in `(chez-sqlite3 private connection)`, reads it after
+    `check-owned`. Slice 4's `load-extension!` reads it last of its checks.
+- **For the suites:**
+  - `applied-settings/with` takes a stand-in for the binding, as `interrupt-database/with` does;
+  - `database-extension-loading?` is reached through `eval`, as `made-claim` is;
+  - neither is exported from `(chez-sqlite3)`.
+- **Decision 2's starts are held two ways:**
+  - **Against the start:** each op's start is read through native's `sqlite3_open_v2` and
+    compared with `open-database`'s connection, with no settings and with each single-op list,
+    the opt-in's among them.
+  - **Over moved starts:** a start comparison can't see a set that writes the start value, nor a
+    set skipped where the value asked is the start (the review's R1, R2 and R6). So an
+    `sqlite3_auto_extension` entry point moves every op off this library's start at each open.
+    Over that, `open-database` with no settings, and `call-with-database`, keep every moved
+    value, and each `#t` and `#f` reads back as asked.
+  - **Every list is judged over moved starts,** a PRAGMA beside an op among them: each op the list
+    doesn't name keeps its moved value (the M4 session's check of the slice, its M1).
+  - **The moves are held on their own:** each moved value is 1 minus the start read through
+    native, never the value the entry point wrote, and differs from it (the check's M2).
+  - Where `sqlite3_auto_extension` is refused (Apple's 21), those rows are named unavailable.
+- **The engine rows' fuels,** alike on Guix's 3.53.1, 3.45.1 and 3.54.1, with each sweep bounded
+  by refusals it saw itself:
+
+  | Row | Completes unexpired at | Seen |
+  |---|---|---|
+  | `open-database`, the three ops and the opt-in among six PRAGMAs, on a file | fuel 289 | |
+  | its remainder resumed twice | fuel 289 | refused 258, the same connection 21, a new call 9; the first refusal before the open at fuel 10 |
+  | a timer's continuation re-entered | tick 301 | |
+  | `call-with-database`, the same, under an engine | fuel 563 | |
+  | one remainder's runs interleaved, `open-database` | fuel 119 | 7,021 trials, 1,717 straddling the first section |
+  | `applied-settings/with`, counted through the stand-in, interleaved | fuel 76 | 2,850 trials, 986 straddling |
+  | a failing set resumed twice | fuel 67 | refused at a third of the fuels at least, 17 + 9 past a set |
+
+  A whole new call's sets interleave with the first run's. Each call is noted exactly twice, the
+  first of each pair in the call's order and the second too (`traps.md`).

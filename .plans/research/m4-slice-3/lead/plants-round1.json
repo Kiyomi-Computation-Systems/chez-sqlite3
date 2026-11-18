@@ -1,0 +1,73 @@
+[
+ {
+  "name": "M1-dqs-swapped",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/settings.sls",
+    "          (list 'dqs-dml sqlite-dbconfig-dqs-dml '(#t #f))\n          (list 'dqs-ddl sqlite-dbconfig-dqs-ddl '(#t #f))",
+    "          (list 'dqs-dml sqlite-dbconfig-dqs-ddl '(#t #f))\n          (list 'dqs-ddl sqlite-dbconfig-dqs-dml '(#t #f))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-settings"
+  ]
+ },
+ {
+  "name": "M2-opt-in-any-set",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/settings.sls",
+    "    (and (list? steps) (member opt-in-step steps) #t)))",
+    "    (and (list? steps) (exists db-config-step? steps) #t)))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-settings",
+   "test-open-settings"
+  ]
+ },
+ {
+  "name": "M3-unavailable-who-fixed",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "              (raise-extensions-unavailable who))",
+    "              (raise-extensions-unavailable 'open-database))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-open-settings",
+   "test-library-loading-real"
+  ]
+ },
+ {
+  "name": "M4-mismatch-swapped",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/open.sls",
+    "(raise-setting-mismatch who (cadr m) (caddr m) (cadddr m))",
+    "(raise-setting-mismatch who (cadr m) (cadddr m) (caddr m))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config"
+  ]
+ },
+ {
+  "name": "M5-record-opt-in-always",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/connection.sls",
+    "(make-interrupt-latch) (and opt-in #t)))))",
+    "(make-interrupt-latch) #t))))"
+   ]
+  ],
+  "suites": [
+   "test-open-db-config",
+   "test-open-settings"
+  ]
+ }
+]

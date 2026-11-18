@@ -19,9 +19,8 @@
 ;;;                         actual, for slice 5 to raise
 ;;;
 ;;; M4 slice 1 adds the four sqlite3_db_config settings (ADR-0021, decisions 1
-;;; to 3 and 5; ADR-0018, amended for M4), beside setting-names and not in
-;;; it: settings-plan's steps are SQL, and open.sls runs every one as SQL, so
-;;; M4 slice 3 joins them to the list, with the open's calls.
+;;; to 3 and 5; ADR-0018, amended for M4), and M4 slice 3 joins them to
+;;; setting-names and settings-plan, with the open's calls (open.sls):
 ;;;
 ;;;   db-config-settings       the four: each name, its op and its domain
 ;;;   db-config-setting-names  their names
@@ -29,6 +28,10 @@
 ;;;   db-config-step           the call for a name and a value, or none
 ;;;   db-config-verdict        the call's answer and cell: a match, the
 ;;;                            mismatch's fields, or an error's code
+;;;   db-config-step?          whether a plan's step is a db_config call's,
+;;;                            not a PRAGMA's
+;;;   steps-opt-in?            whether a plan's steps hold the opt-in's step,
+;;;                            which the record's opt-in is read from
 ;;;
 ;;; The table (ADR-0018, decision 3), each value written as canonical SQL from
 ;;; the words below and decimal integers alone, so no text of the caller's
@@ -44,23 +47,37 @@
 ;;;   statement-cache  exact integer, 0 to 1024;    never: the library's own,
 ;;;                    32 when absent               the cache's capacity
 ;;;
+;;; and db_config's four (ADR-0018, amended for M4), each written to its op,
+;;; constants.sls's sqlite-dbconfig-*, by one sqlite3_db_config call, and read
+;;; back from that call's own cell: never SQL.
+;;;
+;;;   enable-load-extension  #t or #f   1 to its op, for #t alone: #f makes
+;;;                                     no call (Q15)
+;;;   defensive              #t or #f   1 or 0
+;;;   dqs-dml                #t or #f   1 or 0
+;;;   dqs-ddl                #t or #f   1 or 0
+;;;
 ;;; Each procedure but raise-setting-refusal answers data for any argument and
-;;; raises nothing, so slice 5 may call any of them inside a critical section,
-;;; as M4 slice 3 may db-config-step and db-config-verdict; raise-setting-
-;;; refusal is called after it.
+;;; raises nothing, so the open verbs call them inside a critical section,
+;;; db-config-step, db-config-verdict, db-config-step? and steps-opt-in?
+;;; among them; raise-setting-refusal is called after it.
 (library (chez-sqlite3 private settings)
   (export setting-names setting-refusal-rules split-open-arguments settings-plan
           raise-setting-refusal read-back-value read-back-comparison
           db-config-settings db-config-setting-names db-config-sentinel db-config-step
-          db-config-verdict)
+          db-config-verdict db-config-step? steps-opt-in?)
   (import (chez-sqlite3 private require-threaded)
           (rnrs)
-          (only (chez-sqlite3 private conditions) shown-value))
+          (only (chez-sqlite3 private conditions) shown-value)
+          (only (chez-sqlite3 private constants) sqlite-dbconfig-enable-load-extension
+                sqlite-dbconfig-defensive sqlite-dbconfig-dqs-dml sqlite-dbconfig-dqs-ddl))
 
   ;; setting-names : (Listof Symbol)
-  ;; Every setting the list takes, in ADR-0018's table order.
+  ;; Every setting the list takes: ADR-0018's seven in its table order, then
+  ;; db_config's four in the M4 plan's (section 4.1), joined in M4 slice 3.
   (define setting-names
-    '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache))
+    '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
+      enable-load-extension defensive dqs-dml dqs-ddl))
 
   ;; setting-refusal-rules : (Listof Symbol)
   ;; The rules a settings list is refused by (ADR-0018, decision 2):
@@ -150,7 +167,8 @@
                (row (and setting (find (lambda (r) (eq? (car r) value)) (caddr setting)))))
           (and row (step (cadr setting) (cadr row))))))
 
-  ;; settings-plan : Any -> (U (List 'settings Natural (Listof Setting-Step)) Setting-Refusal)
+  ;; settings-plan : Any -> (U (List 'settings Natural (Listof Step)) Setting-Refusal)
+  ;; Step = (U Setting-Step Db-Config-Step)
   ;; Setting-Step = (List Symbol String String Any)
   ;; Setting-Refusal = (U (List 'refused 'second-settings-list)
   ;;                      (List 'refused 'not-an-association-list Any)
@@ -166,9 +184,13 @@
   ;; shown-value, a string by its kind. Else the plan: the statement cache's
   ;; capacity, statement-cache's value or 32; and a step for each of SQLite's
   ;; settings given, busy-timeout's first, then the rest in the list's order.
-  ;; A step is the setting's name, the SQL that sets it, the SQL that reads it
-  ;; back, PRAGMA and its name, and the Scheme value expected back, the value
-  ;; given. SETTINGS is never changed, and is read more than once: the open
+  ;; A PRAGMA's step is the setting's name, the SQL that sets it, the SQL
+  ;; that reads it back, PRAGMA and its name, and the Scheme value expected
+  ;; back, the value given. One of db_config's four plans db-config-step's
+  ;; step, (name op written expected), among the PRAGMAs' in the list's
+  ;; order; its value outside #t and #f is setting-out-of-domain; and
+  ;; (enable-load-extension . #f) plans no step, its no-call, yet is a name
+  ;; seen, so a second one is setting-given-twice. SETTINGS is never changed, and is read more than once: the open
   ;; verbs call it inside the one critical section that holds their checks
   ;; (open.sls's checked), on a list no other thread changes, so no handler
   ;; of this thread runs between the reads either.
@@ -187,6 +209,14 @@
                          (if (exact-integer-within? value largest-statement-cache)
                              (loop (cdr rest) (cons name seen) value first steps)
                              (list 'refused 'setting-out-of-domain name (shown-value value))))
+                        ((assq name db-config-settings)
+                         (let ((step (db-config-step name value)))
+                           (cond ((eq? step 'no-call)
+                                  (loop (cdr rest) (cons name seen) capacity first steps))
+                                 ((pair? step)
+                                  (loop (cdr rest) (cons name seen) capacity first (cons step steps)))
+                                 (else
+                                  (list 'refused 'setting-out-of-domain name (shown-value value))))))
                         (else
                          (let ((step (step-for name value)))
                            (cond ((not step)
@@ -217,10 +247,10 @@
       ((not-an-association-list)
        "the settings are an association list from a setting's name, a symbol, to its value")
       ((unknown-setting)
-       "not a setting: busy-timeout, foreign-keys, journal-mode, synchronous, temp-store, trusted-schema or statement-cache")
+       "not a setting: busy-timeout, foreign-keys, journal-mode, synchronous, temp-store, trusted-schema, statement-cache, enable-load-extension, defensive, dqs-dml or dqs-ddl")
       ((setting-given-twice) "a setting given twice")
       (else
-       "a value outside its setting's domain: busy-timeout an exact integer from 0 to 2147483647 ms; foreign-keys and trusted-schema #t or #f; journal-mode delete, truncate, persist or wal; synchronous off, normal, full or extra; temp-store default, file or memory; statement-cache an exact integer from 0 to 1024")))
+       "a value outside its setting's domain: busy-timeout an exact integer from 0 to 2147483647 ms; foreign-keys and trusted-schema #t or #f; journal-mode delete, truncate, persist or wal; synchronous off, normal, full or extra; temp-store default, file or memory; statement-cache an exact integer from 0 to 1024; enable-load-extension, defensive, dqs-dml and dqs-ddl #t or #f")))
 
   ;; raise-setting-refusal : Symbol Setting-Refusal -> Nothing
   ;; An assertion violation from WHO for REFUSAL, as split-open-arguments or
@@ -286,18 +316,19 @@
   ;; db-config-settings : (Listof (List Symbol Natural (Listof Boolean)))
   ;; The four, in the M4 plan's table order (section 4.1): each setting's
   ;; name, its op's C name with SQLITE_DBCONFIG_ dropped, lower-cased, _
-  ;; turned to - (ADR-0021, decision 1); its op, that C name's value in the
-  ;; floor's sqlite3.h; and its domain, #t or #f. Each value is written to its
-  ;; op as 1 or 0, and read back from the call's own cell.
+  ;; turned to - (ADR-0021, decision 1); its op, constants.sls's for that C
+  ;; name, which tests/test-constants.sps holds to sqlite3.h; and its domain,
+  ;; #t or #f. Each value is written to its op as 1 or 0, and read back from
+  ;; the call's own cell.
   (define db-config-settings
-    '((enable-load-extension 1005 (#t #f))
-      (defensive 1010 (#t #f))
-      (dqs-dml 1013 (#t #f))
-      (dqs-ddl 1014 (#t #f))))
+    (list (list 'enable-load-extension sqlite-dbconfig-enable-load-extension '(#t #f))
+          (list 'defensive sqlite-dbconfig-defensive '(#t #f))
+          (list 'dqs-dml sqlite-dbconfig-dqs-dml '(#t #f))
+          (list 'dqs-ddl sqlite-dbconfig-dqs-ddl '(#t #f))))
 
   ;; db-config-setting-names : (Listof Symbol)
-  ;; The four's names, in the table's order. None is in setting-names until
-  ;; M4 slice 3 joins them.
+  ;; The four's names, in the table's order: setting-names' last four since
+  ;; M4 slice 3 joined them.
   (define db-config-setting-names (map car db-config-settings))
 
   ;; db-config-sentinel : Integer
@@ -345,4 +376,33 @@
                  (cond ((eqv? cell db-config-sentinel) '())
                        ((eqv? cell 1) #t)
                        ((eqv? cell 0) #f)
-                       (else cell)))))))
+                       (else cell))))))
+
+  ;; --- the join's two readers (M4 slice 3) ---------------------------------------------
+
+  ;; db-config-step? : Any -> Boolean
+  ;; Whether STEP, one of a plan's, is a db_config call's, db-config-step's
+  ;; shape, (name op written expected): a list of four, NAME a symbol, OP and
+  ;; WRITTEN exact integers. A PRAGMA's step, (name set-sql read-sql
+  ;; expected), has a string where the op stands, so no step is both; the
+  ;; open runs one of these by its call and any other by its SQL. Total.
+  (define (db-config-step? step)
+    (and (list? step) (= (length step) 4) (symbol? (car step))
+         (integer? (cadr step)) (exact? (cadr step))
+         (integer? (caddr step)) (exact? (caddr step))
+         #t))
+
+  ;; opt-in-step : Db-Config-Step
+  ;; The opt-in's own step, (enable-load-extension op 1 #t), as db-config-
+  ;; step makes it for (enable-load-extension . #t) alone (ADR-0021, decision
+  ;; 5).
+  (define opt-in-step (db-config-step 'enable-load-extension #t))
+
+  ;; steps-opt-in? : Any -> Boolean
+  ;; Whether STEPS, a plan's steps, hold the opt-in's step, equal? to
+  ;; opt-in-step: the connection's opt-in to extension loading, which the
+  ;; record holds, fixed when it is made (ADR-0012, amended for M4). Read from
+  ;; the step, never the name, so (enable-load-extension . #f), which plans
+  ;; no step, holds none. #f for anything that is no proper list. Total.
+  (define (steps-opt-in? steps)
+    (and (list? steps) (member opt-in-step steps) #t)))

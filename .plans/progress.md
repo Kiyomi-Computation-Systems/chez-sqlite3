@@ -84,8 +84,9 @@ newest first.
     ("Assertion violation"), 2026-11-17.
   - **Slice 2,** the bindings and `check-variadic`, is done, as PR #37, `1735a66`, below; the
     maintainer accepted its amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept
-    all"). **Slice 5,** FTS5 and JSON, is PR #40, below, rebased onto the close fix and slice 2,
-    its workaround gone. **Slice 3,** the settings, is being built from `1735a66`.
+    all"). **Slice 5,** FTS5 and JSON, is done, as PR #40, `7dac918`, below. **Slice 3,** the
+    four settings at open and the opt-in's check, is PR #44, below. **Slice 4,** `load-extension!`,
+    follows it.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
@@ -154,6 +155,122 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-18 — M4 slice 3: the four `db_config` settings at open (PR #44)
+
+- **Built** by an Opus builder from `1735a66`, rebased onto `7c6d536`:
+  - **`settings.sls`:**
+    - `setting-names` holds eleven names: the seven, then the four in the plan's order;
+    - `db-config-settings` takes its ops from `constants.sls`;
+    - `settings-plan` gains them, a `no-call` marking `(enable-load-extension . #f)` seen and
+      planning no step;
+    - new `db-config-step?` and `steps-opt-in?`, both total;
+    - both refusal messages list the eleven.
+  - **`open.sls`:**
+    - each set is one section at the next claimed position: the cell filled with
+      `db-config-sentinel` through `call-with-int-cell`, the call, the verdict, and the
+      `sqlite3_errstr` message copied there;
+    - a refusal closes the connection first, then raises from the verb;
+    - `checked-open` makes the fifth check after the list's own rules, inside the checks'
+      section, and answers the opt-in;
+    - new `applied-settings/with`, for a stand-in binding.
+  - **`connection.sls`:** the record's immutable opt-in, and `database-extension-loading?`, which
+    runs `check-owned`, then reads it.
+  - **`(chez-sqlite3)`** exports `sqlite-extensions-unavailable?`, 69 names.
+  - **The docs' Settings:**
+    - the four rows, and the starts "as the library was built", Apple's `defensive` on;
+    - `writable_schema` doing nothing under `defensive`, and DQS failing at prepare, each a
+      `scheme run` block;
+    - the opt-in's refusal;
+    - in Conditions, the predicate.
+  - **The suites:**
+    - new `test-open-db-config` (33 rows) and `test-open-db-config-engines` (12), in
+      `MEMORY_SUITES_1`, the lighter shard on `main`'s last three runs at the current layout:
+      1012, 1023 and 1005 s against shard 2's 836, 1091 and 1441 s (44305936182, 44298034354,
+      44293661574). #40's close-out had sent them to shard 2, on runs from before its own suites
+      and `test-check-variadic` went into shard 1;
+    - `test-settings` 74 to 86, `test-library-loading-real`'s three decoy rows, and
+      `refusal-probe.sps`' `--opens`.
+- **Replaced rows,** named in the log:
+  - `test-settings`' held-out row becomes the four in the live list;
+  - M3's names row and no-row row write out the eleven;
+  - `test-open-settings`' two hold-out rows become accept rows;
+  - `test-public`'s count goes from 68 to 69.
+- **Watched failing:** against the base's sources, `7c6d536`'s for the final suites:
+  - `test-open-db-config` 25 of 33 fail, and the engines suite 8 of 12;
+  - `test-settings` 13, `test-public` 5, `test-library-loading-real` 3, `test-open-settings` 2
+    and `test-reference` 1;
+  - each row that passes there was watched failing against a plant.
+
+  The builder's 67 plants, rerun on the final suites: 65 caught. R4, the message copied after
+  the section, survives harmlessly, since `sqlite3_errstr`'s text is static; and the idle-turns
+  plant is equivalent and must pass. Its round-1 survivor, `(enable-load-extension . #f)` sending
+  a 0, brought the row that turns the switch on at every open through `sqlite3_auto_extension`.
+  My 14, written from their descriptions, all caught (the log's "The lead's verification"):
+  - the DQS ops swapped;
+  - the opt-in taken from any set;
+  - the refusal's `who` fixed, seen only by the decoy;
+  - a mismatch's fields swapped;
+  - the record's opt-in always `#t`;
+  - the review's R1, R2, R3 and R6;
+  - the check's five: a set beside a PRAGMA, the moves made identities, PRAGMAs before sets, a
+    code that is no exact integer, the reader unowned.
+- **Reviewed** (Opus, read-only), no blocker. **Two majors,** fixed:
+  - an op set unasked beside the opt-in survived, so each single-op list, the opt-in's among
+    them, now leaves the other three at their starts;
+  - a set that writes a lane's start can't be seen there, partly a flaw in the brief and in the
+    plan's §4.7. An `sqlite3_auto_extension` entry point now moves every op off its start first
+    (the plan, amended).
+
+  **Three minors,** fixed: a failing sweep's guard counted one trial; the docs' starts weren't
+  true of every library; the log was stale since the rebase. Two nits: one answered (R4), one
+  fixed (the straddle count).
+- **Checked by the M4 session** against the plan, read-only: no blocker, no major. Five minors,
+  fixed:
+  - M1, a set that writes the start beside a PRAGMA, unseen, since only the empty and single-op
+    lists were judged over moved starts;
+  - M2, no row holding the moves to moving, since the expected values came from the entry point's
+    own list;
+  - M3, nothing holding the order across PRAGMAs and sets;
+  - M4, the defensive build's recipe uncommitted, now
+    `research/m4-slice-3/lib-defensive.sh`, which rebuilds it byte for byte;
+  - M5, ledger claims the log didn't hold, now in its "The lead's verification".
+
+  Six nits: five fixed (the whole-call count, the non-integer code, the reader's owner check,
+  the entry points' answers, the held count), and one answered (the messages' containment,
+  ADR-0013's decision 9).
+- **Libraries:** `make test` 79 of 79 on Guix's 3.53.1, the floor (3.45.1), 3.54.1, and 3.54.1
+  built `DEFAULT_DEFENSIVE`, which starts `defensive` on, as Apple's does. Each library was set
+  inside the container (`traps.md`).
+- **Times** under the gate, on Guix's library:
+  - `test-open-db-config` 12 to 14 s, its engines suite 55 to 56 s;
+  - `test-library-loading-real` 175 to 177 s, the lead's run and the builder's, up from 145 to
+    160 s with three new children;
+  - M3's `test-open-engines` 23 s and `test-open-interleave` 37 s, their sweeps longer (ADR-0018,
+    amended);
+  - the rest 10 to 34 s.
+- **The engine rows' fuels:** ADR-0021, amended 2026-11-18.
+- **The records,** accepted by the maintainer, 2026-11-18 ("Accept all"): ADR-0021's amendment,
+  ADR-0018's, the M4 plan's, and four traps. After the check: each amendment's additions, and a
+  fifth trap, whole calls counted by their effects. The maintainer accepted the additions the same day ("Accept all").
+- **For slice 4:**
+  - `load-extension!` reads `database-extension-loading?` last of its checks;
+  - `refusal-probe.sps`' `--opens` serves the decoy's load rows;
+  - where a load row's plant could write a value a start already holds, judge it over a moved
+    start (the plan, amended).
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder, three rounds | Opus | 714k, 808k and 891k | 376, 223 and 150 | 70, 26 and 22 min |
+  | The review | Opus | 329k | 82 | 18 min |
+
+- **Learned:**
+  - **A comparison with a start sees a move, never a write of the start itself.** Hold a setter
+    from a value it would have to change, in every list shape, and with expected values that
+    never come from the code that writes them.
+  - **Read the lane before trusting the green.** A host variable didn't reach the container, and a
+    floor run passed on Guix's library.
 
 ### 2026-11-17 — M4 slice 5: FTS5 and JSON (PR #40)
 
