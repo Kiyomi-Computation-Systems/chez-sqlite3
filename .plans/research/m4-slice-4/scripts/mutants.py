@@ -8,6 +8,9 @@ E = "src/chez-sqlite3/private/extension.sls"
 C = "src/chez-sqlite3/private/connection.sls"
 N = "src/chez-sqlite3/private/native.sls"
 P = "src/chez-sqlite3.sls"
+B = "tests/extension-build.sls"
+TL = "tests/test-load-extension.sps"
+TE = "tests/test-load-extension-engines.sps"
 
 DEFAULT_SUITES = ["test-load-extension", "test-load-extension-engines", "test-public", "test-reference",
                   "test-never-loads", "test-docs", "test-library-loading-real"]
@@ -80,6 +83,10 @@ MUTANTS = [
      "edits": [(E, """                             'path-not-absolute (shown-value copy)))
       copy))""", """                             'path-not-absolute (shown-value copy)))
       path))""")]},
+    {"name": "C08e-entry-copy-unused",
+     "edits": [(E, """                             'entry-point-holds-nul (shown-value copy)))
+      copy))""", """                             'entry-point-holds-nul (shown-value copy)))
+      entry))""")]},
     {"name": "C09-empty-path-let-through",
      "edits": [(E, """(unless (and (> (string-length copy) 0) (char=? (string-ref copy 0) #\\/))""",
                 """(unless (or (= (string-length copy) 0) (char=? (string-ref copy 0) #\\/))""")]},
@@ -276,6 +283,20 @@ MUTANTS = [
      "env": "env -u C_INCLUDE_PATH -u CPATH",
      "suites": ["test-load-extension", "test-load-extension-engines"],
      "edits": []},
+    {"name": "X03-suites-told-no-load-extension",
+     "suites": ["test-load-extension", "test-load-extension-engines"],
+     "edits": [(TL, "(define available (reach-value '(chez-sqlite3 private native) 'load-extension-available?))",
+                "(define available #f)"),
+               (TE, """(define available
+  (guard (e (#t (list 'unreached (describe e))))
+    (eval 'load-extension-available? (environment '(chez-sqlite3 private native)))))""",
+                "(define available #f)")]},
+    {"name": "X04-build-skipped-everywhere",
+     "suites": ["test-load-extension", "test-load-extension-engines"],
+     "edits": [(B, "    (if (eq? available #f)\n        '(unavailable)", "    (if #t\n        '(unavailable)")]},
+    {"name": "X05-build-made-everywhere",
+     "suites": ["test-load-extension"],
+     "edits": [(B, "    (if (eq? available #f)\n        '(unavailable)", "    (if #f\n        '(unavailable)")]},
     {"name": "X01-no-compiler",
      "env": "CC=false",
      "suites": ["test-load-extension", "test-load-extension-engines"],

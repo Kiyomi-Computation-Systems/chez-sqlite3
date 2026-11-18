@@ -9,11 +9,19 @@
 ;;;   build-extensions   each variant compiled into a directory, with $CC
 ;;;                      -Wall -Werror against the lane's sqlite3ext.h:
 ;;;                      their paths, or the first compile's whole failure
+;;;   built-where-loadable
+;;;                      build-extensions where native records
+;;;                      sqlite3_load_extension, and (unavailable), nothing
+;;;                      compiled, where it records none
 ;;;   extension-path     one variant's path, from build-extensions' answer
 ;;;
 ;;; The compiler is a test oracle, never an install dependency: a missing
 ;;; compiler or header fails the compile, and the suite's first row names
-;;; it, never a skip (ADR-0001, decision 3). $CC is read as the constants'
+;;; it, never a skip (ADR-0001, decision 3). The one exception is a library
+;;; that lacks sqlite3_load_extension, as Apple's does: no connection of it
+;;; can load an extension, so the build is named unavailable there, and the
+;;; suites assert the opt-in's refusal in its place (the maintainer's
+;;; "Build named unavailable there", 2026-11-18). $CC is read as the constants'
 ;;; oracle reads it, (libsqlite3-oracle)'s c-compiler, and the header comes
 ;;; from the compiler's own path, which C_INCLUDE_PATH leads on a floor run
 ;;; (AGENTS.md). Nothing here runs at import: each compile runs when a suite
@@ -22,7 +30,7 @@
 ;;; Test-only: it lives in tests/, which make test puts on Chez's library
 ;;; path. It loads no libsqlite3.
 (library (extension-build)
-  (export extension-suffix build-extensions extension-path extension-variants)
+  (export extension-suffix build-extensions built-where-loadable extension-path extension-variants)
   (import (rnrs)
           (chez-sqlite3-testing)
           (only (libsqlite3-oracle) c-compiler)
@@ -82,6 +90,18 @@
             (if (eq? (car r) 'not-built)
                 r
                 (loop (cdr rest) (cons r built)))))))
+
+  ;; built-where-loadable : Any String
+  ;;                        -> (U (Listof (Pairof Symbol String)) (List 'not-built Symbol Any)
+  ;;                              (List 'unavailable))
+  ;; build-extensions' answer for DIR, unless AVAILABLE, native's record of
+  ;; sqlite3_load_extension, is #f: then (unavailable), and nothing is
+  ;; compiled or written. Any other value, the record unread among them,
+  ;; builds, so a missing compiler or header fails there.
+  (define (built-where-loadable available dir)
+    (if (eq? available #f)
+        '(unavailable)
+        (build-extensions dir)))
 
   ;; extension-path : Any Symbol -> String
   ;; NAME's path in BUILT, build-extensions' answer; when BUILT is a

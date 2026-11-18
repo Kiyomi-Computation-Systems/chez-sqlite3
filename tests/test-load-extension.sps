@@ -71,7 +71,7 @@
         (srfi :64)
         (only (chezscheme) foreign-ref foreign-procedure foreign-callable foreign-callable-entry-point
               lock-object unlock-object fork-thread make-mutex with-mutex sleep make-time
-              get-thread-id disable-interrupts enable-interrupts mkdir current-directory)
+              get-thread-id disable-interrupts enable-interrupts mkdir current-directory directory-list)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (extension-build)
@@ -317,6 +317,45 @@
 ;; memory-used : -> Any
 (define (memory-used) (guard (e (#t (list 'raised (describe e)))) (sqlite3-memory-used)))
 
+;; counts-memory? : Boolean
+;; Whether the library keeps a count of its memory: sqlite3_memory_used
+;; higher while a connection of the suite's is open than before it, as the
+;; memory check's own control asks (ADR-0005, amended). Apple's
+;; DEFAULT_MEMSTATUS=0 build keeps none.
+(define counts-memory?
+  (guard (e (#t #f))
+    (let* ((before (sqlite3-memory-used))
+           (db (open-database ":memory:"))
+           (during (sqlite3-memory-used)))
+      (close-database! db)
+      (> during before))))
+
+;; memory-verdict : Symbol
+;; What held-then-freed must answer on this library.
+(define memory-verdict (if counts-memory? 'held-then-freed 'no-count))
+
+;; held-then-freed : Any Any Any -> Any
+;; BEFORE, HELD and AFTER, sqlite3_memory_used read before a load, while
+;; its message or extension was held, and after it was let go:
+;; held-then-freed when the count rose while held and came back to BEFORE;
+;; no-count where the library keeps none and all three read alike; else
+;; the three.
+(define (held-then-freed before held after)
+  (cond ((and (integer? before) (integer? held) (integer? after) (> held before) (= after before))
+         'held-then-freed)
+        ((and (not counts-memory?) (equal? before held) (equal? held after)) 'no-count)
+        (else (list 'memory before held after))))
+
+;; memory-noted! : String -> Void
+;; Where the library keeps no count, the row NAME's memory part printed
+;; unavailable, never passed unseen (ADR-0005, amended).
+(define (memory-noted! name)
+  (unless counts-memory?
+    (display "UNAVAILABLE ")
+    (display name)
+    (display ", its memory part: this libsqlite3 keeps no count of its memory")
+    (newline)))
+
 ;; --- the extension ---------------------------------------------------------------------------
 
 ;; dir : (U String (List 'raised String))
@@ -326,10 +365,13 @@
 (define (in-dir name) (if (string? dir) (string-append dir "/" name) "/nonexistent/no-scratch"))
 
 ;; built : Any
-;; build-extensions' answer: each variant's name and path, or the failure.
+;; built-where-loadable's answer: each variant's name and path, or the
+;; failure; or (unavailable), nothing compiled, where native records no
+;; sqlite3_load_extension, as on Apple's library (the maintainer's "Build
+;; named unavailable there").
 (define built
   (if (string? dir)
-      (guard (e (#t (list 'raised (describe e)))) (build-extensions dir))
+      (guard (e (#t (list 'raised (describe e)))) (built-where-loadable available dir))
       (list 'no-scratch dir)))
 
 (define ext (extension-path built 'default))
@@ -383,11 +425,33 @@
   zero-counts
   (native-counts))
 
-(test-equal "tests/extension.c compiles, each of its four variants, with $CC -Wall -Werror against this lane's sqlite3ext.h, each a file at its path; the failures' files are made"
-  (list '(default named derived failing) '(yes yes yes yes) 'made)
-  (list (if (list? built) (map (lambda (b) (if (pair? b) (car b) b)) built) built)
-        (if (list? built) (map (lambda (b) (yes-no (and (pair? b) (string? (cdr b)) (file-exists? (cdr b))))) built) built)
-        files-made))
+(if (eq? available #f)
+    (begin
+      (display "UNAVAILABLE the extension's build: this libsqlite3 has no sqlite3_load_extension, so no connection can load it; the build is named unavailable and the opt-in's refusal asserted in its place")
+      (newline)
+      (test-equal "unavailable, the build not made and the opt-in's open refused in its place: tests/extension.c compiles"
+        (list '(unavailable) '(raised (extensions-unavailable open-database library-condition)) 'made)
+        (list built (attempt-open opted) files-made)))
+    (test-equal "tests/extension.c compiles, each of its four variants, with $CC -Wall -Werror against this lane's sqlite3ext.h, each a file at its path, the library having sqlite3_load_extension; the failures' files are made"
+      (list '(default named derived failing) '(yes yes yes yes) 'made)
+      (list (if (list? built) (map (lambda (b) (if (pair? b) (car b) b)) built) built)
+            (if (list? built) (map (lambda (b) (yes-no (and (pair? b) (string? (cdr b)) (file-exists? (cdr b))))) built) built)
+            files-made)))
+
+(test-equal "the build's decision: where native records no sqlite3_load_extension, built-where-loadable answers (unavailable), and compiles and writes nothing, its directory left empty; where it records one, or its record is unread, it builds, so a missing compiler or header fails there, asked only where this library has the entry point, so that the build is never required where nothing loads it"
+  (list '(unavailable) '() (if (eq? available #f) 'not-asked 'builds) (if (eq? available #f) 'not-asked 'builds))
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-temp-directory
+     (lambda (scratch)
+       (let* ((none (built-where-loadable #f scratch))
+              (left (directory-list scratch))
+              (some (if (eq? available #f) 'not-asked (built-where-loadable #t scratch)))
+              (unread (if (eq? available #f)
+                          'not-asked
+                          (built-where-loadable '(unreached load-extension-available?) scratch))))
+         (list none left
+               (if (and (list? some) (= (length some) 4) (for-all pair? some)) 'builds some)
+               (if (and (list? unread) (= (length unread) 4) (for-all pair? unread)) 'builds unread)))))))
 
 (test-equal "native records sqlite3_load_extension as a boolean; where it is #f, the load rows say so"
   'boolean
@@ -409,6 +473,16 @@
         (cons '() '()) (cons '(1 2) '(1 2)) (cons '("x") '(kind list)) (cons '(1 . 2) '(kind list))
         (cons "a string" '(kind string)) (cons (u8-list->bytevector (list 47)) '(kind bytevector))
         (cons (vector 47) '(kind vector)) (cons car '(kind procedure))))
+
+;; in-order : (Any -> Any) (Listof Any) -> (Listof Any)
+;; PROC called on each of ITEMS, first to last, by a named let, never map,
+;; whose order of calls is not fixed: a call of the verb is an effect
+;; (AGENTS.md). Their answers, in order.
+(define (in-order proc items)
+  (let loop ((rest items) (found '()))
+    (if (null? rest)
+        (reverse found)
+        (loop (cdr rest) (cons (proc (car rest)) found)))))
 
 ;; refusals-of : (Any -> Any) (Listof (Pairof Any Any)) -> (Listof Any)
 ;; Each value of VALUES through CALL, in order: what it answered or raised.
@@ -474,13 +548,13 @@
   (let ((on-opted (if (eq? available #t)
                       (with-db opted
                         (lambda (db)
-                          (let* ((r (map (lambda (s) (loaded db s)) (nul-strings ext)))
+                          (let* ((r (in-order (lambda (s) (loaded db s)) (nul-strings ext)))
                                  (h (half db)))
                             (list r h))))
                       (list (map (lambda (s) (refused '(path-holds-nul (kind string)))) (nul-strings ext))
                             'not-asked))))
-    (list (with-db plain (lambda (db) (map (lambda (s) (loaded db s)) (nul-strings "/x/ext.so"))))
-          (with-db plain (lambda (db) (map (lambda (s) (loaded db s)) (nul-strings "x.so"))))
+    (list (with-db plain (lambda (db) (in-order (lambda (s) (loaded db s)) (nul-strings "/x/ext.so"))))
+          (with-db plain (lambda (db) (in-order (lambda (s) (loaded db s)) (nul-strings "x.so"))))
           (if (pair? on-opted) (car on-opted) on-opted)
           (if (pair? on-opted) (cadr on-opted) on-opted))))
 
@@ -503,10 +577,10 @@
              (list "/" "//" "/ext.so" "/./ext.so" "/../x" ext ext-bare missing)))
   (with-db plain
     (lambda (db)
-      (list (map (lambda (s) (loaded db s))
+      (list (in-order (lambda (s) (loaded db s))
                  '("" "ext.so" "ext" "./ext.so" "../ext.so" "x/ext.so" "~/ext.so" " /ext.so" "\\ext.so"))
-            (map (lambda (c) (loaded db (string-append (string c) "/ext.so"))) firsts)
-            (map (lambda (s) (loaded db s))
+            (in-order (lambda (c) (loaded db (string-append (string c) "/ext.so"))) firsts)
+            (in-order (lambda (s) (loaded db s))
                  (list "/" "//" "/ext.so" "/./ext.so" "/../x" ext ext-bare missing))))))
 
 ;; ext-relative : String
@@ -533,7 +607,7 @@
   (lambda ()
     (let ((refusals (with-db opted
                       (lambda (db)
-                        (let ((r (map (lambda (s) (loaded db s))
+                        (let ((r (in-order (lambda (s) (loaded db s))
                                       (list ext-relative (string-append "./" ext-relative) "ext.so" "ext" ""))))
                           (list r (half db))))))
           (raw (with-db opted (lambda (db) (raw-load db ext-relative #f)))))
@@ -554,8 +628,8 @@
         (map (lambda (s) (refused '(extension-loading-not-enabled))) '("" "chez_named_init" "x")))
   (with-db plain
     (lambda (db)
-      (list (map (lambda (s) (loaded db ext-named s)) (nul-strings "chez_named_init"))
-            (map (lambda (s) (loaded db ext-named s)) '("" "chez_named_init" "x"))))))
+      (list (in-order (lambda (s) (loaded db ext-named s)) (nul-strings "chez_named_init"))
+            (in-order (lambda (s) (loaded db ext-named s)) '("" "chez_named_init" "x"))))))
 
 ;; --- the checks' order -----------------------------------------------------------------------------
 
@@ -787,8 +861,8 @@
         (list "the default variant with the entry point \"\"" ext '("") #f)
         (list "the failing variant, whose init sets its message and answers SQLITE_ERROR" ext-failing '() #t)))
 
-(load-row "each failure raises &sqlite-error from load-extension!, code error and extended code error, the call's own answer, with no SQL and no offset: a path no file stands at, an empty file, a directory, a file that is no shared object, an entry point the file lacks, the derived name absent, \"\", and an init that fails; its message is the slot's text exactly as a raw sqlite3_load_extension through native reads it on another connection, or, where dlsym's message can name a handle, a message as the raw call gives one; chez_half is absent after each"
-  (map (lambda (c) (list (list 'raised (list 'sqlite-error 'load-extension! 'error 'error #f #f))
+(load-row "each failure raises &sqlite-error from load-extension!, code error and extended code error, the call's own answer, with no SQL and no offset: a path no file stands at, an empty file, a directory, a file that is no shared object, an entry point the file lacks, the derived name absent, \"\", and an init that fails; its message is the slot's text exactly as a raw sqlite3_load_extension through native, answering 1, reads it on another connection, or, where dlsym's message can name a handle, a message as the raw call gives one; chez_half is absent after each"
+  (map (lambda (c) (list 1 (list 'raised (list 'sqlite-error 'load-extension! 'error 'error #f #f))
                          (if (cadddr c) 'the-raw-calls-message 'a-message-as-the-raw-calls)
                          '(absent error)))
        failure-cases)
@@ -808,7 +882,8 @@
                                     (apply load-extension! db path entry)
                                     (list 'loaded 'no-message)))
                                (h (half db)))
-                          (list (car m)
+                          (list (if (pair? raw) (car raw) raw)
+                                (car m)
                                 (cond ((not (and (pair? raw) (= (length raw) 2) (string? (cadr raw))
                                                  (string? (cadr m))))
                                        (list 'messages (cadr m) raw))
@@ -818,8 +893,8 @@
                                 h))))))
             (loop (cdr rest) (cons r found)))))))
 
-(load-row "a failure's code is the call's own, never the connection's: after a unique constraint's failure on the connection, whose own extended code reads constraint-unique, 2067, through native, a load of a path no file stands at raises error, extended code error; its message is the raw call's, and does not end with the connection's own, which the load leaves as it was"
-  (list 'failed (list 2067 'a-message)
+(load-row "a failure's code is the call's own, never the connection's: after a unique constraint's failure on the connection, whose own extended code reads constraint-unique, 2067, through native, a load of a path no file stands at raises error, extended code error; its message is the raw call's, which answered 1, and does not end with the connection's own, which the load leaves as it was"
+  (list 'failed (list 2067 'a-message) 1
         (list 'raised (list 'sqlite-error 'load-extension! 'error 'error #f #f))
         'the-raw-calls-message 'not-the-connections 'left-as-it-was)
   (lambda ()
@@ -837,6 +912,7 @@
                (after (connection-error db)))
           (list failed
                 (if (and (list? own) (string? (cadr own))) (list (car own) 'a-message) own)
+                (if (pair? raw) (car raw) raw)
                 (car m)
                 (if (and (pair? raw) (equal? (cadr m) (cadr raw))) 'the-raw-calls-message (list 'messages (cadr m) raw))
                 (if (and (string? (cadr m)) (list? own) (string? (cadr own)) (not (ends-with? (cadr m) (cadr own))))
@@ -1047,35 +1123,44 @@
   (lambda ()
     (with-db opted
       (lambda (db)
-        (map (lambda (code)
+        (in-order (lambda (code)
                (let-values (((load calls) (stand-in (lambda (h f p s) code))))
                  (attempt (lambda () (load-extension/with load c-string->string db ext) 'loaded))))
              '(100 101 256 612 1.0 none))))))
 
-(load-row "a message on the success path is freed: a stand-in that makes the real load of a path no file stands at, then answers 0, leaves a message in the slot, and the verb answers nothing, sqlite3_memory_used back to what it read before the load"
-  (list 'loaded 'freed)
+(load-row "a message on the success path is freed: a stand-in that makes the real load of a path no file stands at, which answers 1 and leaves a message in the slot, then answers 0; the verb answers nothing, and sqlite3_memory_used, higher while the message was held, read by the stand-in, is back to what it read before the load"
+  (list 'loaded '(1 a-message) memory-verdict)
   (lambda ()
+    (memory-noted! "a message on the success path is freed")
     (with-db opted
       (lambda (db)
-        (let-values (((load calls) (stand-in (lambda (h f p s) (raw-load-binding h f p s) 0))))
-          (let* ((before (memory-used))
-                 (r (attempt (lambda () (load-extension/with load c-string->string db missing) 'loaded)))
-                 (after (memory-used)))
-            (list r (if (equal? before after) 'freed (list 'memory before after)))))))))
+        (let* ((real #f)
+               (load (lambda (h f p s)
+                       (let ((code (raw-load-binding h f p s)))
+                         (set! real (list code (if (eqv? (foreign-ref 'uptr s 0) 0) 'none 'a-message)
+                                          (memory-used)))
+                         0)))
+               (before (memory-used))
+               (r (attempt (lambda () (load-extension/with load c-string->string db missing) 'loaded)))
+               (after (memory-used)))
+          (list r (if real (list (car real) (cadr real)) 'not-called)
+                (held-then-freed before (and real (caddr real)) after)))))))
 
-(load-row "a copy that raises: a stand-in copy raising an object of the suite's own, beside native's binding, on a path no file stands at, has that very object raised from the verb, and the message freed all the same, sqlite3_memory_used back to what it read before; chez_half absent"
-  (list 'the-copys-own 'freed '(absent error))
+(load-row "a copy that raises: a stand-in copy raising an object of the suite's own, beside native's binding, on a path no file stands at, has that very object raised from the verb, and the message freed all the same: sqlite3_memory_used, higher while the copy held it, read by the copy, back to what it read before; chez_half absent"
+  (list 'the-copys-own memory-verdict '(absent error))
   (lambda ()
+    (memory-noted! "a copy that raises")
     (with-db opted
       (lambda (db)
         (let* ((marker (list 'the-copys-raise))
-               (copy (lambda (address) (raise marker)))
+               (held #f)
+               (copy (lambda (address) (set! held (memory-used)) (raise marker)))
                (before (memory-used))
                (r (guard (e ((eq? e marker) 'the-copys-own) (#t (list 'raised (what-raised e))))
                     (load-extension/with raw-load-binding copy db missing)
                     'no-raise))
                (after (memory-used)))
-          (list r (if (equal? before after) 'freed (list 'memory before after)) (half db)))))))
+          (list r (held-then-freed before held after) (half db)))))))
 
 ;; --- the refusals: the wrong thread and a closed connection ----------------------------------------
 
@@ -1115,7 +1200,7 @@
   (map (lambda (x) (list wrong-thread 'owner-and-caller)) '(1 2 3 4 5))
   (with-db plain
     (lambda (db)
-      (map (lambda (args) (thread-judged (in-thread (lambda () (apply load-extension! db args)))))
+      (in-order (lambda (args) (thread-judged (in-thread (lambda () (apply load-extension! db args)))))
            (list (list ext) (list 42) (list "ext.so") (list (string #\/ #\nul)) (list ext 42))))))
 
 (load-row "from another thread, on a connection that opted in, with everything valid: &sqlite-wrong-thread, owner and caller as they are, though SQLite itself loads from any thread; chez_half is absent on the owner's thread after, nothing loaded"
@@ -1139,35 +1224,36 @@
 
 ;; --- the memory ----------------------------------------------------------------------------------
 
-(load-row "a load, a call and the close leave sqlite3_memory_used as it read before the open, and every count zero: the extension's registrations and the load's own records are freed by the close"
-  (list 'loaded 'present 'as-before zero-counts)
+(load-row "a load, a call and the close leave sqlite3_memory_used as it read before the open, higher while the connection held the extension, and every count zero: the extension's registrations and the load's own records are freed by the close"
+  (list 'loaded 'present memory-verdict zero-counts)
   (lambda ()
+    (memory-noted! "a load, a call and the close")
     (let* ((before (memory-used))
            (db (opted))
            (r (loaded db ext))
-           (h (half db)))
+           (h (half db))
+           (held (memory-used)))
       (close-database! db)
       (let ((after (memory-used)))
-        (list r h (if (equal? before after) 'as-before (list 'memory before after)) (native-counts))))))
+        (list r h (held-then-freed before held after) (native-counts))))))
 
-(load-row "each failure's message is freed: on one connection, each failed load raises &sqlite-error error from load-extension!, and sqlite3_memory_used reads after it what it read just before it, for every failure, the failing init's among them"
-  (map (lambda (c) 'freed) failure-cases)
+(load-row "each failure's message is freed: on one connection, each failed load, made by the verb's own work with native's binding and a copy that reads sqlite3_memory_used as it is given the message, then copies it, raises &sqlite-error error from load-extension!; the count was higher while the message was held, and reads after the raise what it read just before the load, for every failure, the failing init's among them"
+  (map (lambda (c) (list '(raised (sqlite-error load-extension! error error #f #f)) memory-verdict))
+       failure-cases)
   (lambda ()
+    (memory-noted! "each failure's message is freed")
     (with-db opted
       (lambda (db)
         (let loop ((rest failure-cases) (found '()))
           (if (null? rest)
               (reverse found)
               (let* ((c (car rest))
+                     (held #f)
+                     (copy (lambda (address) (set! held (memory-used)) (c-string->string address)))
                      (before (memory-used))
-                     (r (attempt (lambda () (apply load-extension! db (cadr c) (caddr c)))))
+                     (r (attempt (lambda () (apply load-extension/with raw-load-binding copy db (cadr c) (caddr c)))))
                      (after (memory-used)))
-                (loop (cdr rest)
-                      (cons (if (and (equal? before after)
-                                     (equal? r '(raised (sqlite-error load-extension! error error #f #f))))
-                                'freed
-                                (list (car c) r before after))
-                            found)))))))))
+                (loop (cdr rest) (cons (list r (held-then-freed before held after)) found)))))))))
 
 ;; --- depth --------------------------------------------------------------------------------------
 
