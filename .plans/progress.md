@@ -77,15 +77,19 @@ newest first.
 - **Now: M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
   2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
   of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
-  - **M4 slice 1,** the pure core of the four `db_config` settings and
-    `&sqlite-extensions-unavailable`, is PR #35, below. The maintainer accepted its ADR-0021
+  - **M4 slice 1 is done:** the pure core of the four `db_config` settings and
+    `&sqlite-extensions-unavailable`, as PR #35, `d1792e4`, squash-merged with CI passing in every
+    job. The maintainer accepted its ADR-0021
     amendment ("Accept"), with a code that names no error raising an assertion violation
     ("Assertion violation"), 2026-11-17.
   - **Slice 2,** the bindings and `check-variadic`, and **slice 5,** FTS5 and JSON, are built and
     in verification.
-  - **The close fix:** slice 5's FTS5 suite found `close-database!` refusing every connection that
-    had used an FTS5 table, FTS5's own statements counted as untracked. The maintainer chose
-    "Close first, count on failure", in a PR of its own before slice 5 (2026-11-17).
+  - **The close fix is PR #36, below:** slice 5's FTS5 suite found `close-database!` refusing
+    every connection that had used an FTS5 table, FTS5's own statements counted as untracked. The
+    maintainer chose "Close first, count on failure", in a PR of its own before slice 5, then
+    "Document it, with a row" and "Vouch only for ours" (2026-11-17), and accepted its amendments
+    to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept all"). Slice 5 rebases onto
+    it and drops its workaround.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -148,6 +152,62 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-17 — M4's close fix: close first, and vouch only for ours (PR #36)
+
+- **Found** by M4 slice 5's FTS5 suite: a connection that had created or queried an FTS5 table
+  couldn't close. `close-connection` counted `sqlite3_next_stmt`'s statements before
+  `sqlite3_close`, and a virtual table's module keeps statements of its own there until
+  `sqlite3_close` disconnects it. FTS3, FTS4, FTS5 and RTREE all did it, 2 to 10 statements, and
+  on a file the only way out was to drop the table.
+- **Built:**
+  - `connection.sls`: the tracked statements finalized and the cache emptied, then
+    `sqlite3_close`; only a refusal counts what is left: the assertion violation if any, else
+    `sqlite3_close`'s `&sqlite-error`. Comments state the boundary;
+  - `tests/test-connection-close.sps`, 22 rows, in `MEMORY_SUITES_1`: each module's close, after a
+    create, a write and a search, and on a reopened file, each chosen by what the library reports
+    and the refusal asserted where it lacks one; an untracked statement still refused, and a
+    second close after its finalize; the latch on both left-open paths; a backup's refusal; a
+    virtual table written again after a refused close; and SQLite's measured behaviour on a
+    refused close, as rows that document it;
+  - `docs/reference.md`: what a refused close means, and what to do about a full-text index.
+- **Decided by the maintainer** (2026-11-17), each from a picker:
+  - "Close first, count on failure";
+  - "Document it, with a row": a refused close inside a transaction has already rolled back the
+    virtual tables' unflushed changes, so roll back, never commit;
+  - "Refuse busy statements first", after the review found an untracked write stepped partway
+    corrupting an FTS index in autocommit, then reopened when the measurement showed RTREE's blob,
+    and FTS5's at 3.45.1, busy in an open write transaction. Asked for one consistent path across
+    extensions and closing, the maintainer chose "Vouch only for ours": the close vouches only for
+    what chez-sqlite3 tracks, and a refusal belongs to whatever left work open, a bug or foreign
+    code.
+- **Watched failing:** against the old order the suite failed 16 of 22 on Guix's library and 18
+  on the two builds with every module. The builder's 21 plants: 18 caught plain, p03, a count made
+  after a successful close, caught only under the gate (an invalid read at `sqlite3_next_stmt`),
+  and two equivalent. My 5 plants: 4 caught; Q5, the cache emptied after `sqlite3_close`, is
+  equivalent, since the clear is Scheme alone and its statements were finalized first.
+- **Libraries:** `make test` 74 of 74 on Guix's 3.53.1, the floor, 3.54.1 with FTS5, and two
+  builds made for this, 3.45.1 and 3.54.1 with FTS3, FTS4, FTS5 and RTREE, as Ubuntu's 3.45.1 lists
+  them. The suite takes 0.3 s plain and 11 to 12 s under the gate.
+- **Reviewed** (Opus, read-only): one major, the autocommit corruption, decided above; seven
+  minors fixed: the docs' text, three log claims, the refusal rows' prepare and step, a row that
+  writes after a refused close, and the comments.
+- **The records,** accepted by the maintainer, 2026-11-17 ("Accept all"): ADR-0012's amendment,
+  with notes in ADR-0005, ADR-0014, ADR-0019, ADR-0020 and ADR-0021; the global constraints' two
+  close rules and the boundary; six traps.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder, three rounds | Opus | 441k, 476k and 570k | 176, 11 and 41 | 39, 4 and 11 min |
+  | The review | Opus | 251k | 62 | 15 min |
+
+- **Learned:**
+  - **M4 is the first milestone where other code works on the connection:** compiled-in modules,
+    and soon extensions. A rule that judges what isn't ours fails on whichever module comes next;
+    the boundary, what the library made, holds for all of them.
+  - **Measure a rule against every case before asking for it.** "Refuse busy statements" was put
+    to the maintainer before the modules' own statements had been read, and had to be reopened.
 
 ### 2026-11-17 — M4 slice 1: the pure core (PR #35)
 

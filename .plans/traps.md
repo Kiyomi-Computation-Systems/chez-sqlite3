@@ -484,11 +484,34 @@ told in chez-curl's `.plans/traps.md`.
   `PRAGMA writable_schema = 1` answered done, and read back 0 (M4's pre-work). (M4's research,
   chez-sqlite3)
 - **An FTS5 table on a library without FTS5 fails at its step, not its prepare:** "no such
-  module: fts5", 1 (M4's pre-work; F1). (M4's research, chez-sqlite3)
+  module: fts5", 1 (M4's pre-work; F1). (M4's research, chez-sqlite3) Its code is a syntax
+  error's too, so a refusal row prepares first and asserts that the prepare succeeded: otherwise a
+  broken create passes it (T3). (M4's close fix, chez-sqlite3)
 - **Every load runs the extension's init again, and a close unloads it.** Its init count read 1,
   2 and 3 across two loads into one connection and one into another, and 1 again once both had
   closed. A load whose init replaces a function failed while a statement of the connection was at
   a row, and with none held it expired every statement (L4, L8). (M4's research, chez-sqlite3)
+- **A virtual table's module keeps prepared statements of its own on the connection,** until the
+  table is disconnected, which only `sqlite3_close`, or a `drop table`, does. FTS3, FTS4, FTS5 and
+  RTREE left 2 to 10 on `sqlite3_next_stmt`'s list, and the old `close-database!`, counting before
+  `sqlite3_close`, refused every connection that had used one. Count a connection's statements
+  after `sqlite3_close` refuses, never before
+  ([research/m4-close-fix/](research/m4-close-fix/), `vtab-close.sps`). (M4 slice 5's FTS5 suite,
+  chez-sqlite3)
+- **A module's own statement can be busy.** RTREE's node blob, on 3.45.1 and 3.54.1, and FTS5's
+  at 3.45.1, are busy inside an open write transaction: no SQL, `sqlite3_stmt_busy` 1. "Busy" is
+  not "someone else's" (`stmt-busy.sps`, `stmt-busy.txt`). (M4's close fix, chez-sqlite3)
+- **A refused `sqlite3_close` has already rolled back the virtual tables of an open
+  transaction,** and nothing else: SQLite's `sqlite3VtabRollback` runs before its busy check.
+  FTS3, FTS4 and FTS5 lose the terms they hadn't flushed and keep their content, so a later commit,
+  or an untracked write's own finalize in autocommit, writes an index the integrity check calls
+  corrupt; a plain table and RTREE lose nothing. `insert into t(t) values ('rebuild')` mended it
+  in every case measured (`failed-close-txn.sps`, `rebuild.sps`). (M4's close fix's review,
+  chez-sqlite3)
+- **A module's option isn't always its name's.** FTS4 is listed as `ENABLE_FTS3`, which
+  registers both `fts3` and `fts4`: `SQLITE_ENABLE_FTS4` defines `SQLITE_ENABLE_FTS3` before the
+  options list. Choose an fts4 row by `ENABLE_FTS3`, held to `pragma_module_list`. (M4's close fix,
+  chez-sqlite3)
 
 ## Checks and environment
 
@@ -818,6 +841,14 @@ told in chez-curl's `.plans/traps.md`.
   join, done right, would have failed them, and an improper `setting-names` killed the suite,
   rc 255, naming no test (the review's P-TOP). Build a row's complement from the suite's own
   written-out list, and read the library inside a row. (M4 slice 1's review, chez-sqlite3)
+- **`scripts/guix-env` changes to its own root.** Run from a copy under `build/`, it runs the
+  worktree's code, not the copy's: `cd build/mut/X && ../../../scripts/guix-env sh -c pwd` prints
+  the worktree's root. A command for a copy changes into it inside the container. The close fix's
+  first probes of two plants ran the fixed code this way, and were run again. (M4's close fix,
+  chez-sqlite3)
+- **`sqlite3_next_stmt` on a freed connection read 0, plain,** in every close of eleven suites,
+  so a count made after a successful close passed them all. Only the gate saw it: 196 to 238
+  errors, an invalid read at `sqlite3_next_stmt` (p03). (M4's close fix, chez-sqlite3)
 
 ## Editing the records
 

@@ -78,6 +78,7 @@ MEMORY_SUITES_1 := \
   tests/test-check-seam.sps \
   tests/test-chez-sqlite3-testing.sps \
   tests/test-ci-sqlite.sps \
+  tests/test-connection-close.sps \
   tests/test-constants.sps \
   tests/test-conveniences-counters.sps \
   tests/test-conveniences-pending-execute.sps \

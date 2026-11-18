@@ -1,0 +1,986 @@
+What .plans/research/m4-close-fix/'s probes printed, run 2026-11-17 in the Guix
+container on Chez 10.4.0, each command before its output, by run-probes.sh: the first part
+`run-probes.sh before`, from the root of plant p01's copy, the second
+`run-probes.sh after`, from the worktree's root, with the fix. stmt-busy.sps's and
+blob-busy.sps's output is stmt-busy.txt.
+
+The libraries: Guix's 3.53.1, the container's own (FTS3, FTS4, FTS5); and,
+under build/, each set by CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH:
+  m4-current-fts5    3.54.1 with -DSQLITE_ENABLE_FTS5
+  m3-floor           3.45.1, SQLite's defaults, no virtual table module
+  m4cf-floor-vtab    3.45.1, and
+  m4cf-current-vtab  3.54.1, each built for this fix from its role's archive,
+                     whose sqlite3.c has that role's source pin as its SHA3-256
+                     (floor 0474604d...0295, current e2b869d3...ee81), by CI's
+                     compile line with four options added, so each lists the
+                     virtual table modules Ubuntu's 3.45.1, CI's main and
+                     memory lanes, lists:
+    $CC -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS3 \
+      -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_RTREE \
+      -Wl,-z,defs -o build/<dir>/lib/libsqlite3.so.0 sqlite3.c -lpthread -lm
+
+== Before the fix: the close counting before sqlite3_close (the old order,
+== plant p01-count-first's copy, build/mut/p01-count-first/)
+
+A close that fails here is undone by dropping the table, so the file's
+reopened connection finds no table v.
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.53.1" 
+options ("ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5") 
+modules-listed (fts3 fts4 fts5) 
+fts5 created 3 ("REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close (assertion-violation close-database! (untracked-statements 2)) 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "insert into v(body) values ('hello world')" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close (assertion-violation close-database! (untracked-statements 7)) 
+fts5 file-first-close (assertion-violation close-database! (untracked-statements 6)) 
+fts5 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts5 file-reopened-close closed 
+fts4 created 1 ("create virtual table v using fts4(body)") 
+fts4 created-close closed 
+fts4 queried #(1) 13 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "REPLACE INTO 'main'.'v_stat' VALUES(?,?)" "SELECT value FROM 'main'.'v_stat' WHERE id=?" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts4(body)") 
+fts4 queried-close (assertion-violation close-database! (untracked-statements 10)) 
+fts4 file-first-close (assertion-violation close-database! (untracked-statements 9)) 
+fts4 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts4 file-reopened-close closed 
+fts3 created 1 ("create virtual table v using fts3(body)") 
+fts3 created-close closed 
+fts3 queried #(1) 10 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts3(body)") 
+fts3 queried-close (assertion-violation close-database! (untracked-statements 7)) 
+fts3 file-first-close (assertion-violation close-database! (untracked-statements 6)) 
+fts3 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts3 file-reopened-close closed 
+rtree not-listed (sqlite-error error "no such module: rtree") 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.54.1" 
+options ("ENABLE_FTS5") 
+modules-listed (fts5) 
+fts5 created 3 ("REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close (assertion-violation close-database! (untracked-statements 2)) 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "insert into v(body) values ('hello world')" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close (assertion-violation close-database! (untracked-statements 7)) 
+fts5 file-first-close (assertion-violation close-database! (untracked-statements 6)) 
+fts5 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts5 file-reopened-close closed 
+fts4 not-listed (sqlite-error error "no such module: fts4") 
+fts3 not-listed (sqlite-error error "no such module: fts3") 
+rtree not-listed (sqlite-error error "no such module: rtree") 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.45.1" 
+options ("ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5" "ENABLE_RTREE") 
+modules-listed (fts3 fts4 fts5 rtree) 
+fts5 created 4 ("PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close (assertion-violation close-database! (untracked-statements 3)) 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,?)" "insert into v(body) values ('hello world')" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close (assertion-violation close-database! (untracked-statements 7)) 
+fts5 file-first-close (assertion-violation close-database! (untracked-statements 6)) 
+fts5 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts5 file-reopened-close closed 
+fts4 created 1 ("create virtual table v using fts4(body)") 
+fts4 created-close closed 
+fts4 queried #(1) 13 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "REPLACE INTO 'main'.'v_stat' VALUES(?,?)" "SELECT value FROM 'main'.'v_stat' WHERE id=?" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts4(body)") 
+fts4 queried-close (assertion-violation close-database! (untracked-statements 10)) 
+fts4 file-first-close (assertion-violation close-database! (untracked-statements 9)) 
+fts4 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts4 file-reopened-close closed 
+fts3 created 1 ("create virtual table v using fts3(body)") 
+fts3 created-close closed 
+fts3 queried #(1) 10 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts3(body)") 
+fts3 queried-close (assertion-violation close-database! (untracked-statements 7)) 
+fts3 file-first-close (assertion-violation close-database! (untracked-statements 6)) 
+fts3 file-reopened (sqlite-error error "no such table: v") 0 () 
+fts3 file-reopened-close closed 
+rtree created 9 ("DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree created-close (assertion-violation close-database! (untracked-statements 8)) 
+rtree queried #(1) 11 ("select count(*) from v where x0 >= 0.0" "insert into v values (1, 0.0, 1.0)" "DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree queried-close (assertion-violation close-database! (untracked-statements 8)) 
+rtree file-first-close (assertion-violation close-database! (untracked-statements 8)) 
+rtree file-reopened (sqlite-error error "no such table: v") 0 () 
+rtree file-reopened-close closed 
+
+== After the fix: sqlite3_close first, the count only when it fails
+
+failed-close-txn.sps's raw mode calls sqlite3_close itself, so it shows
+SQLite's own behaviour whatever close-database! does; verb mode goes through
+close-database!.
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.53.1" 
+options ("ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5") 
+modules-listed (fts3 fts4 fts5) 
+fts5 created 3 ("REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close closed 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "insert into v(body) values ('hello world')" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close closed 
+fts5 file-first-close closed 
+fts5 file-reopened #(1) 3 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "PRAGMA 'main'.data_version" "select count(*) from v where v match 'hello'") 
+fts5 file-reopened-close closed 
+fts4 created 1 ("create virtual table v using fts4(body)") 
+fts4 created-close closed 
+fts4 queried #(1) 13 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "REPLACE INTO 'main'.'v_stat' VALUES(?,?)" "SELECT value FROM 'main'.'v_stat' WHERE id=?" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts4(body)") 
+fts4 queried-close closed 
+fts4 file-first-close closed 
+fts4 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts4 file-reopened-close closed 
+fts3 created 1 ("create virtual table v using fts3(body)") 
+fts3 created-close closed 
+fts3 queried #(1) 10 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts3(body)") 
+fts3 queried-close closed 
+fts3 file-first-close closed 
+fts3 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts3 file-reopened-close closed 
+rtree not-listed (sqlite-error error "no such module: rtree") 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/untracked-vtab.sps 
+version "3.53.1" 
+"select 1" not-stepped close (assertion-violation close-database! (untracked-statements 1)) 
+(quote left) ("select 1") 
+(quote then) closed 
+"select count(*) from v where v match 'hello'" not-stepped close (assertion-violation close-database! (untracked-statements 8)) 
+(quote left) ("select count(*) from v where v match 'hello'" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+"select body from v" 100 close (assertion-violation close-database! (untracked-statements 9)) 
+(quote left) ("SELECT T.'rowid', T.c0 FROM 'main'.'v_content' T WHERE T.'rowid' >= ? AND T.'rowid' <= ? ORDER BY T.'rowid' ASC" "select body from v" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw commit
+version "3.53.1" mode raw end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree not-listed 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw rollback
+version "3.53.1" mode raw end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree not-listed 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb commit
+version "3.53.1" mode verb end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree not-listed 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb rollback
+version "3.53.1" mode verb end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree not-listed 
+
+$ $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/rebuild.sps 
+version "3.53.1" 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) 
+fts5 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts5 rebuild done (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts5 reopened (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) 
+fts4 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts4 rebuild done (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts4 reopened (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) 
+fts3 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts3 rebuild done (plain 2 search 2 integrity intact) 
+fts3 close closed 
+fts3 reopened (plain 2 search 2 integrity intact) 
+fts3 close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.54.1" 
+options ("ENABLE_FTS5") 
+modules-listed (fts5) 
+fts5 created 3 ("REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close closed 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "insert into v(body) values ('hello world')" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close closed 
+fts5 file-first-close closed 
+fts5 file-reopened #(1) 3 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "PRAGMA 'main'.data_version" "select count(*) from v where v match 'hello'") 
+fts5 file-reopened-close closed 
+fts4 not-listed (sqlite-error error "no such module: fts4") 
+fts3 not-listed (sqlite-error error "no such module: fts3") 
+rtree not-listed (sqlite-error error "no such module: rtree") 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/untracked-vtab.sps 
+version "3.54.1" 
+"select 1" not-stepped close (assertion-violation close-database! (untracked-statements 1)) 
+(quote left) ("select 1") 
+(quote then) closed 
+"select count(*) from v where v match 'hello'" not-stepped close (assertion-violation close-database! (untracked-statements 8)) 
+(quote left) ("select count(*) from v where v match 'hello'" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+"select body from v" 100 close (assertion-violation close-database! (untracked-statements 9)) 
+(quote left) ("SELECT T.'rowid', T.c0 FROM 'main'.'v_content' T WHERE T.'rowid' >= ? AND T.'rowid' <= ? ORDER BY T.'rowid' ASC" "select body from v" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw commit
+version "3.54.1" mode raw end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 not-listed 
+fts3 not-listed 
+rtree not-listed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw rollback
+version "3.54.1" mode raw end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 not-listed 
+fts3 not-listed 
+rtree not-listed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb commit
+version "3.54.1" mode verb end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 not-listed 
+fts3 not-listed 
+rtree not-listed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb rollback
+version "3.54.1" mode verb end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 not-listed 
+fts3 not-listed 
+rtree not-listed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4-current-fts5/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4-current-fts5/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/rebuild.sps 
+version "3.54.1" 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) 
+fts5 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts5 rebuild done (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts5 reopened (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts4 not-listed 
+fts3 not-listed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.45.1" 
+options ("ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5" "ENABLE_RTREE") 
+modules-listed (fts3 fts4 fts5 rtree) 
+fts5 created 4 ("PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close closed 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,?)" "insert into v(body) values ('hello world')" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close closed 
+fts5 file-first-close closed 
+fts5 file-reopened #(1) 3 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "PRAGMA 'main'.data_version" "select count(*) from v where v match 'hello'") 
+fts5 file-reopened-close closed 
+fts4 created 1 ("create virtual table v using fts4(body)") 
+fts4 created-close closed 
+fts4 queried #(1) 13 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "REPLACE INTO 'main'.'v_stat' VALUES(?,?)" "SELECT value FROM 'main'.'v_stat' WHERE id=?" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts4(body)") 
+fts4 queried-close closed 
+fts4 file-first-close closed 
+fts4 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts4 file-reopened-close closed 
+fts3 created 1 ("create virtual table v using fts3(body)") 
+fts3 created-close closed 
+fts3 queried #(1) 10 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts3(body)") 
+fts3 queried-close closed 
+fts3 file-first-close closed 
+fts3 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts3 file-reopened-close closed 
+rtree created 9 ("DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree created-close closed 
+rtree queried #(1) 11 ("select count(*) from v where x0 >= 0.0" "insert into v values (1, 0.0, 1.0)" "DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree queried-close closed 
+rtree file-first-close closed 
+rtree file-reopened #(1) 9 ("DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "select count(*) from v where x0 >= 0.0") 
+rtree file-reopened-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/untracked-vtab.sps 
+version "3.45.1" 
+"select 1" not-stepped close (assertion-violation close-database! (untracked-statements 1)) 
+(quote left) ("select 1") 
+(quote then) closed 
+"select count(*) from v where v match 'hello'" not-stepped close (assertion-violation close-database! (untracked-statements 8)) 
+(quote left) ("select count(*) from v where v match 'hello'" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,?)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+"select body from v" 100 close (assertion-violation close-database! (untracked-statements 9)) 
+(quote left) ("SELECT T.'rowid', T.c0 FROM 'main'.'v_content' T WHERE T.'rowid' >= ? AND T.'rowid' <= ? ORDER BY T.'rowid' ASC" "select body from v" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,?)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw commit
+version "3.45.1" mode raw end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close 5 in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree commit ended in-transaction #f 
+rtree after-end ((t 1) (v 1) (v-search 1)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 1) (v 1) (v-search 1)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw rollback
+version "3.45.1" mode raw end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close 5 in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree rollback ended in-transaction #f 
+rtree after-end ((t 0) (v 0) (v-search 0)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 0) (v 0) (v-search 0)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb commit
+version "3.45.1" mode verb end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree commit ended in-transaction #f 
+rtree after-end ((t 1) (v 1) (v-search 1)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 1) (v 1) (v-search 1)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb rollback
+version "3.45.1" mode verb end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree rollback ended in-transaction #f 
+rtree after-end ((t 0) (v 0) (v-search 0)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 0) (v 0) (v-search 0)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-floor-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-floor-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/rebuild.sps 
+version "3.45.1" 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) 
+fts5 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts5 rebuild done (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts5 reopened (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) 
+fts4 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts4 rebuild done (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts4 reopened (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) 
+fts3 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts3 rebuild done (plain 2 search 2 integrity intact) 
+fts3 close closed 
+fts3 reopened (plain 2 search 2 integrity intact) 
+fts3 close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.54.1" 
+options ("ENABLE_FTS3" "ENABLE_FTS4" "ENABLE_FTS5" "ENABLE_RTREE") 
+modules-listed (fts3 fts4 fts5 rtree) 
+fts5 created 3 ("REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 created-close closed 
+fts5 queried #(1) 10 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "select count(*) from v where v match 'hello'" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "insert into v(body) values ('hello world')" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)" "create virtual table v using fts5(body)") 
+fts5 queried-close closed 
+fts5 file-first-close closed 
+fts5 file-reopened #(1) 3 ("SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "PRAGMA 'main'.data_version" "select count(*) from v where v match 'hello'") 
+fts5 file-reopened-close closed 
+fts4 created 1 ("create virtual table v using fts4(body)") 
+fts4 created-close closed 
+fts4 queried #(1) 13 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "REPLACE INTO 'main'.'v_stat' VALUES(?,?)" "SELECT value FROM 'main'.'v_stat' WHERE id=?" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts4(body)") 
+fts4 queried-close closed 
+fts4 file-first-close closed 
+fts4 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts4 file-reopened-close closed 
+fts3 created 1 ("create virtual table v using fts3(body)") 
+fts3 created-close closed 
+fts3 queried #(1) 10 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'" "SELECT level, idx, end_block FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ? ORDER BY level DESC, idx ASC" "REPLACE INTO 'main'.'v_segdir' VALUES(?,?,?,?,?,?)" "SELECT coalesce((SELECT max(blockid) FROM 'main'.'v_segments') + 1, 1)" "SELECT (SELECT max(idx) FROM 'main'.'v_segdir' WHERE level = ?) + 1" "INSERT INTO 'main'.'v_content' VALUES(?,(?))" "DELETE FROM 'main'.'v_segdir' WHERE level = ?" "insert into v(body) values ('hello world')" "create virtual table v using fts3(body)") 
+fts3 queried-close closed 
+fts3 file-first-close closed 
+fts3 file-reopened #(1) 2 ("SELECT idx, start_block, leaves_end_block, end_block, root FROM 'main'.'v_segdir' WHERE level BETWEEN ? AND ?ORDER BY level DESC, idx ASC" "select count(*) from v where v match 'hello'") 
+fts3 file-reopened-close closed 
+rtree created 9 ("DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree created-close closed 
+rtree queried #(1) 11 ("select count(*) from v where x0 >= 0.0" "insert into v values (1, 0.0, 1.0)" "DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "create virtual table v using rtree(id, x0, x1)") 
+rtree queried-close closed 
+rtree file-first-close closed 
+rtree file-reopened #(1) 9 ("DELETE FROM 'main'.'v_parent' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_parent' VALUES(?1, ?2)" "SELECT parentnode FROM 'main'.'v_parent' WHERE nodeno = ?1" "DELETE FROM 'main'.'v_rowid' WHERE rowid = ?1" "INSERT OR REPLACE INTO 'main'.'v_rowid' VALUES(?1, ?2)" "SELECT nodeno FROM 'main'.'v_rowid' WHERE rowid = ?1" "DELETE FROM 'main'.'v_node' WHERE nodeno = ?1" "INSERT OR REPLACE INTO 'main'.'v_node' VALUES(?1, ?2)" "select count(*) from v where x0 >= 0.0") 
+rtree file-reopened-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/untracked-vtab.sps 
+version "3.54.1" 
+"select 1" not-stepped close (assertion-violation close-database! (untracked-statements 1)) 
+(quote left) ("select 1") 
+(quote then) closed 
+"select count(*) from v where v match 'hello'" not-stepped close (assertion-violation close-database! (untracked-statements 8)) 
+(quote left) ("select count(*) from v where v match 'hello'" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+"select body from v" 100 close (assertion-violation close-database! (untracked-statements 9)) 
+(quote left) ("SELECT T.'rowid', T.c0 FROM 'main'.'v_content' T WHERE T.'rowid' >= ? AND T.'rowid' <= ? ORDER BY T.'rowid' ASC" "select body from v" "SELECT pgno FROM 'main'.'v_idx' WHERE segid=? AND term<=? ORDER BY term DESC LIMIT 1" "INSERT INTO 'main'.'v_idx'(segid,term,pgno) VALUES(?,?,?)" "REPLACE INTO 'main'.'v_docsize' VALUES(?,?)" "INSERT INTO 'main'.'v_content' VALUES(?1,?2)" "PRAGMA 'main'.data_version" "REPLACE INTO 'main'.'v_config' VALUES(?,?)" "REPLACE INTO 'main'.'v_data'(id, block) VALUES(?,?)") 
+(quote then) closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw commit
+version "3.54.1" mode raw end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close 5 in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree commit ended in-transaction #f 
+rtree after-end ((t 1) (v 1) (v-search 1)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 1) (v 1) (v-search 1)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps raw rollback
+version "3.54.1" mode raw end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close 5 in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close 5 in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close 5 in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close 5 in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close 5 in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree rollback ended in-transaction #f 
+rtree after-end ((t 0) (v 0) (v-search 0)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 0) (v 0) (v-search 0)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb commit
+version "3.54.1" mode verb end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 commit ended in-transaction #f 
+fts5 after-end ((t 1) (v 1) (v-search 0)) 
+fts5 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 commit ended in-transaction #f 
+fts4 after-end ((t 1) (v 1) (v-search 0)) 
+fts4 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 commit ended in-transaction #f 
+fts3 after-end ((t 1) (v 1) (v-search 0)) 
+fts3 integrity (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-connection ((t 1) (v 1) (v-search 0)) (sqlite-error corrupt corrupt-vtab "database disk image is malformed") 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree commit ended in-transaction #f 
+rtree after-end ((t 1) (v 1) (v-search 1)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 1) (v 1) (v-search 1)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb rollback
+version "3.54.1" mode verb end rollback 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none rollback ended in-transaction #f 
+none after-end ((t 0) (v none) (v-search none)) 
+none other-connection ((t 0) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 before #t ((t 1) (v 1) (v-search 1)) 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts5 after-close ((t 1) (v 1) (v-search 0)) 
+fts5 rollback ended in-transaction #f 
+fts5 after-end ((t 0) (v 0) (v-search 0)) 
+fts5 integrity () 
+fts5 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts5 other-close closed 
+fts5 last-close closed 
+fts4 before #t ((t 1) (v 1) (v-search 1)) 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts4 after-close ((t 1) (v 1) (v-search 0)) 
+fts4 rollback ended in-transaction #f 
+fts4 after-end ((t 0) (v 0) (v-search 0)) 
+fts4 integrity () 
+fts4 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts4 other-close closed 
+fts4 last-close closed 
+fts3 before #t ((t 1) (v 1) (v-search 1)) 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+fts3 after-close ((t 1) (v 1) (v-search 0)) 
+fts3 rollback ended in-transaction #f 
+fts3 after-end ((t 0) (v 0) (v-search 0)) 
+fts3 integrity () 
+fts3 other-connection ((t 0) (v 0) (v-search 0)) () 
+fts3 other-close closed 
+fts3 last-close closed 
+rtree before #t ((t 1) (v 1) (v-search 1)) 
+rtree close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+rtree after-close ((t 1) (v 1) (v-search 1)) 
+rtree rollback ended in-transaction #f 
+rtree after-end ((t 0) (v 0) (v-search 0)) 
+rtree integrity (#("ok")) 
+rtree other-connection ((t 0) (v 0) (v-search 0)) (#("ok")) 
+rtree other-close closed 
+rtree last-close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m4cf-current-vtab/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m4cf-current-vtab/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/rebuild.sps 
+version "3.54.1" 
+fts5 close (assertion-violation close-database! (untracked-statements 1)) 
+fts5 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts5 rebuild done (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts5 reopened (plain 2 search 2 integrity intact) 
+fts5 close closed 
+fts4 close (assertion-violation close-database! (untracked-statements 1)) 
+fts4 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts4 rebuild done (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts4 reopened (plain 2 search 2 integrity intact) 
+fts4 close closed 
+fts3 close (assertion-violation close-database! (untracked-statements 1)) 
+fts3 commit done (plain 2 search 1 integrity (sqlite-error corrupt corrupt-vtab)) 
+fts3 rebuild done (plain 2 search 2 integrity intact) 
+fts3 close closed 
+fts3 reopened (plain 2 search 2 integrity intact) 
+fts3 close closed 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/vtab-close.sps 
+version "3.45.1" 
+options () 
+modules-listed () 
+fts5 not-listed (sqlite-error error "no such module: fts5") 
+fts4 not-listed (sqlite-error error "no such module: fts4") 
+fts3 not-listed (sqlite-error error "no such module: fts3") 
+rtree not-listed (sqlite-error error "no such module: rtree") 
+
+$ CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 C_INCLUDE_PATH=$PWD/build/m3-floor/include $CHEZ --libdirs src:build/scheme-libs --program .plans/research/m4-close-fix/failed-close-txn.sps verb commit
+version "3.45.1" mode verb end commit 
+none before #t ((t 1) (v none) (v-search none)) 
+none close (assertion-violation close-database! (untracked-statements 1)) in-transaction #t extended-code 5 
+none after-close ((t 1) (v none) (v-search none)) 
+none commit ended in-transaction #f 
+none after-end ((t 1) (v none) (v-search none)) 
+none other-connection ((t 1) (v none) (v-search none)) no-check 
+none other-close closed 
+none last-close closed 
+fts5 not-listed 
+fts4 not-listed 
+fts3 not-listed 
+rtree not-listed 
+
