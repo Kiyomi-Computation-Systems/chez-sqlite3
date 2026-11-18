@@ -251,6 +251,22 @@ told in chez-curl's `.plans/traps.md`.
   `(new-where-the-control-made-none 2)`. Count each whole call from the stand-in's notes instead.
   Reproduce: plant `research/m4-slice-3/lead/trap-idle-turns.json` and judge `e-once` by its
   runs' answers. (M4 slice 3, from the M4 session's check, chez-sqlite3)
+- **A collect request due inside a critical section costs an engine's ticks at the section's
+  exit.** So an engine can expire just past a call's last section, though no procedure call
+  follows it. A sweep that raises `collect-trip-bytes` above what its runs allocate never sees a
+  remainder there. M4 slice 4's sweeps first read "both past the section in 0; R before it and R1
+  past it in 0", and a plant that set the claim's flag after the section passed them all. With
+  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 186", and the
+  plant ran the init twice. Reproduce: `test-load-extension-engines`' two interleave rows print
+  both counts. (M4 slice 4, from its review, chez-sqlite3)
+- **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
+  inside it and resumed a second time met the wind's own refusal, an assertion violation,
+  `re-entered`, where the call's claim should have answered `&sqlite-closed`. M4 slice 4 makes its
+  first three checks in one `call-with-open-handle` inside a critical section of its own.
+  Reproduce: `mut.py prepare C19-open-check-outside-a-section` from
+  `research/m4-slice-4/scripts/`; `e-twice` reads
+  `(second (raised (assertion-violation load-extension! (re-entered))) 0)` at fuels 15 to 17.
+  (M4 slice 4, chez-sqlite3)
 
 ## SQLite
 

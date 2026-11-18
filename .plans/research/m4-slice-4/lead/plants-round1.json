@@ -1,0 +1,107 @@
+[
+ {
+  "name": "E1-opt-in-check-dropped",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "        (checked-opt-in db)\n",
+    "        (if #f #f)\n"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E2-code-from-connection",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "                 (list 'failed code (joined base more))))))))",
+    "                 (list 'failed (caddr codes) (joined base more))))))))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E3-unfreed-when-copy-raises",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "                         (sqlite3-free message)\n                         read))))",
+    "                         (when (eq? (car read) 'copied) (sqlite3-free message))\n                         read))))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E4-claim-not-compared",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "     (if (not (claim 0 #t))",
+    "     (if (not (begin (claim 0 #t) #t))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension",
+   "test-load-extension-engines"
+  ]
+ },
+ {
+  "name": "E5-owner-after-arguments",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "      (checked-open db)\n      (let* ((file (checked-path path))\n             (proc (and (pair? entries) (checked-entry (car entries)))))\n",
+    "      (let* ((file (checked-path path))\n             (proc (and (pair? entries) (checked-entry (car entries)))))\n        (checked-open db)\n"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E6-dot-paths-allowed",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "(char=? (string-ref copy 0) #\\/))",
+    "(memv (string-ref copy 0) '(#\\/ #\\.)))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E7-join-always-colon",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "           (string-append base more))\n          (else (string-append base \": \" more))))",
+    "           (string-append base \": \" more))\n          (else (string-append base \": \" more))))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ },
+ {
+  "name": "E8-empty-entry-as-none",
+  "edits": [
+   [
+    "src/chez-sqlite3/private/extension.sls",
+    "             (proc (and (pair? entries) (checked-entry (car entries)))))",
+    "             (proc (let ((e (and (pair? entries) (checked-entry (car entries))))) (and e (> (string-length e) 0) e))))"
+   ]
+  ],
+  "suites": [
+   "test-load-extension"
+  ]
+ }
+]

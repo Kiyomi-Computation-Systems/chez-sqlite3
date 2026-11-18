@@ -242,7 +242,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **A flag that decides an exit is read inside the section of the step it guards,** never in an
   earlier one: an engine's expiry between them runs the after thunk, and the resumed caller would
   step what it had planned. **An engine row sweeps fuel from 1 until the call completes without
-  expiring,** not to a fixed bound (ADR-0017, amended in M3 slice 1).
+  expiring,** not to a fixed bound (ADR-0017, amended in M3 slice 1). A sweep of a call that holds
+  a claim also runs a pass with collect requests falling, the trip below what one call
+  allocates, and fails by name unless it reached past the call's last section (ADR-0016, amended
+  in M4 slice 4).
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the
@@ -281,14 +284,18 @@ Proposed record is marked *(provisional)* until that record is accepted.
   its entry point, then the opt-in.** It holds a claim. One section makes the call, reads the
   connection's extended code before and after it, and copies and frees the message with
   `sqlite3_free` on every path. A failure raises `&sqlite-error` whose code is the call's answer,
-  with the slot's message, followed by the connection's when its code changed across the call
-  (ADR-0021, decision 7).
+  with the slot's message, followed by the connection's when its code changed across the call;
+  a code that names no error raises `(not-an-error CODE)` from the verb. The caller's strings are
+  copied, the copies checked, and C handed the copies (ADR-0021, decision 7, amended in M4 slice
+  4).
 - **Never bound:** `sqlite3_enable_load_extension`, `db_config`'s other shapes, `TRUSTED_SCHEMA`
   as an op, `sqlite3_auto_extension` and its siblings (ADR-0021, decision 11).
 - **A suite's rows for what a library may lack** are chosen by what the library reports:
   FTS5 by `sqlite-compile-option? "ENABLE_FTS5"`, held to `pragma_module_list`; extension
   loading by native's record of `sqlite3_load_extension`. The rest are named unavailable, never
-  silently, and the refusal is asserted in their place, so each suite runs on every lane. The
+  silently, and the refusal is asserted in their place, so each suite runs on every lane. Where
+  native records no `sqlite3_load_extension`, the suites' extension isn't built, and the build is
+  named unavailable too (ADR-0001, amended in M4 slice 4). The
   `current` lane compiles with `ENABLE_FTS5`, the `floor` lane with SQLite's defaults (ADR-0003,
   ADR-0005, amended).
 

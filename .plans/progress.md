@@ -85,8 +85,9 @@ newest first.
   - **Slice 2,** the bindings and `check-variadic`, is done, as PR #37, `1735a66`, below; the
     maintainer accepted its amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept
     all"). **Slice 5,** FTS5 and JSON, is done, as PR #40, `7dac918`, below. **Slice 3,** the
-    four settings at open and the opt-in's check, is PR #44, below. **Slice 4,** `load-extension!`,
-    follows it.
+    four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
+    4,** `load-extension!`, is PR #45, below. Then the maintainer's Mac run for slices 3 to 5, and
+    M4's closing review.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
@@ -147,14 +148,98 @@ newest first.
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
 - **Open:**
-  - **`test-transaction-interrupt`** took 318 s on CI on `main` at `c0a5408` (run 44083802043),
-    past the 150 s that ADR-0005's slice 6 amendment made a finding. On the memory-mutex device,
-    from M3's closing review, it took 11 s on PR #32's CI. One run is one sample: read it on the
-    next runs of `memory-1` before calling the risk closed.
+  - **For M4's closing review: the sweeps that raise `collect-trip-bytes`.** A collect request
+    due inside a critical section costs an engine's ticks at its exit, so a remainder can be taken
+    just past a call's last section, and a sweep that raises the trip never sees one (ADR-0016,
+    amended in M4 slice 4). M3's sweeps and slice 3's raise it. Check each for a claim that a
+    remainder past its last section could break, and give it slice 4's pass with collect requests
+    falling where one could.
+  - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
+    `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
+    On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
+    12 and 12 s on `main`'s runs 44325663052, 44305936182, 44298034354 and 44293661574. The risk
+    is closed.
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-18 — M4 slice 4: `load-extension!` (PR #45)
+
+- **Built** by an Opus builder from `c92d397`:
+  - `(chez-sqlite3 private extension)`: `load-extension!`, exported from `(chez-sqlite3)` (70
+    names), and `load-extension/with`, for a stand-in load and copy;
+  - `tests/extension.c`, the research's four variants with `chez_half` and `chez_inits`, built by
+    `tests/extension-build.sls` with `$CC -Wall -Werror -shared -fPIC`, or `-dynamiclib` and
+    `.dylib` on a Mac;
+  - new `test-load-extension` (42 rows) and `test-load-extension-engines` (14), in
+    `MEMORY_SUITES_2`. Shard 2 was the lighter over `main`'s last three runs, 3,041 s against
+    3,406 s, and on the latest, `c92d397`'s, the only one at the current layout (1,114 s against
+    1,371 s);
+  - `refusal-probe.sps`' `--loads`, for the decoy's two load rows; `test-public`,
+    `test-reference` and `test-never-loads`;
+  - the docs' Extensions: the method, the opt-in and its fix, the default entry point's search,
+    and what a load does to the connection.
+- **Watched failing:** against `c92d397`'s sources:
+  - `test-load-extension` 36 of 42, the engines suite 12 of 14;
+  - `test-public` 4, `test-library-loading-real` 2, `test-reference` 1 and `test-never-loads` 1;
+  - each row that passes there was watched failing against a plant.
+
+  The builder's 62 plants, on the final tree: 60 caught. S07, the claim not marked last, and R02,
+  a failure raised inside the section, are equivalent. My 12, written from their descriptions,
+  all caught:
+  - the opt-in check dropped, caught on every lane by the row that turns the C switch on through
+    `sqlite3_auto_extension`;
+  - the code from the connection;
+  - the message unfreed when its copy raises;
+  - the claim not compared, or taken after the section, or made only before it;
+  - the owner check after the arguments;
+  - `./` paths let through;
+  - the join always `": "`;
+  - `""` taken as no entry point;
+  - the caller's path, and its entry point, handed to C.
+- **Reviewed** (Opus, read-only): the verb's code sound, no blocker.
+
+  **Two majors,** fixed:
+  - S03, a flag set after the section, wasn't equivalent, and the builder's first trap was false.
+    A collect request due inside a section costs ticks at its exit, so the sweeps' raised trip hid
+    every remainder past the section. Each sweep now runs a pass with collect requests falling
+    (ADR-0016, amended);
+  - C08, the caller's path handed to C, wasn't equivalent either, nor was its entry point's twin.
+    The caller can change its strings between an expiry and the resume, so two rows now do.
+
+  **Five minors,** fixed:
+  - the interleave was bounded by a control run;
+  - the memory rows had no positive control, and the raw codes weren't asserted;
+  - four statements in the docs weren't true of every library;
+  - the Apple build was unmeasured, which the maintainer settled as "Build named unavailable
+    there" (ADR-0001, amended);
+  - the suites mapped calls of the verb.
+- **Libraries:** `make test` 81 of 81 on Guix's 3.53.1, the floor (3.45.1) and 3.54.1, each
+  library set inside the container.
+- **Times** under the gate, on Guix's library:
+  - `test-load-extension` 13 to 14 s;
+  - its engines suite 31 s, from 16 s with the second passes;
+  - `test-library-loading-real` 188 to 192 s, from 175 to 177 s with two more children.
+- **The engine rows' figures:** ADR-0021, amended 2026-11-18.
+- **For the Mac run** (slices 3 to 5):
+  - with Apple's library, the build and the load rows print UNAVAILABLE, and the opt-in's
+    refusal is asserted instead;
+  - with Homebrew's, the extension is a `.dylib`, and every row asserts codes, never the Mac's
+    messages.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The builder, two rounds | Opus | 614k and 729k | 175 and 57 | 69 and 49 min |
+  | The review | Opus | 330k | 98 | 25 min |
+
+- **Learned:**
+  - **A sweep's quieting is a setup, not a fact about Chez.** The raised trip that makes runs
+    comparable also hides a remainder past the last section, so a straddle count of 0 measured the
+    setup.
+  - **The caller is code too.** Between an expiry and its resume it can change what it passed,
+    so a check of an argument binds only the copy C is handed.
 
 ### 2026-11-18 — M4 slice 3: the four `db_config` settings at open (PR #44)
 
