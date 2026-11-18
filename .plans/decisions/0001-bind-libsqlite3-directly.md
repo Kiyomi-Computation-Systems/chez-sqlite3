@@ -6,6 +6,8 @@
   ([amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
   Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): `check-variadic` as built
   ([amendment](#amendment-2026-11-17-check-variadic-as-built-m4-slice-2)).
+  Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): the extension's build where loading is unavailable
+  ([amendment](#amendment-2026-11-18-the-extensions-build-where-loading-is-unavailable-m4-slice-4)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
 - **Settles:** brief §3a
@@ -148,3 +150,23 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 
 - **One line matches chez-curl's word for word:** the Makefile's recipe,
   `@TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' TEST_TIMEOUT='$(TEST_TIMEOUT)' sh tests/check-variadic.sh`.
   It is this repository's own pattern for a script target, as `check-test-fails`' is, and is kept.
+
+## Amendment, 2026-11-18: the extension's build where loading is unavailable (M4 slice 4)
+
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)). The rule is the
+maintainer's, "Build named unavailable there" (2026-11-18).
+
+- **Decision 3's "a missing header or compiler fails the suite" is narrowed for one case.** Where
+  native records no `sqlite3_load_extension`, as on Apple's library, the suites' extension,
+  `tests/extension.c`, is not built:
+  - the build rows print UNAVAILABLE;
+  - the suites assert the opt-in's refusal in their place.
+
+  The SDK's `sqlite3.h` declares no `sqlite3_load_extension` (M4 slice 2's Mac step), and its
+  `sqlite3ext.h` has never been compiled against.
+- **Everywhere else, a missing compiler or header still fails the suite.** A row holds both
+  branches:
+  - a plant that skips the build everywhere fails on Linux's lanes;
+  - one that builds everywhere fails the row too.
+- **This mirrors [ADR-0002](0002-runtime-libsqlite3-discovery.md)'s amendment** for the optional
+  prototype. The Mac run with Apple's library is the first to take the branch.

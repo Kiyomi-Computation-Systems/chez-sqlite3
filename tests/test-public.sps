@@ -111,6 +111,7 @@
     (call-with-database chez-sqlite3 private open)
     (database? chez-sqlite3 private connection)
     (interrupt-database! chez-sqlite3 private connection)
+    (load-extension! chez-sqlite3 private extension)
     (sqlite-version chez-sqlite3 private report)
     (sqlite-version-number chez-sqlite3 private report)
     (sqlite-source-id chez-sqlite3 private report)
@@ -182,12 +183,12 @@
   'loaded
   public-load)
 
-(test-equal "(chez-sqlite3) exports 69 names, counted from the library itself, not from this suite's list"
-  69
+(test-equal "(chez-sqlite3) exports 70 names, counted from the library itself, not from this suite's list"
+  70
   (guard (e (#t (list 'raised (describe e))))
     (length (library-exports '(chez-sqlite3)))))
 
-(test-equal "(chez-sqlite3) exports exactly the connections, the interrupt, the statements, the values, the conveniences, the counters, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
+(test-equal "(chez-sqlite3) exports exactly the connections, the interrupt, the extensions' load, the statements, the values, the conveniences, the counters, the report, the compile options, the root's predicate and each condition's predicate and accessors, sqlite-library-unavailable-library aside: no type name, no constructor, nothing raw"
   (sorted-names (map car public-names))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3)))))
@@ -214,6 +215,11 @@
   (sorted-names '(execute! execute-script! query query-row query-fold code-number made-claim))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private conveniences)))))
+
+(test-equal "(chez-sqlite3 private extension) exports exactly load-extension!, which (chez-sqlite3) exports, and load-extension/with, its form that takes the load's binding and the message's copy, for the suites"
+  (sorted-names '(load-extension! load-extension/with))
+  (guard (e (#t (list 'raised (describe e))))
+    (sorted-names (library-exports '(chez-sqlite3 private extension)))))
 
 (test-equal "(chez-sqlite3 private transaction) exports exactly with-transaction, which (chez-sqlite3) exports"
   '(with-transaction)

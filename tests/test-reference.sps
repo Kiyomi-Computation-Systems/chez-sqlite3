@@ -514,6 +514,11 @@
     ("sqlite-extensions-unavailable? : Any -> Boolean"))
   (list (entry-line "sqlite-extensions-unavailable?") (comments-of "sqlite-extensions-unavailable?")))
 
+(test-equal "load-extension!'s entry holds its signature, written out from the M4 plan's section 4.8, and it is its source comment"
+  '("load-extension! : (case-> (Database String -> Void) (Database String String -> Void))"
+    ("load-extension! : (case-> (Database String -> Void) (Database String String -> Void))"))
+  (list (entry-line "load-extension!") (comments-of "load-extension!")))
+
 (test-end "reference")
 
 ;; SRFI-64 sets no exit status; this is the shared form.

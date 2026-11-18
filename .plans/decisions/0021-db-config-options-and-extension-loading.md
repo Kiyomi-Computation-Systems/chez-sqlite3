@@ -21,6 +21,8 @@
   Amended 2026-11-18 in M4 slice 3, and accepted by the maintainer that day ("Accept all"), with its additions after the M4 session's check ("Accept all"): the four set at open, the opt-in's check and the
   record's, and the starts held over moved starts
   ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
+  Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): `load-extension!` as built
+  ([amendment](#amendment-2026-11-18-load-extension-as-built-m4-slice-4)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
 - **Settles:** brief §2.5 and §2.8, as the M4 plan amends them
@@ -383,3 +385,62 @@ review's fixes.
 
   A whole new call's sets interleave with the first run's. Each call is noted exactly twice, the
   first of each pair in the call's order and the second too (`traps.md`).
+
+## Amendment, 2026-11-18: `load-extension!` as built (M4 slice 4)
+
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)), from the slice and its review (Opus).
+
+- **The library** is `(chez-sqlite3 private extension)`. `(chez-sqlite3)` exports
+  `load-extension!`, 70 names. `load-extension/with` takes a stand-in for the load's binding and
+  the message's copy, for the suites, as `applied-settings/with` does.
+- **The checks,** in decision 7's order, each refusal from `load-extension!` before anything
+  reaches C:
+  - a database, its owner and an open connection, all made by one `call-with-open-handle`,
+    inside a critical section of its own. A remainder taken in its wind can't re-enter it
+    (`traps.md`);
+  - the path: `path-not-a-string`, `path-holds-nul`, then `path-not-absolute`, U+0000 judged
+    before absolute;
+  - the entry point: `entry-point-not-a-string`, `entry-point-holds-nul`;
+  - the opt-in, last: `extension-loading-not-enabled`, read by `database-extension-loading?`.
+
+  Each string is named by its kind.
+- **The caller's strings are copied, the copies checked, and C handed the copies.** The caller's
+  own code runs between an engine's expiry and its resume, and can change its strings there.
+  Rows change the path's `/` and the entry point's last character there, at every fuel. Each fuel
+  loads, or refuses the changed string by its own rule, never handing C the caller's string (the
+  review's C08, which reached `&sqlite-error`, and C08e, which reached `call-with-c-string`'s own
+  refusal).
+- **The claim** is `made-claim`'s, made by the first expression. Position 0 is compared first in
+  the load's one critical section, and a refused run raises `&sqlite-closed` after it.
+- **The section,** through `call-with-open-handle`, holds:
+  - the C strings and the slot;
+  - the extended code read before the call and after it;
+  - the call;
+  - the slot's copy under a guard, and its `sqlite3_free`, whatever the copy did;
+  - `sqlite3_errstr`'s text when the slot holds none;
+  - `sqlite3_errmsg`'s when the extended code after the call names an error and differs from the
+    code before. An init whose failing call set the connection's error leaves its reason there;
+    one whose last call succeeded leaves 0, and its message is the slot's alone (the M4 session's
+    check).
+
+  It answers data, and the raise comes after it.
+- **A code that names no error** raises `(not-an-error CODE)` from the verb, as the M4 slice 1
+  amendment has it for `db_config`. That is a non-zero code whose low byte is 0, 100 or 101, or
+  one that is no exact integer, and only a stand-in answers one.
+- **The two messages join** as they stand when the slot's text is empty or ends in a space, as
+  rv1's "error during initialization: " does; otherwise with `": "` between them.
+- **Where native records no `sqlite3_load_extension`,** the suites' extension isn't built, and
+  the suites assert the opt-in's refusal instead ([ADR-0001](0001-bind-libsqlite3-directly.md),
+  amended 2026-11-18).
+- **The engine rows,** alike on Guix's 3.53.1, 3.45.1 and 3.54.1, each bounded by refusals it saw
+  itself. Their fuels depend on the scratch path's length, since the path is copied and encoded
+  inside the call: under the container's `/tmp` the load completes unexpired at fuel 60, and with
+  `TMPDIR` 6, 14, 25 and 50 characters long at 70, 80, 93 and 124 (the M4 session's check). Each sweep that holds the claim also runs a pass with collect requests falling
+  ([ADR-0016](0016-the-conveniences-and-the-counters.md), amended 2026-11-18):
+
+  | Row | No collect request in a trial | Under a collect trip of 256 bytes |
+  |---|---|---|
+  | the load resumed at its fuel | completes unexpired at fuel 60 | |
+  | resumed twice | fuels 1 to 8 a whole new call; refused from fuel 9 | 3 taken past the section, answering again |
+  | interleaved | 1,759 trials; 444 whole new calls, all below the first refusal at fuel 9 | 2,134 trials; 492 whole new calls below the first refusal at 9; R before the section and R1 past it in 186 |
+  | a timer's continuation called after the call | refused from tick 8 | 3 taken past the section |

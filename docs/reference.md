@@ -4,6 +4,7 @@ Every name `(chez-sqlite3)` exports, one entry each. Import it with
 `(import (chez-sqlite3))`.
 
 - [Connections](#connections)
+- [Extensions](#extensions)
 - [Conveniences and counters](#conveniences-and-counters)
 - [Transactions](#transactions)
 - [Statements](#statements)
@@ -373,6 +374,79 @@ On a closed connection, or one closing, it does nothing.
   'nothing-happened)
 ;; => nothing-happened
 ```
+
+## Extensions
+
+An extension is a shared library of C code that adds functions, virtual
+tables and more to SQLite. Loading one takes two steps: open the connection
+with `(enable-load-extension . #t)`, then load the file by its absolute path.
+
+```scheme
+(define db (open-database "app.db" '((enable-load-extension . #t))))
+(load-extension! db "/opt/app/lib/ext.so")
+```
+
+Without the setting, `load-extension!` refuses before anything is loaded,
+and its message says to add `(enable-load-extension . #t)`:
+
+```scheme run
+(call-with-database ":memory:"
+  (lambda (db)
+    (guard (e ((assertion-violation? e) (condition-irritants e)))
+      (load-extension! db "/opt/app/lib/ext.so"))))
+;; => (extension-loading-not-enabled)
+```
+
+So nothing loads on a connection that did not ask, whatever the library's
+own switch says. The library never turns on SQL's `load_extension()`
+either; only an extension's own C code could.
+
+### `load-extension!`
+
+```text
+load-extension! : (case-> (Database String -> Void) (Database String String -> Void))
+```
+
+Loads the extension at the path into the connection, which opted in at
+open. Call it on the connection's own thread, as every verb.
+
+The path is absolute. A relative path, a bare name and `""` are assertion
+violations: the working directory, or the loader's own search, would choose
+the file. SQLite tries the path as given, then with `.so` appended, or
+`.dylib` on a Mac, so `/opt/app/lib/ext` loads `/opt/app/lib/ext.so`.
+
+The second form names the extension's entry point, the C function that sets
+it up. Without it, SQLite tries `sqlite3_extension_init`, then a name made
+from the file's: `sqlite3_`, the letters of its name after any leading
+`lib` and before the first dot, in lower case, then `_init`. For
+`/opt/app/lib/libgeo.so` that is `sqlite3_geo_init`.
+
+```scheme
+(load-extension! db "/opt/app/lib/geo.so" "geo_setup")
+```
+
+A failure raises a condition that `sqlite-error?` holds, its code what
+SQLite answered: `error` for a file it can't load or set up, `nomem` when
+memory runs out. Its message is SQLite's own, and differs between Linux and
+a Mac. When the file can't be opened, it names the path tried last, the
+suffix appended.
+
+What a load does to the connection:
+
+- each load runs the extension's setup again, and what it adds belongs to
+  this connection alone;
+- it stays loaded until the connection closes, which unloads it, unless the
+  extension's setup asks to stay loaded for the life of the process;
+- a load whose setup replaces functions an earlier load added fails while a
+  statement of the connection is at a row; with none held, it takes, and
+  statements prepared before it are prepared again at their next step;
+- a statement, a blob or a backup the extension leaves open makes
+  `close-database!` refuse: that work is the extension's to finish.
+
+An extension is C code that runs in the process: load only files you trust.
+A library built without extension loading, as Apple's is, refuses the
+setting at open with a condition that `sqlite-extensions-unavailable?`
+holds.
 
 ## Conveniences and counters
 

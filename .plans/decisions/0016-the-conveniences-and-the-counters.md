@@ -23,6 +23,8 @@
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the script's claim on its byte offsets, `made-claim`
   held whole, and the sweeps' bound on a whole new call
   ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
+  Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): a sweep with collect requests falling
+  ([amendment](#amendment-2026-11-18-a-sweep-with-collect-requests-falling-m4-slice-4)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -510,3 +512,25 @@ the lead ([the review's log](../m3-closing-review-mutation-log.md)).
     refused call's 72.
   - **Now:** a remainder taken before the call's first section must have its second resume
     refused with `&sqlite-closed`, and every whole new call must come below the first such fuel.
+
+## Amendment, 2026-11-18: a sweep with collect requests falling (M4 slice 4)
+
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)), from its review (Opus).
+
+- **A collect request due inside a critical section is handled at the section's exit,** and
+  costs the engine ticks there. So an engine can expire just past a call's last section, even when
+  no procedure call follows it.
+- **A sweep that raises `collect-trip-bytes`,** as AGENTS.md has a row do when it judges one run
+  by another at the same fuel, never sees a remainder there. Slice 4's first sweeps read a
+  straddle count of 0. A plant that set the claim's flag after the section instead of inside it
+  passed them all.
+- **So a sweep of a call that holds a claim also runs a pass with collect requests falling:**
+  - each trial collects first, then holds the trip at 256 bytes, below what one call allocates;
+  - each trial is judged by its own effects;
+  - each bound is a refusal the pass saw itself;
+  - the pass fails by name unless it reached past the section.
+
+  Under it, slice 4's interleave saw R before the section and R1 past it in 186 of 2,134 trials,
+  and the plant ran the init twice in 163 trials past the first refusal.
+- **M3's sweeps and slice 3's raise the trip the same way.** Whether each needs the pass is for M4's
+  closing review.

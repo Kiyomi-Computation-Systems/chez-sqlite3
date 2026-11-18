@@ -133,6 +133,8 @@ MEMORY_SUITES_2 := \
   tests/test-interrupt.sps \
   tests/test-library-loading-decoys.sps \
   tests/test-libsqlite3-info.sps \
+  tests/test-load-extension-engines.sps \
+  tests/test-load-extension.sps \
   tests/test-manifest.sps \
   tests/test-open-interleave.sps \
   tests/test-open-locks.sps \

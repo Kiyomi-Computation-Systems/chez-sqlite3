@@ -20,7 +20,9 @@
 ;;; verbs take a settings list, applied at open and read back (ADR-0018),
 ;;; db_config's four among it, each one call held by its own answer, and an
 ;;; open that opts in to extension loading on a library without it refused
-;;; by sqlite-extensions-unavailable?'s condition (ADR-0021).
+;;; by sqlite-extensions-unavailable?'s condition (ADR-0021). load-extension!
+;;; loads an extension into a connection that opted in, by an absolute path,
+;;; and refuses one that did not before anything reaches C (ADR-0021).
 ;;; interrupt-database! is the one verb any thread may call, and the close
 ;;; shuts it out before it finalizes anything (ADR-0019).
 (library (chez-sqlite3)
@@ -38,6 +40,10 @@
    database?
    ;; interrupt-database! : Database -> Void
    interrupt-database!
+
+   ;; --- extensions (chez-sqlite3 private extension) ---
+   ;; load-extension! : (case-> (Database String -> Void) (Database String String -> Void))
+   load-extension!
 
    ;; --- the conveniences (chez-sqlite3 private conveniences) ---
    ;; execute! : Database String Value ... -> Void
@@ -187,6 +193,7 @@
           (only (chez-sqlite3 private connection)
                 close-database! database? interrupt-database!
                 changes total-changes last-insert-rowid in-transaction?)
+          (only (chez-sqlite3 private extension) load-extension!)
           (only (chez-sqlite3 private conveniences)
                 execute! execute-script! query query-row query-fold)
           (only (chez-sqlite3 private transaction) with-transaction)
