@@ -33,7 +33,8 @@
 ;;;                     one per entry point of a part
 ;;;   the opens         M4 slice 3's: a case list as the probe's --opens takes
 ;;;                     it, and the entries a failed open writes to the
-;;;                     decoy's log
+;;;                     decoy's log; and M4 slice 4's, a case list as its
+;;;                     --loads takes it
 ;;;
 ;;; Each suite keeps its own runner, scratch directory and floors, and names
 ;;; the helpers here that take them by the names its rows use. Nothing here
@@ -54,7 +55,7 @@
           lacks-build decoy-builds compile-decoys decoy-status decoy-row-in
           read-switch the-report-three threadsafe-call initialize-call log-of memory-used-call
           loaded-calls every-call code-of missing-api-rows
-          opens-arg open-calls)
+          opens-arg open-calls loads-arg)
   (import (rnrs)
           (srfi :64)
           (chez-sqlite3-testing)
@@ -477,6 +478,12 @@
   ;; CASES, each an open's arguments, its filename first, written as the one
   ;; datum tests/refusal-probe.sps's --opens reads.
   (define (opens-arg cases)
+    (call-with-string-output-port (lambda (port) (write cases port))))
+
+  ;; loads-arg : (Listof (Listof Any)) -> String
+  ;; CASES, each a call of load-extension!'s arguments, written as the one
+  ;; datum tests/refusal-probe.sps's --loads reads (M4 slice 4).
+  (define (loads-arg cases)
     (call-with-string-output-port (lambda (port) (write cases port))))
 
   ;; open-calls : -> (Listof String)

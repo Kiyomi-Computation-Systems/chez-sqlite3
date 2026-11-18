@@ -27,6 +27,9 @@
 ;;;     without it, an open that opts in is refused by the named condition,
 ;;;     after the list's own rules, the open never tried; on the control it is
 ;;;     tried, and so is (enable-load-extension . #f) on the lacking build;
+;;;   - load-extension! on the decoy (M4 slice 4): reached on the build
+;;;     without sqlite3_load_extension and on the control, it refuses what is
+;;;     no database at depth 1, and the log shows nothing of SQLite's called;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
 ;;;     then through the override. What it reports must equal what
 ;;;     tests/libsqlite3-oracle.c reads from the same file;
@@ -324,6 +327,41 @@
                                   (list (cons 'load-extension-available? #f)
                                         (cons 'opens (list (both cantopen-from)))))
                         '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
+
+;; --- load-extension! on the decoy (M4 slice 4) ---------------------------------------
+;; The decoy's open always fails, so no connection of it reaches a load:
+;; what a row sees is the verb itself, where the library lacks
+;; sqlite3_load_extension and where it has it. On both, load-extension! is
+;; reached, its library loading where native binds no load, and its first
+;; check refuses what is no database, whatever the arguments after it, an
+;; assertion violation from the verb, raised after its section, its handler
+;; at depth 1, every count zero; and the log holds the load's entries
+;; alone, so nothing of SQLite's is called, sqlite3_load_extension least of
+;; all where the build has it.
+
+(define load-cases
+  '((nope "/x/ext.so")
+    (nope "/x/ext.so" "chez_named_init")
+    (42 "ext.so")
+    (#f 42 42)))
+
+(define (load-refused db) (list 'assertion 'load-extension! (list 'not-a-database db) 'depth-1 no-counts))
+
+(decoy-row "lacks-sqlite3_load_extension" #f
+  (list "--extension-loading" "yes" "--loads" (loads-arg load-cases))
+  "load-extension! on a library without sqlite3_load_extension: reached, its library loading though native binds no load, it refuses what is no database, for each form, from load-extension!, its handler at depth 1 and every count zero; the log holds the load's entries alone"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #f)
+                                        (cons 'loads (map (lambda (c) (load-refused (car c))) load-cases))))
+                        '() '() (loaded-calls "control"))))
+
+(decoy-row "control" #f
+  (list "--extension-loading" "yes" "--loads" (loads-arg load-cases))
+  "load-extension! on the control, which has sqlite3_load_extension: the same refusals, and the log holds the load's entries alone, no sqlite3_load_extension"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #t)
+                                        (cons 'loads (map (lambda (c) (load-refused (car c))) load-cases))))
+                        '() '() (loaded-calls "control"))))
 
 ;; --- the real libsqlite3 ---------------------------------------------------------------
 

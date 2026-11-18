@@ -6,7 +6,7 @@
 ;;; tests/test-*.sps glob, so make test never runs it directly (ADR-0007).
 ;;;
 ;;;   refusal-probe.sps [--then-override PATH] [--marker NAME] [--message yes]
-;;;                     [--extension-loading yes] [--opens CASES]
+;;;                     [--extension-loading yes] [--opens CASES] [--loads CASES]
 ;;;
 ;;; It references loaded-libsqlite3 three times, each inside its guard. The
 ;;; first reference prints what happened:
@@ -17,7 +17,8 @@
 ;;;             native)'s loaded-threadsafe; with --extension-loading,
 ;;;             (load-extension-available? . BOOLEAN), native's record of
 ;;;             the optional sqlite3_load_extension (M4); with --opens,
-;;;             (opens . RESULTS), below; and the exit status is 0
+;;;             (opens . RESULTS), below; with --loads, (loads . RESULTS),
+;;;             below; and the exit status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
 ;;;             (detail . D) (candidates . LIST) (library . L)
 ;;;             (irritants . LIST), and the exit status is 1. WHO is the
@@ -92,6 +93,16 @@
 ;;; is refused before anything opens, and the decoy's call log, which always
 ;;; follows, shows whether sqlite3_open_v2 was called (the M4 plan, section
 ;;; 4.3).
+;;;
+;;; With --loads, CASES is one datum, a list of cases, each the arguments of
+;;; a call of (chez-sqlite3)'s load-extension!, after the open's cases, in
+;;; order, and RESULTS holds what each did, as OPEN above shows it: (answered
+;;; V) for an answer. A case is data, so no case holds a database: what a
+;;; row on the decoy can see is that the verb's library loads where the
+;;; library lacks sqlite3_load_extension, that its refusals come at depth 1
+;;; with every count zero, and, from the call log, that nothing of SQLite's
+;;; is called (M4 slice 4; the decoy's open always fails, so no connection
+;;; of it reaches a load).
 ;;;
 ;;; Why eval, and no import of (chez-sqlite3 private native): Chez runs the
 ;;; libraries a program imports before the program's body, so a guard in the
@@ -273,6 +284,18 @@
                  (call-shown (shown call (lambda (v) (list 'answered v)))))
             (loop (cdr rest) (cons (list open-shown call-shown called) found)))))))
 
+;; loads : (Listof (Listof Any)) -> (Listof Any)
+;; Each case of CASES through load-extension!, in order, as RESULTS shows
+;; them.
+(define (loads cases)
+  (let ((load (eval 'load-extension! (environment '(chez-sqlite3)))))
+    (let loop ((rest cases) (found '()))
+      (if (not (pair? rest))
+          (reverse found)
+          (loop (cdr rest)
+                (cons (shown (tried (lambda () (apply load (car rest)))) (lambda (v) (list 'answered v)))
+                      found))))))
+
 (define status
   (case (car first)
     ((loaded)
@@ -293,6 +316,12 @@
            (show 'opens (let ((read (read-cases cases)))
                           (if (and (list? read) (pair? read) (not (eq? (car read) 'unreadable)))
                               (opens read)
+                              read)))))
+       (let ((cases (option "--loads")))
+         (when cases
+           (show 'loads (let ((read (read-cases cases)))
+                          (if (and (list? read) (pair? read) (not (eq? (car read) 'unreadable)))
+                              (guard (e (#t (cons 'raised (raised-facts e)))) (loads read))
                               read)))))
        0))
     ((refused)

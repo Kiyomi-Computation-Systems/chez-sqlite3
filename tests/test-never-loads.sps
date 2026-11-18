@@ -213,6 +213,7 @@
   (sorted '((chez-sqlite3)
             (chez-sqlite3 private connection)
             (chez-sqlite3 private conveniences)
+            (chez-sqlite3 private extension)
             (chez-sqlite3 private native)
             (chez-sqlite3 private open)
             (chez-sqlite3 private report)
