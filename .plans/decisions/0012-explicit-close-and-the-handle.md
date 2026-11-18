@@ -16,6 +16,8 @@
   ([amendment](#amendment-2026-11-16-the-open-verbs-library-m3-slice-5)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: the record holds the opt-in
   ([amendment](#amendment-2026-11-17-the-record-holds-the-opt-in-m4s-plan)).
+  Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): the close's order, and the boundary it vouches for
+  ([amendment](#amendment-2026-11-17-close-first-and-vouch-only-for-ours-m4s-close-fix)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: opening and closing a connection
 - **Settles:** brief §3e, and the open surface of brief §4
@@ -380,3 +382,37 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
   fifth step, after the list's own rules: an opt-in on a library without
   `sqlite3_load_extension` raises `&sqlite-extensions-unavailable`, before anything is
   allocated.
+
+## Amendment, 2026-11-17: close first, and vouch only for ours (M4's close fix)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close fix ([its mutation log](../m4-close-fix-mutation-log.md)), from M4 slice 5's FTS5 suite, its review and the fix's own (Opus). The maintainer's choices, 2026-11-17: "Close first, count on failure"; "Document it, with a row"; and, after the busy rule's measurement, "Vouch only for ours".
+
+- **Decision 5's order changes.** The close finalizes the tracked statements and empties the
+  cache, then calls `sqlite3_close`. On `SQLITE_OK` its outcomes are as before. On any other
+  answer the connection stays open and counted, and only then does `sqlite3_next_stmt` count what
+  is left: one or more is the assertion violation naming the count; none, `sqlite3_close`'s own
+  `&sqlite-error`, which only an unfinished backup reaches, and the library binds no backup.
+- **Why:** a virtual table's module keeps prepared statements of its own on the connection, and
+  `sqlite3_close` finalizes them as it disconnects each table, before it looks for statements. The
+  old order counted them as untracked, so a connection that had used an FTS3, FTS4, FTS5 or RTREE
+  table could never close: 2 to 10 statements, by module and version ([research/m4-close-fix/](../research/m4-close-fix/)).
+- **The boundary, "Vouch only for ours":** the close vouches for the statements chez-sqlite3
+  tracks, and judges none it didn't make. A refused close means something other than the library
+  left a statement, a blob or a backup open on the connection: a chez-sqlite3 bug, or foreign code
+  such as an extension loaded with `load-extension!` (ADR-0021). That work, and what SQLite's
+  close does to it, is its owner's. The library's own leaks are the counters', Valgrind's and the
+  gate's to catch, as decision 5 already said. After a refusal the count is a diagnostic: every
+  statement left, a module's own among them while a leftover statement holds its table. So the
+  first bullet of decision 5 now reads "a defect in chez-sqlite3, or foreign code's".
+- **What a refusal does, measured and held by rows:** SQLite rolls back every virtual table an
+  open transaction wrote before it refuses. FTS3, FTS4 and FTS5 lose the terms they hadn't
+  flushed, so a later commit, or an untracked write's own finalize in autocommit, leaves an index
+  the module calls corrupt. Plain tables and RTREE lose nothing. The old order never reached this.
+  `docs/reference.md` tells the caller to roll back, and that the table's own `'rebuild'` mended
+  the index in the measured cases ("Document it, with a row").
+- **Rejected: refusing busy statements before `sqlite3_close`** ("Refuse busy statements first",
+  chosen and then withdrawn the same day). RTREE keeps a busy blob of its own inside an open write
+  transaction, on 3.45.1 and 3.54.1, and so does FTS5 at 3.45.1 (`stmt-busy.txt`), so the rule
+  would have refused the closes this fix exists for. `sqlite3_close_v2` stays rejected.
+- **The M2 plan's amendment** reads "before `sqlite3_next_stmt` and `sqlite3_close`" in the old
+  order; its "a close that then fails leaves its statements finalized" still holds.

@@ -1,0 +1,991 @@
+What run-plants.sh printed, 2026-11-17, in the Guix container, from the worktree's root.
+Plants ran four or six at a time (xargs -P), so lines of different plants interleave.
+
+== Round 1: every plant then made but p03, the eleven suites, the new suite's first version, Guix's 3.53.1
+== (the other ten suites and connection.sls's code are unchanged since; the new suite's counts here are superseded)
+$ ls build/mut | grep -v "\.log$" | grep -v "^p03" | xargs -P 4 -n 1 sh .plans/research/m4-close-fix/run-plants.sh guix
+p01-count-first guix test-connection-close: exit 1, pass 6, fail 11, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL every count is zero at the end
+p04-latch-shut-busy guix test-connection-close: exit 1, pass 14, fail 3, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p05-handle-cleared guix test-connection-close: exit 1, pass 11, fail 6, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL every count is zero at the end
+p02-never-count guix test-connection-close: exit 1, pass 13, fail 4, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+p01-count-first guix test-connection: exit 0, pass 63, fail 0, 1 s
+p04-latch-shut-busy guix test-connection: exit 0, pass 63, fail 0, 1 s
+p05-handle-cleared guix test-connection: exit 1, pass 26, fail 37, 1 s
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL two untracked statements: the count named is 2
+    FAIL a connection a backup reads from: sqlite3_close refuses, and close-database! raises an &sqlite-error, bus
+    FAIL close-database! from another thread raises &sqlite-wrong-thread from close-database!, with a message, the
+    FAIL close-database! from another thread on a closed connection still raises &sqlite-wrong-thread: the thread 
+    FAIL call-with-open-handle from another thread raises &sqlite-wrong-thread from its who, and its procedure nev
+    FAIL call-with-open-handle from another thread on a closed connection still raises &sqlite-wrong-thread from i
+    FAIL a connection opened on another thread belongs to it: the main thread's close raises &sqlite-wrong-thread,
+    FAIL call-with-database: the procedure's two values come back; inside, the connection is open and counted; aft
+    FAIL call-with-database: the procedure's raise reaches the caller unchanged, and the connection is closed
+    FAIL call-with-database: a warning the procedure raises with raise-continuable reaches an outer handler that r
+    FAIL call-with-database: a raise, then a close that fails: the caller gets the procedure's raise, not the clos
+    FAIL call-with-database: the same under an inner guard that does not match: the outer guard gets the procedure
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape through a continuation closes the connection
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database: a continuation that re-enters the procedure finds the connection closed, and no conne
+    FAIL call-with-database checks its procedure first, then all open-database checks, before anything opens: no p
+    FAIL call-with-database passes its options to the open: 'read-only on an existing file is read-only inside, an
+    FAIL call-with-database: a failed open raises its &sqlite-error from call-with-database, and the procedure nev
+    FAIL call-with-database: a procedure that closes its connection itself returns, and nothing is left
+    FAIL call-with-open-handle refuses what is no database, and a closed connection, after its critical section: a
+    FAIL call-with-open-handle refuses another thread after its critical section: that thread's handler runs at de
+    FAIL call-with-open-handle raises its procedure's raise again after its critical section: a handler of it runs
+    FAIL call-with-open-handle raises its procedure's raise of a fresh symbol again after its critical section: a 
+    FAIL call-with-open-handle raises its procedure's raise of a fresh pair again after its critical section: a ha
+    FAIL call-with-open-handle: a warning its procedure raises with raise-continuable is raised again with raise, 
+    FAIL call-with-open-handle answers every value its procedure answers, and gives it the handle, an exact positi
+    FAIL open-database raises after its critical section: a handler of a failed open, and of U+0000, runs at depth
+    FAIL call-with-database's open raises after its critical section: a handler of a failed open, and of U+0000, r
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+    FAIL close-database! raises its count-down's double free after its critical section: a handler of it runs at d
+    FAIL open-database and close-database! under an engine of every fuel from 1 to 60 ticks a slice: each opens an
+    FAIL call-with-open-handle: a close in another engine, at every fuel from 1 to 60 ticks of the first slice, ne
+    FAIL call-with-open-handle refuses a continuation of its procedure re-entered after the call finished: from it
+    FAIL call-with-open-handle under an engine of every fuel from 1 to 60 ticks a slice: each call completes with 
+    FAIL every count is zero at the end
+p05-handle-cleared guix test-connection-cache: exit 1, pass 18, fail 3, 0 s
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+    FAIL every count is zero at the end
+p01-count-first guix test-connection-cache: exit 0, pass 21, fail 0, 1 s
+p04-latch-shut-busy guix test-connection-cache: exit 0, pass 21, fail 0, 1 s
+p05-handle-cleared guix test-interrupt-close: exit 1, pass 4, fail 4, 1 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+    FAIL the race: interrupts from one thread against opens and closes of a file on another; every interrupt answe
+    FAIL every count is zero at the end
+p02-never-count guix test-connection: exit 1, pass 58, fail 5, 1 s
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL two untracked statements: the count named is 2
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+p01-count-first guix test-interrupt-close: exit 0, pass 8, fail 0, 0 s
+p02-never-count guix test-connection-cache: exit 1, pass 20, fail 1, 0 s
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+p02-never-count guix test-interrupt-close: exit 1, pass 7, fail 1, 1 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+p05-handle-cleared guix test-interrupt-database: exit 1, pass 13, fail 10, 1 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes: the close
+    FAIL with-transaction's ROLLBACK runs with the latch shut: the body raises, and an interrupt-database! sent as
+    FAIL nested, with-transaction's ROLLBACK TO and RELEASE run with the latch shut: the inner body raises, and th
+    FAIL with-transaction's COMMIT stays interruptible, and an interrupted COMMIT is rolled back with the latch sh
+    FAIL nested, the RELEASE that commits stays interruptible, and its rollback runs with the latch shut: the verb
+    FAIL every count is zero at the end
+p01-count-first guix test-interrupt-database: exit 0, pass 23, fail 0, 1 s
+p02-never-count guix test-interrupt-database: exit 1, pass 21, fail 2, 0 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p05-handle-cleared guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p01-count-first guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p02-never-count guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p05-handle-cleared guix test-open-settings: exit 1, pass 19, fail 4, 3 s
+    FAIL a close that fails after a setting's failure is not raised over it: with an untracked statement on the co
+    FAIL busy-timeout runs first, whatever the list's order: under another's exclusive lock, with busy-timeout las
+    FAIL each raise site's with-exception-handler handler runs at interrupt depth 1, its who the verb called: a re
+    FAIL every count is zero at the end
+p02-never-count guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p01-count-first guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+p02-never-count guix test-open-engines: exit 1, pass 7, fail 1, 1 s
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+p05-handle-cleared guix test-open-engines: exit 1, pass 6, fail 2, 1 s
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+    FAIL every count is zero at the end
+p01-count-first guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+p05-handle-cleared guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p02-never-count guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p01-count-first guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p05-handle-cleared guix test-statement: exit 1, pass 60, fail 16, 1 s
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+    FAIL call-with-database's close finalizes what the procedure left: a statement stepped and left, finalized aft
+    FAIL call-with-statement: the procedure's two values come back; inside, the statement is ready, tracked and co
+    FAIL call-with-statement: the procedure's raise reaches the caller as the same object, and the statement is fi
+    FAIL call-with-statement: a warning the procedure raises with raise-continuable reaches an outer handler that 
+    FAIL call-with-statement: an escape through a continuation finalizes the statement
+    FAIL call-with-statement: a continuation that re-enters the procedure finds the statement finalized, its step!
+    FAIL call-with-statement: a finalize that fails after the procedure raised does not mask the procedure's condi
+    FAIL call-with-statement checks its procedure first, before the database and the SQL; then prepare-statement's
+    FAIL prepare-statement raises after its section: a failed prepare, no statement, more than one, U+0000, a clos
+    FAIL prepare-statement, step!, reset! and finalize-statement! under an engine of every fuel from 1 to 60 ticks
+    FAIL two engines on one thread, at every fuel from 1 to 60 ticks of the first slice: one runs call-with-statem
+    FAIL call-with-statement does not survive an engine's preemption: at every fuel from 1 to 60 ticks a slice, an
+    FAIL call-with-statement abandoned at its first expiry, at every fuel from 1 to 400 ticks, leaves no statement
+    FAIL every count is zero at the end
+p01-count-first guix test-statement: exit 0, pass 76, fail 0, 1 s
+p02-never-count guix test-statement: exit 1, pass 75, fail 1, 2 s
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+p01-count-first guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p02-never-count guix test-statement-who: exit 0, pass 29, fail 0, 0 s
+p05-handle-cleared guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p06-counted-down guix test-connection-close: exit 1, pass 12, fail 5, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+p07-latch-shut-untracked guix test-connection-close: exit 1, pass 15, fail 2, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+p08-latch-shut-failed guix test-connection-close: exit 1, pass 16, fail 1, 0 s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p06-counted-down guix test-connection: exit 1, pass 55, fail 8, 1 s
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL two untracked statements: the count named is 2
+    FAIL a connection a backup reads from: sqlite3_close refuses, and close-database! raises an &sqlite-error, bus
+    FAIL call-with-database: a raise, then a close that fails: the caller gets the procedure's raise, not the clos
+    FAIL call-with-database: the same under an inner guard that does not match: the outer guard gets the procedure
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+p06-counted-down guix test-connection-cache: exit 1, pass 19, fail 2, 0 s
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+p07-latch-shut-untracked guix test-connection: exit 0, pass 63, fail 0, 1 s
+p06-counted-down guix test-interrupt-close: exit 1, pass 6, fail 2, 1 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+p08-latch-shut-failed guix test-connection: exit 0, pass 63, fail 0, 1 s
+p07-latch-shut-untracked guix test-connection-cache: exit 0, pass 21, fail 0, 1 s
+p08-latch-shut-failed guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p06-counted-down guix test-interrupt-database: exit 1, pass 19, fail 4, 0 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p06-counted-down guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p06-counted-down guix test-open-settings: exit 1, pass 22, fail 1, 2 s
+    FAIL a close that fails after a setting's failure is not raised over it: with an untracked statement on the co
+p06-counted-down guix test-open-engines: exit 1, pass 7, fail 1, 1 s
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+p06-counted-down guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p06-counted-down guix test-statement: exit 1, pass 74, fail 2, 1 s
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+p06-counted-down guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p09-zero-untracked guix test-connection-close: exit 1, pass 16, fail 1, 1 s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p09-zero-untracked guix test-connection: exit 1, pass 62, fail 1, 0 s
+    FAIL a connection a backup reads from: sqlite3_close refuses, and close-database! raises an &sqlite-error, bus
+p09-zero-untracked guix test-connection-cache: exit 1, pass 20, fail 1, 1 s
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+p09-zero-untracked guix test-interrupt-close: exit 1, pass 7, fail 1, 0 s
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+p09-zero-untracked guix test-interrupt-database: exit 1, pass 22, fail 1, 0 s
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+p09-zero-untracked guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p09-zero-untracked guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+p09-zero-untracked guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p09-zero-untracked guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p09-zero-untracked guix test-statement: exit 1, pass 75, fail 1, 1 s
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+p09-zero-untracked guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p10-one-not-counted guix test-connection-close: exit 1, pass 13, fail 4, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+p10-one-not-counted guix test-connection: exit 1, pass 59, fail 4, 0 s
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+p10-one-not-counted guix test-connection-cache: exit 1, pass 20, fail 1, 1 s
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+p10-one-not-counted guix test-interrupt-close: exit 1, pass 7, fail 1, 0 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+p10-one-not-counted guix test-interrupt-database: exit 1, pass 21, fail 2, 1 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p10-one-not-counted guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p10-one-not-counted guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p10-one-not-counted guix test-open-engines: exit 1, pass 7, fail 1, 1 s
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+p10-one-not-counted guix test-transaction-engine: exit 0, pass 20, fail 0, 1 s
+p10-one-not-counted guix test-statement: exit 1, pass 75, fail 1, 2 s
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+p10-one-not-counted guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p11-count-before-named-after guix test-connection-close: exit 1, pass 14, fail 3, 0 s
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+p11-count-before-named-after guix test-connection: exit 0, pass 63, fail 0, 1 s
+p11-count-before-named-after guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p11-count-before-named-after guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p11-count-before-named-after guix test-interrupt-database: exit 0, pass 23, fail 0, 0 s
+p11-count-before-named-after guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p11-count-before-named-after guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p11-count-before-named-after guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p11-count-before-named-after guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p11-count-before-named-after guix test-statement: exit 0, pass 76, fail 0, 1 s
+p11-count-before-named-after guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p12-finalize-after-close guix test-connection-close: exit 1, pass 3, fail 14, 1 s
+    FAIL every count is zero once the load has returned
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL rtree unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL rtree unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-connection: exit 0, pass 63, fail 0, 0 s
+p12-finalize-after-close guix test-connection-cache: exit 1, pass 13, fail 8, 0 s
+    FAIL database-cache-capacity and database-cache-count refuse no database, and database-cache-count reads 0 onc
+    FAIL a returned statement is filed, reset and its bindings cleared: the next check-out of its SQL answers that
+    FAIL the same SQL checked out twice, while the first is out, gives two statements; returned, the first is kept
+    FAIL a statement whose step failed is finalized on its return, never kept: the cache holds none, and nothing i
+    FAIL a close that succeeds finalizes the cache's statements and leaves it empty
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p12-finalize-after-close guix test-interrupt-database: exit 1, pass 8, fail 15, 0 s
+    FAIL on a closed connection interrupt-database! does nothing and raises nothing, from the owner and from anoth
+    FAIL a second close leaves the connection closed to interrupts: closed, closed again, then interrupt-database!
+    FAIL a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from inside it; c
+    FAIL the open makes the connection interruptible: open-database, open-database with a settings list, and call-
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the close (set, th
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes: the close
+    FAIL with-transaction's ROLLBACK runs with the latch shut: the body raises, and an interrupt-database! sent as
+    FAIL nested, with-transaction's ROLLBACK TO and RELEASE run with the latch shut: the inner body raises, and th
+    FAIL with-transaction's COMMIT stays interruptible, and an interrupted COMMIT is rolled back with the latch sh
+    FAIL nested, the RELEASE that commits stays interruptible, and its rollback runs with the latch shut: the verb
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p12-finalize-after-close guix test-open-settings: exit 1, pass 10, fail 13, 2 s
+    FAIL options and a list together, the list at each position among read-only and uri, through both verbs: each 
+    FAIL journal-mode wal is kept in the file: a second connection, opened while the first is open, reads wal; del
+    FAIL all six at once, busy-timeout among the rest, and statement-cache: the open leaves no statement tracked, 
+    FAIL journal-mode on :memory: mismatches at each of its values, the read-back memory (Q9; single P11): open-da
+    FAIL journal-mode wal on a temporary database, filename "", mismatches, the read-back delete (concurrency S4);
+    FAIL each of the six read back as other than asked mismatches, through applied-settings! with a step no list m
+    FAIL a setting's statement that fails closes the connection, then raises its own condition, from the who: a se
+    FAIL a close that fails after a setting's failure is not raised over it: with an untracked statement on the co
+    FAIL statement-cache through the public surface: after 33 distinct statements through query, the statement cou
+    FAIL busy-timeout runs first, whatever the list's order: under another's exclusive lock, with busy-timeout las
+    FAIL no setting is applied unasked (decision 8): a connection opened without busy-timeout keeps SQLite's 0, wi
+    FAIL each raise site's with-exception-handler handler runs at interrupt depth 1, its who the verb called: a re
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-open-engines: exit 1, pass 2, fail 6, 1 s
+    FAIL open-database with the six settings and statement-cache on a file, as an engine, at every fuel from 1 unt
+    FAIL open-database's remainder resumed twice, at every fuel from 1 until it completes without expiring: resume
+    FAIL call-with-database re-entered through a continuation a timer's handler took at each tick from 1 until its
+    FAIL call-with-database with the six settings and statement-cache on a file, as an engine, at every fuel from 
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-transaction-engine: exit 1, pass 19, fail 1, 2 s
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-statement: exit 1, pass 49, fail 27, 1 s
+    FAIL every verb on another thread raises &sqlite-wrong-thread from the verb, with a message, the owner the mai
+    FAIL every verb but finalize-statement! refuses a finalized statement &sqlite-closed, from the verb, with a me
+    FAIL a statement kept past its connection's close is finalized: every verb but finalize-statement! raises &sql
+    FAIL reset!'s own failure: the insert ... returning's commit under a read raises &sqlite-error from reset!, bu
+    FAIL finalize-statement!'s own failure: the commit under a read raises &sqlite-error from finalize-statement!,
+    FAIL with no reader, the same reset! and finalize-statement! raise nothing, and the insert stands: 3 rows
+    FAIL a connection tracks its live statements, oldest first: three prepared, the middle one finalized, leaves t
+    FAIL close-database! finalizes oldest first: of two inserts stepped once under a read, the failure raised is t
+    FAIL the close keeps the first failure: three entries tracked here, the first finalized, the second and third 
+    FAIL an entry whose finalize raises counts as its failure: the close raises that very object, once every entry
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+    FAIL call-with-database's close finalizes what the procedure left: a statement stepped and left, finalized aft
+    FAIL call-with-statement: the procedure's two values come back; inside, the statement is ready, tracked and co
+    FAIL call-with-statement: the procedure's raise reaches the caller as the same object, and the statement is fi
+    FAIL call-with-statement: a warning the procedure raises with raise-continuable reaches an outer handler that 
+    FAIL call-with-statement: an escape through a continuation finalizes the statement
+    FAIL call-with-statement: a continuation that re-enters the procedure finds the statement finalized, its step!
+    FAIL call-with-statement: a finalize that fails after the procedure raised does not mask the procedure's condi
+    FAIL call-with-statement checks its procedure first, before the database and the SQL; then prepare-statement's
+    FAIL prepare-statement raises after its section: a failed prepare, no statement, more than one, U+0000, a clos
+    FAIL close-database! raises a finalize's failure after its section, at depth 1, with the connection closed
+    FAIL prepare-statement, step!, reset! and finalize-statement! under an engine of every fuel from 1 to 60 ticks
+    FAIL two engines on one thread, at every fuel from 1 to 60 ticks of the first slice: one runs call-with-statem
+    FAIL call-with-statement does not survive an engine's preemption: at every fuel from 1 to 60 ticks a slice, an
+    FAIL call-with-statement abandoned at its first expiry, at every fuel from 1 to 400 ticks, leaves no statement
+    FAIL every count is zero at the end
+p12-finalize-after-close guix test-statement-who: exit 1, pass 21, fail 8, 1 s
+    FAIL prepared names its who: a failed prepare, with the SQL and its offset; no statement; more than one; U+000
+    FAIL prepared-at names its who: no database, the wrong thread, a closed connection, a start outside the SQL, a
+    FAIL checked-out names its who: an on-made that is no procedure, no database, the wrong thread, no string, U+0
+    FAIL prepared-at answers each statement of a script in turn, from the tail of the one before, with its own tex
+    FAIL prepared-at's statement is tracked and counted by its connection, as prepare-statement's is, and the clos
+    FAIL checked-out reads its call's check first in the check-out's section and in a miss's prepare's: answering 
+    FAIL prepared-at reads its call's check first in its section: answering true, it raises &sqlite-closed from it
+    FAIL every count is zero at the end
+p13-cache-kept guix test-connection-close: exit 0, pass 17, fail 0, 1 s
+p13-cache-kept guix test-connection: exit 0, pass 63, fail 0, 0 s
+p13-cache-kept guix test-connection-cache: exit 1, pass 17, fail 4, 1 s
+    FAIL database-cache-capacity and database-cache-count refuse no database, and database-cache-count reads 0 onc
+    FAIL a close that succeeds finalizes the cache's statements and leaves it empty
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+p13-cache-kept guix test-interrupt-close: exit 0, pass 8, fail 0, 0 s
+p13-cache-kept guix test-interrupt-database: exit 0, pass 23, fail 0, 1 s
+p13-cache-kept guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p13-cache-kept guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p08-latch-shut-failed guix test-interrupt-close: exit 1, pass 7, fail 1, 53 s
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+p13-cache-kept guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+p07-latch-shut-untracked guix test-interrupt-close: exit 1, pass 7, fail 1, 53 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+p08-latch-shut-failed guix test-interrupt-database: exit 1, pass 22, fail 1, 1 s
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+p07-latch-shut-untracked guix test-interrupt-database: exit 1, pass 20, fail 3, 1 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p08-latch-shut-failed guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p07-latch-shut-untracked guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p13-cache-kept guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p13-cache-kept guix test-statement: exit 0, pass 76, fail 0, 2 s
+p08-latch-shut-failed guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+p13-cache-kept guix test-statement-who: exit 0, pass 29, fail 0, 0 s
+p08-latch-shut-failed guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p07-latch-shut-untracked guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p07-latch-shut-untracked guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+p14-close-twice guix test-connection-close: exit 0, pass 17, fail 0, 0 s
+p08-latch-shut-failed guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p14-close-twice guix test-connection: exit 0, pass 63, fail 0, 1 s
+p14-close-twice guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p07-latch-shut-untracked guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p14-close-twice guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p08-latch-shut-failed guix test-statement: exit 0, pass 76, fail 0, 1 s
+p14-close-twice guix test-interrupt-database: exit 0, pass 23, fail 0, 0 s
+p08-latch-shut-failed guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p14-close-twice guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p07-latch-shut-untracked guix test-statement: exit 0, pass 76, fail 0, 1 s
+p15-busy-closes guix test-connection-close: exit 1, pass 12, fail 5, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+p07-latch-shut-untracked guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p15-busy-closes guix test-connection: exit 1, pass 55, fail 8, 0 s
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL two untracked statements: the count named is 2
+    FAIL a connection a backup reads from: sqlite3_close refuses, and close-database! raises an &sqlite-error, bus
+    FAIL call-with-database: a raise, then a close that fails: the caller gets the procedure's raise, not the clos
+    FAIL call-with-database: the same under an inner guard that does not match: the outer guard gets the procedure
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+p15-busy-closes guix test-connection-cache: exit 1, pass 19, fail 2, 1 s
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+p16-details-first guix test-connection-close: exit 0, pass 17, fail 0, 1 s
+p15-busy-closes guix test-interrupt-close: exit 1, pass 6, fail 2, 0 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+p16-details-first guix test-connection: exit 0, pass 63, fail 0, 0 s
+p14-close-twice guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p15-busy-closes guix test-interrupt-database: exit 1, pass 19, fail 4, 1 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p16-details-first guix test-connection-cache: exit 0, pass 21, fail 0, 1 s
+p14-close-twice guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+p16-details-first guix test-interrupt-close: exit 0, pass 8, fail 0, 0 s
+p15-busy-closes guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p16-details-first guix test-interrupt-database: exit 0, pass 23, fail 0, 1 s
+p16-details-first guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p14-close-twice guix test-transaction-engine: exit 0, pass 20, fail 0, 1 s
+p15-busy-closes guix test-open-settings: exit 1, pass 22, fail 1, 2 s
+    FAIL a close that fails after a setting's failure is not raised over it: with an untracked statement on the co
+p14-close-twice guix test-statement: exit 0, pass 76, fail 0, 2 s
+p15-busy-closes guix test-open-engines: exit 1, pass 7, fail 1, 1 s
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+p14-close-twice guix test-statement-who: exit 0, pass 29, fail 0, 0 s
+p16-details-first guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+p16-details-first guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p17-details-no-handle guix test-connection-close: exit 0, pass 17, fail 0, 0 s
+p15-busy-closes guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p17-details-no-handle guix test-connection: exit 0, pass 63, fail 0, 1 s
+p17-details-no-handle guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p17-details-no-handle guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p16-details-first guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p15-busy-closes guix test-statement: exit 1, pass 74, fail 2, 1 s
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+p17-details-no-handle guix test-interrupt-database: exit 0, pass 23, fail 0, 0 s
+p15-busy-closes guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p17-details-no-handle guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p16-details-first guix test-statement: exit 0, pass 76, fail 0, 1 s
+p18-no-count-down guix test-connection-close: exit 1, pass 3, fail 14, 1 s
+    FAIL every count is zero once the load has returned
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL rtree unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL rtree unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL every count is zero at the end
+p16-details-first guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p18-no-count-down guix test-connection: exit 1, pass 8, fail 55, 0 s
+    FAIL no option: the file is created, read-write, with a mutex and extended codes; one connection and no block 
+    FAIL 'create: as no option
+    FAIL 'read-write on a missing file: CANTOPEN, and no file is made; on an existing one: read-write
+    FAIL 'read-write 'create, in either order: the file is created, read-write
+    FAIL 'read-only on a missing file: CANTOPEN, and no file is made; on an existing one: read-only, with a mutex 
+    FAIL 'uri: file:DIR/u.db makes DIR/u.db, and file:DIR/e.db?mode=ro opens it read-only
+    FAIL 'memory: a database in memory, and no file is made at the name given
+    FAIL 'no-follow on a symbolic link: CANTOPEN, extended cantopen-symlink; the same link without it opens
+    FAIL 'no-mutex: no mutex; 'read-only 'no-mutex: read-only with no mutex
+    FAIL :memory:, with every option that applies to it: read-write, extended, and each mutex
+    FAIL an option refused, each by its rule and the option: unknown, a string option by its kind, twice, and a co
+    FAIL a filename that is no string is refused by its rule and shown-value: a symbol, a number, a list holding a
+    FAIL a filename that starts file:, given without 'uri, is refused by its rule, naming the name by its kind, wi
+    FAIL a filename holding U+0000, first, in the middle and last, is refused naming its kind, from open-database,
+    FAIL the complement: FILE:x.db, File:x.db and ./file:y.db, relative, and DIR/file:z.db, absolute, are plain na
+    FAIL a file in a missing directory: an &sqlite-error from open-database, cantopen and cantopen as symbols, a m
+    FAIL a symbolic link with 'no-follow: cantopen, extended cantopen-symlink, the handle closed before the raise
+    FAIL a second close-database! does nothing: no raise, the counts stay zero; call-with-open-handle then raises 
+    FAIL an untracked statement: close-database! raises an assertion violation naming the count, the connection st
+    FAIL two untracked statements: the count named is 2
+    FAIL a connection a backup reads from: sqlite3_close refuses, and close-database! raises an &sqlite-error, bus
+    FAIL close-database! from another thread raises &sqlite-wrong-thread from close-database!, with a message, the
+    FAIL close-database! from another thread on a closed connection still raises &sqlite-wrong-thread: the thread 
+    FAIL call-with-open-handle from another thread raises &sqlite-wrong-thread from its who, and its procedure nev
+    FAIL call-with-open-handle from another thread on a closed connection still raises &sqlite-wrong-thread from i
+    FAIL a connection opened on another thread belongs to it: the main thread's close raises &sqlite-wrong-thread,
+    FAIL call-with-database: the procedure's two values come back; inside, the connection is open and counted; aft
+    FAIL call-with-database: the procedure's raise reaches the caller unchanged, and the connection is closed
+    FAIL call-with-database: a warning the procedure raises with raise-continuable reaches an outer handler that r
+    FAIL call-with-database: a raise, then a close that fails: the caller gets the procedure's raise, not the clos
+    FAIL call-with-database: the same under an inner guard that does not match: the outer guard gets the procedure
+    FAIL call-with-database: a return, then a close that fails: the close's assertion violation reaches the caller
+    FAIL call-with-database: an escape through a continuation closes the connection
+    FAIL call-with-database: an escape, then a close that fails: the close's assertion violation is raised
+    FAIL call-with-database: a continuation that re-enters the procedure finds the connection closed, and no conne
+    FAIL call-with-database checks its procedure first, then all open-database checks, before anything opens: no p
+    FAIL call-with-database passes its options to the open: 'read-only on an existing file is read-only inside, an
+    FAIL call-with-database: a failed open raises its &sqlite-error from call-with-database, and the procedure nev
+    FAIL call-with-database: a procedure that closes its connection itself returns, and nothing is left
+    FAIL call-with-open-handle refuses what is no database, and a closed connection, after its critical section: a
+    FAIL call-with-open-handle refuses another thread after its critical section: that thread's handler runs at de
+    FAIL call-with-open-handle raises its procedure's raise again after its critical section: a handler of it runs
+    FAIL call-with-open-handle raises its procedure's raise of a fresh symbol again after its critical section: a 
+    FAIL call-with-open-handle raises its procedure's raise of a fresh pair again after its critical section: a ha
+    FAIL call-with-open-handle: a warning its procedure raises with raise-continuable is raised again with raise, 
+    FAIL call-with-open-handle answers every value its procedure answers, and gives it the handle, an exact positi
+    FAIL open-database raises after its critical section: a handler of a failed open, and of U+0000, runs at depth
+    FAIL call-with-database's open raises after its critical section: a handler of a failed open, and of U+0000, r
+    FAIL call-with-database raises its close's failure after the critical after thunk, on a return and on an escap
+    FAIL close-database! raises its count-down's double free after its critical section: a handler of it runs at d
+    FAIL open-database and close-database! under an engine of every fuel from 1 to 60 ticks a slice: each opens an
+    FAIL call-with-open-handle: a close in another engine, at every fuel from 1 to 60 ticks of the first slice, ne
+    FAIL call-with-open-handle refuses a continuation of its procedure re-entered after the call finished: from it
+    FAIL call-with-open-handle under an engine of every fuel from 1 to 60 ticks a slice: each call completes with 
+    FAIL every count is zero at the end
+p18-no-count-down guix test-connection-cache: exit 1, pass 13, fail 8, 0 s
+    FAIL open-database refuses a statement-cache outside 0 to 1024 by the settings' rule, -1, 1025, 32.0, "32" by 
+    FAIL a returned statement is filed, reset and its bindings cleared: the next check-out of its SQL answers that
+    FAIL the same SQL checked out twice, while the first is out, gives two statements; returned, the first is kept
+    FAIL a statement whose step failed is finalized on its return, never kept: the cache holds none, and nothing i
+    FAIL a close that succeeds finalizes the cache's statements and leaves it empty
+    FAIL a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connecti
+    FAIL a close refused for an untracked statement empties the cache all the same: the cached statement is finali
+    FAIL every count is zero at the end
+t1-option-disagrees guix test-connection-close: exit 1, pass 16, fail 1, 1 s
+    FAIL each module's compile option agrees with pragma_module_list: fts5 by ENABLE_FTS5, fts4 by ENABLE_FTS3, wh
+p18-no-count-down guix test-interrupt-close: exit 1, pass 4, fail 4, 1 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+    FAIL the race: interrupts from one thread against opens and closes of a file on another; every interrupt answe
+    FAIL every count is zero at the end
+t1-option-disagrees guix test-connection: exit 0, pass 63, fail 0, 0 s
+p18-no-count-down guix test-interrupt-database: exit 1, pass 8, fail 15, 0 s
+    FAIL on a closed connection interrupt-database! does nothing and raises nothing, from the owner and from anoth
+    FAIL a second close leaves the connection closed to interrupts: closed, closed again, then interrupt-database!
+    FAIL a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from inside it; c
+    FAIL the open makes the connection interruptible: open-database, open-database with a settings list, and call-
+    FAIL the close clears the flag before it finalizes anything: the verb reaches SQLite before the close (set, th
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+    FAIL a stand-in in flight on another thread, through interrupt-database/with, when the owner closes: the close
+    FAIL with-transaction's ROLLBACK runs with the latch shut: the body raises, and an interrupt-database! sent as
+    FAIL nested, with-transaction's ROLLBACK TO and RELEASE run with the latch shut: the inner body raises, and th
+    FAIL with-transaction's COMMIT stays interruptible, and an interrupted COMMIT is rolled back with the latch sh
+    FAIL nested, the RELEASE that commits stays interruptible, and its rollback runs with the latch shut: the verb
+    FAIL every count is zero at the end
+p17-details-no-handle guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+t1-option-disagrees guix test-connection-cache: exit 0, pass 21, fail 0, 1 s
+t1-option-disagrees guix test-interrupt-close: exit 0, pass 8, fail 0, 0 s
+p18-no-count-down guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p17-details-no-handle guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+t1-option-disagrees guix test-interrupt-database: exit 0, pass 23, fail 0, 1 s
+t1-option-disagrees guix test-interrupt: exit 0, pass 27, fail 0, 0 s
+p17-details-no-handle guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p18-no-count-down guix test-open-settings: exit 1, pass 11, fail 12, 2 s
+    FAIL an empty settings list is accepted by both verbs, the cache 32 as with none; a list of options, '(read-on
+    FAIL a bad option and a bad setting together: M2's checks come first, wherever the option stands among the arg
+    FAIL options and a list together, the list at each position among read-only and uri, through both verbs: each 
+    FAIL journal-mode wal is kept in the file: a second connection, opened while the first is open, reads wal; del
+    FAIL journal-mode on :memory: mismatches at each of its values, the read-back memory (Q9; single P11): open-da
+    FAIL journal-mode wal on a temporary database, filename "", mismatches, the read-back delete (concurrency S4);
+    FAIL each of the six read back as other than asked mismatches, through applied-settings! with a step no list m
+    FAIL a setting's statement that fails closes the connection, then raises its own condition, from the who: a se
+    FAIL a close that fails after a setting's failure is not raised over it: with an untracked statement on the co
+    FAIL busy-timeout runs first, whatever the list's order: under another's exclusive lock, with busy-timeout las
+    FAIL each raise site's with-exception-handler handler runs at interrupt depth 1, its who the verb called: a re
+    FAIL every count is zero at the end
+p17-details-no-handle guix test-statement: exit 0, pass 76, fail 0, 1 s
+p18-no-count-down guix test-open-engines: exit 1, pass 2, fail 6, 1 s
+    FAIL open-database with the six settings and statement-cache on a file, as an engine, at every fuel from 1 unt
+    FAIL open-database's remainder resumed twice, at every fuel from 1 until it completes without expiring: resume
+    FAIL call-with-database re-entered through a continuation a timer's handler took at each tick from 1 until its
+    FAIL call-with-database with the six settings and statement-cache on a file, as an engine, at every fuel from 
+    FAIL call-with-database's procedure leaves a statement its connection does not track, so the close fails, then
+    FAIL every count is zero at the end
+t1-option-disagrees guix test-open-settings: exit 0, pass 23, fail 0, 3 s
+p17-details-no-handle guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+t1-option-disagrees guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p18-no-count-down guix test-transaction-engine: exit 1, pass 19, fail 1, 2 s
+    FAIL every count is zero at the end
+t2-never-available guix test-connection-close: exit 1, pass 9, fail 8, 0 s
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts4 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts4 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+    FAIL fts5 unavailable: its create raises &sqlite-error, code error, at its step, and the connection closes
+t1-option-disagrees guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+t2-never-available guix test-connection: exit 0, pass 63, fail 0, 1 s
+t2-never-available guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p18-no-count-down guix test-statement: exit 1, pass 41, fail 35, 1 s
+    FAIL prepare-statement: a statement, ready, tracked by its connection, counted; its SQL, no parameter, one col
+    FAIL SQL holding no statement is refused by its rule, naming the SQL by its kind: empty, whitespace, a line co
+    FAIL SQL holding more than one statement is refused by its rule, at the tail's character index: 10 in select 1
+    FAIL a refused SQL's first statement has been prepared: pragma cache_size = 7; select 1 is refused at index 23
+    FAIL prepare passes no flags (ADR-0014, decision 4): a table-valued function, which SQLITE_PREPARE_NO_VTAB ref
+    FAIL SQL holding U+0000, first, in the middle and last, is refused by its rule, naming it by its kind, before 
+    FAIL SQL that is no string is refused by its rule and shown-value: a symbol, a number, a list holding a string
+    FAIL prepare-statement checks in order: what is no database first, before SQL that is no string; then the thre
+    FAIL a failed prepare raises &sqlite-error from prepare-statement, with a copy of the SQL and SQLite's offset 
+    FAIL every verb on another thread raises &sqlite-wrong-thread from the verb, with a message, the owner the mai
+    FAIL every verb but finalize-statement! refuses a finalized statement &sqlite-closed, from the verb, with a me
+    FAIL a statement kept past its connection's close is finalized: every verb but finalize-statement! raises &sql
+    FAIL reset!'s own failure: the insert ... returning's commit under a read raises &sqlite-error from reset!, bu
+    FAIL finalize-statement!'s own failure: the commit under a read raises &sqlite-error from finalize-statement!,
+    FAIL with no reader, the same reset! and finalize-statement! raise nothing, and the insert stands: 3 rows
+    FAIL a connection tracks its live statements, oldest first: three prepared, the middle one finalized, leaves t
+    FAIL close-database! finalizes oldest first: of two inserts stepped once under a read, the failure raised is t
+    FAIL the close keeps the first failure: three entries tracked here, the first finalized, the second and third 
+    FAIL an entry whose finalize raises counts as its failure: the close raises that very object, once every entry
+    FAIL a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; t
+    FAIL an untracked statement, made with a raw prepare, beside a tracked one: close-database! finalizes the trac
+    FAIL call-with-database's close finalizes what the procedure left: a statement stepped and left, finalized aft
+    FAIL call-with-statement: the procedure's two values come back; inside, the statement is ready, tracked and co
+    FAIL call-with-statement: the procedure's raise reaches the caller as the same object, and the statement is fi
+    FAIL call-with-statement: a warning the procedure raises with raise-continuable reaches an outer handler that 
+    FAIL call-with-statement: an escape through a continuation finalizes the statement
+    FAIL call-with-statement: a continuation that re-enters the procedure finds the statement finalized, its step!
+    FAIL call-with-statement: a finalize that fails after the procedure raised does not mask the procedure's condi
+    FAIL call-with-statement checks its procedure first, before the database and the SQL; then prepare-statement's
+    FAIL prepare-statement raises after its section: a failed prepare, no statement, more than one, U+0000, a clos
+    FAIL prepare-statement, step!, reset! and finalize-statement! under an engine of every fuel from 1 to 60 ticks
+    FAIL two engines on one thread, at every fuel from 1 to 60 ticks of the first slice: one runs call-with-statem
+    FAIL call-with-statement does not survive an engine's preemption: at every fuel from 1 to 60 ticks a slice, an
+    FAIL call-with-statement abandoned at its first expiry, at every fuel from 1 to 400 ticks, leaves no statement
+    FAIL every count is zero at the end
+t2-never-available guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p18-no-count-down guix test-statement-who: exit 1, pass 23, fail 6, 1 s
+    FAIL prepared names its who: a failed prepare, with the SQL and its offset; no statement; more than one; U+000
+    FAIL prepared-at names its who: no database, the wrong thread, a closed connection, a start outside the SQL, a
+    FAIL checked-out names its who: an on-made that is no procedure, no database, the wrong thread, no string, U+0
+    FAIL prepared-at answers each statement of a script in turn, from the tail of the one before, with its own tex
+    FAIL prepared-at's statement is tracked and counted by its connection, as prepare-statement's is, and the clos
+    FAIL every count is zero at the end
+t2-never-available guix test-interrupt-database: exit 0, pass 23, fail 0, 0 s
+t1-option-disagrees guix test-statement: exit 0, pass 76, fail 0, 1 s
+t2-never-available guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+t1-option-disagrees guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+t2-never-available guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+t2-never-available guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+t2-never-available guix test-transaction-engine: exit 0, pass 20, fail 0, 1 s
+t2-never-available guix test-statement: exit 0, pass 76, fail 0, 1 s
+t2-never-available guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+p04-latch-shut-busy guix test-interrupt-close: exit 1, pass 6, fail 2, 108 s
+    FAIL after a close refused for an untracked statement, a long step on the connection is stopped from another t
+    FAIL after a close that sqlite3_close refuses, busy beside an unfinished backup, a long step on the connection
+p04-latch-shut-busy guix test-interrupt-database: exit 1, pass 19, fail 4, 1 s
+    FAIL a close refused for an untracked statement leaves the flag set again: the close raises its assertion viol
+    FAIL a close that sqlite3_close itself refuses, busy beside an unfinished backup, leaves the flag set again: c
+    FAIL slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing fro
+    FAIL call-with-database's close: the verb did nothing from inside it, and the procedure's answer comes back; l
+p04-latch-shut-busy guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p04-latch-shut-busy guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p04-latch-shut-busy guix test-open-engines: exit 0, pass 8, fail 0, 0 s
+p04-latch-shut-busy guix test-transaction-engine: exit 0, pass 20, fail 0, 2 s
+p04-latch-shut-busy guix test-statement: exit 0, pass 76, fail 0, 1 s
+p04-latch-shut-busy guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+
+== The final round: after plants.py --refresh, the final new suite in all 21 copies, Guix's 3.53.1
+$ ls build/mut | grep -v "\.log$" | grep -v "\.out$" | SUITES=test-connection-close xargs -P 6 -n 1 sh .plans/research/m4-close-fix/run-plants.sh guix
+p03-count-on-success guix test-connection-close: exit 0, pass 22, fail 0, 1 s
+p04-latch-shut-busy guix test-connection-close: exit 1, pass 18, fail 4, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p02-never-count guix test-connection-close: exit 1, pass 15, fail 7, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+p06-counted-down guix test-connection-close: exit 1, pass 12, fail 10, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+p01-count-first guix test-connection-close: exit 1, pass 6, fail 16, 1 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p05-handle-cleared guix test-connection-close: exit 1, pass 11, fail 11, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p08-latch-shut-failed guix test-connection-close: exit 1, pass 20, fail 2, 0 s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p09-zero-untracked guix test-connection-close: exit 1, pass 19, fail 3, 0 s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+p10-one-not-counted guix test-connection-close: exit 1, pass 17, fail 5, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+p11-count-before-named-after guix test-connection-close: exit 1, pass 18, fail 4, 0 s
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+p07-latch-shut-untracked guix test-connection-close: exit 1, pass 20, fail 2, 1 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+p12-finalize-after-close guix test-connection-close: exit 1, pass 3, fail 19, 1 s
+    FAIL every count is zero once the load has returned
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL rtree unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no 
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL rtree unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no 
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p15-busy-closes guix test-connection-close: exit 1, pass 12, fail 10, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+p16-details-first guix test-connection-close: exit 0, pass 22, fail 0, 0 s
+p14-close-twice guix test-connection-close: exit 0, pass 22, fail 0, 0 s
+p17-details-no-handle guix test-connection-close: exit 1, pass 20, fail 2, 1 s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+p13-cache-kept guix test-connection-close: exit 0, pass 22, fail 0, 1 s
+p18-no-count-down guix test-connection-close: exit 1, pass 3, fail 19, 1 s
+    FAIL every count is zero once the load has returned
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL rtree unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no 
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL rtree unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no 
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+t2-never-available guix test-connection-close: exit 1, pass 11, fail 11, 0 s
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts4 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts4 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+t3-create-broken guix test-connection-close: exit 1, pass 13, fail 9, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+t1-option-disagrees guix test-connection-close: exit 1, pass 21, fail 1, 0 s
+    FAIL each module's compile option agrees with pragma_module_list: fts5 by ENABLE_FTS5, fts4 by ENABLE_FTS3, wh
+
+== p01, p11 and t3 on the other libraries, the final new suite
+$ for lib in m3-floor m4-current m4-current-fts5 m4cf-floor-vtab m4cf-current-vtab; do SUITES=test-connection-close sh .plans/research/m4-close-fix/run-plants.sh $lib p01-count-first p11-count-before-named-after t3-create-broken; done
+p01-count-first m3-floor test-connection-close: exit 1, pass 20, fail 2, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+p11-count-before-named-after m3-floor test-connection-close: exit 0, pass 22, fail 0, 0 s
+t3-create-broken m3-floor test-connection-close: exit 1, pass 13, fail 9, 0 s
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+p01-count-first m4-current test-connection-close: exit 1, pass 20, fail 2, 0 s
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+p11-count-before-named-after m4-current test-connection-close: exit 0, pass 22, fail 0, 1 s
+t3-create-broken m4-current test-connection-close: exit 1, pass 13, fail 9, 1 s
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+    FAIL fts5 unavailable: its create prepares, then raises &sqlite-error, code error, at its step, and makes no t
+p01-count-first m4-current-fts5 test-connection-close: exit 1, pass 8, fail 14, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p11-count-before-named-after m4-current-fts5 test-connection-close: exit 1, pass 18, fail 4, 0 s
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+t3-create-broken m4-current-fts5 test-connection-close: exit 1, pass 13, fail 9, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+p01-count-first m4cf-floor-vtab test-connection-close: exit 1, pass 4, fail 18, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a rtree table closes, every count back to 0; so does one that also wrote 
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose rtree table was made and written closes; reopened and searched, it keeps its rows, and close
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p11-count-before-named-after m4cf-floor-vtab test-connection-close: exit 1, pass 17, fail 5, 0 s
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+t3-create-broken m4cf-floor-vtab test-connection-close: exit 1, pass 13, fail 9, 1 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+p01-count-first m4cf-current-vtab test-connection-close: exit 1, pass 4, fail 18, 1 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a fts4 table closes, every count back to 0; so does one that also wrote a
+    FAIL a :memory: connection that made a rtree table closes, every count back to 0; so does one that also wrote 
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose fts4 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL a file whose rtree table was made and written closes; reopened and searched, it keeps its rows, and close
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement: sqlite3_close runs first and answers busy, then the count is named: close-databas
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection: sqlite3_close refuses, busy, and with no statement left to count, clo
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL a transaction that wrote a plain table, then a close that sqlite3_close refuses: the transaction stays op
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select held at its row, with no module: sqlite3_close refuses, busy, and close
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+    FAIL every count is zero at the end
+p11-count-before-named-after m4cf-current-vtab test-connection-close: exit 1, pass 18, fail 4, 0 s
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+t3-create-broken m4cf-current-vtab test-connection-close: exit 1, pass 13, fail 9, 0 s
+    FAIL a :memory: connection that made a fts5 table closes, every count back to 0; so does one that also wrote a
+    FAIL a file whose fts5 table was made and written closes; reopened and searched, it keeps its rows, and closes
+    FAIL call-with-database: a procedure that makes, writes and searches an fts5 table gives its answer, and the c
+    FAIL an untracked statement beside an fts5 table: sqlite3_close disconnects the table, finalizing fts5's own s
+    FAIL a backup reading from a connection with an fts5 table: sqlite3_close finalizes fts5's statements, then re
+    FAIL a transaction that wrote a plain table and an fts5 table, then a close that sqlite3_close refuses: the tr
+    FAIL after a close that a backup refused, the connection's fts5 table takes writes again: an insert, then its 
+    FAIL the boundary, as SQLite draws it: an untracked insert ... returning into an fts5 table, stepped once in a
+    FAIL the boundary: an untracked select of an fts5 table held at its row keeps the table connected: sqlite3_clo
+
+== p03's eleven suites, plain, Guix's 3.53.1 (round 2)
+$ sh .plans/research/m4-close-fix/run-plants.sh guix p03-count-on-success
+p03-count-on-success guix test-connection-close: exit 0, pass 18, fail 0, 0 s
+p03-count-on-success guix test-connection: exit 0, pass 63, fail 0, 1 s
+p03-count-on-success guix test-connection-cache: exit 0, pass 21, fail 0, 0 s
+p03-count-on-success guix test-interrupt-close: exit 0, pass 8, fail 0, 1 s
+p03-count-on-success guix test-interrupt-database: exit 0, pass 23, fail 0, 0 s
+p03-count-on-success guix test-interrupt: exit 0, pass 27, fail 0, 1 s
+p03-count-on-success guix test-open-settings: exit 0, pass 23, fail 0, 2 s
+p03-count-on-success guix test-open-engines: exit 0, pass 8, fail 0, 1 s
+p03-count-on-success guix test-transaction-engine: exit 0, pass 20, fail 0, 1 s
+p03-count-on-success guix test-statement: exit 0, pass 76, fail 0, 1 s
+p03-count-on-success guix test-statement-who: exit 0, pass 29, fail 0, 1 s
+== p03 under the gate, Guix's 3.53.1, the final new suite
+$ cd build/mut/p03-count-on-success && make test-memory MEMORY_SUITES=tests/test-connection-close.sps
+test-memory: FAIL tests/test-connection-close.sps (exit 9, Valgrind's: an error or a definite leak)
+  time: 12s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+test-memory: ran 1, passed 0, failed 1, hung 0, slow 0
+ERROR SUMMARY: 238 errors from 7 contexts (suppressed: 0 from 0)
+Invalid read of size 8
+   at 0x8D8C3DC: sqlite3_next_stmt (in <store>/lib/libsqlite3.so.3.53.1)
+   by 0x6FAC5A6: ???
+ Address 0x4c6ca70 is 32 bytes inside a block of size 840 free'd
+Invalid read of size 4
+   at 0x4ADEB30: pthread_mutex_lock@@GLIBC_2.2.5 (in <store>/lib/libc.so.6)
+   by 0x8D8C3E4: sqlite3_next_stmt (in <store>/lib/libsqlite3.so.3.53.1)

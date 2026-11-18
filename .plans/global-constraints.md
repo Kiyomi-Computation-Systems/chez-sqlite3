@@ -99,8 +99,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
 - **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
-  checks `sqlite3_next_stmt`, then calls `sqlite3_close`, never `sqlite3_close_v2`. A failed open
-  closes its handle before it raises. A second close does nothing (ADR-0012).
+  then calls `sqlite3_close`, never `sqlite3_close_v2`, and counts `sqlite3_next_stmt`'s
+  statements only after a refusal. A failed open closes its handle before it raises. A second
+  close does nothing (ADR-0012, amended in M4's close fix).
+- **The close vouches only for what chez-sqlite3 tracks.** A refused close means a statement, a
+  blob or a backup left open by a chez-sqlite3 bug or by foreign code, such as an extension; it
+  judges no statement it didn't make (ADR-0012, amended: "Vouch only for ours").
 - **A handle is an integer in an opaque, sealed `database` record,** with a private accessor. No
   ftype pointer holds one (ADR-0012).
 - **A `file:` name without `'uri` is refused,** case-sensitively, as SQLite tests it (ADR-0012,
@@ -119,8 +123,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
 
 - **A statement is an integer in an opaque, sealed record, and its connection holds it,
   strongly.** No guardians, no weak tracking (ADR-0014, ADR-0012 amended).
-- **`close-database!` finalizes every statement it holds, checks `sqlite3_next_stmt`, calls
-  `sqlite3_close`, and then raises the first failure a finalize reported;** a failed close keeps the
+- **`close-database!` finalizes every statement it holds, calls `sqlite3_close`, counts
+  `sqlite3_next_stmt`'s statements only if it refuses, and then raises the first failure a
+  finalize reported;** a failed close keeps the
   connection open and counted (the maintainer's, R1). The statements are finalized oldest first,
   and a failed close raises its own failure (ADR-0014).
 - **Every statement verb checks, in order, before anything reaches C:** a statement; on its
