@@ -69,9 +69,9 @@
 ;;;   - when the slot holds a message, its copy under a guard, then its
 ;;;     sqlite3_free whatever the copy did, so no message is left unfreed
 ;;;     on any path; what the copy raised is raised after the section;
-;;;   - for a failure, when the extended code changed across the call, the
-;;;     connection's sqlite3_errmsg, copied; and sqlite3_errstr's text for
-;;;     the code when the slot held none.
+;;;   - for a failure, when the extended code changed across the call to
+;;;     one that names an error, the connection's sqlite3_errmsg, copied;
+;;;     and sqlite3_errstr's text for the code when the slot held none.
 ;;;
 ;;; Every block lives whole in the section (ADR-0011, amended). It answers
 ;;; data, and the raise comes after it (ADR-0012, amended):
@@ -86,9 +86,12 @@
 ;;;             the slot's text, as SQLite wrote it, naming the path it
 ;;;             tried last; or sqlite3_errstr's when the slot held none;
 ;;;             followed, when the connection's extended code changed
-;;;             across the call, by the connection's message, which holds an
-;;;             init's reason where the slot says only "error during
-;;;             initialization: ". The two join as they stand where the
+;;;             across the call to one that names an error, by the
+;;;             connection's message, which holds an init's reason where the
+;;;             slot says only "error during initialization: ". An init
+;;;             whose last call succeeded leaves the code at 0, which names
+;;;             no error, and its "not an error" is no reason: then the
+;;;             slot's text stands alone. The two join as they stand where the
 ;;;             first ends in a space, as SQLite's "...: " does, and with
 ;;;             ": " between them otherwise
 ;;;   no error  a code that names no error, its low byte 0, 100 or 101 but
@@ -215,7 +218,9 @@
   ;; slot's message, when there is one, copied by COPY under a guard and
   ;; freed with sqlite3_free whatever the copy did; then, for a failure,
   ;; sqlite3_errstr's text when the slot held none, and the connection's
-  ;; sqlite3_errmsg when its extended code changed. Answers loaded; failed,
+  ;; sqlite3_errmsg when its extended code changed to one that names an
+  ;; error, by names-error?: an init's failing call left it, where a call
+  ;; that succeeded leaves 0 and "not an error". Answers loaded; failed,
   ;; the code and the message; not-an-error, the code; or what the copy
   ;; raised.
   (define (called load copy handle file proc)
@@ -240,7 +245,8 @@
                (let ((base (if (eq? (car text) 'copied)
                                (cadr text)
                                (or (c-string->string (sqlite3-errstr code)) "")))
-                     (more (and (not (eqv? (cadr codes) (caddr codes)))
+                     (more (and (names-error? (caddr codes))
+                                (not (eqv? (cadr codes) (caddr codes)))
                                 (c-string->string (sqlite3-errmsg handle)))))
                  (list 'failed code (joined base more))))))))
 

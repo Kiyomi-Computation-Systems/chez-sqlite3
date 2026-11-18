@@ -6,7 +6,7 @@
   ([amendment](#amendment-2026-11-17-the-variadic-binding-measured-and-its-check-m4s-plan)).
   Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): `check-variadic` as built
   ([amendment](#amendment-2026-11-17-check-variadic-as-built-m4-slice-2)).
-  Amended 2026-11-18 in M4 slice 4, proposed: the extension's build where loading is unavailable
+  Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): the extension's build where loading is unavailable
   ([amendment](#amendment-2026-11-18-the-extensions-build-where-loading-is-unavailable-m4-slice-4)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1: every binding to libsqlite3
@@ -153,7 +153,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 
 
 ## Amendment, 2026-11-18: the extension's build where loading is unavailable (M4 slice 4)
 
-Proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)). The rule is the
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)). The rule is the
 maintainer's, "Build named unavailable there" (2026-11-18).
 
 - **Decision 3's "a missing header or compiler fails the suite" is narrowed for one case.** Where

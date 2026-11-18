@@ -57,7 +57,9 @@
     '((default "ext" ())
       (named "ext-named" ("-DEXT_NAMED"))
       (derived "libchezext" ("-DEXT_DERIVED"))
-      (failing "ext-failing" ("-DEXT_FAILING"))))
+      (failing "ext-failing" ("-DEXT_FAILING"))
+      (exec-failing "ext-exec-failing" ("-DEXT_EXEC_FAILING"))
+      (leaves "ext-leaves" ("-DEXT_LEAVES_STATEMENT"))))
 
   (define source "tests/extension.c")
 

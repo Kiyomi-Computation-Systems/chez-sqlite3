@@ -245,7 +245,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   expiring,** not to a fixed bound (ADR-0017, amended in M3 slice 1). A sweep of a call that holds
   a claim also runs a pass with collect requests falling, the trip below what one call
   allocates, and fails by name unless it reached past the call's last section (ADR-0016, amended
-  in M4 slice 4).
+  in M4 slice 4). M4 slice 4's sweeps do; whether M3's and slice 3's need it is for M4's closing
+  review.
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the
@@ -284,7 +285,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   its entry point, then the opt-in.** It holds a claim. One section makes the call, reads the
   connection's extended code before and after it, and copies and frees the message with
   `sqlite3_free` on every path. A failure raises `&sqlite-error` whose code is the call's answer,
-  with the slot's message, followed by the connection's when its code changed across the call;
+  with the slot's message, followed by the connection's when its code changed across the call to
+  one that names an error;
   a code that names no error raises `(not-an-error CODE)` from the verb. The caller's strings are
   copied, the copies checked, and C handed the copies (ADR-0021, decision 7, amended in M4 slice
   4).

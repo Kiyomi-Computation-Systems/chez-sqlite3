@@ -30,7 +30,8 @@ FREE_BLOCK = """                       (let ((read (guard (c (#t (list 'raised c
 BASE = """               (let ((base (if (eq? (car text) 'copied)
                                (cadr text)
                                (or (c-string->string (sqlite3-errstr code)) "")))"""
-MORE = """                     (more (and (not (eqv? (cadr codes) (caddr codes)))
+MORE = """                     (more (and (names-error? (caddr codes))
+                                (not (eqv? (cadr codes) (caddr codes)))
                                 (c-string->string (sqlite3-errmsg handle)))))"""
 CODES = """                      (let* ((before (sqlite3-extended-errcode handle))
                              (code (load handle file proc slot))
@@ -218,6 +219,13 @@ MUTANTS = [
      "edits": [(E, """           (string-append base more))
           (else""", """           (string-append base ": " more))
           (else""")]},
+    {"name": "K13-connection-message-for-any-change",
+     "edits": [(E, """                     (more (and (names-error? (caddr codes))
+                                (not (eqv? (cadr codes) (caddr codes)))""",
+                """                     (more (and (not (eqv? (cadr codes) (caddr codes)))""")]},
+    {"name": "K14-slot-text-only-without-an-entry-point",
+     "edits": [(E, """               (let ((base (if (eq? (car text) 'copied)""",
+                """               (let ((base (if (and (eq? (car text) 'copied) (eqv? proc 0))""")]},
     {"name": "K11-not-an-error-unchecked",
      "edits": [(E, "              ((not (names-error? code)) (list 'not-an-error code))\n", "")]},
     {"name": "K12-no-error-taken-as-success",
@@ -271,6 +279,9 @@ MUTANTS = [
     {"name": "P02-signature-comment-changed",
      "edits": [(P, ";; load-extension! : (case-> (Database String -> Void) (Database String String -> Void))",
                 ";; load-extension! : Database String -> Void")]},
+    # --- the close over an extension's leftover statement ----------------------------------------
+    {"name": "Z01-close-names-no-untracked-statement",
+     "edits": [(C, "                            (if (> untracked 0)", "                            (if #f")]},
     # --- SQL's load_extension() -----------------------------------------------------------------
     {"name": "Q01-sql-loading-turned-on",
      "edits": [(C, "(only (chezscheme) critical-section dynamic-wind get-thread-id)",

@@ -23,6 +23,17 @@
  *   EXT_FAILING   sqlite3_extension_init that sets its message, by
  *                 sqlite3_mprintf, to "chez_failing refused", registers
  *                 nothing, and answers SQLITE_ERROR
+ *   EXT_EXEC_FAILING
+ *                 sqlite3_extension_init that runs "select 1" through
+ *                 sqlite3_exec, a call that succeeds and so leaves the
+ *                 connection's error code at 0, then sets its message to
+ *                 "probe refused" and answers SQLITE_ERROR; the exec's own
+ *                 failure, were there one, is answered instead
+ *   EXT_LEAVES_STATEMENT
+ *                 sqlite3_extension_init that registers the two functions,
+ *                 then prepares "select 1" and leaves the statement open on
+ *                 the connection, answering the prepare's code: foreign
+ *                 work a close must refuse over
  *
  * Its two functions:
  *
@@ -45,7 +56,7 @@ SQLITE_EXTENSION_INIT1
 /* inits: how many times an init of this file has run in the process. */
 static int inits;
 
-#ifndef EXT_FAILING
+#if !defined(EXT_FAILING) && !defined(EXT_EXEC_FAILING)
 /* chez_half: its one argument, as a double, halved. */
 static void chez_half(sqlite3_context *context, int argc, sqlite3_value **argv)
 {
@@ -95,6 +106,27 @@ int sqlite3_extension_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_routi
   inits++;
   *pzErrMsg = sqlite3_mprintf("chez_failing refused");
   return SQLITE_ERROR;
+}
+#elif defined(EXT_EXEC_FAILING)
+int sqlite3_extension_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi)
+{
+  int rc;
+  SQLITE_EXTENSION_INIT2(pApi);
+  inits++;
+  rc = sqlite3_exec(db, "select 1", 0, 0, 0);
+  if (rc != SQLITE_OK)
+    return rc;
+  *pzErrMsg = sqlite3_mprintf("probe refused");
+  return SQLITE_ERROR;
+}
+#elif defined(EXT_LEAVES_STATEMENT)
+int sqlite3_extension_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi)
+{
+  sqlite3_stmt *left = 0;
+  int rc = registered(db, pzErrMsg, pApi);
+  if (rc != SQLITE_OK)
+    return rc;
+  return sqlite3_prepare_v2(db, "select 1", -1, &left, 0);
 }
 #else
 int sqlite3_extension_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi)

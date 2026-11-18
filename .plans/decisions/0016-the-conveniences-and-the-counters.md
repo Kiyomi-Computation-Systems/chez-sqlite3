@@ -23,7 +23,7 @@
   Amended 2026-11-17 in M3's closing review, and accepted by the maintainer that day: the script's claim on its byte offsets, `made-claim`
   held whole, and the sweeps' bound on a whole new call
   ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
-  Amended 2026-11-18 in M4 slice 4, proposed: a sweep with collect requests falling
+  Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): a sweep with collect requests falling
   ([amendment](#amendment-2026-11-18-a-sweep-with-collect-requests-falling-m4-slice-4)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
@@ -515,7 +515,7 @@ the lead ([the review's log](../m3-closing-review-mutation-log.md)).
 
 ## Amendment, 2026-11-18: a sweep with collect requests falling (M4 slice 4)
 
-Proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)), from its review (Opus).
+Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 ([its mutation log](../m4-slice-4-mutation-log.md)), from its review (Opus).
 
 - **A collect request due inside a critical section is handled at the section's exit,** and
   costs the engine ticks there. So an engine can expire just past a call's last section, even when

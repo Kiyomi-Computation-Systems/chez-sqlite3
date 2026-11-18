@@ -148,6 +148,12 @@ newest first.
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
 - **Open:**
+  - **For M4's closing review: the loading suites' cost under the gate is climbing** (the M4
+    session's reading of CI). On `c92d397`'s run 44325663052, `test-library-loading-real` took
+    223 s, against 156 to 158 s on the three runs before; `-missing` 202 s, from 164 to 166 s; and
+    `-decoys` 190 s, after 132 to 239 s. 239 s is already over half the 450 s bound, with runners
+    differing about two to one, and slice 4 adds two rows to `-real`. AGENTS.md says to split long
+    before the limit.
   - **For M4's closing review: the sweeps that raise `collect-trip-bytes`.** A collect request
     due inside a critical section costs an engine's ticks at its exit, so a remainder can be taken
     just past a call's last section, and a sweep that raises the trip never sees one (ADR-0016,
@@ -172,7 +178,7 @@ newest first.
   - `tests/extension.c`, the research's four variants with `chez_half` and `chez_inits`, built by
     `tests/extension-build.sls` with `$CC -Wall -Werror -shared -fPIC`, or `-dynamiclib` and
     `.dylib` on a Mac;
-  - new `test-load-extension` (42 rows) and `test-load-extension-engines` (14), in
+  - new `test-load-extension` (44 rows) and `test-load-extension-engines` (14), in
     `MEMORY_SUITES_2`. Shard 2 was the lighter over `main`'s last three runs, 3,041 s against
     3,406 s, and on the latest, `c92d397`'s, the only one at the current layout (1,114 s against
     1,371 s);
@@ -181,13 +187,13 @@ newest first.
   - the docs' Extensions: the method, the opt-in and its fix, the default entry point's search,
     and what a load does to the connection.
 - **Watched failing:** against `c92d397`'s sources:
-  - `test-load-extension` 36 of 42, the engines suite 12 of 14;
+  - `test-load-extension` 38 of 44, the engines suite 12 of 14;
   - `test-public` 4, `test-library-loading-real` 2, `test-reference` 1 and `test-never-loads` 1;
   - each row that passes there was watched failing against a plant.
 
-  The builder's 62 plants, on the final tree: 60 caught. S07, the claim not marked last, and R02,
-  a failure raised inside the section, are equivalent. My 12, written from their descriptions,
-  all caught:
+  The builder's 65 plants, on the final tree: 63 caught. S07, the claim not marked last, and R02,
+  a failure raised inside the section, are equivalent. `research/m4-slice-4/scripts/red.sh`
+  rebuilds the red trees. My 15, written from their descriptions, all caught:
   - the opt-in check dropped, caught on every lane by the row that turns the C switch on through
     `sqlite3_auto_extension`;
   - the code from the connection;
@@ -197,7 +203,10 @@ newest first.
   - `./` paths let through;
   - the join always `": "`;
   - `""` taken as no entry point;
-  - the caller's path, and its entry point, handed to C.
+  - the caller's path, and its entry point, handed to C;
+  - the connection's message appended on any change of code;
+  - the slot's text dropped when an entry point is given;
+  - the close's count of untracked statements dropped, beside an extension's leftover statement.
 - **Reviewed** (Opus, read-only): the verb's code sound, no blocker.
 
   **Two majors,** fixed:
@@ -215,6 +224,24 @@ newest first.
   - the Apple build was unmeasured, which the maintainer settled as "Build named unavailable
     there" (ADR-0001, amended);
   - the suites mapped calls of the verb.
+- **Checked by the M4 session** against the plan, read-only: no blocker, no major.
+  - **Three minors,** fixed:
+    - an init whose last call succeeded had ": not an error" appended, so the connection's message
+      now follows only when the code after the call names an error (ADR-0021, amended);
+    - the dlsym cases' text is now compared exactly off a Mac;
+    - the log's build-only trees are now rebuilt by `red.sh`, or said not to be kept.
+  - **Six nits,** fixed or recorded:
+    - an argument order;
+    - a row in which an extension's leftover statement makes the close refuse;
+    - the constraint's reach over older sweeps;
+    - §4.8's one `scheme run` block;
+    - C08e's wording;
+    - the engine fuels' dependence on `TMPDIR`.
+  - **Its CI reading** is an open item for M4's closing review: the loading suites' cost is
+    climbing.
+- **The records,** accepted by the maintainer, 2026-11-18 ("Accept all"): ADR-0021's amendment,
+  ADR-0001's, ADR-0016's and the M4 plan's. Since the acceptance, after the check, the join's
+  condition and the fuels' `TMPDIR` note were refined.
 - **Libraries:** `make test` 81 of 81 on Guix's 3.53.1, the floor (3.45.1) and 3.54.1, each
   library set inside the container.
 - **Times** under the gate, on Guix's library:
@@ -231,7 +258,7 @@ newest first.
 
   | Agent | Model | Tokens | Tool calls | Time |
   |---|---|---|---|---|
-  | The builder, two rounds | Opus | 614k and 729k | 175 and 57 | 69 and 49 min |
+  | The builder, three rounds | Opus | 614k, 729k and 777k | 175, 57 and 29 | 69, 49 and 24 min |
   | The review | Opus | 330k | 98 | 25 min |
 
 - **Learned:**

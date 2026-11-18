@@ -267,6 +267,11 @@ told in chez-curl's `.plans/traps.md`.
   `research/m4-slice-4/scripts/`; `e-twice` reads
   `(second (raised (assertion-violation load-extension! (re-entered))) 0)` at fuels 15 to 17.
   (M4 slice 4, chez-sqlite3)
+- **An engine row's fuels grow with the scratch path's length.** `load-extension!` copies and
+  encodes its path inside the call, so a longer path costs more ticks. Under the container's
+  `TMPDIR=/tmp` the load completed unexpired at fuel 60; with `TMPDIR` 6, 14, 25 and 50 characters
+  long, at 70, 80, 93 and 124. A recorded fuel names its `TMPDIR`, and a row never asserts one.
+  (M4 slice 4, from the M4 session's check, chez-sqlite3)
 
 ## SQLite
 

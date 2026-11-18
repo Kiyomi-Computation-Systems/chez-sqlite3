@@ -71,7 +71,8 @@
         (srfi :64)
         (only (chezscheme) foreign-ref foreign-procedure foreign-callable foreign-callable-entry-point
               lock-object unlock-object fork-thread make-mutex with-mutex sleep make-time
-              get-thread-id disable-interrupts enable-interrupts mkdir current-directory directory-list)
+              get-thread-id disable-interrupts enable-interrupts mkdir current-directory directory-list
+              machine-type)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (extension-build)
@@ -378,6 +379,8 @@
 (define ext-named (extension-path built 'named))
 (define ext-derived (extension-path built 'derived))
 (define ext-failing (extension-path built 'failing))
+(define ext-exec-failing (extension-path built 'exec-failing))
+(define ext-leaves (extension-path built 'leaves))
 
 ;; ext-bare : String
 ;; The default variant's path without its suffix, which SQLite retries
@@ -432,8 +435,8 @@
       (test-equal "unavailable, the build not made and the opt-in's open refused in its place: tests/extension.c compiles"
         (list '(unavailable) '(raised (extensions-unavailable open-database library-condition)) 'made)
         (list built (attempt-open opted) files-made)))
-    (test-equal "tests/extension.c compiles, each of its four variants, with $CC -Wall -Werror against this lane's sqlite3ext.h, each a file at its path, the library having sqlite3_load_extension; the failures' files are made"
-      (list '(default named derived failing) '(yes yes yes yes) 'made)
+    (test-equal "tests/extension.c compiles, each of its six variants, with $CC -Wall -Werror against this lane's sqlite3ext.h, each a file at its path, the library having sqlite3_load_extension; the failures' files are made"
+      (list '(default named derived failing exec-failing leaves) '(yes yes yes yes yes yes) 'made)
       (list (if (list? built) (map (lambda (b) (if (pair? b) (car b) b)) built) built)
             (if (list? built) (map (lambda (b) (yes-no (and (pair? b) (string? (cdr b)) (file-exists? (cdr b))))) built) built)
             files-made)))
@@ -450,8 +453,8 @@
                           'not-asked
                           (built-where-loadable '(unreached load-extension-available?) scratch))))
          (list none left
-               (if (and (list? some) (= (length some) 4) (for-all pair? some)) 'builds some)
-               (if (and (list? unread) (= (length unread) 4) (for-all pair? unread)) 'builds unread)))))))
+               (if (and (list? some) (= (length some) 6) (for-all pair? some)) 'builds some)
+               (if (and (list? unread) (= (length unread) 6) (for-all pair? unread)) 'builds unread)))))))
 
 (test-equal "native records sqlite3_load_extension as a boolean; where it is #f, the load rows say so"
   'boolean
@@ -658,13 +661,20 @@
               (refused '(extension-loading-not-enabled)) '(absent error))
         (list (refused '(extension-loading-not-enabled)) '(absent error)))
   (let ((tried (lambda (db)
-                 (list (loaded db ext) (loaded db ext-named "chez_named_init") (loaded db ext-derived)
-                       (half db)))))
-    (list (with-db plain tried)
-          (with-db (lambda () (open-database ":memory:" '((enable-load-extension . #f)))) tried)
-          (attempt (lambda ()
-                     (call-with-database ":memory:" '((enable-load-extension . #f) (defensive . #t))
-                       (lambda (db) (list (loaded db ext) (half db)))))))))
+                 (let* ((a (loaded db ext))
+                        (b (loaded db ext-named "chez_named_init"))
+                        (c (loaded db ext-derived))
+                        (h (half db)))
+                   (list a b c h)))))
+    (let* ((none (with-db plain tried))
+           (false (with-db (lambda () (open-database ":memory:" '((enable-load-extension . #f)))) tried))
+           (cwd (attempt (lambda ()
+                           (call-with-database ":memory:" '((enable-load-extension . #f) (defensive . #t))
+                             (lambda (db)
+                               (let* ((r (loaded db ext))
+                                      (h (half db)))
+                                 (list r h))))))))
+      (list none false cwd))))
 
 (test-equal "the opt-in's refusal names the fix: its message holds (enable-load-extension . #t), written out here"
   'names-the-fix
@@ -845,23 +855,34 @@
               (if (equal? (native-counts) zero-counts) 'closed (native-counts))
               again)))))
 
+;; mac? : Boolean
+;; Whether Chez runs on macOS, its machine type ending in osx.
+(define mac?
+  (let* ((name (symbol->string (machine-type))) (n (string-length name)))
+    (and (>= n 3) (string=? (substring name (- n 3) n) "osx"))))
+
+;; dlsym-stable? : Boolean
+;; Whether dlsym's failure reads the same at a second load: everywhere but
+;; a Mac, where it names the handle dlopen gave, not the file
+;; (research/m4-mac/, run 1), which a second load need not share.
+(define dlsym-stable? (not mac?))
+
 ;; failure-cases : (Listof (List String String (Listof String) Boolean))
 ;; Each failure: what it is, the path, the entry point given, if any, and
 ;; whether its message names only what the load was given, so that a
-;; second load's reads the same. An entry point the file lacks is dlsym's
-;; failure, whose message on a Mac names the handle dlopen gave, not the
-;; file (research/m4-mac/, run 1), which a second load need not share.
+;; second load's reads the same: every case's, but an entry point the file
+;; lacks, dlsym's failure, on a Mac.
 (define failure-cases
   (list (list "a path no file stands at" missing '() #t)
         (list "an empty file" empty '() #t)
         (list "a directory" a-directory '() #t)
         (list "a file that is no shared object" not-a-library '() #t)
-        (list "the named variant with none named" ext-named '() #f)
-        (list "the default variant with an entry point it lacks" ext '("chez_nothing_init") #f)
-        (list "the default variant with the entry point \"\"" ext '("") #f)
+        (list "the named variant with none named" ext-named '() dlsym-stable?)
+        (list "the default variant with an entry point it lacks" ext '("chez_nothing_init") dlsym-stable?)
+        (list "the default variant with the entry point \"\"" ext '("") dlsym-stable?)
         (list "the failing variant, whose init sets its message and answers SQLITE_ERROR" ext-failing '() #t)))
 
-(load-row "each failure raises &sqlite-error from load-extension!, code error and extended code error, the call's own answer, with no SQL and no offset: a path no file stands at, an empty file, a directory, a file that is no shared object, an entry point the file lacks, the derived name absent, \"\", and an init that fails; its message is the slot's text exactly as a raw sqlite3_load_extension through native, answering 1, reads it on another connection, or, where dlsym's message can name a handle, a message as the raw call gives one; chez_half is absent after each"
+(load-row "each failure raises &sqlite-error from load-extension!, code error and extended code error, the call's own answer, with no SQL and no offset: a path no file stands at, an empty file, a directory, a file that is no shared object, an entry point the file lacks, the derived name absent, \"\", and an init that fails; its message is the slot's text exactly as a raw sqlite3_load_extension through native, answering 1, reads it on another connection, dlsym's failures among them, but on a Mac, where dlsym's message names a handle, a message as the raw call gives one; chez_half is absent after each"
   (map (lambda (c) (list 1 (list 'raised (list 'sqlite-error 'load-extension! 'error 'error #f #f))
                          (if (cadddr c) 'the-raw-calls-message 'a-message-as-the-raw-calls)
                          '(absent error)))
@@ -1041,6 +1062,62 @@
         (let* ((r (attempt (lambda () (query db "select load_extension(?)" ext))))
                (h (half db)))
           (list r h))))))
+
+;; after-a-failed-statement : Database -> Any
+;; A failed statement on DB, select from, which fails at its prepare, so
+;; DB's own extended code and message are that failure's; then DB's own,
+;; read through native.
+(define (after-a-failed-statement db)
+  (let ((failed (guard (e ((sqlite-error? e) (sqlite-error-code e))) (execute! db "select from") 'not-failed)))
+    (list failed (let ((own (connection-error db))) (if (list? own) (car own) own)))))
+
+(load-row "an init that makes a call that succeeds, then fails: the exec-failing variant's init runs select 1 through sqlite3_exec, which leaves the connection's code at 0, then answers SQLITE_ERROR with its own message; after a failed statement on the connection, whose own code read error, 1, the verb raises error, and its message is the slot's alone, exactly as a raw sqlite3_load_extension through native, answering 1, reads it on another connection in the same state: the connection's code, changed across the call to 0, names no error, so its message is not appended; the connection's code after reads 0"
+  (list '(error 1) '(error 1) 1 '(raised (sqlite-error load-extension! error error #f #f))
+        'the-raw-calls-message 0)
+  (lambda ()
+    (let* ((raw (with-db opted
+                  (lambda (db)
+                    (let* ((state (after-a-failed-statement db))
+                           (r (raw-load db ext-exec-failing #f)))
+                      (list state r)))))
+           (verb (with-db opted
+                   (lambda (db)
+                     (let* ((state (after-a-failed-statement db))
+                            (m (guard (e ((sqlite-error? e)
+                                          (list (list 'raised (what-raised e)) (sqlite-error-message e)))
+                                         (#t (list (list 'raised (what-raised e)) 'no-message)))
+                                 (load-extension! db ext-exec-failing)
+                                 (list 'loaded 'no-message)))
+                            (after (connection-error db)))
+                       (list state m (if (list? after) (car after) after)))))))
+      (if (and (list? raw) (= (length raw) 2) (list? (cadr raw)) (list? verb) (= (length verb) 3))
+          (let ((raw-code (car (cadr raw))) (raw-text (cadr (cadr raw))) (m (cadr verb)))
+            (list (car raw) (car verb) raw-code (car m)
+                  (if (and (string? raw-text) (equal? (cadr m) raw-text)) 'the-raw-calls-message
+                      (list 'messages (cadr m) raw-text))
+                  (caddr verb)))
+          (list raw verb)))))
+
+;; int sqlite3_finalize(sqlite3_stmt*), native's, and
+;; sqlite3_stmt *sqlite3_next_stmt(sqlite3*, sqlite3_stmt*)
+(define sqlite3-finalize (reach '(chez-sqlite3 private native) 'sqlite3-finalize))
+(define sqlite3-next-stmt (reach '(chez-sqlite3 private native) 'sqlite3-next-stmt))
+
+(load-row "a statement an extension leaves open makes the close refuse: the leaves variant's init registers its functions, then prepares select 1 and leaves it open; the load answers and chez_half answers; close-database! raises untracked-statements 1, the connection still open and counted; the statement, found through native's sqlite3_next_stmt, finalizes with 0; then a second close closes, every count back to 0"
+  (list 'loaded 'present '(raised (assertion-violation close-database! (untracked-statements 1)))
+        '((block . 0) (connection . 1) (statement . 0)) '(finalized 0) 'closed zero-counts)
+  (lambda ()
+    (let* ((db (opted))
+           (r (loaded db ext-leaves))
+           (h (half db))
+           (refused (attempt (lambda () (close-database! db) 'closed)))
+           (counts (native-counts))
+           (finished (handle-call db
+                       (lambda (handle)
+                         (let ((left (sqlite3-next-stmt handle 0)))
+                           (if (eqv? left 0) 'none (list 'finalized (sqlite3-finalize left)))))))
+           (again (attempt (lambda () (close-database! db) 'closed))))
+      (list r h refused counts finished again (native-counts)))))
 
 ;; --- the close ---------------------------------------------------------------------------------
 

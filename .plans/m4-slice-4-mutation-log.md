@@ -8,8 +8,13 @@ slices 1, 2, 3 and 5 and the close fix merged there. `make test` ran 79 suites t
 slice, 79 passing on Guix's 3.53.1, and runs 81 with it. The lead committed the first round as
 `ebc9b14`. The slice's read-only Opus review then found two majors, which overturned two survivor
 arguments and a trap, and five minors, all fixed in a second round
-([below](#round-2-the-reviews-findings)). Every figure below is from the second round's tree,
-the final one, unless a line names another.
+([below](#round-2-the-reviews-findings)). The lead committed that as `e40827a`, and the
+records as `a484a74`, PR #45; the M4 session's check against the plan found two minors and two
+nits more, fixed in a third round ([below](#round-3-the-m4-sessions-check)). Every figure below
+is from the third round's tree, the final one, unless a line names another. Every run's scratch
+directories were made under `TMPDIR=/tmp`, the container's, so the extension's path is
+`/tmp/chez-sqlite3-testing.XXXXXX/ext.so`; the engine rows' fuels grow with that path's length
+(round 3).
 
 ## What the slice adds
 
@@ -51,7 +56,9 @@ the final one, unless a line names another.
     message is the slot's text, or `sqlite3_errstr`'s, then the connection's when its code
     changed: joined as they stand where the first ends in a space, as SQLite's "error during
     initialization: " does, else with ": " between them. rv1's part B reads, whole, "error during
-    initialization: unable to delete/modify user-function due to active statements".
+    initialization: unable to delete/modify user-function due to active statements". The
+    connection's message is appended only when its code after the call names an error: an init
+    whose last call succeeded leaves 0 there, "not an error" (round 3).
   - **A code that names no error,** its low byte 0, 100 or 101 but not 0, or no exact integer,
     which only a stand-in answers, is an assertion violation from the verb, `(not-an-error
     CODE)`, as the open's sets are (ADR-0021, amended in M4 slice 1). Decision 7 says nothing of
@@ -66,8 +73,10 @@ the final one, unless a line names another.
   message, what a load does to the connection, the close's refusal over an extension's leftover
   work (ADR-0021's close-fix amendment), and the library without extension loading.
 - **The extension,** `tests/extension.c`, the research's `ext.c`'s four variants: the default
-  init, `chez_named_init`, `sqlite3_chezext_init` in `libchezext`, and the failing init; its
-  functions `chez_half` and `chez_inits`. `tests/extension-build.sls`, `(extension-build)`,
+  init, `chez_named_init`, `sqlite3_chezext_init` in `libchezext`, and the failing init; and two
+  of round 3's, an init that runs `select 1` through `sqlite3_exec` and then fails with its own
+  message, and one that leaves a prepared statement open on the connection; its functions
+  `chez_half` and `chez_inits`. `tests/extension-build.sls`, `(extension-build)`,
   compiles it with `$CC -Wall -Werror -shared -fPIC`, `-dynamiclib` and `.dylib` on a Mac by
   Chez's machine type, against the lane's `sqlite3ext.h`. Where native records
   `sqlite3_load_extension`, a missing compiler or header fails the build's row and every load
@@ -75,12 +84,13 @@ the final one, unless a line names another.
   build unavailable, compiles nothing, and the suites assert the opt-in's refusal in its place
   (the maintainer's "Build named unavailable there", round 2).
 - **The suites:**
-  - `tests/test-load-extension.sps`, new, 42 rows: the build and its decision; every check, every kind of value,
+  - `tests/test-load-extension.sps`, new, 44 rows: the build and its decision; every check, every kind of value,
     U+0000 at every position, every first character but `/` from U+0001 to U+007F and four
     beyond, the order; the opt-in, its message, and the opt-in with the C switch on; the
     default, named and derived entry points and the suffix's retry; the init counted, the close
     unloading; each failure's code and message; the code after a constraint's failure; the held
-    row, its message whole; the ": " join; SQL's `load_extension()`; the stand-in's rows; the
+    row, its message whole; the ": " join; an init whose last call succeeded; the close refused
+    over an extension's leftover statement; SQL's `load_extension()`; the stand-in's rows; the
     wrong thread and a closed connection; the memory; the depth;
   - `tests/test-load-extension-engines.sps`, new, 14 rows: clean, every fuel; resumed twice,
     interleaved and a timer's continuation re-entered, each in two passes, with no collect
@@ -110,8 +120,10 @@ touches the binding at its load, fails nothing else.
 
 Every plant ran in a copy of the worktree of its own, made by
 `tar --exclude=./build --exclude=./.git`, each edit checked to match its file's text exactly once
-before it was written, under `build/mut/r1/NAME/` for the first round and `build/mut/final/NAME/`
-for the figures below, on the final tree. Each copy ran `make deps` and its suites through
+before it was written, under `build/mut/final/NAME/` for the figures below, on the final tree.
+The first round's copies, `build/mut/r1/NAME/`, aren't kept: they are rebuilt from `ebc9b14`, whose
+`mutants.py` is that round's, by checking it out and running the commands below `--into
+build/mut/r1`. Each copy ran `make deps` and its suites through
 `$CHEZ --libdirs src:tests:build/scheme-libs --program`, each under `timeout 600`, inside one
 `scripts/guix-env` run from the worktree, six copies at a time by `xargs -P 6`, on Guix's 3.53.1;
 `scripts/guix-env` starts at the worktree's root, so each `run.sh` changes into its copy first.
@@ -133,6 +145,10 @@ scripts/guix-env sh -c 'ls build/mut/final/*/run.sh | xargs -P 6 -n 1 sh'
 python3 -I -B $D/mut.py --into build/mut/final report all
 ```
 
+The red copies are [red.sh](research/m4-slice-4/scripts/red.sh)'s: `sh $D/red.sh prepare`, on the
+host, which has git, makes `build/mut/red/` and `build/mut/base-own/`; `scripts/guix-env sh $D/red.sh
+run` runs the seven suites in each and prints their counts.
+
 ## The red runs
 
 The rows were written against the plan's §4.4 and §5 item 4, then run against the base,
@@ -144,7 +160,7 @@ whole (`build/mut/base-own/`).
 
 | Suite | The base's own | Red, the base's `src/` and `docs/` | Green |
 |---|---|---|---|
-| `test-load-extension` | new | 6 passed, 36 failed | 42 passed |
+| `test-load-extension` | new | 6 passed, 38 failed | 44 passed |
 | `test-load-extension-engines` | new | 2 passed, 12 failed | 14 passed |
 | `test-public` | 22 passed | 19 passed, 4 failed | 23 passed |
 | `test-reference` | 21 passed | 21 passed, 1 failed | 22 passed |
@@ -152,8 +168,9 @@ whole (`build/mut/base-own/`).
 | `test-library-loading-real` | 51 passed | 51 passed, 2 failed | 53 passed |
 | `test-docs` | 105 passed | 105 passed, the base's page | 107 passed |
 
-`test-docs` and `test-reference` ran red with the base's page too: with the first round's page
-and the base's `src/` (`build/mut/base/`), `test-docs` failed 1 of 107, the new block, its
+`test-docs` and `test-reference` ran red with the slice's page too, in the first round, with
+the base's `src/`, in a copy that isn't kept, `build/mut/base/`, `build/mut/red/` with the
+slice's `docs/` in place of the base's: `test-docs` failed 1 of 107, the new block, its
 `load-extension!` unbound, and `test-reference` 3 of 22, the entry with no export and the
 signature row. The rows that pass red, each a precondition or watched failing against a plant
 instead:
@@ -191,17 +208,17 @@ program of its own: Guix's 3.53.1, the default; the floor's 3.45.1 (`build/m3-fl
 
 Under `make test-memory`, on Guix's 3.53.1, each suite the slice touched passed, 0 errors and
 nothing definitely lost, none `SLOW`, each time from the gate's `time:` line, the first round's
-and the final tree's:
+and the final tree's; the four suites round 3 didn't touch ran on round 2's tree:
 
 | Suite | Shard | Rows | Round 1 | Final |
 |---|---|---|---|---|
-| `test-load-extension`, new | 2 | 42 | 13 s | 13 s |
+| `test-load-extension`, new | 2 | 44 | 13 s | 14 s |
 | `test-load-extension-engines`, new | 2 | 14 | 16 s | 31 s |
 | `test-public` | 2 | 23 | 10 s | 10 s |
 | `test-reference` | 2 | 22 | 10 s | 10 s |
 | `test-never-loads` | 1 | 5 | 6 s | 6 s |
 | `test-docs` | 1 | 107 | 34 s | 34 s |
-| `test-library-loading-real` | 1 | 53 | 192 s | 191 s, from slice 3's 175 to 177 s, two more children |
+| `test-library-loading-real` | 1 | 53 | 192 s | 193 s, from slice 3's 175 to 177 s, two more children |
 
 **The shard.** Both new suites are in `MEMORY_SUITES_2`. The memory jobs of `main`'s latest three
 CI runs, each shard's `time:` lines summed from `gh run view RUN --log --job JOB` on the host:
@@ -223,7 +240,7 @@ suites add about 44 s here.
 |---|---|---|
 | `e-fuel`, the load resumed at its fuel | completes unexpired at fuel 60 | |
 | `e-twice`, resumed twice | fuels 1 to 8 a whole new call; 51 refused, taken before the section, from fuel 9; none taken past it | completes at 66; 8 whole new calls; 54 refused from fuel 9; 3 taken past the section, answering again |
-| `e-interleave` | 1759 trials; refusals at 51 fuels; 444 whole new calls, all at fuels up to 8, below the sweep's first refusal at 9; no remainder past the section | 2134 trials; refusals at 54 fuels; 492 whole new calls, up to fuel 8, below the first refusal at 9; both remainders past the section in 3, R before it and R1 past it in 186 |
+| `e-interleave` | 1759 trials; refusals at 51 fuels; 444 whole new calls, all at fuels up to 8, below the sweep's first refusal at 9; no remainder past the section | 2132 trials; refusals at 54 fuels; 492 whole new calls, up to fuel 8, below the first refusal at 9; both remainders past the section in 3, R before it and R1 past it in 184 |
 | `e-reentry`, a timer's continuation called after the call | ends before tick 53; 7 whole new calls, 45 refused from tick 8 | ends before tick 59; 7 new, 48 refused from tick 8, 3 taken past the section |
 | `e-caller-path`, the path's `/` made `x` between expiry and resume | completes at 62; refused path-not-absolute at 16 fuels, loaded at 45 | |
 | `e-caller-entry`, the entry point's last character made U+0000 | completes at 89; refused entry-point-holds-nul at 70 fuels, loaded at 18 | |
@@ -243,9 +260,12 @@ U+007F and four beyond, and paths let through; `x-relative-opted` a relative pat
 loads, refused; `x-entry-kinds`; `x-entry-nul`; `x-order`; `x-opt-in` no setting, `#f`, through
 both verbs; `x-opt-in-message`; `x-switch-on` the opt-in with the C switch on; `x-default`,
 `x-named`, `x-derived`, `x-bare` the suffix's retry; `x-inits` counted across loads and
-connections; `x-failures` each failure's code and message, the raw call's code asserted;
+connections; `x-failures` each failure's code and message, the raw call's code asserted, and
+dlsym's three compared exactly but on a Mac;
 `x-constraint` the code after a constraint's failure; `x-held` the load beside a held row;
-`x-held-whole` its message whole; `x-colon` the ": " join; `x-sql`; `x-close` the close
+`x-held-whole` its message whole; `x-colon` the ": " join; `x-exec` an init whose last call
+succeeded, after a failed statement; `x-close-refused` the close over an extension's leftover
+statement; `x-sql`; `x-close` the close
 unloading; `x-stand-in` the stand-in's calls; `x-empty-slot`; `x-not-an-error`;
 `x-success-freed`, the real load's code and message asserted; `x-copy-raises`; `x-thread` another
 thread, no opt-in, every argument; `x-thread-valid` another thread, everything valid; `x-closed`;
@@ -291,42 +311,46 @@ the new block.
 | S04 | the claim made after the checks, not by the first expression | engines 6: `e-twice`, `e-interleave`, `e-reentry` and their low passes, each refused at too few fuels: `e-interleave` at 1 of 60, its whole new calls all below its one refusal at 59 |
 | S05 | the claim in a section of its own, the call outside it | engines 6: the same |
 | S10 | the section's critical section dropped, the claim compared outside one | engines 6: the same |
-| S06 | the claim at position 1, never made | load-extension 20; engines 11 |
+| S06 | the claim at position 1, never made | load-extension 22; engines 11 |
 | S07 | the claim not the call's last | **survived**, below |
 | S08 | a refused run answers nothing | engines 7: `e-twice`, `e-interleave`, `e-reentry`, their low passes, `e-depth` |
 | S09 | a refused run raises an assertion violation | engines 7: the same |
 | K01 | NULL passed for every entry point | load-extension 4: `x-named`, `x-failures`, `x-stand-in`, `x-freed`; engines 1: `e-caller-entry` |
-| K02 | the path's C string passed as the entry point when none is given | load-extension 12; engines 10 |
-| K03 | a failure's code read from the connection, §4.7's plant | load-extension 8: `x-named`, `x-failures`, `x-constraint`, `x-held`, `x-empty-slot`, `x-not-an-error`, `x-freed`, `x-depth-failures` |
+| K02 | the path's C string passed as the entry point when none is given | load-extension 14; engines 10 |
+| K03 | a failure's code read from the connection, §4.7's plant | load-extension 9: `x-named`, `x-failures`, `x-constraint`, `x-held`, `x-exec`, `x-empty-slot`, `x-not-an-error`, `x-freed`, `x-depth-failures` |
 | K04 | the extended code "before" read after the call | load-extension 3: `x-held`, `x-held-whole`, `x-colon` |
 | K05 | the connection's message dropped, §4.7's plant | load-extension 3: `x-held`, `x-held-whole`, `x-colon` |
-| K06 | the connection's message always appended | load-extension 3: `x-failures`, `x-constraint`, `x-empty-slot` |
-| K07 | the message from `sqlite3_errmsg`, not the slot | load-extension 5: `x-failures`, `x-constraint`, `x-held-whole`, `x-colon`, `x-empty-slot` |
+| K06 | the connection's message always appended | load-extension 4: `x-failures`, `x-constraint`, `x-exec`, `x-empty-slot` |
+| K07 | the message from `sqlite3_errmsg`, not the slot | load-extension 6: `x-failures`, `x-constraint`, `x-held-whole`, `x-colon`, `x-exec`, `x-empty-slot` |
 | K08 | an empty slot's message "", no `sqlite3_errstr` | load-extension 1: `x-empty-slot` |
 | K09 | the two messages always joined as they stand | load-extension 1: `x-colon` |
 | K10 | the two always joined with ": " | load-extension 1: `x-held-whole` |
 | K11 | a code that names no error left to `raise-sqlite-error` | load-extension 2: `x-not-an-error`, `x-depth-failures` |
 | K12 | a code that names no error taken as success | load-extension 2: the same |
+| K13 | the connection's message appended for any change of its code, round 2's condition | load-extension 1: `x-exec`, ": not an error" appended; round 3 |
+| K14 | the slot's text used only where no entry point was given, the check's plant | load-extension 1: `x-failures`, its three dlsym cases each `sqlite3_errstr`'s "SQL logic error"; round 3 |
 | F01 | the message never freed, §4.7's plant; gate | load-extension 3: `x-success-freed`, `x-copy-raises`, `x-freed`, and the exit's memory check, 7232 bytes; the gate's Valgrind, 7,080 bytes in 24 blocks definitely lost |
 | F02 | freed only on a failure, a message on the success path left; gate | load-extension 1: `x-success-freed`, and the memory check, 344 bytes; the gate, 352 bytes in 1 block |
 | F03 | not freed when the copy raises, §4.7's plant; gate | load-extension 1: `x-copy-raises`, and the memory check, 688 bytes; the gate, 704 bytes in 2 blocks |
 | F04 | the copy unguarded, its raise skipping the free | load-extension 1: `x-copy-raises`, and the memory check |
-| F05 | the message freed before the copy; gate | load-extension 6: `x-failures`, `x-constraint`, `x-held-whole`, `x-colon`, `x-copy-raises`, `x-freed`, their held counts read after the free; the gate, 3789 errors from 1 context |
+| F05 | the message freed before the copy; gate | load-extension 7: `x-failures`, `x-constraint`, `x-held-whole`, `x-colon`, `x-exec`, `x-copy-raises`, `x-freed`, their held counts read after the free; the gate, 3789 errors from 1 context |
 | R02 | a failure raised inside the section | **survived**, below |
 | N01 | `sqlite3_load_extension` bound plain, §4.7's plant | native 1 of 117: the load's FIFO row |
 | D01 | the verb's library touching the binding at its load | loading-real 1: `l-load-lacking` |
-| P01 | `load-extension!` not exported | load-extension 29; engines 12; public 4 of 23; reference 3; docs 1; loading-real 2 |
+| P01 | `load-extension!` not exported | load-extension 31; engines 12; public 4 of 23; reference 3; docs 1; loading-real 2 |
 | P02 | the signature comment changed | reference 2 of 22: the whole-page row, `r-line` |
 | Q01 | `sqlite3_enable_load_extension` called at every open that opts in | load-extension 1: `x-sql` |
-| X01 | `CC=false`: no compiler | load-extension 14: `x-build`, `x-decision`'s build, every load row after them, `x-end`; engines 11 |
-| X02 | `C_INCLUDE_PATH` and `CPATH` unset: no `sqlite3ext.h` | load-extension 14 and engines 11, the same |
-| X03 | the suites told the library has no `sqlite3_load_extension` | the unavailable branch reached: load-extension prints 25 UNAVAILABLE lines, the build among them, engines 12; the refusals they assert in place fail, load-extension 24 of 42 and engines 12 of 14, since this library lets the open opt in |
-| X04 | the build skipped everywhere, `built-where-loadable` always unavailable | load-extension 14: `x-build`, `x-decision` and the load rows; engines 11 |
+| Z01 | the close names no untracked statement, its refusal raised as `sqlite3_close`'s own | load-extension 1: `x-close-refused`; round 3 |
+| X01 | `CC=false`: no compiler | load-extension 16: `x-build`, `x-decision`'s build, every load row after them, `x-end`; engines 11 |
+| X02 | `C_INCLUDE_PATH` and `CPATH` unset: no `sqlite3ext.h` | load-extension 16 and engines 11, the same |
+| X03 | the suites told the library has no `sqlite3_load_extension` | the unavailable branch reached: load-extension prints 27 UNAVAILABLE lines, the build among them, engines 12; the refusals they assert in place fail, load-extension 26 of 44 and engines 12 of 14, since this library lets the open opt in |
+| X04 | the build skipped everywhere, `built-where-loadable` always unavailable | load-extension 16: `x-build`, `x-decision` and the load rows; engines 11 |
 | X05 | the build made everywhere, the decision ignored | load-extension 1: `x-decision`, its directory written |
 
-**62 plants: 60 caught, 2 survived, each argued below.** All 62 ran on the final tree,
-`build/mut/final/`. The first round, `build/mut/r1/`, ran 58 on the first round's suites, with C08
-and S03 surviving too, and the arguments the review overturned (round 2). The M4 plan's §4.7
+**65 plants: 63 caught, 2 survived, each argued below.** All 65 ran on the final tree,
+`build/mut/final/`. The first round, `build/mut/r1/`, not kept (above), ran 58 on the first
+round's suites, with C08 and S03 surviving too, and the arguments the review overturned (round
+2); the second round's 62 caught 60, the survivors below; round 3 added K13, K14 and Z01. The M4 plan's §4.7
 names C13 (the verb's refusal dropped), C01 with O01 (the owner checks), K03 (the code), K05 and
 F01 to F03 (the messages, unfreed), N01 (the load bound plain) and S01 (the claim). The rest are
 the builder's, one at least at every site of `(chez-sqlite3 private extension)` and of
@@ -360,7 +384,8 @@ test first, each new row watched failing against a plant in a copy under `build/
   trip to 256 bytes, below what one call allocates, until the trial ends. Each trial is judged by
   its own inits, each bound is a refusal the sweep saw itself, and each low pass fails by name
   unless it reaches past the section: `e-interleave-low` asserts a trial with R before the section
-  and R1 past it, 186 of 2134, and `e-twice-low` and `e-reentry-low` a remainder and a
+  and R1 past it, 186 of 2134 in round 2, 184 of 2132 on the final tree, whose two more variants'
+  builds move what a trial allocates, and `e-twice-low` and `e-reentry-low` a remainder and a
   continuation taken past it, 3 each. S03 fails `e-interleave-low`: 655 trials ran two inits, 163
   of them past the sweep's first refusal, at fuel 9. The trap is corrected below.
 - **Major 2: C08 was not equivalent, and the entry point's copy survived too.** The caller's own
@@ -401,6 +426,46 @@ test first, each new row watched failing against a plant in a copy under `build/
 - **Minor 5: the suites mapped calls of the verb.** Each call of the verb, `load-extension/with`
   or a thread is now made in order by `in-order`, a named let, or the suites' own loops.
 
+## Round 3: the M4 session's check
+
+The M4 session's read-only check of PR #45 against the plan found no blocker and no major, two
+minors and two nits, and a note. Each is fixed here, test first, each new row watched failing
+against a plant in a copy under `build/`.
+
+- **Minor 1: an init whose last call succeeded got ": not an error" appended.** The verb
+  appended `sqlite3_errmsg` whenever the extended code differed across the call, a change to 0
+  among them. An init that runs `select 1` through `sqlite3_exec`, then fails with "probe
+  refused", read "error during initialization: probe refused: not an error" after a failed
+  statement on the connection, and the slot's text alone on a fresh one. Now the connection's
+  message is appended only when the code after the call names an error, by `names-error?`, and
+  differs from the code before. The init is `tests/extension.c`'s EXT_EXEC_FAILING, and `x-exec`
+  loads it after a failed `select from` on the connection, its message held to a raw call's slot
+  text on another connection in the same state, two readings of the library. On round 2's code
+  `x-exec` failed, reading the message above; K13, that condition planted back, fails it.
+- **Minor 2: no row held the slot's text where dlsym fails.** `x-failures` accepted any string for
+  its three dlsym cases, an entry point the file lacks, so the check's plant, the slot's text used
+  only where no entry point was given (K14), passed both suites, every such load reading
+  `sqlite3_errstr`'s "SQL logic error". Off a Mac, by Chez's machine type, those three are now
+  compared exactly with the raw call's slot text, as the rest are: dlsym's text there names the
+  file and the symbol, the same at each load. On a Mac it names a handle address (research/m4-mac/,
+  run 1), and stays compared by kind. K14 fails `x-failures`.
+- **Minor 3: the log cited trees only `build/` held.** `build/mut/red/` and `build/mut/base-own/`
+  are now [red.sh](research/m4-slice-4/scripts/red.sh)'s; `build/mut/base/` and the first round's
+  `build/mut/r1/` are said not kept, with how to rebuild the second.
+- **Nit: `x-opt-in` ran its loads and chez_half's read as one call's arguments,** in no fixed
+  order. They run in order by `let*`.
+- **Nit: the docs' close over an extension's leftover work had no row with an extension.**
+  `tests/extension.c`'s EXT_LEAVES_STATEMENT registers the two functions, then prepares `select 1`
+  and leaves it open. `x-close-refused` loads it; `close-database!` raises `untracked-statements
+  1`, the connection still open and counted; the statement, found by native's
+  `sqlite3_next_stmt`, finalizes with 0; and a second close closes, every count back to 0. Z01, the
+  close's count dropped so its refusal is `sqlite3_close`'s own `busy`, fails it.
+- **Note: the engine rows' fuels depend on the scratch path's length.** The check measured the
+  load completing unexpired at fuel 60, 70, 80, 93 and 124 under `TMPDIR`s of `/tmp` and of 6, 14,
+  25 and 50 characters, and S03's low pass reading 652 two-init trials, 160 past the bound, where
+  this log's runs read 655 and 163. Every run here used the container's `TMPDIR=/tmp`; the
+  figures above are those.
+
 ## For the records
 
 - **ADR-0021, slice 4's amendment (proposed):**
@@ -422,6 +487,10 @@ test first, each new row watched failing against a plant in a copy under `build/
   - **the message's join:** the slot's text, or `sqlite3_errstr`'s, then the connection's,
     joined as they stand where the first is empty or ends in a space, else with ": ". Decision 7
     says "followed by"; rv1's part B's text is the first case;
+  - **the connection's message only for a code that names an error** (round 3): decision 7's
+    "when the connection's extended code changed across the call" becomes "changed to a code that
+    names an error"; an init whose last call succeeded leaves 0 and "not an error", which is no
+    reason;
   - a message in the slot is freed on the success path too: the real binding leaves NULL there,
     a stand-in can leave one (`x-success-freed`);
   - the engine rows' figures, the table above, both passes.
@@ -442,11 +511,14 @@ test first, each new row watched failing against a plant in a copy under `build/
   `c-string->string` never raises on SQLite's message; and the decoy's load rows need
   `refusal-probe.sps`' `--loads`, not `--opens`: no connection of the decoy reaches a load.
 - **ADR-0005 and the Makefile's shards:** both new suites in `MEMORY_SUITES_2`, by the sums above;
-  `test-library-loading-real` 191 s under the gate here, two more children.
-- **The global constraints' "`db_config` and extensions":** the `load-extension!` bullet could
-  add the code that names no error, and that the message is freed whatever the call answered;
+  `test-library-loading-real` 193 s under the gate here, two more children.
+- **The global constraints' "`db_config` and extensions":** the `load-extension!` bullet's
+  "followed by the connection's when its code changed across the call" needs "changed to a code
+  that names an error" (round 3); it could add the code that names no error, and that the message
+  is freed whatever the call answered;
   "Environment and tests" could name the build's exception.
-- **traps.md:** the two traps below.
+- **traps.md:** the two traps below, and that an engine row's fuels grow with the scratch path's
+  length, so a figure records its `TMPDIR` (round 3's note).
 - **The Mac step,** owed by the plan's §5 after slices 3 to 5: `test-load-extension` and its
   engines suite with Apple's library, whose load rows and build print unavailable; and with
   Homebrew's, the extension a `.dylib` built `-dynamiclib`, the suffix's retry `.dylib`,
@@ -463,7 +535,7 @@ test first, each new row watched failing against a plant in a copy under `build/
   Hold a claim inside its section, and sweep a pass with the trip below what one call allocates.
   Reproduce: `test-load-extension-engines`' `e-interleave` reads "both past the section in 0; R
   before it and R1 past it in 0", and `e-interleave-low`, the same sweep under a trip of 256
-  bytes, "in 3" and "in 186"; `mut.py --into build/mut/x prepare S03-flag-set-after-the-section`,
+  bytes, "in 3" and "in 184"; `mut.py --into build/mut/x prepare S03-flag-set-after-the-section`,
   from [the driver](research/m4-slice-4/scripts/), fails `e-interleave-low` alone.
 - **`call-with-open-handle` called outside a critical section exposes its wind to an expiry.**
   A remainder taken inside its `dynamic-wind`, before its section, and resumed a second time,
