@@ -1,0 +1,13 @@
+#!/bin/sh
+# openssl dgst -sha3-256 -r FILE, replayed from digests the host's real
+# openssl computed of the same files (build/m4s5-probe/digests), only when
+# FILE is byte for byte the file the digest was computed of.
+f=$4
+case ${f##*/} in
+  sqlite-autoconf-3540100.tar.gz) ref=$SHIM_DL/sqlite-autoconf-3540100.tar.gz ;;
+  sqlite3.c) ref=$SHIM_X/sqlite-autoconf-3540100/sqlite3.c ;;
+  *) echo "shim openssl: no digest for $f" >&2; exit 1 ;;
+esac
+cmp -s "$f" "$ref" || { echo "shim openssl: $f is not $ref" >&2; exit 1; }
+d=$(awk -v n="${f##*/}" '$2 == n { print $1 }' "$SHIM_DIGESTS")
+echo "$d *$f"

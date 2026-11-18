@@ -1,0 +1,13 @@
+#!/bin/sh
+# A curl for the container, which has no network: -o FILE URL served from
+# build/m4-dl, by the URL's last part. Logs the call.
+out=; url=
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    -o) out=$2; shift 2 ;;
+    -*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+echo "shim curl: $url -> $out" >&2
+cp "$SHIM_DL/${url##*/}" "$out"

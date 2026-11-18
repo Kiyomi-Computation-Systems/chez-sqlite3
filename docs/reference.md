@@ -1159,6 +1159,15 @@ that holds U+0000, is an assertion violation.
 ;; => #t
 ```
 
+Full-text search, FTS5, is an option too, and SQLite's own default build
+leaves it out. So check for it before you use it:
+
+```scheme
+(if (sqlite-compile-option? "ENABLE_FTS5")
+    (execute! db "create virtual table docs using fts5(title, body)")
+    (error 'setup "this SQLite has no FTS5"))
+```
+
 ### `sqlite-compile-options`
 
 ```text

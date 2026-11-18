@@ -14,6 +14,8 @@
   [amendment](#amendment-2026-11-15-m3s-bindings-m3s-plan)).
   Amended 2026-11-17 in M4's plan, and accepted by the maintainer that day: M4's bindings
   ([amendment](#amendment-2026-11-17-m4s-bindings-m4s-plan)).
+  Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): the int cell, and the load's FIFO row
+  ([amendment](#amendment-2026-11-17-the-int-cell-and-the-loads-fifo-row-m4-slice-2)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every foreign procedure
 - **Settles:** brief §3d
@@ -255,3 +257,22 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 0 
   point are counted C strings, each refused before anything is allocated when it holds U+0000,
   since `dlopen` and SQLite read them to a NUL.
 - **The allowlist needs no new type:** `uptr`, `int` and `void` are in it.
+
+## Amendment, 2026-11-17: the int cell, and the load's FIFO row (M4 slice 2)
+
+Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 ([its mutation log](../m4-slice-2-mutation-log.md)), from the slice and its review (Opus).
+
+- **`call-with-int-cell`,** native's: a counted block of an `int`'s size, written with the
+  caller's fill, passed to a procedure, read back as a signed `int` after it returns, and freed on
+  every path by `call-with-block`. The fill must fit a C `int`, by `(foreign-sizeof 'int)`, before
+  anything is allocated. It is the cell ADR-0021's decision 3 names: slice 1's review found that no
+  slice gave the open one, and only `native.sls` may touch foreign memory. Slice 3 fills it with
+  `db-config-sentinel`.
+- **The load's FIFO row, by the M1 slice 2 amendment's method:** the C call is turned on through the binding
+  first; the collector's thread is forked before the loader's, since a `fork-thread` waits while
+  another thread is in `dlopen` (`traps.md`); the collector's collection must finish while the load
+  waits, and releases it. Bound plain, the load holds the collection, and only the 30 s watchdog
+  releases it: the row fails, `released-by-the-watchdog`. Where the loader is still in the call
+  when the row gives up, the FIFO is opened for writing before any close, so the row fails by name
+  instead of waiting on the connection's mutex. The probes are in
+  [research/m4-slice-2/](../research/m4-slice-2/): `fifo-load.sps` and `fifo-thread.sps`.

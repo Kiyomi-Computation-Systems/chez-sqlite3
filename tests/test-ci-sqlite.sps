@@ -18,11 +18,12 @@
 ;;;     PREFIX/include/sqlite3.h that defines the row's three macros. The
 ;;;     base row's floor is 8.1.2, a version no SQLite has, so a version
 ;;;     written in the script fails it. Its options are the floor's 37 lines
-;;;     and the current release's 38, written here as a reviewed copy of
-;;;     what SQLite, built with build-sqlite.sh's flags, lists (the slice's
-;;;     log), with the COMPILER= entry this suite computes from $CC's own
-;;;     macros, by another route than the script's. Every other row is one
-;;;     edit of a passing row, and names what it breaks;
+;;;     and the current release's 39, ENABLE_FTS5 among them, written here as
+;;;     a reviewed copy of what SQLite, built with build-sqlite.sh's flags by
+;;;     role, lists (M1 slice 5's log; M4's research, F0), with the COMPILER=
+;;;     entry this suite computes from $CC's own macros, by another route
+;;;     than the script's. Every other row is one edit of a passing row, and
+;;;     names what it breaks;
 ;;;   - build-sqlite.sh: each row puts a shim/ directory first on PATH,
 ;;;     whose curl, openssl and tar are POSIX sh scripts that log each call,
 ;;;     and a CC that logs its own and builds nothing. PATH holds nothing
@@ -214,8 +215,10 @@
 ;;
 ;; What SQLite's release logs publish for the two builds the lanes make
 ;; (https://sqlite.org/releaselog/X_Y_Z.html), and the compile options each
-;; lists when built with build-sqlite.sh's flags, in SQLite's order, as the
-;; slice's log measured them through the FFI.
+;; lists when built with build-sqlite.sh's flags, in SQLite's order, as M1
+;; slice 5's log measured them through the FFI: the current release's with
+;; ENABLE_FTS5 after DIRECT_OVERFLOW_READ, as M4's research measured it (F0),
+;; since the current lane compiles FTS5 in (ADR-0003, amended).
 
 (define floor-source-id
   "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a")
@@ -283,6 +286,7 @@
      "DEFAULT_WAL_SYNCHRONOUS=2"
      "DEFAULT_WORKER_THREADS=0"
      "DIRECT_OVERFLOW_READ"
+     "ENABLE_FTS5"
      "MALLOC_SOFT_LIMIT=1024"
      "MAX_ATTACHED=10"
      "MAX_COLUMN=2000"
@@ -306,8 +310,8 @@
      "TEMP_STORE=1"
      "THREADSAFE=1")))
 
-(test-equal "the copies hold 37 and 38 lines, the COMPILER= entry among them when SQLite lists one"
-  (if (string? compiler-option) '(37 38) '(36 37))
+(test-equal "the copies hold 37 and 39 lines, the COMPILER= entry among them when SQLite lists one"
+  (if (string? compiler-option) '(37 39) '(36 38))
   (list (length floor-options) (length current-options)))
 
 ;; --- trees ---------------------------------------------------------------------------
@@ -718,7 +722,7 @@
   floor-spec
   (lambda (root prefix) (floor-passes prefix)))
 
-(check-row "--current: the pinned release's library passes, with its 38 lines, in a tree with no floors file"
+(check-row "--current: the pinned release's library passes, with its 39 lines, in a tree with no floors file"
   current-spec
   (lambda (root prefix) (current-passes prefix)))
 
@@ -896,14 +900,24 @@
   (lambda (root prefix)
     (library-refused prefix floor-identity current-role current-identity)))
 
-;; The floor's list differs from the current one in two places five lines
-;; apart, so diff -u shows both in one hunk.
+;; The floor's list differs from the current one in three places,
+;; ENABLE_FTS5, MAX_FUNCTION_ARG and MAX_SCHEMA, with six unchanged lines
+;; between the first two and five between the last two. No gap is more than
+;; twice diff -u's three lines of context, so diff -u shows all three in one
+;; hunk.
 (options-row "--current: the pinned release's identity with the floor's 37 options is refused"
   current-spec
   (lambda ()
     (list floor-options
-          (hunk current-options (position "MAX_FUNCTION_ARG=1000" current-options) 7
-                '((#\- . "MAX_FUNCTION_ARG=1000")
+          (hunk current-options (position "ENABLE_FTS5" current-options) 14
+                '((#\- . "ENABLE_FTS5")
+                  (#\space . "MALLOC_SOFT_LIMIT=1024")
+                  (#\space . "MAX_ATTACHED=10")
+                  (#\space . "MAX_COLUMN=2000")
+                  (#\space . "MAX_COMPOUND_SELECT=500")
+                  (#\space . "MAX_DEFAULT_PAGE_SIZE=8192")
+                  (#\space . "MAX_EXPR_DEPTH=1000")
+                  (#\- . "MAX_FUNCTION_ARG=1000")
                   (#\+ . "MAX_FUNCTION_ARG=127")
                   (#\space . "MAX_LENGTH=1000000000")
                   (#\space . "MAX_LIKE_PATTERN_LENGTH=50000")
@@ -911,6 +925,15 @@
                   (#\space . "MAX_PAGE_COUNT=0xfffffffe")
                   (#\space . "MAX_PAGE_SIZE=65536")
                   (#\- . "MAX_SCHEMA=10000000")))))
+  current-role)
+
+;; The current release's list without ENABLE_FTS5, as build-sqlite.sh built
+;; it before the current lane compiled FTS5 in (ADR-0003, amended): refused,
+;; naming the one line. M4's research saw this refusal the other way round,
+;; the FTS5 build against the old list (F0).
+(options-row "--current: the pinned release built without FTS5, its 38 options, is refused, naming ENABLE_FTS5"
+  current-spec
+  (lambda () (dropped current-options "ENABLE_FTS5"))
   current-role)
 
 (check-row "--current: current_version and version set to the floor's in the env, with the floor's library, are still refused"
@@ -1281,10 +1304,14 @@
 (define (source-digest-call number)
   (string-append "openssl dgst -sha3-256 -r WORK/" (archive-name number) "/sqlite3.c"))
 
-;; §2c of the slice's plan: one compile, SQLite's defaults with THREADSAFE
-;; written, an unresolved symbol an error.
-(define (cc-call cc-name prefix number)
-  (string-append cc-name " -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -Wl,-z,defs -o " (lib-path prefix)
+;; One compile, by role (M1 slice 5's plan, §2c; ADR-0003, amended): the
+;; floor's is SQLite's defaults with THREADSAFE written, and the current
+;; release's adds FTS5; an unresolved symbol is an error.
+(define floor-flags "-DSQLITE_THREADSAFE=1")
+(define current-flags "-DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5")
+
+(define (cc-call cc-name prefix number flags)
+  (string-append cc-name " -shared -fPIC -O2 " flags " -Wl,-z,defs -o " (lib-path prefix)
                  " WORK/" (archive-name number) "/sqlite3.c -lpthread -lm"))
 
 (define (shim-file number name) (string-append "the shim's " (archive-name number) "/" name "\n"))
@@ -1474,7 +1501,7 @@
   build-floor-spec
   (lambda (root prefix)
     (build-answer 1 "" (string-append (curl-says "2024" "8010200") (no-library prefix))
-                  (built-calls "2024" "8010200" (cc-call "cc" prefix "8010200"))
+                  (built-calls "2024" "8010200" (cc-call "cc" prefix "8010200" floor-flags))
                   1 0
                   (list 'none (shim-file "8010200" "sqlite3.h") (shim-file "8010200" "sqlite3ext.h")))))
 
@@ -1482,7 +1509,7 @@
   build-current-spec
   (lambda (root prefix)
     (build-answer 1 "" (string-append (curl-says "2026" "3540100") (no-library prefix))
-                  (built-calls "2026" "3540100" (cc-call "cc" prefix "3540100"))
+                  (built-calls "2026" "3540100" (cc-call "cc" prefix "3540100" current-flags))
                   1 0
                   (list 'none (shim-file "3540100" "sqlite3.h") (shim-file "3540100" "sqlite3ext.h")))))
 
@@ -1497,7 +1524,7 @@
   (spec-with build-floor-spec 'cc-writes #t)
   (lambda (root prefix)
     (build-answer 1 "" (string-append (curl-says "2024" "8010200") (no-header-found))
-                  (append (built-calls "2024" "8010200" (cc-call "cc" prefix "8010200"))
+                  (append (built-calls "2024" "8010200" (cc-call "cc" prefix "8010200" floor-flags))
                           (list (find-call prefix (string-append prefix "/include"))))
                   1 1
                   (list "the shim's library\n" (shim-file "8010200" "sqlite3.h")
@@ -1511,8 +1538,8 @@
     (build-answer 1 "" (string-append (curl-says "2024" "8010200") (no-header-found))
                   (append (built-calls "2024" "8010200"
                                        (string-append "cc [C_INCLUDE_PATH=" root "/elsewhere]"
-                                                      (substring (cc-call "cc" prefix "8010200") 2
-                                                                 (string-length (cc-call "cc" prefix "8010200")))))
+                                                      (substring (cc-call "cc" prefix "8010200" floor-flags) 2
+                                                                 (string-length (cc-call "cc" prefix "8010200" floor-flags)))))
                           (list (find-call prefix (string-append prefix "/include:" root "/elsewhere"))))
                   1 1
                   (list "the shim's library\n" (shim-file "8010200" "sqlite3.h")
@@ -1524,7 +1551,7 @@
              'env (lambda (root prefix) (list (string-append "CC=" root "/shim/cc-other"))))
   (lambda (root prefix)
     (build-answer 1 "" (string-append (curl-says "2024" "8010200") (no-library prefix))
-                  (built-calls "2024" "8010200" (cc-call "cc-other" prefix "8010200"))
+                  (built-calls "2024" "8010200" (cc-call "cc-other" prefix "8010200" floor-flags))
                   1 0
                   (list 'none (shim-file "8010200" "sqlite3.h") (shim-file "8010200" "sqlite3ext.h")))))
 
@@ -1541,8 +1568,9 @@
   (string-append "cc [C_INCLUDE_PATH=" include-path "] [CHEZ_SQLITE3_LIBRARY=" (lib-path prefix)
                  "] " args))
 
-;; success-row : String Build-Spec String String String Natural String String Lib Header (Listof String) -> Unit
-(define (success-row name spec year number version lib-number source-id role lib header options)
+;; success-row : String Build-Spec String String String Natural String String Lib Header (Listof String) String -> Unit
+;; FLAGS are the role's on its compile line.
+(define (success-row name spec year number version lib-number source-id role lib header options flags)
   (build-row name
     (spec-with spec 'stub lib 'header header)
     (lambda (root prefix)
@@ -1552,7 +1580,7 @@
         (cadr (passes-by "cc" prefix version lib-number source-id role options))
         "build-sqlite.sh: SQLite " version " built into " prefix "\n")
        (curl-says year number)
-       (append (built-calls year number (cc-call "cc" prefix number))
+       (append (built-calls year number (cc-call "cc" prefix number flags))
                (list (check-cc-call prefix (string-append prefix "/include") "-E -M CWORK/find.c")
                      (check-cc-call prefix (string-append prefix "/include") "-dM -E CWORK/find.c")
                      (check-cc-call prefix (string-append prefix "/include") "-E -P CWORK/compiler.c")))
@@ -1563,11 +1591,11 @@
 
 (success-row "both digests right and a library that is the floor's: built, checked, and the last line printed, exit 0"
   build-floor-spec "2024" "8010200" "8.1.2" 8001002 floor-source-id floor-role
-  floor-lib floor-header floor-options)
+  floor-lib floor-header floor-options floor-flags)
 
 (success-row "--current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, exit 0"
   build-current-spec "2026" "3540100" current-version current-number current-source-id current-role
-  current-lib current-header current-options)
+  current-lib current-header current-options current-flags)
 
 ;; --- both scripts: the execute bit ------------------------------------------------------------
 ;;

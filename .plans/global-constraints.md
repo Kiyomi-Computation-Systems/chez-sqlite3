@@ -28,7 +28,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(chez-sqlite3 private …)` library (ADR-0001).
 - **Constants and signatures are checked against `sqlite3.h`** by a C program compiled at test
   time. A missing header or compiler fails the suite, never skips it. The compiler is a test
-  oracle, never an install dependency (ADR-0001).
+  oracle, never an install dependency (ADR-0001). The one exception: the optional
+  `sqlite3_load_extension`'s prototype is asked in a compile of its own, and named UNAVAILABLE,
+  both facts asserted, where its header refuses it and the library lacks it (ADR-0002, amended in
+  M4 slice 2).
 - **`sqlite3_db_config` is bound once, in the shape `(db op int int*)`, with
   `(__varargs_after 2)`, plain; `sqlite3_config` is never bound** (ADR-0001, brief §2.8).
   `make check-variadic`, which CI's `main` job runs as a step and `make test` doesn't, removes the

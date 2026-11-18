@@ -17,6 +17,8 @@
 ;;;   sqlite-prepare-persistent
 ;;;                             sqlite3_prepare_v3's flag for a statement kept
 ;;;                             and run again (M3)
+;;;   sqlite-dbconfig-*         the four sqlite3_db_config ops v1 sets, each
+;;;                             in the shape (db op int int*) (M4, ADR-0021)
 ;;;   sqlite-result-codes       every primary and extended result code in
 ;;;                             3.45.1's sqlite3.h, in the header's order
 ;;;   sqlite-result-code-name   a code's name, or the integer
@@ -31,6 +33,8 @@
           sqlite-row sqlite-done
           sqlite-integer sqlite-float sqlite-text sqlite-blob sqlite-null
           sqlite-utf8 sqlite-prepare-persistent
+          sqlite-dbconfig-enable-load-extension sqlite-dbconfig-defensive
+          sqlite-dbconfig-dqs-dml sqlite-dbconfig-dqs-ddl
           sqlite-result-codes sqlite-result-code-name sqlite-primary-code-name)
   (import (chez-sqlite3 private require-threaded)
           (rnrs))
@@ -81,6 +85,18 @@
   ;; sqlite3_prepare_v3's prepFlags bit for a statement that is kept and run
   ;; again, so SQLite avoids the lookaside memory for it (M3, ADR-0020)
   (define sqlite-prepare-persistent #x01)
+
+  ;; The sqlite3_db_config ops of v1's four settings (ADR-0021, decision 1).
+  ;; Each takes an int, 1 to set, 0 to clear, -1 to read, and an int* for the
+  ;; state after the call.
+  ;; sqlite-dbconfig-enable-load-extension : Natural   SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION
+  (define sqlite-dbconfig-enable-load-extension 1005)
+  ;; sqlite-dbconfig-defensive : Natural    SQLITE_DBCONFIG_DEFENSIVE
+  (define sqlite-dbconfig-defensive 1010)
+  ;; sqlite-dbconfig-dqs-dml : Natural      SQLITE_DBCONFIG_DQS_DML
+  (define sqlite-dbconfig-dqs-dml 1013)
+  ;; sqlite-dbconfig-dqs-ddl : Natural      SQLITE_DBCONFIG_DQS_DDL
+  (define sqlite-dbconfig-dqs-ddl 1014)
 
   ;; sqlite-result-codes : (Listof (Pairof Symbol Natural))
   ;; Every primary and extended result code of 3.45.1's sqlite3.h (108), in

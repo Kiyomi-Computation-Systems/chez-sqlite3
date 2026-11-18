@@ -521,7 +521,7 @@ BEGIN {
   CHKN = "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads"
   BLDN = "scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads"
   BUILDLINE = "make build"
-  MAKELINE = "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean"
+  MAKELINE = "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-variadic check-dev check-clean"
   LAUNCHER = "sh tests/guix-env-launcher.sh"
   VERS = "Report the versions this run uses"
   SQLN = "Report the runner's SQLite"

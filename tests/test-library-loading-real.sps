@@ -19,6 +19,10 @@
 ;;;   - decoys: this suite's part of the missing-api rows, as the other suites
 ;;;     build them, and the control build, for preflight. The partition's
 ;;;     three rows are held here too, so that any one suite alone holds it;
+;;;   - the optional entry point, outside the pattern (the M4 plan, section
+;;;     4.6): a build without sqlite3_load_extension loads, with no
+;;;     missing-api, and native records it absent; the control records it
+;;;     there;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
 ;;;     then through the override. What it reports must equal what
 ;;;     tests/libsqlite3-oracle.c reads from the same file;
@@ -141,23 +145,25 @@
 
 ;; --- the partition ----------------------------------------------------------------------
 
-;; Each part makes the missing-api rows of one suite. Merged in the table's
-;; order, the parts are its names exactly when each entry is in one part,
-;; once, and each part keeps the table's order; the other two suites hold the
-;; same row.
-(test-equal "the three suites' entry lists partition the convention table: merged in its order, they are its names, each once"
-  (map row-name conventions-table)
-  (merge-halves (map row-name conventions-table) (map cdr decoy-parts)))
+;; Each part makes the missing-api rows of one suite. Merged in native's
+;; order, every-entry's, the parts are the required entry points exactly when
+;; each is in one part, once, and each part keeps the order; the other two
+;; suites hold the same row. The optional entry points, which a library may
+;; lack and still load, follow every-entry in the convention table, outside
+;; the partition (the M4 plan, section 4.6).
+(test-equal "the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
+  every-entry
+  (merge-halves every-entry (map cdr decoy-parts)))
 
 ;; The partition is dealt: native's order, by position from 0, by a pattern of
 ;; five that repeats (deal-pattern). The row above holds only that the parts
 ;; partition the table, each in its order, so two entries swapped between
 ;; parts, or one moved to another, passes it. Each part is exactly what the
 ;; pattern deals its suite, and every name the pattern holds is a part.
-(test-equal "each suite's part is the entries the pattern deals it, by position in the convention table from 0, and the pattern names only parts"
+(test-equal "each suite's part is the entries the pattern deals it, by position in every-entry from 0, and the pattern names only parts"
   (list decoy-parts 'all)
   (list (map (lambda (part)
-               (cons (car part) (entries-dealt (map row-name conventions-table) deal-pattern (car part))))
+               (cons (car part) (entries-dealt every-entry deal-pattern (car part))))
              decoy-parts)
         (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 
@@ -190,10 +196,11 @@
 ;; --- decoys --------------------------------------------------------------------------
 
 ;; builds : (Listof (Pairof String (Listof String)))
-;; The control, for preflight's rows, and a lacking build for each entry of
-;; this suite's part.
+;; The control, for preflight's rows and the optional entry point's, a
+;; lacking build for each entry of this suite's part, and one for each
+;; optional entry point.
 (define builds
-  (decoy-builds (cons "control" (map lacks-build this-entries))))
+  (decoy-builds (cons "control" (map lacks-build (append this-entries optional-entries)))))
 
 (define (so-of build) (in-scratch (string-append build ".so")))
 
@@ -218,6 +225,24 @@
 ;; This suite's part of the entry points, each left out, one at a time
 ;; ((library-loading)'s missing-api-rows).
 (missing-api-rows decoy-row control-library this-entries)
+
+;; The optional entry point, outside the pattern (ADR-0002, amended
+;; 2026-11-17): a library without sqlite3_load_extension, as Apple's is,
+;; loads, never missing-api, and native records it absent, which an open that
+;; opts in reads (M4 slice 3). The control has it, and its record says so: the
+;; row above is the entry point's doing, not the probe's. Neither load calls
+;; it, so each log is a successful load's six calls.
+(decoy-row "lacks-sqlite3_load_extension" #f '("--extension-loading" "yes")
+  "a library without the optional sqlite3_load_extension loads, with no missing-api, and native records it absent, load-extension-available? #f"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #f)))
+                        '() '() (loaded-calls "control"))))
+
+(decoy-row "control" #f '("--extension-loading" "yes")
+  "the control, which has sqlite3_load_extension, loads, and native records it there, load-extension-available? #t"
+  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
+                                  (list (cons 'load-extension-available? #t)))
+                        '() '() (loaded-calls "control"))))
 
 ;; --- the real libsqlite3 ---------------------------------------------------------------
 

@@ -112,23 +112,25 @@
 
 ;; --- the partition ----------------------------------------------------------------------
 
-;; Each part makes the missing-api rows of one suite. Merged in the table's
-;; order, the parts are its names exactly when each entry is in one part,
-;; once, and each part keeps the table's order; the other two suites hold the
-;; same row.
-(test-equal "the three suites' entry lists partition the convention table: merged in its order, they are its names, each once"
-  (map row-name conventions-table)
-  (merge-halves (map row-name conventions-table) (map cdr decoy-parts)))
+;; Each part makes the missing-api rows of one suite. Merged in native's
+;; order, every-entry's, the parts are the required entry points exactly when
+;; each is in one part, once, and each part keeps the order; the other two
+;; suites hold the same row. The optional entry points, which a library may
+;; lack and still load, follow every-entry in the convention table, outside
+;; the partition (the M4 plan, section 4.6).
+(test-equal "the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
+  every-entry
+  (merge-halves every-entry (map cdr decoy-parts)))
 
 ;; The partition is dealt: native's order, by position from 0, by a pattern of
 ;; five that repeats (deal-pattern). The row above holds only that the parts
 ;; partition the table, each in its order, so two entries swapped between
 ;; parts, or one moved to another, passes it. Each part is exactly what the
 ;; pattern deals its suite, and every name the pattern holds is a part.
-(test-equal "each suite's part is the entries the pattern deals it, by position in the convention table from 0, and the pattern names only parts"
+(test-equal "each suite's part is the entries the pattern deals it, by position in every-entry from 0, and the pattern names only parts"
   (list decoy-parts 'all)
   (list (map (lambda (part)
-               (cons (car part) (entries-dealt (map row-name conventions-table) deal-pattern (car part))))
+               (cons (car part) (entries-dealt every-entry deal-pattern (car part))))
              decoy-parts)
         (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 

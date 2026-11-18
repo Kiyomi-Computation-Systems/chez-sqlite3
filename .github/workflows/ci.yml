@@ -163,11 +163,13 @@ jobs:
         run: make build
 
       # CHEZ is the real binary, not a symlink or a wrapper. make test runs
-      # check-ci, which holds this file's shape.
+      # check-ci, which holds this file's shape. check-variadic runs here,
+      # after check-test-fails, and never inside make test (ADR-0001,
+      # amended 2026-11-17).
       - name: Checks and suites
         env:
           CHEZ: ${{ runner.temp }}/chez-threads/bin/scheme
-        run: make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean
+        run: make check-help check-suites check-pins check-floors check-ci test check-test-fails check-variadic check-dev check-clean
 
       # The launcher's own tests run no Guix: stand-ins take its place. They
       # need make test, so CHEZ too.
@@ -467,7 +469,8 @@ jobs:
           C_INCLUDE_PATH: ${{ runner.temp }}/sqlite-floor/include
         run: make test
 
-  # SQLite at the current release, compiled here as the floor's is, with
+  # SQLite at the current release, compiled here as the floor's is but with
+  # FTS5, which the floor's build leaves out (ADR-0003, amended), by
   # scripts/ci/build-sqlite.sh --current: the release the script pins, no
   # floor, so it reads no floors file and its cache is not keyed by one. The
   # suites must pass on it as on the floor's. check-sqlite.sh asserts the

@@ -20,10 +20,13 @@
  * when it is linked and no switch read at run time can hide an entry point
  * from dlsym:
  *
- *   (none)                   the control: the 41 entry points
+ *   (none)                   the control: the 44 entry points
  *                            (chez-sqlite3 private native) binds, M1's 15,
- *                            M2's 21 and M3's five
- *   DECOY_LACKS_<entry>      that one entry point left out
+ *                            M2's 21, M3's five and M4's three, the optional
+ *                            sqlite3_load_extension among them
+ *   DECOY_LACKS_<entry>      that one entry point left out; for
+ *                            sqlite3_load_extension, a library the load
+ *                            accepts, recording it absent
  *   DECOY_NOT_SQLITE         no sqlite3_* function at all
  *   DECOY_MARKER             also defines decoy_marker, which no other
  *                            build has: whether a process ever loaded this
@@ -537,6 +540,49 @@ int sqlite3_get_autocommit(sqlite3 *db)
 void sqlite3_interrupt(sqlite3 *db)
 {
   called("sqlite3_interrupt(%s)", db ? "db" : "NULL");
+}
+#endif
+
+/* --- M4's three ------------------------------------------------------------
+   Native binds each, the last only where it is there, and the load calls
+   none; the open always fails, so no row reaches them. Each answers as a
+   library that can do nothing would. */
+
+#ifndef DECOY_LACKS_sqlite3_db_config
+/* Variadic, as the header declares it: it reads its two variadic arguments,
+   the value and the cell, with va_arg, logs them, and answers SQLITE_ERROR,
+   leaving the cell, as for an op it does not know. */
+int sqlite3_db_config(sqlite3 *db, int op, ...)
+{
+  va_list args;
+  int value;
+  int *cell;
+  va_start(args, op);
+  value = va_arg(args, int);
+  cell = va_arg(args, int *);
+  va_end(args);
+  called("sqlite3_db_config(%s,%d,%d,%s)", db ? "db" : "NULL", op, value, cell ? "cell" : "NULL");
+  return SQLITE_ERROR;
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_free
+/* Nothing of the decoy's is ever handed out to free. */
+void sqlite3_free(void *p)
+{
+  called("sqlite3_free(%s)", p ? "p" : "NULL");
+}
+#endif
+
+#ifndef DECOY_LACKS_sqlite3_load_extension
+/* SQLITE_ERROR, with no message: it loads nothing. */
+int sqlite3_load_extension(sqlite3 *db, const char *zFile, const char *zProc, char **pzErrMsg)
+{
+  called("sqlite3_load_extension(%s,%s,%s,%s)", db ? "db" : "NULL", zFile ? "file" : "NULL",
+         zProc ? zProc : "NULL", pzErrMsg ? "pzErrMsg" : "NULL");
+  if (pzErrMsg)
+    *pzErrMsg = NULL;
+  return SQLITE_ERROR;
 }
 #endif
 

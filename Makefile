@@ -76,6 +76,7 @@ MEMORY_SUITES_1 := \
   tests/test-check-floors.sps \
   tests/test-check-memory-shards.sps \
   tests/test-check-seam.sps \
+  tests/test-check-variadic.sps \
   tests/test-chez-sqlite3-testing.sps \
   tests/test-ci-sqlite.sps \
   tests/test-connection-close.sps \
@@ -88,7 +89,9 @@ MEMORY_SUITES_1 := \
   tests/test-counters.sps \
   tests/test-docs.sps \
   tests/test-execute-script.sps \
+  tests/test-fts5.sps \
   tests/test-interrupt-database.sps \
+  tests/test-json.sps \
   tests/test-library-loading-missing.sps \
   tests/test-library-loading-real.sps \
   tests/test-load-state.sps \
@@ -153,7 +156,7 @@ MEMORY_LOGS := build/memory
 
 # One physical line: check-help reads it with awk, and fails if it ends in
 # a backslash.
-.PHONY: help check-help check-guix check-guix-inside deps build dev check-dev check-pins test check-suites check-seam check-floors check-ci check-memory-shards check-nothreads check-test-fails test-memory check-memory-gate clean check-clean
+.PHONY: help check-help check-guix check-guix-inside deps build dev check-dev check-pins test check-suites check-seam check-floors check-ci check-memory-shards check-nothreads check-test-fails check-variadic test-memory check-memory-gate clean check-clean
 
 .DEFAULT_GOAL := help
 
@@ -434,6 +437,23 @@ check-nothreads: ## Fail unless every library under src/ refuses to import, by n
 check-test-fails: ## Plant bad suites, none at all, a stale README, a bad workflow and bad shards, in a copy; make test must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' sh tests/check-test-fails.sh
+
+# sqlite3_db_config is variadic, and on x86-64 and Linux arm64 a binding
+# without its convention answers alike, so only test-conventions, which reads
+# the form, can see the convention lost there (ADR-0001, amended 2026-11-17).
+# In a copy of the tree, the unchanged copy must pass test-conventions and
+# test-native; then the convention is removed from sqlite3_db_config's
+# binding, one line alone changed, and test-conventions must fail, naming
+# exactly the tests that hold the table to src/ and the one violation, the
+# variadic row's. On Apple arm64, by Chez's (machine-type), test-native must
+# fail on the copy too; on any other machine its result is reported. CI's
+# main job runs it as a step after check-test-fails, and make test does not:
+# inside make test it would run in each of check-test-fails' cases, under a
+# 5 s suite timeout (the M4 plan, section 4.2). tests/check-variadic.sh holds
+# the steps, and tests/test-check-variadic.sps each of its failure branches.
+check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy; test-conventions must fail on it, by name, and on Apple arm64 test-native too
+	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
+	@TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' TEST_TIMEOUT='$(TEST_TIMEOUT)' sh tests/check-variadic.sh
 
 # Runs every MEMORY_SUITES suite under Valgrind, in order, each under
 # timeout, and goes on after a failure (ADR-0005); with MEMORY_SHARD 1 or 2,

@@ -228,6 +228,15 @@ told in chez-curl's `.plans/traps.md`.
   nothing. So a suite run against a library that lacks a new export dies naming no test, and a
   new row can't be watched failing that way. Watch it fail against the exports stubbed, each
   present and wrong, as M4 slice 1's red run did. (M4 slice 1, chez-sqlite3)
+- **`fork-thread` waits while another thread is in `dlopen`.** With one thread blocked in
+  `sqlite3_load_extension`'s open of a FIFO, a `fork-thread` called at 501 ms returned at 3957 ms,
+  once the load returned (glibc 2.41, in the container). That fits glibc's loader holding its lock
+  through the open, which creating a thread also takes; the cause wasn't traced further. Forking
+  a shell through `system` didn't wait. Fork
+  any helper thread before the call that may block in `dlopen` (M4 slice 2's FIFO row).
+  Reproduce, from the root: `scripts/guix-env sh -c 'd=$(mktemp -d); mkfifo $d/f.fifo; (sleep 4;
+  exec 3<>$d/f.fifo) & $CHEZ --script .plans/research/m4-slice-2/fifo-thread.sps
+  "$CHEZ_SQLITE3_LIBRARY" $d/f.fifo; wait'`. (M4 slice 2, chez-sqlite3)
 
 ## SQLite
 
@@ -849,6 +858,17 @@ told in chez-curl's `.plans/traps.md`.
 - **`sqlite3_next_stmt` on a freed connection read 0, plain,** in every close of eleven suites,
   so a count made after a successful close passed them all. Only the gate saw it: 196 to 238
   errors, an invalid read at `sqlite3_next_stmt` (p03). (M4's close fix, chez-sqlite3)
+- **A probe killed by its own bound loses what it hadn't flushed.** On the Mac's first run of
+  `l1-load-extension.c`, its output went to a file, fully buffered, and the 20 s `alarm` set
+  around L6 killed it (SIGALRM, exit 142). The kill lost all but the first 4 KB, from partway
+  through L3 on: L4, L5, L7 and L8 went unseen, and both timing files were empty. The load it
+  bounded was waiting on dyld's second open of the FIFO, which the probe's one writer had
+  already passed; run 2 found the double open. So the Mac was needed twice. A probe run once on
+  another machine line-buffers its output and bounds each wait without killing itself: it polls
+  without blocking, or runs a case in a child process that it ends itself
+  (`research/m4-mac/fifo.c`). Reproduced on Linux with L6 pointed at a missing file: the old
+  probe exited 142 after 20 s, its output cut off mid-line, and the new one ended at once.
+  (M4's Mac load, chez-sqlite3)
 
 ## Editing the records
 
