@@ -40,6 +40,23 @@
 ;;;                  row's next step answers SQLITE_INTERRUPT, and with no
 ;;;                  statement running it is a no-op. Every argument is a
 ;;;                  handle, a uptr, so Chez's int range never bites here
+;;;   M4's three     sqlite3_db_config, variadic: each of the four ops
+;;;                  round-trips through the binding on a :memory: connection
+;;;                  of its own, read, set to the other value, read, set back
+;;;                  and read, a fresh sentinel in its cell before each call;
+;;;                  an op the library does not know answers SQLITE_ERROR and
+;;;                  leaves the cell. sqlite3_free of NULL. Native's record,
+;;;                  load-extension-available?, is this process's own
+;;;                  foreign-entry?. sqlite3_load_extension of a file that is
+;;;                  no shared object answers SQLITE_ERROR and a message,
+;;;                  freed by sqlite3_free. On a library without
+;;;                  sqlite3_load_extension, ENABLE_LOAD_EXTENSION's round
+;;;                  trip and the load's rows print UNAVAILABLE, and the
+;;;                  record and the binding, both #f, are asserted in their
+;;;                  place. On x86-64 a binding of sqlite3_db_config without
+;;;                  its variadic convention round-trips too: only
+;;;                  test-conventions holds that, and make check-variadic
+;;;                  watches it fail
 ;;;   C strings      call-with-c-string: UTF-8 on bytes where encodings
 ;;;                  differ, the NUL written, U+0000 refused at every position
 ;;;                  before anything is allocated, by kind, from the WHO it is
@@ -47,6 +64,10 @@
 ;;;                  re-entry refused. c-string->string reads them back
 ;;;   out-pointers   call-with-out-pointer: a zeroed, counted slot, read after
 ;;;                  PROC and freed on every path
+;;;   int cells      call-with-int-cell (M4): a counted int block written with
+;;;                  the caller's fill, read after PROC, the fill read back when
+;;;                  PROC writes nothing, freed on every path, a fill no C int
+;;;                  holds refused before anything is allocated
 ;;;   bytes          call-with-bytes: a bytevector's bytes, U+0000 and bytes
 ;;;                  past ASCII kept, in a counted block of at least one byte,
 ;;;                  never NULL for none, freed on return, raise and escape,
@@ -69,8 +90,10 @@
 ;;;                  them
 ;;;   collect-safe   sqlite3_open_v2 blocked on a FIFO while another thread
 ;;;                  collects: the collection finishes only if the call is
-;;;                  __collect_safe. The types and conventions of every binding
-;;;                  are the convention suite's
+;;;                  __collect_safe; and sqlite3_load_extension, the same
+;;;                  way, on a connection with the C call on (M4). The types
+;;;                  and conventions of every binding are the convention
+;;;                  suite's
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own: SRFI-64 makes #f of a raise in an actual expression, and catches
@@ -87,7 +110,7 @@
         (srfi :64)
         (only (chezscheme) foreign-ref foreign-set! foreign-sizeof getenv machine-type void
               library-exports fork-thread make-mutex with-mutex collect-rendezvous
-              sleep make-time disable-interrupts enable-interrupts)
+              sleep make-time disable-interrupts enable-interrupts foreign-entry?)
         (chez-sqlite3-testing)
         (libsqlite3-oracle)
         (chez-sqlite3 private counters)
@@ -152,6 +175,7 @@
 (define call-with-c-string (native-procedure 'call-with-c-string))
 (define c-string->string (native-procedure 'c-string->string))
 (define call-with-out-pointer (native-procedure 'call-with-out-pointer))
+(define call-with-int-cell (native-procedure 'call-with-int-cell))
 (define call-with-bytes (native-procedure 'call-with-bytes))
 (define foreign-bytes (native-procedure 'foreign-bytes))
 (define c-string->bytevector (native-procedure 'c-string->bytevector))
@@ -181,6 +205,13 @@
 (define sqlite3-last-insert-rowid (native-procedure 'sqlite3-last-insert-rowid))
 (define sqlite3-get-autocommit (native-procedure 'sqlite3-get-autocommit))
 (define sqlite3-interrupt (native-procedure 'sqlite3-interrupt))
+(define sqlite3-db-config (native-procedure 'sqlite3-db-config))
+(define sqlite3-free (native-procedure 'sqlite3-free))
+;; sqlite3-load-extension and load-extension-available? are values: the
+;; binding or #f, and a boolean. When native cannot be reached each is the
+;; raising procedure, which no row's expected value is.
+(define sqlite3-load-extension (native-procedure 'sqlite3-load-extension))
+(define load-extension-available? (native-procedure 'load-extension-available?))
 ;; sqlite-transient is a value, not a procedure: when native cannot be
 ;; reached it is the raising procedure, which no row's expected value is,
 ;; and which no binding takes as a uptr.
@@ -369,7 +400,7 @@
   counts-after-load)
 
 ;; No back door: the exports, written out whole.
-(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings, M2's 21 and M3's five, sqlite-transient, and the C-string, out-pointer and byte helpers"
+(test-equal "(chez-sqlite3 private native) exports exactly the report, the threadsafe answer, M1's ten raw bindings, M2's 21, M3's five and M4's three, the record of the optional one, sqlite-transient, and the C-string, out-pointer and byte helpers"
   (sorted-names '(loaded-libsqlite3 loaded-threadsafe
                   sqlite3-open-v2 sqlite3-close sqlite3-errmsg sqlite3-errstr sqlite3-errcode
                   sqlite3-extended-errcode sqlite3-next-stmt sqlite3-memory-used
@@ -381,8 +412,10 @@
                   sqlite3-column-int64 sqlite3-column-double sqlite3-column-text sqlite3-column-blob
                   sqlite3-column-bytes sqlite3-error-offset
                   sqlite3-changes64 sqlite3-total-changes64 sqlite3-last-insert-rowid
-                  sqlite3-get-autocommit sqlite3-interrupt sqlite-transient
-                  call-with-c-string c-string->string call-with-out-pointer
+                  sqlite3-get-autocommit sqlite3-interrupt
+                  sqlite3-db-config sqlite3-free sqlite3-load-extension load-extension-available?
+                  sqlite-transient
+                  call-with-c-string c-string->string call-with-out-pointer call-with-int-cell
                   call-with-bytes foreign-bytes c-string->bytevector))
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private native)))))
@@ -1364,6 +1397,185 @@
          (list (car first) first-row first-done (car second) second-row value second-done
                first-finalized second-finalized))))))
 
+;; --- M4's three: sqlite3_db_config, sqlite3_free and sqlite3_load_extension -------------------------
+;; sqlite3_db_config is variadic, int sqlite3_db_config(sqlite3*, int op, ...),
+;; bound once in the shape (db op int int*) with (__varargs_after 2): the op's
+;; value, then a counted int block, its cell, which gets the op's state after
+;; every call, a set's as a read's (ADR-0021, decision 4; research D6). A
+;; value of -1 reads and changes nothing. On x86-64 a binding without the
+;; convention answers alike, so these rows hold the binding's behaviour, and
+;; test-conventions, with make check-variadic, its convention.
+
+;; op-of : Symbol -> (U Natural (List 'no-op Symbol))
+;; A db_config op's value, from (chez-sqlite3 private constants), which
+;; tests/test-constants.sps holds to sqlite3.h; reached through eval, so a
+;; name the library lacks is a sentinel that the binding refuses, and the
+;; rows that use it fail by name, where an import would end the suite
+;; unnamed.
+(define (op-of name)
+  (guard (e (#t (list 'no-op name)))
+    (eval name (environment '(chez-sqlite3 private constants)))))
+
+(define enable-load-extension-op (op-of 'sqlite-dbconfig-enable-load-extension))
+(define defensive-op (op-of 'sqlite-dbconfig-defensive))
+(define dqs-dml-op (op-of 'sqlite-dbconfig-dqs-dml))
+(define dqs-ddl-op (op-of 'sqlite-dbconfig-dqs-ddl))
+
+;; config-call : Natural Integer Integer Integer -> (List Integer Integer)
+;; sqlite3_db_config of OP with VALUE on DB, its cell native's counted int
+;; block, call-with-int-cell's, that holds SENTINEL before the call: the
+;; code, and the cell after it.
+(define (config-call db op value sentinel)
+  (let-values (((code after)
+                (call-with-int-cell 'test-native sentinel
+                  (lambda (cell) (sqlite3-db-config db op value cell)))))
+    (list code after)))
+
+;; config-round-trip : Natural Integer -> Any
+;; On a :memory: connection of its own: OP read with -1, set to the other of
+;; 0 and 1, read, set back to the start, read; each cell's sentinel BASE plus
+;; the call's place, 1 to 5, so no call can pass on another's. Each call is
+;; its code and its cell, the cell named start or other once the start, the
+;; first call's, is known, and kept as a number when it is neither.
+(define (config-round-trip op base)
+  (with-memory
+   (lambda (db)
+     (let* ((read-start (config-call db op -1 (+ base 1)))
+            (start (cadr read-start))
+            (other (if (eqv? start 0) 1 0))
+            (set-other (config-call db op other (+ base 2)))
+            (read-other (config-call db op -1 (+ base 3)))
+            (set-start (config-call db op start (+ base 4)))
+            (read-back (config-call db op -1 (+ base 5)))
+            (named (lambda (call)
+                     (list (car call)
+                           (cond ((eqv? (cadr call) start) 'start)
+                                 ((eqv? (cadr call) other) 'other)
+                                 (else (cadr call)))))))
+       (list (if (memv start '(0 1)) 'start-is-0-or-1 (list 'start start))
+             (in-order named (list read-start set-other read-other set-start read-back)))))))
+
+(define round-tripped
+  (list (list 'start-is-0-or-1 (list (list ok 'start) (list ok 'other) (list ok 'other)
+                                     (list ok 'start) (list ok 'start)))
+        ok zero-counts))
+
+(for-each
+ (lambda (op-case)
+   (test-equal (string-append "sqlite3_db_config round-trips " (car op-case)
+                              " through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after")
+     round-tripped
+     (guard (e (#t (list 'raised (describe e))))
+       (config-round-trip (cadr op-case) (caddr op-case)))))
+ (list (list "DEFENSIVE" defensive-op 7100)
+       (list "DQS_DML" dqs-dml-op 7200)
+       (list "DQS_DDL" dqs-ddl-op 7300)))
+
+;; extension-loading? : Boolean
+;; Whether native's load found sqlite3_load_extension: its own record, which
+;; the suites choose their load rows by (ADR-0005, amended 2026-11-17).
+(define extension-loading? (eq? load-extension-available? #t))
+
+;; load-row : String Any (-> Any) -> Void
+;; The test NAME, EXPECTED against THUNK's answer, on a library that has
+;; sqlite3_load_extension. On one without it, as Apple's, NAME is printed
+;; UNAVAILABLE, never skipped silently, and in its place native's record
+;; and its binding, #f both, are asserted.
+(define (load-row name expected thunk)
+  (if extension-loading?
+      (test-equal name expected (guard (e (#t (list 'raised (describe e)))) (thunk)))
+      (begin
+        (display "UNAVAILABLE ")
+        (display name)
+        (display ": this libsqlite3 has no sqlite3_load_extension")
+        (newline)
+        (test-equal (string-append "unavailable, the library has no sqlite3_load_extension, in place of: " name)
+          '(#f #f)
+          (list load-extension-available? sqlite3-load-extension)))))
+
+;; Apple's library answers 21 to every call of ENABLE_LOAD_EXTENSION and
+;; leaves the cell, and lacks sqlite3_load_extension (the M4 pre-work's Mac
+;; step), so its round trip is chosen by native's record.
+(load-row "sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after"
+  round-tripped
+  (lambda () (config-round-trip enable-load-extension-op 7400)))
+
+;; 1999 is above SQLITE_DBCONFIG_MAX in every header measured, 1019 at the
+;; floor and 1023 in 3.53.1's and 3.54.1's (the M4 pre-work).
+(test-equal "sqlite3_db_config of an op the library does not know, 1999, answers SQLITE_ERROR and leaves the cell at its sentinel, to set and to read; the close answers SQLITE_OK and every count is zero after"
+  (list (list (list error-code 7501) (list error-code 7502)) ok zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (with-memory
+     (lambda (db)
+       (let* ((set (config-call db 1999 1 7501))
+              (read (config-call db 1999 -1 7502)))
+         (list set read))))))
+
+(test-equal "sqlite3_free of NULL does nothing, and answers the unspecified value, as a void result does, never a number; every count is zero after"
+  (list 'void zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (list (if (eq? (sqlite3-free 0) (void)) 'void 'not-void) (native-counts))))
+
+;; Native's record of the optional entry point is this process's own answer:
+;; foreign-entry? asks the whole process, which holds the one libsqlite3
+;; native loaded (ADR-0002, amended), and the binding is a procedure exactly
+;; when the record says it is there.
+(test-equal "load-extension-available?, native's record, is a boolean, this process's own foreign-entry? of sqlite3_load_extension, and sqlite3-load-extension is a procedure exactly when it is #t"
+  (let ((there (foreign-entry? "sqlite3_load_extension")))
+    (list there there))
+  (list load-extension-available?
+        (and (boolean? load-extension-available?) (procedure? sqlite3-load-extension))))
+
+;; load-call : Natural String -> (List Integer (U String (List 'no-message Any)))
+;; sqlite3_load_extension of PATH on DB with no entry point, its message's
+;; slot a counted out-pointer: its code, and the slot's message, copied,
+;; then freed with sqlite3_free whatever the copy did.
+(define (load-call db path)
+  (call-with-c-string 'test-native path
+    (lambda (file)
+      (let-values (((code message)
+                    (call-with-out-pointer 'test-native
+                      (lambda (slot) (sqlite3-load-extension db file 0 slot)))))
+        (let ((text (guard (e (#t (list 'raised (describe e))))
+                      (and (not (eqv? message 0)) (c-string->string message)))))
+          (unless (eqv? message 0) (sqlite3-free message))
+          (list code (if (string? text) text (list 'no-message text))))))))
+
+;; message-of : (List Integer Any) -> (List Integer Symbol)
+;; A load's code, and message for a string, as a row names it: it never
+;; asserts SQLite's text (ADR-0013, decision 9).
+(define (message-of answer)
+  (list (car answer) (if (string? (cadr answer)) 'message (cadr answer))))
+
+;; A file that is no shared object: dlopen refuses it, and so does the path
+;; with .so appended, which isn't there (research L2). SQLite's message is
+;; its own allocation, and an unfreed one shows in the memory check and
+;; under the gate's Valgrind (X1). With the C call off the load answers "not
+;; authorized" without opening anything, so the row loads twice, with the
+;; call set off, then on, through the binding: each a failure with a
+;; message, and the two messages differ, two readings of one library, no
+;; text written here. A set that did not take, which leaves the call as the
+;; library starts it, gives two alike.
+(load-row "sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOAD_EXTENSION set to 0 through the binding and then to 1, and the two messages differ; the close answers SQLITE_OK and every count is zero after"
+  (list (list (list ok 0) (list error-code 'message) (list ok 1) (list error-code 'message) 'messages-differ)
+        ok zero-counts)
+  (lambda ()
+    (call-with-temp-directory
+     (lambda (dir)
+       (let* ((path (string-append dir "/not-a-library.so"))
+              (written (capture-command
+                        (list "sh" "-c" "printf 'no ELF here\\n' >\"$1\"" "sh" path))))
+         (if (not (equal? written '(0 "" "")))
+             (list 'not-written written)
+             (with-memory
+              (lambda (db)
+                (let* ((off (config-call db enable-load-extension-op 0 7601))
+                       (refused (load-call db path))
+                       (on (config-call db enable-load-extension-op 1 7602))
+                       (failed (load-call db path)))
+                  (list off (message-of refused) on (message-of failed)
+                        (if (equal? (cadr refused) (cadr failed)) 'messages-alike 'messages-differ)))))))))))
+
 ;; --- call-with-c-string and c-string->string ----------------------------------------------------
 
 ;; c-bytes : String -> Any
@@ -1624,6 +1836,98 @@
          (b (raised (lambda () (call-with-out-pointer 42 (lambda (slot) slot))))))
     (list a b (native-counts))))
 
+;; --- call-with-int-cell (M4 slice 2) -------------------------------------------------------------
+;; sqlite3_db_config's cell: a counted int block, its fill a sentinel of the
+;; caller's, read after PROC (ADR-0021, decision 3). A fill of 0, which a set
+;; writes, would make a call that left the cell read as one that wrote 0.
+
+;; int-bound : Integer -> Integer
+;; 2^(B-1) for a C int of B bits: the first value above an int's range.
+(define int-bound (expt 2 (- (* 8 (foreign-sizeof 'int)) 1)))
+
+(test-equal "call-with-int-cell writes its fill first: a PROC that writes nothing reads back each fill, -1, 7, 255, and an int's two bounds, -2^31 and 2^31-1, never 0; one block is counted while PROC runs, and none after"
+  (list (map (lambda (fill) (list (list 'wrote-nothing (counts-with '((block . 1)))) fill))
+             (list -1 7 255 (- int-bound) (- int-bound 1)))
+        zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((answers (in-order (lambda (fill)
+                               (let-values (((answer value)
+                                             (call-with-int-cell 'open-database fill
+                                               (lambda (cell) (list 'wrote-nothing (native-counts))))))
+                                 (list answer value)))
+                             (list -1 7 255 (- int-bound) (- int-bound 1)))))
+      (list answers (native-counts)))))
+
+(test-equal "call-with-int-cell reads the cell once PROC has returned: over a fill of -1, a PROC that writes 42, then -5, reads -5, and its answer is PROC's"
+  (list (list 'wrote -1) -5 zero-counts)
+  (guard (e (#t (list 'raised (describe e))))
+    (let-values (((answer value)
+                  (call-with-int-cell 'open-database -1
+                    (lambda (cell)
+                      (let ((before (foreign-ref 'int cell 0)))
+                        (foreign-set! 'int cell 0 42)
+                        (foreign-set! 'int cell 0 -5)
+                        (list 'wrote before))))))
+      (list answer value (native-counts)))))
+
+(test-equal "call-with-int-cell: a raise from PROC frees the cell, and reaches the caller; so does an escape; the count is back at 0 after each"
+  (list 'proc-raised zero-counts 'escaped zero-counts)
+  (let* ((a (guard (e ((eq? e 'from-proc) 'proc-raised)
+                      (#t (list 'other (describe e))))
+              (call-with-int-cell 'open-database -1 (lambda (cell) (raise 'from-proc)))))
+         (after-a (native-counts))
+         (b (guard (e (#t (list 'other (describe e))))
+              (call/cc
+               (lambda (k)
+                 (call-with-int-cell 'open-database -1 (lambda (cell) (k 'escaped)))))))
+         (after-b (native-counts)))
+    (list a after-a b after-b)))
+
+(test-equal "call-with-int-cell: re-entering PROC through a continuation, once the cell is freed, raises from its WHO, and PROC runs once"
+  (list (list 'assertion-violation 'open-database '()) 1 zero-counts)
+  (let ((k #f) (runs 0))
+    (let ((r (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
+                             (irritants-condition? e))
+                        (list 'assertion-violation (condition-who e) (condition-irritants e)))
+                       (#t (list 'other (describe e))))
+               (call-with-int-cell 'open-database -1
+                 (lambda (cell)
+                   (call/cc (lambda (c) (set! k c)))
+                   (set! runs (+ runs 1))))
+               (if (= runs 1) (k #f) (list 'reentered runs)))))
+      (list r runs (native-counts)))))
+
+;; The range is a C int's, not Chez's foreign int's, which also takes 2^31
+;; to 2^32-1 and hands them to C as negatives (AGENTS.md).
+(test-equal "call-with-int-cell refuses a fill no C int holds, from its WHO, by shown-value, with nothing allocated at the raise and without running PROC: 2^31, -2^31-1, 2^32-1, the top of what Chez's foreign int takes, 2^32 and 2^63 beyond it, 1.5, 1.0, a symbol and a string"
+  (list (map (lambda (irritant)
+               (list (list 'assertion-violation 'open-database (list irritant)) zero-counts))
+             (list int-bound (- (- int-bound) 1) (- (* 2 int-bound) 1) (* 2 int-bound) (expt 2 63)
+                   1.5 1.0 'one '(kind string)))
+        0 zero-counts)
+  (let* ((runs 0)
+         (refusals
+          (in-order (lambda (fill)
+                      (at-raise (lambda ()
+                                  (call-with-int-cell 'open-database fill
+                                    (lambda (cell) (set! runs (+ runs 1)) 'ran)))
+                                (lambda (e)
+                                  (if (and (assertion-violation? e) (who-condition? e)
+                                           (irritants-condition? e))
+                                      (list 'assertion-violation (condition-who e) (condition-irritants e))
+                                      (list 'other (describe e))))))
+                    (list int-bound (- (- int-bound) 1) (- (* 2 int-bound) 1) (* 2 int-bound)
+                          (expt 2 63) 1.5 1.0 'one "1"))))
+    (list refusals runs (native-counts))))
+
+(test-equal "call-with-int-cell refuses a PROC that is no procedure, from its WHO, and a WHO that is no symbol, from itself"
+  (list (list 'assertion-violation 'open-database '(not-a-procedure))
+        (list 'assertion-violation 'call-with-int-cell '(42))
+        zero-counts)
+  (let* ((a (raised (lambda () (call-with-int-cell 'open-database -1 'not-a-procedure))))
+         (b (raised (lambda () (call-with-int-cell 42 -1 (lambda (cell) cell))))))
+    (list a b (native-counts))))
+
 ;; --- call-with-bytes, foreign-bytes and c-string->bytevector (M2 slice 4) -------------------------
 ;; A bound TEXT or BLOB, and a column's bytes and name read back, cross in
 ;; counted blocks and are copied by native's own code (ADR-0011, decisions 2
@@ -1852,6 +2156,13 @@
          (b (reentered (lambda (proc) (call-with-out-pointer 'open-database proc)))))
     (list a b)))
 
+(test-equal "call-with-int-cell refuses a re-entry outside its critical thunks, and a fill no C int holds before any: a handler of each runs at depth 1, and PROC runs once"
+  (list (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'open-database '())) 1 zero-counts)
+        (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'open-database (list int-bound))))
+  (let* ((a (reentered (lambda (proc) (call-with-int-cell 'open-database -1 proc))))
+         (b (handler-depth (lambda () (call-with-int-cell 'open-database int-bound (lambda (cell) cell))))))
+    (list a b)))
+
 ;; PROC frees the block it was handed, so the free on the way out finds no
 ;; live block there: free-foreign-block!'s refusal, raised outside the
 ;; critical after thunk that tried the free. Nothing is freed twice. Both
@@ -1964,15 +2275,22 @@
 
 ;; placed-binding : Any -> (U (List Symbol Any String) #f)
 ;; (NAME LIBRARY ENTRY) for a top-level
-;; (define NAME (load-step (bind-required LIBRARY (foreign-procedure ...)))).
+;; (define NAME (load-step (bind-required LIBRARY (foreign-procedure ...)))),
+;; and (NAME optional ENTRY) for a top-level
+;; (define NAME (load-step (bind-optional (foreign-procedure ...)))).
 (define (placed-binding form)
   (let ((step (load-step-of form)))
     (and step
          (let ((expr (cadr step)))
-           (and (list? expr) (= (length expr) 3) (eq? (car expr) 'bind-required)
-                (let ((fp (caddr expr)))
-                  (and (pair? fp) (eq? (car fp) 'foreign-procedure)
-                       (list (car step) (cadr expr) (c-name fp)))))))))
+           (cond ((and (list? expr) (= (length expr) 3) (eq? (car expr) 'bind-required))
+                  (let ((fp (caddr expr)))
+                    (and (pair? fp) (eq? (car fp) 'foreign-procedure)
+                         (list (car step) (cadr expr) (c-name fp)))))
+                 ((and (list? expr) (= (length expr) 2) (eq? (car expr) 'bind-optional))
+                  (let ((fp (cadr expr)))
+                    (and (pair? fp) (eq? (car fp) 'foreign-procedure)
+                         (list (car step) 'optional (c-name fp)))))
+                 (else #f))))))
 
 ;; step-names : (Listof Symbol)
 ;; The load's own names a step's expression may use: its bindings of the
@@ -1986,7 +2304,7 @@
 ;; head of what it runs, and which of step-names that uses, so a step whose
 ;; body was swapped for another's, or that stopped calling its binding or
 ;; checking its answer, changes the list too.
-(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list, M2's 21 and M3's five, in ADR-0002's order; each with the head of what it runs and the load's names it uses"
+(test-equal "native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and check, sqlite3_initialize's binding and call, then the rest of M1's required list, M2's 21, M3's five and M4's two, in ADR-0002's order, then the optional sqlite3_load_extension; each with the head of what it runs and the load's names it uses"
   '((chosen call-with-values)
     (libsqlite3-loaded guard)
     (raw-libversion-number bind-required)
@@ -2034,7 +2352,10 @@
     (sqlite3-total-changes64 bind-required report)
     (sqlite3-last-insert-rowid bind-required report)
     (sqlite3-get-autocommit bind-required report)
-    (sqlite3-interrupt bind-required report))
+    (sqlite3-interrupt bind-required report)
+    (sqlite3-db-config bind-required report)
+    (sqlite3-free bind-required report)
+    (sqlite3-load-extension bind-optional))
   (if body-read?
       (let loop ((forms native-body) (found '()))
         (if (null? forms)
@@ -2070,6 +2391,23 @@
            (caddr (car forms)))
           (else (loop (cdr forms))))))
 
+;; Native's record of the optional entry point is read from bind-optional's
+;; answer alone, so the record and the binding cannot disagree: a second
+;; foreign-entry? could, in a process that loaded another library since.
+(test-equal "load-extension-available? is defined right after sqlite3-load-extension's step, as whether that step's answer, the binding or #f, is a procedure, and from nothing else"
+  '((sqlite3-load-extension load-extension-available?)
+    (if (procedure? sqlite3-load-extension) #t #f))
+  (if body-read?
+      (let loop ((forms native-body))
+        (cond ((or (null? forms) (null? (cdr forms))) (list 'no-such-definitions))
+              ((and (load-step-of (car forms)) (eq? (car (load-step-of (car forms))) 'sqlite3-load-extension))
+               (let ((next (cadr forms)))
+                 (list (list 'sqlite3-load-extension
+                             (and (list? next) (= (length next) 3) (eq? (car next) 'define) (cadr next)))
+                       (and (list? next) (= (length next) 3) (caddr next)))))
+              (else (loop (cdr forms)))))
+      native-body))
+
 (test-equal "loaded-threadsafe answers the variable of the threadsafe step, the one check-threadsafe was given, and no constant"
   '(threadsafe threadsafe)
   (if body-read?
@@ -2086,7 +2424,7 @@
                   first)))
       native-body))
 
-(test-equal "every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-procedure ...)))), with no report for the report's own three and the report for the rest, and there are no others"
+(test-equal "every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-procedure ...)))), with no report for the report's own three and the report for the rest, or, for the optional sqlite3_load_extension, (define NAME (load-step (bind-optional (foreign-procedure ...)))), and there are no others"
   (list '((raw-libversion-number #f "sqlite3_libversion_number")
           (raw-libversion #f "sqlite3_libversion")
           (raw-sourceid #f "sqlite3_sourceid")
@@ -2127,8 +2465,11 @@
           (sqlite3-total-changes64 report "sqlite3_total_changes64")
           (sqlite3-last-insert-rowid report "sqlite3_last_insert_rowid")
           (sqlite3-get-autocommit report "sqlite3_get_autocommit")
-          (sqlite3-interrupt report "sqlite3_interrupt"))
-        41)
+          (sqlite3-interrupt report "sqlite3_interrupt")
+          (sqlite3-db-config report "sqlite3_db_config")
+          (sqlite3-free report "sqlite3_free")
+          (sqlite3-load-extension optional "sqlite3_load_extension"))
+        44)
   (if body-read?
       (list (let loop ((forms native-body) (found '()))
               (if (null? forms)
@@ -2259,6 +2600,146 @@
                                      'released-by-the-collector)))
                (when pid (capture-command (list "kill" pid)))
                (list answers released-by (native-counts))))))))))
+
+;; --- __collect_safe, by behaviour: sqlite3_load_extension blocked on a FIFO (ADR-0011, amended) -----
+;; The open's method above, for M4's load (research L6 and X1). The
+;; connection has the C call on: ENABLE_LOAD_EXTENSION set to 1 through
+;; native's sqlite3_db_config, or the load would answer "not authorized"
+;; without opening anything. dlopen opens the FIFO read-only and waits for a
+;; writer. The collector, once the loader has called, waits a second, asks
+;; for a collection, notes that it finished, then releases the loader
+;; through release-until: the FIFO opened for writing, and again each second
+;; until the loader answers. Linux's dlopen opens the FIFO once; macOS's
+;; dyld opens it twice, each open waiting for a writer (the M4 session's Mac
+;; run 2, PR #38), so a single release left the Mac's load to the watchdog.
+;; .plans/research/m4-slice-2/fifo-double-open.sps shows a single release
+;; leaving an opener that opens twice waiting, on Linux too, and
+;; release-until freeing it. A plain binding holds the collection, and the
+;; collector with it, until the load returns, so only the watchdog shell can
+;; release it: after 30 s, its marker left first, it opens the FIFO for
+;; writing ten times, a second apart. The verdict is who released the
+;; loader. The loader notes, as its call returns, whether the collection had
+;; finished: a load that never waited, as one that did not open the FIFO
+;; would, returns before it, and fails the row too.
+;;
+;; While dlopen waits, glibc's dynamic loader holds its lock, and a thread
+;; made then waits for it: pthread_create, which fork-thread calls, returned
+;; only when a blocked load did, 3.5 s after it was called (measured in M4
+;; slice 2, glibc 2.41). So the collector is forked first, and the loader,
+;; the last thread the row makes, after it. capture-command's shell, started
+;; by the collector, does not wait for the lock. Released, dlopen reads no
+;; header from the FIFO, and SQLite tries the path with .so appended, which
+;; isn't there: the load answers SQLITE_ERROR and a message, freed with
+;; sqlite3_free.
+
+;; release-rounds : Natural
+;; How many releases release-until makes at most, a second apart.
+(define release-rounds 10)
+
+;; release-until : String (-> Any) -> (U (List 'released Natural) (List 'unanswered Natural) (List 'release Any))
+;; FIFO opened for writing by a shell, then up to a second's wait for
+;; ANSWERED?, and again until it answers, release-rounds times at most: the
+;; releases it took, or that it never answered, or a release's own failure.
+(define (release-until fifo answered?)
+  (let loop ((n 1))
+    (let ((released (capture-command (list "sh" "-c" "exec 3<>\"$1\"" "sh" fifo))))
+      (cond ((not (equal? released '(0 "" ""))) (list 'release released))
+            ((eq? (wait-until answered? 100) 'satisfied) (list 'released n))
+            ((< n release-rounds) (loop (+ n 1)))
+            (else (list 'unanswered n))))))
+
+;; blocking-load : Natural String -> (List Any Any)
+;; What the loader and the collector each answered, or that it hung.
+(define (blocking-load db fifo)
+  (let ((m (make-mutex))
+        (loader-calling #f)
+        (collected #f)
+        (loader-answer #f)
+        (collector-answer #f))
+    (fork-thread
+     (lambda ()
+       (let ((a (guard (e (#t (list 'raised (describe e))))
+                  (if (eq? (wait-until (lambda () (with-mutex m loader-calling)) 3000) 'satisfied)
+                      (begin
+                        (sleep (make-time 'time-duration 0 1))
+                        (collect-rendezvous)
+                        (with-mutex m (set! collected #t))
+                        (let ((released (release-until fifo (lambda () (with-mutex m loader-answer)))))
+                          (if (eq? (car released) 'released) 'collected released)))
+                      'the-loader-never-called))))
+         (with-mutex m (set! collector-answer (list 'answer a))))))
+    (fork-thread
+     (lambda ()
+       (let ((a (guard (e (#t (list 'raised (describe e))))
+                  (call-with-c-string 'test-native fifo
+                    (lambda (file)
+                      (let-values (((code message)
+                                    (call-with-out-pointer 'test-native
+                                      (lambda (slot)
+                                        (with-mutex m (set! loader-calling #t))
+                                        (sqlite3-load-extension db file 0 slot)))))
+                        (let* ((order (if (with-mutex m collected)
+                                          'returned-after-the-collection
+                                          'returned-before-the-collection))
+                               (text (guard (e (#t (list 'raised (describe e))))
+                                       (and (not (eqv? message 0)) (c-string->string message)))))
+                          (unless (eqv? message 0) (sqlite3-free message))
+                          (list code (if (string? text) 'message (list 'no-message text)) order))))))))
+         (with-mutex m (set! loader-answer (list 'answer a))))))
+    ;; A loader still waiting once the bound has passed is released here,
+    ;; through release-until, and waited for again, bounded: the
+    ;; connection's close, which follows, would wait for the load, which
+    ;; holds the connection's mutex, to TEST_TIMEOUT. So the row fails by
+    ;; name, the-loader-hung, and the suite goes on.
+    (let* ((loader (wait-until (lambda () (with-mutex m loader-answer)) loader-steps))
+           (released (if (eq? loader 'satisfied)
+                         'not-needed
+                         (release-until fifo (lambda () (with-mutex m loader-answer)))))
+           (returned (if (eq? loader 'satisfied)
+                         'satisfied
+                         (wait-until (lambda () (with-mutex m loader-answer)) 3000)))
+           (collector (wait-until (lambda () (with-mutex m collector-answer)) 12000)))
+      (list (if (eq? loader 'satisfied)
+                (cadr (with-mutex m loader-answer))
+                (list 'the-loader-hung 'released released 'then returned))
+            (if (eq? collector 'satisfied) (cadr (with-mutex m collector-answer)) 'the-collector-hung)))))
+
+;; loader-steps : Natural
+;; How many 10 ms waits the FIFO row gives the loader: 120 s, past the
+;; watchdog's 30 s.
+(define loader-steps 12000)
+
+(load-row "sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, it lets another thread's collection finish, returning after it, and that thread releases it; it answers SQLITE_ERROR and a message, freed by sqlite3_free; the handle closes with SQLITE_OK; every count is zero after"
+  (list (list (list (list ok 1) (list (list error-code 'message 'returned-after-the-collection) 'collected))
+              ok zero-counts)
+        'released-by-the-collector)
+  (lambda ()
+    (call-with-temp-directory
+     (lambda (dir)
+       (let* ((fifo (string-append dir "/blocking.fifo"))
+              (marker (string-append dir "/watchdog-fired"))
+              (made (capture-command (list "mkfifo" fifo))))
+         (if (not (equal? made '(0 "" "")))
+             (list 'mkfifo made)
+             (let* ((watchdog (capture-command
+                               (list "sh" "-c"
+                                     "(sleep 30; : >\"$2\"; i=0; while [ $i -lt 10 ]; do exec 3<>\"$1\"; exec 3<&-; sleep 1; i=$((i+1)); done) </dev/null >/dev/null 2>&1 & echo $!"
+                                     "sh" fifo marker)))
+                    (pid (let ((out (cadr watchdog)))
+                           (and (= (car watchdog) 0) (> (string-length out) 1)
+                                (substring out 0 (- (string-length out) 1)))))
+                    (answers (if pid
+                                 (with-memory
+                                  (lambda (db)
+                                    (let* ((on (config-call db enable-load-extension-op 1 7701))
+                                           (blocked (blocking-load db fifo)))
+                                      (list on blocked))))
+                                 (list 'no-watchdog watchdog)))
+                    (released-by (if (file-exists? marker)
+                                     'released-by-the-watchdog
+                                     'released-by-the-collector)))
+               (when pid (capture-command (list "kill" pid)))
+               (list answers released-by))))))))
 
 (test-equal "every count is zero at the end"
   zero-counts

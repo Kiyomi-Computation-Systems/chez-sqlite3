@@ -31,13 +31,25 @@
 ;;; A binding can hide behind a name for the keyword: (define-syntax fp
 ;;; (identifier-syntax foreign-procedure)) binds nothing the scan reads. So the
 ;;; scan also counts every occurrence of the symbol in a file, quoted or not,
-;;; and allows three: the head of a form it reads; the entry of a library's
-;;; (import (only (chezscheme) ...)) clause; and the one (syntax
-;;; foreign-procedure) in a fender of (define-syntax bind-required ...)'s
-;;; syntax-case. Each other is a (stray-reference FILE).
+;;; and allows these: the head of a form it reads; the entry of a library's
+;;; (import (only (chezscheme) ...)) clause; and one (syntax
+;;; foreign-procedure) in a fender of each binder's syntax-case,
+;;; (define-syntax bind-required ...)'s and, since M4, (define-syntax
+;;; bind-optional ...)'s. Each other is a (stray-reference FILE). A form
+;;; bind-optional wraps is read as one bind-required wraps is: the scan reads
+;;; every form, whatever binds it.
+;;;
+;;; A convention is read from what precedes a form's entry, exactly
+;;; (convention-forms): nothing is plain, __collect_safe alone is
+;;; collect-safe, and a list of __varargs_after and 2 alone is variadic, the
+;;; one variadic binding's, sqlite3_db_config's, whose two named parameters
+;;; come before its variadic ones (ADR-0001 and ADR-0021, decision 4).
+;;; Anything else is (other ...), which no row holds: a count of 3, and
+;;; __collect_safe beside the count of 2, among them.
 (library (foreign-conventions)
   (export conventions-table
           row-name row-prototype row-arguments row-result row-convention row-records
+          convention-forms convention-of
           allowed-argument-types allowed-result-types
           scan-tree violations)
   (import (rnrs)
@@ -52,13 +64,19 @@
   ;;               spelling; (RESULT ()) for (void)
   ;;   ARGUMENTS   (Listof Symbol): the Chez argument types
   ;;   RESULT      Symbol: the Chez result type
-  ;;   CONVENTION  collect-safe or plain
+  ;;   CONVENTION  collect-safe, plain or variadic (convention-forms)
   ;;   RECORDS     (Listof String): each begins with the record it cites
-  ;; In ADR-0002's amended order: M1's 15, then M2's 21, then M3's five.
+  ;; In ADR-0002's amended order: M1's 15, then M2's 21, then M3's five, then
+  ;; M4's three, the required sqlite3_db_config and sqlite3_free, then the
+  ;; optional sqlite3_load_extension, whose records say it is optional.
   ;; Every call that can block is collect-safe: sqlite3_open_v2 and
-  ;; sqlite3_close in M1, and sqlite3_prepare_v3, sqlite3_step, sqlite3_reset
-  ;; and sqlite3_finalize in M2. Every other binding is plain, M3's five among
-  ;; them (ADR-0011, decision 5, amended). No binding takes a Scheme object:
+  ;; sqlite3_close in M1, sqlite3_prepare_v3, sqlite3_step, sqlite3_reset
+  ;; and sqlite3_finalize in M2, and sqlite3_load_extension in M4.
+  ;; sqlite3_db_config is variadic, and plain. Every other binding is plain,
+  ;; M3's five among them (ADR-0011, decision 5, amended). A prototype that
+  ;; ends "..." is a variadic function's: its named parameters are the row's
+  ;; leading arguments, and test-constants holds their count to the
+  ;; convention's (ADR-0001, amended 2026-11-17). No binding takes a Scheme object:
   ;; every argument is an integer, a flonum or the address of a block we
   ;; allocated, SQLITE_TRANSIENT is a pointer-width integer, and a string or
   ;; blob SQLite returns is an address we read ourselves (decisions 1 and 4).
@@ -217,7 +235,21 @@
       ("sqlite3_interrupt" ("void" ("sqlite3 *")) (uptr) void plain
        ("ADR-0011 decision 5, M3 amendment: it returned in microseconds from another thread, waiting for no mutex, so it is plain; the one binding called off the owning thread"
         "ADR-0019 decision 5: interrupt-database! calls it alone, bound plain"
-        "ADR-0002 M3 amendment: a required entry point"))))
+        "ADR-0002 M3 amendment: a required entry point"))
+      ("sqlite3_db_config" ("int" ("sqlite3*" "int" "...")) (uptr int int uptr) int variadic
+       ("ADR-0001 M4 amendment and ADR-0021 decision 4: variadic, its two named parameters before the variadic ones, bound once, in the shape (db op int int*)"
+        "ADR-0011 decision 5, M4 amendment: a set never waited, under another connection's exclusive lock, so it is plain"
+        "ADR-0011 decision 3, M4 amendment: the cell is a counted int block holding a sentinel"
+        "ADR-0002 M4 amendment: a required entry point"))
+      ("sqlite3_free" ("void" ("void*")) (uptr) void plain
+       ("ADR-0021 decision 9: it frees the one block SQLite allocates for us, a load's message"
+        "ADR-0011 decision 5, M4 amendment: it does no I/O, so it is plain"
+        "ADR-0002 M4 amendment: a required entry point"))
+      ("sqlite3_load_extension" ("int" ("sqlite3 *" "const char *" "const char *" "char **"))
+       (uptr uptr uptr uptr) int collect-safe
+       ("ADR-0011 decision 5, M4 amendment: it waited on a FIFO for a writer, and bound plain it held another thread's collection, so it is __collect_safe"
+        "ADR-0011 decisions 1 to 3, M4 amendment: the path and the entry point are counted C strings, the message's slot a counted out-pointer"
+        "ADR-0002 M4 amendment: an optional entry point, bound by bind-optional, its absence recorded, never refused"))))
 
   (define (row-name row) (car row))
   (define (row-prototype row) (cadr row))
@@ -312,11 +344,15 @@
            1)
           (else 0)))
 
-  ;; fender-allowance : Any -> (U 0 1)
-  ;; 1 when DATUM is a library holding (define-syntax bind-required ...) with
-  ;; a syntax-case clause (PATTERN FENDER TEMPLATE) whose FENDER holds
+  ;; binders : (Listof Symbol)
+  ;; The macros whose fender may name foreign-procedure, once each.
+  (define binders '(bind-required bind-optional))
+
+  ;; fender-allowance : Symbol Any -> (U 0 1)
+  ;; 1 when DATUM is a library holding (define-syntax BINDER ...) with a
+  ;; syntax-case clause (PATTERN FENDER TEMPLATE) whose FENDER holds
   ;; (syntax foreign-procedure).
-  (define (fender-allowance datum)
+  (define (fender-allowance binder datum)
     (define (fender-has-syntax? clause)
       (and (list? clause) (= (length clause) 3)
            (has-subform? '(syntax foreign-procedure) (cadr clause))))
@@ -324,7 +360,7 @@
       (and (list? form) (>= (length form) 3) (exists fender-has-syntax? (cdddr form))))
     (define (binder? e)
       (and (pair? e) (list? e) (>= (length e) 3) (eq? (car e) 'define-syntax)
-           (eq? (cadr e) 'bind-required)
+           (eq? (cadr e) binder)
            (exists case-has-fender? (forms-headed 'syntax-case e))))
     (if (and (pair? datum) (list? datum) (eq? (car datum) 'library) (exists binder? (cdr datum)))
         1
@@ -333,12 +369,15 @@
   ;; stray-references : String (Listof Any) -> (Listof (List 'stray-reference String))
   ;; One (stray-reference FILE) for each occurrence of foreign-procedure in
   ;; the data of FILE that is not the head of a form foreign-forms reads, the
-  ;; one import entry, or the one fender mention.
+  ;; one import entry, or one fender mention of each binder.
   (define (stray-references file data)
     (let* ((total (apply + (map symbol-count data)))
            (heads (apply + (map (lambda (d) (length (foreign-forms d))) data)))
            (imports (min 1 (apply + (map import-allowance data))))
-           (fenders (min 1 (apply + (map fender-allowance data)))))
+           (fenders (apply + (map (lambda (binder)
+                                    (min 1 (apply + (map (lambda (d) (fender-allowance binder d))
+                                                         data))))
+                                  binders))))
       (let loop ((n (- total heads imports fenders)) (found '()))
         (if (<= n 0)
             found
@@ -413,11 +452,23 @@
   ;; A type written out: a symbol, or a proper list such as (* int).
   (define (literal-type? x) (or (symbol? x) (list? x)))
 
-  ;; convention-of : (Listof Any) -> Any
+  ;; convention-forms : (Listof (Pairof Symbol (Listof Any)))
+  ;; Each convention a row may hold, and exactly what precedes a form's entry
+  ;; for it: nothing for plain, __collect_safe alone for collect-safe, and
+  ;; the list of __varargs_after and 2 alone for variadic, 2 the count of
+  ;; sqlite3_db_config's named parameters, which test-constants holds to its
+  ;; prototype.
+  (define convention-forms
+    '((plain) (collect-safe __collect_safe) (variadic (__varargs_after 2))))
+
+  ;; convention-of : (Listof Any) -> (U Symbol (Pairof 'other (Listof Any)))
+  ;; The convention that CONVENTIONS, what precedes a form's entry, is
+  ;; exactly, by convention-forms; (other . CONVENTIONS) when it is none.
   (define (convention-of conventions)
-    (cond ((null? conventions) 'plain)
-          ((equal? conventions '(__collect_safe)) 'collect-safe)
-          (else (cons 'other conventions))))
+    (let loop ((rest convention-forms))
+      (cond ((null? rest) (cons 'other conventions))
+            ((equal? (cdar rest) conventions) (caar rest))
+            (else (loop (cdr rest))))))
 
   ;; refused-types : Any (Listof Symbol) (Listof Any) Any -> (Listof Violation)
   (define (refused-types entry allowed-arguments arguments result allowed-results)

@@ -275,7 +275,7 @@
 (define chk-n "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
 (define bld-n "scripts/ci/build-chez.sh \"$RUNNER_TEMP/chez-nothreads\" --nothreads")
 (define make-line
-  "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-dev check-clean")
+  "make check-help check-suites check-pins check-floors check-ci test check-test-fails check-variadic check-dev check-clean")
 (define build-run "make build")
 (define launcher "sh tests/guix-env-launcher.sh")
 
@@ -434,7 +434,7 @@
 
 (define make-words
   '("check-help" "check-suites" "check-pins" "check-floors" "check-ci" "test"
-    "check-test-fails" "check-dev" "check-clean"))
+    "check-test-fails" "check-variadic" "check-dev" "check-clean"))
 
 (define (without-word line word)
   (let* ((at (find-sub line (string-append " " word) 0)))
