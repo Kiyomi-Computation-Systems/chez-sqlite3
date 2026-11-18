@@ -16,13 +16,17 @@
 ;;;                     with its counts, its Valgrind line and its call log
 ;;;   the floors        the decoy's versions, from packaging/floors.sexp
 ;;;   the entries       every entry point (chez-sqlite3 private native)
-;;;                     binds, and its partition: each suite's part, by the
-;;;                     suite's file name, dealt by a pattern of five that
-;;;                     repeats. Each entry's missing-api row runs in
+;;;                     requires, and its partition: each suite's part, by
+;;;                     the suite's file name, dealt by a pattern of five
+;;;                     that repeats. Each entry's missing-api row runs in
 ;;;                     exactly one suite, and rows in each hold that the
-;;;                     parts, merged in the convention table's order, are
-;;;                     its names, each once, and that each part is what the
-;;;                     pattern deals it
+;;;                     parts, merged in native's order, are the required
+;;;                     entry points, each once, and that each part is what
+;;;                     the pattern deals it. The optional ones, which a
+;;;                     library may lack and still load, follow them in a
+;;;                     list of their own, outside the pattern, and
+;;;                     test-conventions holds the two, appended, to the
+;;;                     convention table's names
 ;;;   the decoys        each build of tests/decoy-libsqlite3.c, compiled in
 ;;;                     a suite's scratch directory, and a row on one
 ;;;   the missing-api rows
@@ -41,7 +45,8 @@
           once no-native-objects gated? valgrind-line
           outcome report loaded-lines refused-lines report-of loaded refused
           read-floor-values
-          report-entries rest-entries every-entry deal-pattern decoy-parts suite-part merge-halves
+          report-entries rest-entries every-entry optional-entries deal-pattern decoy-parts
+          suite-part merge-halves
           entries-dealt
           lacks-build decoy-builds compile-decoys decoy-status decoy-row-in
           read-switch the-report-three threadsafe-call initialize-call log-of memory-used-call
@@ -241,12 +246,13 @@
 
   ;; --- the entries and their partition ---------------------------------------------
 
-  ;; The entry points (chez-sqlite3 private native) binds, in its order
+  ;; The entry points (chez-sqlite3 private native) requires, in its order
   ;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-  ;; rest, M1's ten, then M2's 21 and M3's five. A forty-second that native
-  ;; binds and the decoy lacks refuses the control, and the control's row
-  ;; fails. A row holds the list to the convention table's names, whole and in
-  ;; order.
+  ;; rest, M1's ten, then M2's 21, M3's five and M4's two, sqlite3_db_config
+  ;; and sqlite3_free. A forty-fourth that native requires and the decoy
+  ;; lacks refuses the control, and the control's row fails. A row holds
+  ;; every-entry, then optional-entries, to the convention table's names,
+  ;; whole and in order.
   (define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
   (define rest-entries
     '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
@@ -259,8 +265,19 @@
       "sqlite3_column_int64" "sqlite3_column_double" "sqlite3_column_text" "sqlite3_column_blob"
       "sqlite3_column_bytes" "sqlite3_error_offset"
       "sqlite3_changes64" "sqlite3_total_changes64" "sqlite3_last_insert_rowid"
-      "sqlite3_get_autocommit" "sqlite3_interrupt"))
+      "sqlite3_get_autocommit" "sqlite3_interrupt"
+      "sqlite3_db_config" "sqlite3_free"))
   (define every-entry (append report-entries '("sqlite3_threadsafe" "sqlite3_initialize") rest-entries))
+
+  ;; optional-entries : (Listof String)
+  ;; The entry points native binds where the library has them, by
+  ;; bind-optional, and records absent where it has not, never refusing the
+  ;; load (ADR-0002, amended 2026-11-17): M4's sqlite3_load_extension, which
+  ;; Apple's library lacks. Outside every-entry, so the pattern deals it no
+  ;; missing-api row: joined to it, at 43, it would go to
+  ;; test-library-loading-real with a row expecting a library that must load
+  ;; to be refused. Its own rows run in test-library-loading-real.
+  (define optional-entries '("sqlite3_load_extension"))
 
   ;; deal-pattern : (Listof String)
   ;; The pattern that deals native's order to the suites, by position from 0,
@@ -276,7 +293,8 @@
   ;; decoy-parts : (Listof (Pairof String (Listof String)))
   ;; The partition: each suite's file name under tests/, then the entry points
   ;; whose missing-api rows it makes, in native's order, written out. Each part
-  ;; holds M1's, M2's and M3's alike. A suite finds its part by its own file's
+  ;; holds M1's, M2's, M3's and M4's alike: M4's sqlite3_db_config, at 41, is
+  ;; the decoys' suite's, and sqlite3_free, at 42, the missing suite's. A suite finds its part by its own file's
   ;; name (suite-part), so a suite copied from another cannot run the other's
   ;; part. Rows in each suite hold that the parts partition the convention
   ;; table, that each is what deal-pattern deals it (entries-dealt), and that
@@ -285,7 +303,7 @@
     '(("test-library-loading-decoys.sps"
        "sqlite3_libversion" "sqlite3_compileoption_get" "sqlite3_errcode" "sqlite3_finalize"
        "sqlite3_bind_parameter_index" "sqlite3_bind_blob64" "sqlite3_column_double"
-       "sqlite3_changes64")
+       "sqlite3_changes64" "sqlite3_db_config")
       ("test-library-loading-real.sps"
        "sqlite3_threadsafe" "sqlite3_close" "sqlite3_next_stmt" "sqlite3_reset"
        "sqlite3_bind_int64" "sqlite3_column_name" "sqlite3_column_blob"
@@ -298,7 +316,7 @@
        "sqlite3_bind_double" "sqlite3_bind_text64" "sqlite3_column_count" "sqlite3_column_type"
        "sqlite3_column_int64" "sqlite3_column_text" "sqlite3_column_bytes"
        "sqlite3_error_offset" "sqlite3_total_changes64" "sqlite3_get_autocommit"
-       "sqlite3_interrupt")))
+       "sqlite3_interrupt" "sqlite3_free")))
 
   ;; entries-dealt : (Listof String) (Listof String) String -> (Listof String)
   ;; The elements of ENTRIES that PATTERN deals NAME, in ENTRIES' order: the
@@ -360,13 +378,15 @@
   (define (lacks-build entry) (string-append "lacks-" entry))
 
   ;; all-builds : (Listof (Pairof String (Listof String)))
-  ;; Each build's name and its switches.
+  ;; Each build's name and its switches: a lacking build for each required
+  ;; entry point and each optional one.
   (define all-builds
     (append (list (list "control")
                   (list "marked" "-DDECOY_MARKER")
                   (list "not-sqlite" "-DDECOY_NOT_SQLITE")
                   (cons "lacks-rest" (map lacks rest-entries)))
-            (map (lambda (entry) (list (lacks-build entry) (lacks entry))) every-entry)))
+            (map (lambda (entry) (list (lacks-build entry) (lacks entry)))
+                 (append every-entry optional-entries))))
 
   ;; decoy-builds : (Listof String) -> (Listof (Pairof String (Listof String)))
   ;; The builds NAMES names, in all-builds' order, each once. A name that is
