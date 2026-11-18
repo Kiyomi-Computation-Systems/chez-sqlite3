@@ -190,8 +190,9 @@ by the gate's `time:` lines, twice on each library, the second on the final tree
 | the FTS5 build of 3.54.1 | 10 s, 11 s | 10 s, 10 s |
 
 Each passed with no Valgrind error and nothing lost, the memory check passing; none `SLOW`. On
-the floor the suite's log, `build/memory/test-fts5.log`, holds the `FTS5 unavailable` line, and its
-refusal row passed; on the other two, the rows and the expected failure.
+the floor the suite's log, `build/memory/test-fts5.log` (not kept; the gate writes it again each
+run), held the `FTS5 unavailable` line, and its refusal row passed; on the other two, the rows and
+the expected failure, as the tree was before the rebase.
 
 ## F0: the lane's check on both 3.54.1 builds
 
