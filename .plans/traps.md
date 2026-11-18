@@ -237,6 +237,13 @@ told in chez-curl's `.plans/traps.md`.
   Reproduce, from the root: `scripts/guix-env sh -c 'd=$(mktemp -d); mkfifo $d/f.fifo; (sleep 4;
   exec 3<>$d/f.fifo) & $CHEZ --script .plans/research/m4-slice-2/fifo-thread.sps
   "$CHEZ_SQLITE3_LIBRARY" $d/f.fifo; wait'`. (M4 slice 2, chez-sqlite3)
+- **A whole new call's effects interleave with the first run's.** In M4 slice 3, a trial took R
+  before `applied-settings/with`'s claim and R1 from R's resume after its first set. It then ran
+  R, a whole new call, to its end, then R1. The stand-in noted `(1005 1) (1005 1) (1010 1)
+  (1013 0) (1014 0) (1010 1) (1013 0) (1014 0)`: two whole calls, each in order, merged. A row
+  that expects two whole calls one after the other failed 522 trials of correct code. Judge a
+  merge: with distinct calls, each noted exactly twice, the first of each pair in the call's
+  order, and the second too. (M4 slice 3, chez-sqlite3)
 
 ## SQLite
 
@@ -489,6 +496,19 @@ told in chez-curl's `.plans/traps.md`.
   on; the others whose start could be read open it off. Apple's answers 21 to the op and leaves
   the cell, so its start isn't known. Apple's 3.51.0 opens every connection with `DEFENSIVE`
   on, and no compile option it lists says so (M4's pre-work). (M4's research, chez-sqlite3)
+  A build with `-DSQLITE_DEFAULT_DEFENSIVE` doesn't list it either: `sqlite3_compileoption_used`
+  answers 0 for it, and its −1 read of `DEFENSIVE` answers `(0 1)`. Read a start through its op,
+  never from the options. (M4 slice 3, chez-sqlite3)
+- **A row that compares with a start can't see a set that writes the start.** M4 slice 3's start
+  rows read each op's start on a connection of the suite's own, then on `open-database`'s, and
+  compared them. A plant that set `defensive` to 0 at every open passed them on every CI lane,
+  where `defensive` starts at 0. So did one that set `dqs-dml` to 1, which every library measured
+  starts at 1. And so did one that skipped `(defensive . #f)` and answered a match. Move the value
+  off its start first, then judge: the slice's `sqlite3_auto_extension` entry point sets every op
+  to 1 minus its start at each open. Reproduce: plant `(defensive 1010 0 #f)` into every open's
+  steps, unless `defensive` is named. On Guix's library, `test-open-db-config`'s start rows,
+  "each start unasked" and "a list naming one op", pass it, and its rows "over the moved starts"
+  fail it. (M4 slice 3, chez-sqlite3)
 - **`DEFENSIVE` turns `writable_schema` off without a word.** Under it,
   `PRAGMA writable_schema = 1` answered done, and read back 0 (M4's pre-work). (M4's research,
   chez-sqlite3)
@@ -855,6 +875,15 @@ told in chez-curl's `.plans/traps.md`.
   the worktree's root. A command for a copy changes into it inside the container. The close fix's
   first probes of two plants ran the fixed code this way, and were run again. (M4's close fix,
   chez-sqlite3)
+- **A variable set on the host doesn't reach `scripts/guix-env`'s container.** The container
+  keeps only `TERM`, `COLORTERM` and `LANG` (its `--preserve`), and exports its own
+  `CHEZ_SQLITE3_LIBRARY`, the profile's. So `CHEZ_SQLITE3_LIBRARY=… scripts/guix-env sh -c 'make
+  test'` ran on Guix's 3.53.1 and passed, green on the wrong library. Only its P4 line, the
+  version's sleep, said so. Set the variables inside the container's `sh -c`, and read the
+  version a suite prints before trusting a lane. Reproduce, from the root:
+  `CHEZ_SQLITE3_LIBRARY=$PWD/build/m3-floor/lib/libsqlite3.so.0 scripts/guix-env sh -c 'echo
+  "$CHEZ_SQLITE3_LIBRARY"'` prints the profile's `/gnu/store/…/lib/libsqlite3.so.0`.
+  (M4 slice 3, chez-sqlite3)
 - **`sqlite3_next_stmt` on a freed connection read 0, plain,** in every close of eleven suites,
   so a count made after a successful close passed them all. Only the gate saw it: 196 to 238
   errors, an invalid read at `sqlite3_next_stmt` (p03). (M4's close fix, chez-sqlite3)
