@@ -84,7 +84,7 @@ newest first.
     ("Assertion violation"), 2026-11-17.
   - **Slice 2,** the bindings and `check-variadic`, is done, as PR #37, `1735a66`, below; the
     maintainer accepted its amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept
-    all"). **Slice 5,** FTS5 and JSON, is PR #39, below, rebased onto the close fix and slice 2,
+    all"). **Slice 5,** FTS5 and JSON, is PR #40, below, rebased onto the close fix and slice 2,
     its workaround gone. **Slice 3,** the settings, is being built from `1735a66`.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
@@ -155,7 +155,7 @@ newest first.
 
 ## Close-outs
 
-### 2026-11-17 — M4 slice 5: FTS5 and JSON (PR #39)
+### 2026-11-17 — M4 slice 5: FTS5 and JSON (PR #40)
 
 - **Built** by an Opus builder from slice 0's head, beside slices 1 and 2:
   - the `current` lane compiles FTS5 in (ADR-0003, amended; the maintainer's Q1):
