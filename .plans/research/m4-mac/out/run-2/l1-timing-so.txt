@@ -1,0 +1,28 @@
+libversion: 3.54.1
+sourceid: 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+L off: ext.so: 0.001 ms
+L a path that doesn't exist: 0.132 ms
+L no entry point, NULL given: 225.887 ms
+L no entry point, one named: 1.150 ms
+L an empty file: 0.642 ms
+L a directory: 0.488 ms
+L an init that fails: 277.921 ms
+L a named entry point it lacks: 171.984 ms
+L ext-named.so, NULL given: 1.106 ms
+L ext-named.so, its entry named: 0.961 ms
+L ext.so, NULL: sqlite3_extension_init: 141.074 ms
+L libchezext.so, NULL: the derived name: 143.640 ms
+L DIR/ext, no suffix: 0.598 ms
+L ext.so, a bare name, cwd DIR: 0.798 ms
+L ./ext.so, relative, cwd DIR: 0.140 ms
+L a path that doesn't exist: 0.501 ms
+L first: 0.634 ms
+L again, same connection: 0.090 ms
+L into the second connection: 0.095 ms
+L after both closed, a third connection: 0.619 ms
+L a FIFO, a writer after 500 ms: 516.566 ms
+L6 the FIFO load: 517.040 ms
+L6 the writer's opens that found a reader: 2
+L first load, beside the held row: 0.869 ms
+L second load, beside the held row: 0.135 ms
+L third load, nothing held: 0.061 ms

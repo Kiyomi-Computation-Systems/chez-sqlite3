@@ -1,0 +1,28 @@
+libversion: 3.54.1
+sourceid: 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+L off: ext.dylib: 0.021 ms
+L a path that doesn't exist: 0.496 ms
+L no entry point, NULL given: 137.093 ms
+L no entry point, one named: 1.062 ms
+L an empty file: 0.611 ms
+L a directory: 0.797 ms
+L an init that fails: 135.031 ms
+L a named entry point it lacks: 138.766 ms
+L ext-named.dylib, NULL given: 1.194 ms
+L ext-named.dylib, its entry named: 0.648 ms
+L ext.dylib, NULL: sqlite3_extension_init: 136.088 ms
+L libchezext.dylib, NULL: the derived name: 136.087 ms
+L DIR/ext, no suffix: 1.539 ms
+L ext.dylib, a bare name, cwd DIR: 0.998 ms
+L ./ext.dylib, relative, cwd DIR: 0.155 ms
+L a path that doesn't exist: 0.920 ms
+L first: 1.003 ms
+L again, same connection: 0.110 ms
+L into the second connection: 0.093 ms
+L after both closed, a third connection: 0.706 ms
+L a FIFO, a writer after 500 ms: 513.522 ms
+L6 the FIFO load: 513.582 ms
+L6 the writer's opens that found a reader: 2
+L first load, beside the held row: 2.759 ms
+L second load, beside the held row: 0.151 ms
+L third load, nothing held: 0.080 ms

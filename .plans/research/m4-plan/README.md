@@ -14,7 +14,7 @@ here twice before anything cites them.
 | File | What it is |
 |---|---|
 | [d1-db-config-open.c](d1-db-config-open.c) | `sqlite3_db_config`'s four v1 ops on a fresh connection: expiry, the error state, a lock, the connections an open makes |
-| [l1-load-extension.c](l1-load-extension.c) | `sqlite3_load_extension`, called as v1's verb would call it; an optional last argument names the files' suffix, `so` when not given ([research/m4-mac/](../m4-mac/README.md)) |
+| [l1-load-extension.c](l1-load-extension.c) | `sqlite3_load_extension`, called as v1's verb would call it; an optional last argument names the files' suffix, `so` when not given; line-buffered, its L6 writer never blocking, since the Mac's run 1 ([research/m4-mac/](../m4-mac/README.md)) |
 | [ext.c](ext.c) | The smallest loadable extension, in four variants by `-D` |
 | [noentry.c](noentry.c) | A shared object with no entry point SQLite looks for |
 | [f1-fts5-json.c](f1-fts5-json.c) | What an FTS5 suite and a JSON suite would assert |

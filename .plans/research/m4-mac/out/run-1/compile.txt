@@ -1,0 +1,11 @@
+$ cc -O2 -Wall -I/opt/homebrew/opt/sqlite/include -o SCRATCH/l1-load-extension .plans/research/m4-plan/l1-load-extension.c /opt/homebrew/opt/sqlite/lib/libsqlite3.dylib -Wl,-rpath,/opt/homebrew/opt/sqlite/lib -lpthread -lm
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -o SCRATCH/l1-dylib.d/ext.dylib .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_NAMED -o SCRATCH/l1-dylib.d/ext-named.dylib .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_DERIVED -o SCRATCH/l1-dylib.d/libchezext.dylib .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_FAILING -o SCRATCH/l1-dylib.d/ext-failing.dylib .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -o SCRATCH/l1-dylib.d/noentry.dylib .plans/research/m4-plan/noentry.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -o SCRATCH/l1-so.d/ext.so .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_NAMED -o SCRATCH/l1-so.d/ext-named.so .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_DERIVED -o SCRATCH/l1-so.d/libchezext.so .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -I/opt/homebrew/opt/sqlite/include -DEXT_FAILING -o SCRATCH/l1-so.d/ext-failing.so .plans/research/m4-plan/ext.c
+$ cc -O2 -Wall -dynamiclib -o SCRATCH/l1-so.d/noentry.so .plans/research/m4-plan/noentry.c

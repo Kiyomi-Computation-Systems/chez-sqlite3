@@ -1,0 +1,9 @@
+libversion: 3.54.1
+the FIFO: DIR/fifo.dylib
+  dlopen, no writer                    still in the call 3000 ms on; released, the opens that found a reader 2; it returned after 3021 ms: NULL, dlerror "dlopen(DIR/fifo.dylib, 0x000A): tried: 'DIR/fifo.dylib' (not a file), '/System/Volumes/Preboot/Cryptexes/OSDIR/fifo.dylib' (no such file), 'DIR/fifo.dylib' (not a file)"
+  dlopen, one writer                   the writer at 500 ms found a reader; still in the call 3000 ms on; released, the opens that found a reader 1; it returned after 3506 ms: NULL, dlerror "dlopen(DIR/fifo.dylib, 0x000A): tried: 'DIR/fifo.dylib' (not a file), '/System/Volumes/Preboot/Cryptexes/OSDIR/fifo.dylib' (no such file), 'DIR/fifo.dylib' (not a file)"
+  load, no writer                      still in the call 3000 ms on; released, the opens that found a reader 2; it returned after 3016 ms: answered 1 (extended 0), message "dlopen(DIR/fifo.dylib.dylib, 0x000A): tried: 'DIR/fifo.dylib.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/fifo.dylib.dylib' (no such file), '~/github/chez-sqlite3/"
+  load, one writer                     the writer at 500 ms found a reader; still in the call 3000 ms on; released, the opens that found a reader 1; it returned after 3505 ms: answered 1 (extended 0), message "dlopen(DIR/fifo.dylib.dylib, 0x000A): tried: 'DIR/fifo.dylib.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSDIR/fifo.dylib.dylib' (no such file), '~/github/chez-sqlite3/"
+  dlopen, a directory                  after 1 ms: NULL, dlerror "dlopen(DIR/dir.dylib, 0x000A): tried: 'DIR/dir.dylib' (not a file), '/System/Volumes/Preboot/Cryptexes/OSDIR/dir.dylib' (no such file), 'DIR/dir.dylib' (not a file)"
+  dlopen, an empty file                after 1 ms: NULL, dlerror "dlopen(DIR/empty.dylib, 0x000A): tried: 'DIR/empty.dylib' (), '/System/Volumes/Preboot/Cryptexes/OSDIR/empty.dylib' (no such file), 'DIR/empty.dylib' ()"
+(exit 0)
