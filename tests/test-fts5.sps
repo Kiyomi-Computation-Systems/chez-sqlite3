@@ -44,8 +44,10 @@
 ;;; where rowid order is 2 then 3, so the rank rows can tell the orders
 ;;; apart; and the phrase "text full" matches nothing, where the words'
 ;;; AND matches 2, so the phrase row can tell a phrase from an AND. The
-;;; agreement row holds the check against its complement: a probe that
-;;; raised, and a module count neither 0 nor 1. The rows go through
+;;; bound MATCH's row asserts its parameter's typeof, text, so a string bound
+;;; as a BLOB, which FTS5 reads as text, fails it. The agreement row holds
+;;; the check against its complement: a probe that raised, and a module
+;;; count neither 0 nor 1, with each answer of the option. The rows go through
 ;;; the conveniences and the statement verbs, so they test the values' path
 ;;; through the library, not SQLite: UTF-8 in SQL text and bound strings,
 ;;; rows read back as vectors of exact integers, flonums and strings.
@@ -189,11 +191,11 @@
   '(agree (disagree #t 0) (disagree #f 1)
           (disagree #f (raised "x")) (disagree #t (raised "x"))
           (disagree (raised "x") 0) (disagree (raised "x") 1)
-          (disagree #t 2))
+          (disagree #t 2) (disagree #f 2))
   (list (agreement fts5-option fts5-module) (agreement #t 0) (agreement #f 1)
         (agreement #f '(raised "x")) (agreement #t '(raised "x"))
         (agreement '(raised "x") 0) (agreement '(raised "x") 1)
-        (agreement #t 2)))
+        (agreement #t 2) (agreement #f 2)))
 
 ;; --- the rows, where FTS5 is ---------------------------------------------------------------
 
@@ -322,13 +324,13 @@
     '(#(3))
     (answer (lambda () (with-docs (lambda (db) (matching db "sqlite NOT fts5"))))))
 
-  (test-equal "a MATCH given as a bound parameter, \"sqlite OR café\", matches 1, 2 and 3"
-    '(#(1) #(2) #(3))
+  (test-equal "a MATCH given as a bound parameter, \"sqlite OR café\", matches 1, 2 and 3, bound as TEXT"
+    '(#(1 "text") #(2 "text") #(3 "text"))
     (answer
      (lambda ()
        (with-docs
         (lambda (db)
-          (query db "select rowid from docs where docs match ?1 order by rowid" "sqlite OR café"))))))
+          (query db "select rowid, typeof(?1) from docs where docs match ?1 order by rowid" "sqlite OR café"))))))
 
   (test-equal "a query's syntax error through query: a bare AND raises &sqlite-error from query, code error, with its SQL and no place"
     (list 'sqlite-error 'query 'error 'error (caddr syntax-errors) #f)

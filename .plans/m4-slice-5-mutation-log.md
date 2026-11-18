@@ -230,7 +230,10 @@ byte the one it names, the digest the host's real `openssl` computed of it, whic
 `tar` extracted. The compile and the check were the real ones, with the container's gcc. It built,
 passed its own `check-sqlite.sh --current` with 39 options, and printed its last line, exit 0, in
 25 s. The library was byte for byte `build/m4-current-fts5`'s. L01 ran the same with the flag
-dropped.
+dropped. The three shims and the digests are kept in
+[research/m4-slice-5/replay/](research/m4-slice-5/replay/). The archive and its extraction were
+not kept: they are SQLite's pinned release, which `build-sqlite.sh` fetches by its URL and checks
+by its digests.
 
 ## How the mutants ran
 
@@ -241,8 +244,9 @@ once before it is written, and a list of runs. The runs went through the worktre
 reach; each suite under `timeout 300`, six mutants at once; none hung. Rows are read from the
 suites' `FAIL` and `XPASS` lines and counts, never by eye. The driver (`mutants.py`,
 `run-mutants.sh`, `summarize.py`) was in the session's scratchpad; the lead copied it, unchanged,
-into [research/m4-slice-5/scripts/](research/m4-slice-5/scripts/), and its logs stay in
-`build/mut/`.
+into [research/m4-slice-5/scripts/](research/m4-slice-5/scripts/). Its per-mutant logs in
+`build/mut/` were not kept; `summarize.py`'s reading of them is, for the rerun on the head
+([research/m4-slice-5/plants-rerun.txt](research/m4-slice-5/plants-rerun.txt)).
 
 As first run, F02's refusal row on an FTS5 library failed on its close, which raised FTS5's
 untracked statements, not on the create's `done`. The row then dropped its probe table as the
@@ -400,11 +404,16 @@ and the plain 3.54.1, `test-json` 16 on all six. Under the gate on Guix's librar
   global constraints' close rules. `test-fts5`'s mark and drops are gone, and its close row is an
   ordinary row (below).
 - **ADR-0003's amendment** is built: the lane, the lists and the rows, and F0's two outcomes on the
-  two 3.54.1 builds. CI's first `current` run on this branch should read `check-sqlite.sh`'s 39
-  lines, `ENABLE_FTS5` among them, and `test-fts5` taking its rows; the `floor` job's
-  `test-fts5` its refusal.
+  two 3.54.1 builds. CI's first run on this branch, 44211896445 at `1b2d6a0`, read them, both
+  SQLite caches missing and rebuilt: `current`'s `check-sqlite.sh` passed its build's 39 compile
+  options, `ENABLE_FTS5` after `DIRECT_OVERFLOW_READ`, and `test-fts5` ran its 19 rows; `floor`'s
+  passed 37, and `test-fts5` printed "FTS5 unavailable" and ran 5; `main`, on Ubuntu's 3.45.1,
+  ran the 19, the first run of the rows on that library. `test-json` passed 16 on each. The
+  amendment says the workflow doesn't change, and no job or step did; the `current` job's comment
+  did, as the plan's §4.5 asks, and `check-ci` skips comments.
 - **ADR-0005's shard amendment** lists `MEMORY_SUITES_1` at 35 suites, as it was then; it is 38 on
-  `3488963` with these two, at about 10 s each under the gate here. Their CI times are for the first runs of `memory-1` to read.
+  `3488963` with these two, at about 10 s each under the gate here. Their CI times are for the
+  first runs of `memory-1` to read.
 - **The brief's §2.6,** amended with M4's plan, says the FTS5 suite runs on every lane, which
   holds; with the close fix, nothing about FTS5 needs adding there.
 - **The ledger:** slice 5's close-out, and the merge order with slice 2, which edits the same shard

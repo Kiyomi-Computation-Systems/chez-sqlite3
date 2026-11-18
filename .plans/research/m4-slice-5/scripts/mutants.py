@@ -5,6 +5,13 @@ file exactly once, and a list of runs. Writes build/mut/NAME/RUN.sh, which
 the container runs from the worktree's root.
 
   python3 -I mutants.py WORKTREE [NAME ...]
+
+The builder wrote it against the tree before the rebase onto the close fix.
+The lead moved FV01, FV02, FV07, FV08, FV10 and J03 to the rows as the
+review left them, each planting a value a wrong rule would give, and
+retired F10, F11, X01 and X02, which planted the workaround and the
+candidate fix: with no NAME they are skipped, and named, their edits match
+nothing (the slice's log, "After the close fix" and "The review's fixes").
 """
 import os, subprocess, sys
 
@@ -122,18 +129,18 @@ mut('X02', "X01's fix with the mark and the drops gone: every FTS5 row passes",
 # --- FTS5: each row's value planted --------------------------------------------------------
 def fv(name, guards, old, new, libs=['guix', 'fts5']):
     mut(name, guards, [(FTS, old, new)], suite(FTS, libs))
-fv('FV01', "MATCH ordered by rank (expected 3 then 2)",
-   """    '(#(2) #(3))
-    (answer
-     (lambda ()
-       (with-docs
-        (lambda (db) (query db "select rowid from docs where docs match 'sqlite' order by rank"))))))""",
+fv('FV01', "MATCH ordered by rank (expected rowid order, 2 then 3)",
    """    '(#(3) #(2))
     (answer
      (lambda ()
        (with-docs
-        (lambda (db) (query db "select rowid from docs where docs match 'sqlite' order by rank"))))))""")
-fv('FV02', "bm25's order is rank's (expected 3 then 2)", "    '((2 3) #t)", "    '((3 2) #t)")
+        (lambda (db) (query db "select rowid from docs where docs match 'sqlite OR rank' order by rank"))))))""",
+   """    '(#(2) #(3))
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db) (query db "select rowid from docs where docs match 'sqlite OR rank' order by rank"))))))""")
+fv('FV02', "bm25's order is rank's (expected rowid order, 2 then 3)", "    '((3 2) #t)", "    '((2 3) #t)")
 fv('FV03', "unicode61 folds creme to crème (expected no match)", "    '((#(1)) (#(1)) (#(1)))", "    '((#(1)) (#(1)) ())")
 fv('FV04', "remove_diacritics 0 keeps them (expected cafe to match)", "    '(#(0) #(1))", "    '(#(1) #(1))")
 fv('FV05', "highlight() answers the text as stored (expected the folded cafe)",
@@ -143,15 +150,36 @@ fv('FV06', "a prefix query (expected searc* as a whole term: nothing)",
     (answer (lambda () (with-docs (lambda (db) (matching db "searc*"))))))""",
    """    '()
     (answer (lambda () (with-docs (lambda (db) (matching db "searc*"))))))""")
-fv('FV07', "a phrase query (expected nothing)",
-   """    '(#(2))
-    (answer (lambda () (with-docs (lambda (db) (matching db "\\"full text\\""))))))""",
-   """    '()
-    (answer (lambda () (with-docs (lambda (db) (matching db "\\"full text\\""))))))""")
-fv('FV08', "a column filter (expected title:sqlite to match the bodies' 2 and 3)", "    '((#(2)) ())", "    '((#(2)) (#(2) #(3)))")
+fv('FV07', "a phrase query (expected an AND's answer: the reversed phrase matching 2)",
+   """    '((#(2)) ())
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db)
+          (let* ((phrase""",
+   """    '((#(2)) (#(2)))
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db)
+          (let* ((phrase""")
+fv('FV08', "a column filter (expected title:sqlite to match the bodies' 2 and 3)",
+   """    '((#(2)) ())
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db)
+          (let* ((second""",
+   """    '((#(2)) (#(2) #(3)))
+    (answer
+     (lambda ()
+       (with-docs
+        (lambda (db)
+          (let* ((second""")
 fv('FV09', "NOT (expected it ignored: 2 and 3)", "    '(#(3))\n    (answer (lambda () (with-docs (lambda (db) (matching db \"sqlite NOT fts5\"))))))",
    "    '(#(2) #(3))\n    (answer (lambda () (with-docs (lambda (db) (matching db \"sqlite NOT fts5\"))))))")
-fv('FV10', "a bound MATCH reaches FTS5 whole (expected café lost: 2 and 3)", "    '(#(1) #(2) #(3))", "    '(#(2) #(3))")
+fv('FV10', "a bound MATCH reaches FTS5 whole (expected café lost: 2 and 3)",
+   """    '(#(1 "text") #(2 "text") #(3 "text"))""", """    '(#(2 "text") #(3 "text"))""")
 fv('FV11', "a query's syntax error names query (expected step!)",
    "    (list 'sqlite-error 'query 'error 'error (caddr syntax-errors) #f)",
    "    (list 'sqlite-error 'step! 'error 'error (caddr syntax-errors) #f)")
@@ -202,7 +230,7 @@ jv('J01', "OMIT_JSON's row reads the predicate (expected #f for both, as a predi
 jv('J02', "json() minifies (expected the literal as written)",
    """  '#("{\\"a\\":[1,2.5,\\"x\\",null,true]}")""", """  '#(" { \\"a\\" : [1, 2.5, \\"x\\", null, true] } ")""")
 jv('J03', "json() minifies a bound string (expected it unchanged)",
-   """  '#("[1,2]" 1)""", """  '#("[1, 2]" 1)""")
+   """  '#("[1,2]" 1 "text")""", """  '#("[1, 2]" 1 "text")""")
 jv('J04', "malformed JSON fails at step (expected at prepare)",
    """  (step-error "select json('{')")""", """  '(sqlite-error call-with-statement error error "select json('{')" #f)""")
 jv('J05', "malformed JSON through query-row names query-row (expected step!)",
@@ -304,9 +332,12 @@ def make(name, edits, runs):
         open(p, 'w', encoding='utf-8').write(text.replace(old, new))
     open(os.path.join(d, 'RUN.sh'), 'w').write(run_lines(name, runs))
 
+RETIRED = {'F10', 'F11', 'X01', 'X02'}
 names = []
 for name, guards, edits, runs in M:
     if ONLY and name not in ONLY:
+        continue
+    if not ONLY and name in RETIRED:
         continue
     make(name, edits, runs)
     names.append(name)
