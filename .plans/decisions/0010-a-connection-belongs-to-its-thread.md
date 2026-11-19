@@ -129,6 +129,10 @@ of the code (Opus).
   section,** owner first, then open. A wrong thread is answered as data and raised after the
   section, `&sqlite-wrong-thread` from the procedure the caller called. The check before the
   section stays, so an argument's refusal still comes after a wrong thread's.
+- **`close-database!` compares it too,** in a critical section around the interrupt latch's close,
+  which finalizes, empties the cache and calls `sqlite3_close`: the first fix missed that verb,
+  and the M4 session's check found a close resumed on another thread closing the connection there,
+  at two fuels. Two more rows hold it.
 - **Rows hold it:** seven, each sweeping every fuel and finishing each remainder on a forked
   thread, with every wait bounded: a bare call, open and closed, and `changes`,
   `in-transaction?`, `step!` and `prepare-statement`, and the refusal's handler at depth 1. On
