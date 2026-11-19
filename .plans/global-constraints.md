@@ -28,10 +28,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `(chez-sqlite3 private …)` library (ADR-0001).
 - **Constants and signatures are checked against `sqlite3.h`** by a C program compiled at test
   time. A missing header or compiler fails the suite, never skips it. The compiler is a test
-  oracle, never an install dependency (ADR-0001). The one exception: the optional
-  `sqlite3_load_extension`'s prototype is asked in a compile of its own, and named UNAVAILABLE,
-  both facts asserted, where its header refuses it and the library lacks it (ADR-0002, amended in
-  M4 slice 2).
+  oracle, never an install dependency (ADR-0001). Two exceptions, each where the library lacks
+  `sqlite3_load_extension`:
+  - the optional prototype is asked in a compile of its own, and named UNAVAILABLE, both facts
+    asserted, where its header refuses it (ADR-0002, amended in M4 slice 2);
+  - the suites' extension, `tests/extension.c`, isn't built, and the build is named unavailable
+    (ADR-0001, amended in M4 slice 4).
 - **`sqlite3_db_config` is bound once, in the shape `(db op int int*)`, with
   `(__varargs_after 2)`, plain; `sqlite3_config` is never bound** (ADR-0001, brief §2.8).
   `make check-variadic`, which CI's `main` job runs as a step and `make test` doesn't, removes the
@@ -71,13 +73,17 @@ Proposed record is marked *(provisional)* until that record is accepted.
     There an engine never expires, and another thread's collection waits.
   - `call-with-open-handle`'s procedure answers data, and what it raises can't be resumed.
   - A C string that a caller under engines uses lives, whole, in one section: the open,
-    `sqlite-compile-option?`, and M2's prepare.
+    `sqlite-compile-option?`, M2's prepare, and `load-extension!`'s path and entry point, each
+    copied and checked before the section, the copy handed to C (ADR-0021, amended in M4 slice 4).
   - A row per site holds the rule (ADR-0012 and ADR-0011, amended by M1's closing review).
 
 ## Loading libsqlite3
 
 - **`CHEZ_SQLITE3_LIBRARY`, if set, is an absolute path, loaded as given,** with no search and no
-  fallback. Anything else is `invalid-override` (ADR-0002).
+  fallback. Anything else is `invalid-override` (ADR-0002). On macOS, `DYLD_LIBRARY_PATH` can
+  still redirect an absolute path by its leaf name, the override's, discovery's and an
+  extension's; the reference says so, and no code changes for it (ADR-0002, amended in M4's
+  closing review).
 - **Otherwise one candidate list, chosen by world.** A Guix world never yields a standard
   directory, and an FHS world never yields a Guix profile. macOS has one candidate,
   `/usr/lib/libsqlite3.dylib`. Discovery is a pure function of its inputs (ADR-0002).
@@ -98,7 +104,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   argument is a database, that it runs on the owning thread, and that the connection is open,
   before anything reaches C. The wrong thread raises `&sqlite-wrong-thread`, and a closed
   connection `&sqlite-closed`. `interrupt-database!` is the one exception, and checks only that its
-  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019).
+  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019). `call-with-open-handle`
+  compares the owner again inside its section, since Chez resumes an engine's remainder on
+  whichever thread calls it, and raises after the section (ADR-0010, amended in M4's closing
+  review).
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
 - **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
@@ -197,7 +206,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Every call of an open verb holds a claim,** made by its first expression: the position of
   the next section any run of the call may make. Each run carries its own position, and each
   section claims it inside the section: the open's, each setting's prepare, step, read and
-  finalize, and a failure's close. A run the call has passed is refused there, touching
+  finalize, each `db_config` set's call, and a failure's close (ADR-0021, amended in M4 slice 3). A run the call has passed is refused there, touching
   nothing, and raises `&sqlite-closed`. One remainder can be resumed again while an earlier
   resume of it is pending, so a flag set only once a call ends lets both runs act (ADR-0018,
   amended in M3 slice 5).
@@ -272,7 +281,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   written match; another cell raises `&sqlite-setting-mismatch`; another code raises
   `&sqlite-error`, its code that answer and its message `sqlite3_errstr`'s, never the
   connection's, since `db_config` sets no error there; but a code whose low byte is 0, 100 or 101,
-  which names no error, an assertion violation from the verb called, `(not-an-error CODE)`. The
+  or one that is no exact integer, which names no error, an assertion violation from the verb
+  called, `(not-an-error CODE)`. The
   cell is filled with the core's `db-config-sentinel`, never a literal. The connection is closed
   first (ADR-0021, decision 3, amended in M4 slice 1).
 - **The opt-in is checked before anything opens:** on a library without
@@ -294,7 +304,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   as an op, `sqlite3_auto_extension` and its siblings (ADR-0021, decision 11).
 - **A suite's rows for what a library may lack** are chosen by what the library reports:
   FTS5 by `sqlite-compile-option? "ENABLE_FTS5"`, held to `pragma_module_list`; extension
-  loading by native's record of `sqlite3_load_extension`. The rest are named unavailable, never
+  loading by native's record of `sqlite3_load_extension`, and `ENABLE_LOAD_EXTENSION`'s round
+  trip by the op's own first answer, where Apple's answers 21. The rest are named unavailable, never
   silently, and the refusal is asserted in their place, so each suite runs on every lane. Where
   native records no `sqlite3_load_extension`, the suites' extension isn't built, and the build is
   named unavailable too (ADR-0001, amended in M4 slice 4). The
@@ -359,8 +370,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended). The banned names include
   `CC`, `C_INCLUDE_PATH`, `CPATH`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `CHEZ_SQLITE3_DECOY` and
   `CHEZ_SQLITE3_GATE_CHILD`. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` stand only in `floor` and
-  `current`, as exact env keys of the three steps that name the lane's build; `main`, the job that
-  tests discovery, refuses both (M1 slices 3 and 5).
+  `current`, as exact env keys of the steps that name a build, each with that build's value:
+  `floor`'s three, and `current`'s five, its `--no-load` build's check and `make test` among them;
+  `main`, the job that tests discovery, refuses both (M1 slices 3 and 5; ADR-0005, amended in M4's
+  closing review).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own
