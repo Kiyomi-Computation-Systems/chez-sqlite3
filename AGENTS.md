@@ -174,11 +174,14 @@
   holds a claim also runs a pass with the trip below what one call
   allocates, judges each trial by its own effects, and fails by name
   unless that pass reached past the section (ADR-0016, amended in M4
-  slice 4). A low row proves its reach two ways: every section the suite
-  forces met its collect request, and some run expired exactly at a forced
-  exit, read from the engine's timer. Its test: with the trip slipped to
-  256 KiB, every low row fails by name and no other row does (ADR-0016,
-  amended in M4's closing review).
+  slice 4). A low row proves its reach: every section the suite forces
+  met its collect request, and some run expired exactly at a forced exit,
+  read from the engine's timer where the section's own callback saw it
+  running; where a plant needs two runs to overlap, the row counts that
+  interleaving, met by correct code in every run. Its tests: with the trip
+  slipped to 256 KiB every low row fails by name and no other row does,
+  and each plant is caught in 20 runs of 20, 10 at once and 10 one after
+  another (ADR-0016, amended in M4's closing review).
 
 **Chez and the FFI**
 

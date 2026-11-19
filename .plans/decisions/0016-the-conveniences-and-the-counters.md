@@ -578,6 +578,23 @@ sweeps need the pass, and now have it.
   - some run expired exactly at a forced section's exit. The engine's timer reads `#f` at the end
     of the request's handler exactly when the remainder lies at that exit, and nowhere else.
 
+  A section is credited only when its own callback found the timer running, and only the first
+  in a slice: an expiry inside `with-transaction` runs its after thunk, which steps a ROLLBACK in a
+  forced section with the timer already off, and the first form credited that section with exits
+  no run had stopped at (the M4 session's recheck).
+- **Where a plant needs two runs to overlap, the low row checks that interleaving itself,** met by
+  correct code in every run, so the plant's catch is that check's complement, not luck:
+  - `test-transaction-engine`'s pending row: at each level, some trial holds R at the body's
+    statement unstepped, R1 at the step's forced exit, and R's second run refused by the claim, 32
+    to 36 trials a level; and every run's answer is one the call can give, where the plant made R's
+    second run answer `(not-allowed-in-state done)` in 27 to 32 trials a run;
+  - each pending script low suite: some trial holds R before the first section and R1 at the first
+    prepare's forced exit, R's second run refused, 96 to 100 trials a suite, and the plant 0.
+
+  Each was proven in 20 runs, 10 at once and 10 one after another, since a catch the heap's layout
+  decides moves between them: the plants caught 20 of 20, correct code passing 20 of 20, where
+  the first forms caught them in about half.
+
   The suite forces 32 KiB through SQLite's trace, an authorizer, the open's tell, or, for
   `open-database`, a forcing VFS: a copy of SQLite's default with `xAccess` and `xFullPathname`
   wrapped, since Apple's library refuses `sqlite3_auto_extension` and a VFS never sees

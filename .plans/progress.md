@@ -273,6 +273,20 @@ newest first.
     apart; two suites move to shard 1;
   - and the docs' twice-failing init, the override's "no search", and the records' figures and
     citations.
+- **Rechecked by the M4 session** at `6fe29c8`: one major. `test-transaction-engine`'s pending low
+  row caught its plant, a claim advanced just after its section, in 11 of 21 runs, and its reach
+  checks passed either way; `script-low-3` caught its plant in 11 of 15. Fixed in builder D's third
+  round:
+  - the timer's credit had counted sections an expiry's unwinding forced, with the timer off, at
+    exits no run stopped at; it now credits a section only where its own callback saw the timer
+    running;
+  - the pending row judges each run's answer, which showed the plant in 27 to 35 trials a run where
+    the state showed it in 1 or 2, and counts the interleaving the plant needs, R holding the body's
+    statement, R1 at the step's forced exit, R's second run refused;
+  - the script low suites force each prepare and count R1 at the first prepare's exit, R's second
+    run refused;
+  - each proven in 20 runs, 10 at once and 10 one after another: both plants caught 20 of 20,
+    correct code passing 20 of 20, rerun by the lead.
 - **The records,** accepted by the maintainer, 2026-11-19 ("Accept all"), and refined after the M4
   session's check: ADR-0010's amendment gains the close, ADR-0016's the reach checks, `$tc-field`
   and the claim window, and AGENTS.md's low-pass bullet how a low row proves its reach:
@@ -299,6 +313,7 @@ newest first.
   | Builder E2, the loading split | Opus | 501k | 261 | 74 min |
   | Builder C, after the check | Opus | 443k | 35 | 15 min |
   | Builder D, after the check | Opus | 434k | 184 | 93 min |
+  | Builder D, after the recheck | Opus | 619k | 278 | 223 min |
 
 - **Learned:**
   - **A check of the calling thread vouches only for the section it is made in.** Engines make a

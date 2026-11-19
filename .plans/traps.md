@@ -277,6 +277,22 @@ told in chez-curl's `.plans/traps.md`.
   at 2^27 and at 256 KiB, none did. A suite proves a low pass reached an exit this way.
   Reproduce: `research/m4-closing-review/sweeps/exit-probe.sps` and `timer-probe.sps`. (M4's
   closing review, chez-sqlite3)
+- **An expiry's unwinding runs after thunks with the timer off, and they can meet requests too.**
+  An engine that expires inside `with-transaction` runs its after thunk, which steps a ROLLBACK
+  through a forced section; that section's request is handled while the slice's ticks read spent,
+  so a credit that reads only the timer at the handler counts an exit no run stopped at. In
+  `test-transaction-engine`, the first form's rule gave 5,115 credits to sections forced with the
+  timer off against 1,176 with it running, and every row still passed. Credit a section only where
+  its own callback saw the timer running. Reproduce:
+  `research/m4-closing-review/sweeps/offtimer-probe.py` on the host, then its copy run as its
+  header says. (M4's closing review, chez-sqlite3)
+- **A trial that judges only the state its runs leave can miss a wrong answer.** A claim advanced
+  just after `with-transaction`'s body section let R's second run answer `(not-allowed-in-state
+  done)` in 29 to 35 trials a run, where the rows' state checks saw a stray effect in 1 or 2, so
+  the row caught the plant in about half its runs. Judge each run's answer against all it may be.
+  Reproduce: `planted.sh P-conv-advance-after`, then `twenty.sh` with the plant's copy and
+  `test-transaction-engine`, in `research/m4-closing-review/sweeps/`. (M4's closing review,
+  chez-sqlite3)
 - **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
   inside it and resumed a second time met the wind's own refusal, an assertion violation,
   `re-entered`, where the call's claim should have answered `&sqlite-closed`. M4 slice 4 makes its

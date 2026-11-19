@@ -260,8 +260,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
   refusals, never by a control run; where a call allocates less than the trip's chunk, about
   32 KiB, the suite allocates that inside the section, in the low pass only. Each low row fails
   by name unless every forced section met its collect request and some run expired at a forced
-  exit, read from the engine's timer, so a trip slipped to 256 KiB fails every low row (ADR-0016,
-  amended in M4's closing review).
+  exit, read from the engine's timer where the section's own callback saw it running, so a trip
+  slipped to 256 KiB fails every low row. Where a plant needs two runs to overlap, the row counts
+  that interleaving, met by correct code in every run, and judges every run's answer; its catch is
+  proven in 20 runs of 20, 10 at once and 10 one after another (ADR-0016, amended in M4's closing
+  review).
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the
