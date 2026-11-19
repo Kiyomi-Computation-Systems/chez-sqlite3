@@ -266,6 +266,12 @@
   count, since each procedure entry before the call's first expression costs
   a tick. Count a guard against the fuels swept, never one trial
   (`.plans/traps.md`).
+* `collect-trip-bytes` is read only when an allocation chunk of about
+  32 KiB runs out, and a request in a trial's first slice moves its
+  remainder earlier than its fuel says. A low pass allocates that much
+  inside the section it must reach, and its bounds read only the trials
+  whose first slice met no request (ADR-0016, amended in M4's closing
+  review; `.plans/traps.md`).
 
 ## Closing ritual
 

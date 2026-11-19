@@ -259,8 +259,17 @@ told in chez-curl's `.plans/traps.md`.
   remainder there. M4 slice 4's sweeps first read "both past the section in 0; R before it and R1
   past it in 0", and a plant that set the claim's flag after the section passed them all. With
   the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 184" (186 before
-  the check of PR #45 added two variants to each trial's build), and the plant ran the init twice. Reproduce: `test-load-extension-engines`' two interleave rows print
-  both counts. (M4 slice 4, from its review, chez-sqlite3)
+  the check of PR #45 added two variants to each trial's build), and the plant ran the init
+  twice. Reproduce: `test-load-extension-engines`' two interleave rows print both counts. (M4
+  slice 4, from its review, chez-sqlite3)
+- **`collect-trip-bytes` is read only when an allocation chunk runs out.** With the trip at 256
+  bytes, a critical section that allocated 1,000 bytes met a collect request at its exit 6 times
+  in 100; 8,000 and 16,000 bytes, 49 and 50; 32,000 bytes and more, every time. So a call that
+  allocates less than about 32 KiB meets a request at the same point at every fuel, and a low
+  pass reaches the exit it needs only by luck: M4's closing review found 0 of 3,706 trials
+  straddling a set's exit until the suite allocated 32 KiB inside that section itself. Reproduce:
+  `research/m4-closing-review/sweeps/chunk-probe.sps`, which printed the same counts twice. (M4's
+  closing review, chez-sqlite3)
 - **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
   inside it and resumed a second time met the wind's own refusal, an assertion violation,
   `re-entered`, where the call's claim should have answered `&sqlite-closed`. M4 slice 4 makes its
