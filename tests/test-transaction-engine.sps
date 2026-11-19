@@ -465,6 +465,13 @@
 ;; The forced section at whose exit the first slice's ticks ran out.
 (define exit-k #f)
 
+;; force-source, forced-source, exit-source : (U Symbol #f)
+;; What a suite's callback names the section it forces, set around its
+;; force!; the last forced section's; and the one exit-k numbers.
+(define force-source #f)
+(define forced-source #f)
+(define exit-source #f)
+
 ;; pass-k, pass-exits : Natural (Listof Natural)
 ;; The most forced sections a first slice of the pass passed, and the
 ;; forced sections a first slice of it expired at the exit of.
@@ -484,17 +491,26 @@
           (set! forced (+ forced 1))
           (when numbering (set! forced-k (+ forced-k 1)))
           (set! forced-pending #t)
-          (set! forced-at t))))
+          (set! forced-at t)
+          (set! forced-source force-source))))
     (set! sink (make-bytevector 32768))))
 
 ;; exit-noted! : -> Void
 ;; In the request handler, once a request is handled: the forced section's
-;; request met, and, inside a first slice whose ticks it spent, the
-;; section's number noted.
+;; request met; and, inside a first slice whose ticks it spent, where the
+;; section's callback found the engine's timer running, the section's
+;; number noted, the first so noted. An expiry's unwinding runs after
+;; thunks, a ROLLBACK's step among them, with the timer already off: a
+;; section forced there is no exit a remainder was taken at. The request
+;; handled is the forced section's own, at its exit: a 32 KiB allocation
+;; always met a request inside its section at a trip of 256 bytes, 100
+;; times of 100 (chunk-probe.sps), so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
-    (when (and numbering (ticks-spent?)) (set! exit-k forced-k))))
+    (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
+      (set! exit-k forced-k)
+      (set! exit-source forced-source))))
 
 ;; slice-begun!, slice-ended! : -> Void
 ;; Around each slice: at its end, a forced section's request still due
@@ -518,6 +534,7 @@
 (define (first-slice e fuel)
   (set! forced-k 0)
   (set! exit-k #f)
+  (set! exit-source #f)
   (set! numbering #t)
   (let ((r (slice e fuel)))
     (set! numbering #f)
@@ -1518,6 +1535,45 @@
         (when (eq? (car r) 'hit) (database-cache-return! db sql (cadr r)))
         (eq? (car r) 'hit)))))
 
+;; body-sql : String
+;; The pending row's body's one statement.
+(define body-sql "insert into t values (1)")
+
+;; body-held : Database -> (U Symbol #f)
+;; Read between two slices: the state of the body's statement while its
+;; execute! holds it out of DB's cache, ready before its step, done after
+;; it; #f when the call holds none.
+(define (body-held db)
+  (and (> (length (tracked-statements db)) (database-cache-count db))
+       (not (cached? db body-sql))
+       (let loop ((rest (tracked-statements db)))
+         (cond ((null? rest) #f)
+               ((string=? (statement-sql (car rest)) body-sql) (statement-state (car rest)))
+               (else (loop (cdr rest)))))))
+
+;; pending-answers : (Listof Any)
+;; What each run of a pending trial may answer: the body's 42; the ended
+;; condition; &sqlite-closed from the body's execute!, its claim refusing a
+;; second run's section; or with-transaction's refusal of a re-entry. A
+;; second run that stepped the body's statement again, its claim's advance
+;; split from its section, answered the statement tier's refusal of a step
+;; at done (M4's closing review, the M4 session's recheck).
+(define pending-answers
+  (list 42 '(raised (transaction-ended with-transaction)) '(raised (closed execute!))
+        '(raised (assertion-violation with-transaction (re-entered)))))
+
+;; straddles : Natural
+;; The trials of the pending sweep under way whose R held the body's
+;; statement ready, whose R1 was taken at its step's exit, the step done,
+;; and whose R's second run was refused by the body's claim, &sqlite-closed
+;; from execute!: it reached the step's section once R1's run had made it.
+;; A claim whose advance is split from its section, just after it, lets
+;; that run step the statement again, which the statement tier refuses, at
+;; done: an answer pending-answers lacks. So every such trial of correct
+;; code is one the split would fail by name, whatever the heap's layout,
+;; and the low row requires some at each level.
+(define straddles 0)
+
 ;; own-left : Database -> (Listof Any)
 ;; Of with-transaction's own statements DB tracks: those not ready, those
 ;; tracked twice, and those whose SQL the cache does not hold.
@@ -1534,7 +1590,10 @@
 ;;                 -> (U 'completed-at-f 'r-completed-at-g (Listof Any))
 ;; One (F, G) on a fresh in-memory database, in PASS: 'completed-at-f when
 ;; the call completed within F, 'r-completed-at-g when R completed within G,
-;; else the deviations, '() for none.
+;; else the deviations, '() for none. R's and R1's runs each answer one of
+;; pending-answers. A trial whose R held the body's statement ready, whose
+;; R1, taken at a forced section's exit, held it done, and whose R's second
+;; run the body's claim refused, is counted in straddles.
 (define (pending-trial pass nested? f g)
   (let ((db #f))
     (dynamic-wind
@@ -1558,12 +1617,18 @@
                                                 f)))
                                     (if (pair? first)
                                         'completed-at-f
-                                        (let ((second (slice first g)))
+                                        (let* ((r-held (body-held db))
+                                               (second (first-slice first g))
+                                               (r1-exit exit-k))
                                           (if (pair? second)
                                               'r-completed-at-g
-                                              (let* ((a (finish first 1000000))
+                                              (let* ((r1-held (body-held db))
+                                                     (a (finish first 1000000))
                                                      (b (finish second 1000000)))
-                                                'ran)))))))
+                                                (when (and (eq? r-held 'ready) r1-exit (eq? r1-held 'done)
+                                                           (equal? a '(raised (closed execute!))))
+                                                  (set! straddles (+ straddles 1)))
+                                                (list 'ran a b))))))))
                            (outcome
                             (if nested?
                                 (let ((w (with-transaction db 'deferred
@@ -1575,12 +1640,16 @@
                                 (run))))
                       (if (memq outcome '(completed-at-f r-completed-at-g))
                           outcome
-                          (let* ((depth (database-depth db))
+                          (let* ((answers (cdr outcome))
+                                 (depth (database-depth db))
                                  (in (in-transaction? db))
                                  (left (own-left db))
                                  (stray (- (length (tracked-statements db)) (database-cache-count db)))
                                  (later (attempt (lambda () (with-transaction db (lambda () 'later-committed))))))
                             (append
+                             (if (for-all (lambda (a) (member a pending-answers)) answers)
+                                 '()
+                                 (list (cons 'answers answers)))
                              (if (and nested? (not (equal? inside '(1 ())))) (list (list 'inside inside)) '())
                              (if (eqv? depth 0) '() (list (list 'depth depth)))
                              (if in (list 'in-transaction-after) '())
@@ -1611,6 +1680,7 @@
 ;; collapse over a stretch of fuels can pass it. A count fixed in trials broke when part
 ;; D made the call cheaper: 647 at every fourth G.
 (define (pending pass nested?)
+  (set! straddles 0)
   (let floop ((f 1) (found '()) (trials 0))
     (let gloop ((g 1) (found found) (trials trials))
       (let ((r (pending-trial pass nested? f g)))
@@ -1620,6 +1690,8 @@
                (write trials)
                (display " trials, the call completed unexpired at fuel ")
                (write f)
+               (display "; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in ")
+               (write straddles)
                (newline)
                (append (reverse found)
                        (if (< trials (* 10 f)) (list (list 'too-few-trials-with-r1 trials 'fuel f)) '())))
@@ -1629,7 +1701,7 @@
               (else (gloop (+ g pending-stride) (if (null? r) found (cons (cons f (cons g r)) found)) (+ trials 1))))))))
 
 (define pending-name
-  "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel on average")
+  "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; each run answers 42, the ended condition, &sqlite-closed from the body's execute!, or the re-entry's refusal; at least ten trials a fuel on average")
 
 (test-equal pending-name
   '(() ())
@@ -1637,12 +1709,18 @@
          (nested (pending 'high #t)))
     (list outer nested)))
 
-(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, which allocates 32 KiB as a step answers a row or a statement finishes, the BEGIN in its own section among them, so a request falls due inside the section and is handled at its exit: the same verdicts, and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. " pending-name)
-  (append '(() ()) low-checks)
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, which allocates 32 KiB as a step answers a row or a statement finishes, the BEGIN in its own section among them, so a request falls due inside the section and is handled at its exit: the same verdicts, and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit; and, at the outer level and nested, some trial with R holding the body's statement ready, R1 taken at its step's exit, and R's second run refused by the body's claim there, &sqlite-closed from execute!, the step R1's run had made. " pending-name)
+  (append '(() () refused-at-the-step-r1-made) low-checks)
   (let-values (((r tally) (counted-pass (lambda ()
                                           (let* ((outer (pending 'low #f))
-                                                 (nested (pending 'low #t)))
-                                            (list outer nested))))))
+                                                 (outer-straddles straddles)
+                                                 (nested (pending 'low #t))
+                                                 (nested-straddles straddles))
+                                            (list outer nested
+                                                  (if (and (> outer-straddles 0) (> nested-straddles 0))
+                                                      'refused-at-the-step-r1-made
+                                                      (list 'refused-at-the-step-r1-made outer-straddles
+                                                            nested-straddles))))))))
     (append r (low-reported "pending" tally))))
 
 ;; --- the call's claim: a remainder resumed twice begins one level ------------------------------

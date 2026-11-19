@@ -94,7 +94,11 @@
 ;;; give-back and R1 past it, unless each section that SQLite's trace forces
 ;;; met its request before the next, which a trip slipped to 256 KiB does
 ;;; not, and unless some first slice expired at such a section's exit, which
-;;; the high pass never does. The fold's low pass is a suite of its own,
+;;; the high pass never does. The tell's authorizer forces each prepare's
+;;; section too, and the script's low rows fail by name unless some trial
+;;; had R before the call's first section, R1 at the first prepare's exit
+;;; and R's second run refused there by the claim, which a claim set split
+;;; from its compare would let prepare the statement again. The fold's low pass is a suite of its own,
 ;;; tests/test-conveniences-pending-fold-low.sps, and the script's four,
 ;;; tests/test-conveniences-pending-script-low-0.sps to -3.sps, each a
 ;;; quarter of its fuels: two halves took 167 and 169 s under the gate, past
@@ -255,10 +259,15 @@
 
   ;; int (*xAuth)(void *pUserData, int action, const char *, const char *, const char *, const char *)
   ;; When armed-at-prepare is set, the authorizer raises SIGINT once, inside
-  ;; the prepare that called it (keyboard-in, below).
+  ;; the prepare that called it (keyboard-in, below). In the low pass's
+  ;; trials it forces the prepare's section, named prepare, as the trace
+  ;; forces a step's (where a remainder lies, below).
   (define authorizer
     (foreign-callable __collect_safe
       (lambda (data action name value schema trigger)
+        (set! force-source 'prepare)
+        (force!)
+        (set! force-source #f)
         (when (or (eqv? action sqlite-select) (eqv? action sqlite-insert))
           (note! (list action (and (eqv? action sqlite-insert) (c-text name))))
           (when (and armed-at-prepare c-raise)
@@ -651,7 +660,8 @@
   ;; once each trial collects first, so in the low pass each trial's
   ;; connection also carries SQLite's trace, whose callback allocates 32 KiB
   ;; as a step answers a row and as a statement finishes: inside the step,
-  ;; and inside query-row's return. Past 32 KiB a collect request always fell
+  ;; and inside query-row's return. The tell's authorizer allocates 32 KiB
+  ;; too, inside each prepare. Past 32 KiB a collect request always fell
   ;; inside a critical section under the low trip. Every request the trials
   ;; meet goes through counted-request, which counts it, and the low rows
   ;; judge where they fell (where a remainder lies, below).
@@ -747,6 +757,13 @@
   ;; The forced section at whose exit the first slice's ticks ran out.
   (define exit-k #f)
 
+  ;; force-source, forced-source, exit-source : (U Symbol #f)
+  ;; What a suite's callback names the section it forces, set around its
+  ;; force!; the last forced section's; and the one exit-k numbers.
+  (define force-source #f)
+  (define forced-source #f)
+  (define exit-source #f)
+
   ;; pass-k, pass-exits : Natural (Listof Natural)
   ;; The most forced sections a first slice of the pass passed, and the
   ;; forced sections a first slice of it expired at the exit of.
@@ -766,17 +783,26 @@
             (set! forced (+ forced 1))
             (when numbering (set! forced-k (+ forced-k 1)))
             (set! forced-pending #t)
-            (set! forced-at t))))
+            (set! forced-at t)
+            (set! forced-source force-source))))
       (set! sink (make-bytevector 32768))))
 
   ;; exit-noted! : -> Void
   ;; In the request handler, once a request is handled: the forced section's
-  ;; request met, and, inside a first slice whose ticks it spent, the
-  ;; section's number noted.
+  ;; request met; and, inside a first slice whose ticks it spent, where the
+  ;; section's callback found the engine's timer running, the section's
+  ;; number noted, the first so noted. An expiry's unwinding runs after
+  ;; thunks, a ROLLBACK's step among them, with the timer already off: a
+  ;; section forced there is no exit a remainder was taken at. The request
+  ;; handled is the forced section's own, at its exit: a 32 KiB allocation
+  ;; always met a request inside its section at a trip of 256 bytes, 100
+  ;; times of 100 (chunk-probe.sps), so it is due as the section ends.
   (define (exit-noted!)
     (when forced-pending
       (set! forced-pending #f)
-      (when (and numbering (ticks-spent?)) (set! exit-k forced-k))))
+      (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
+        (set! exit-k forced-k)
+        (set! exit-source forced-source))))
 
   ;; slice-begun!, slice-ended! : -> Void
   ;; Around each slice: at its end, a forced section's request still due
@@ -800,6 +826,7 @@
   (define (first-slice e fuel)
     (set! forced-k 0)
     (set! exit-k #f)
+    (set! exit-source #f)
     (set! numbering #t)
     (let ((r (slice e fuel)))
       (set! numbering #f)
@@ -1009,6 +1036,19 @@
   ;; lay before the give-back and R1 past it; and whether no collect request
   ;; fell in R's first slice, so the sweep's bound reads it.
 
+  ;; prepare-straddles : Natural
+  ;; The interleaved trials of the sweep under way whose R lay before the
+  ;; call's first section, whose R1 was taken at the exit of the first
+  ;; section R's resume forced, a prepare, and whose R's second run was
+  ;; refused, &sqlite-closed from the verb: so that run reached the first
+  ;; prepare once R1's had made it, and its claim refused it. A claim whose
+  ;; set is split from its compare, even inside the section, lets that run
+  ;; prepare the statement again, which the trial reads as two calls: the
+  ;; authorizer's request is handled where interrupts are first enabled
+  ;; after it, there or at the section's exit (M4's closing review, the M4
+  ;; session's recheck).
+  (define prepare-straddles 0)
+
   ;; trial : Pass Call Positive-Integer Positive-Integer -> Judged
   ;; One trial of C at FUEL, R resumed at G, in PASS.
   (define (trial pass c fuel g)
@@ -1026,7 +1066,8 @@
                   (let* ((R (cadr r))
                          (r-past (> (noted-count kind) 0))
                          (r-given (past-the-give-back? c db))
-                         (r1 (slice R g)))
+                         (r1 (first-slice R g))
+                         (r1-at-prepare (and (eqv? exit-k 1) (eq? exit-source 'prepare))))
                     (if (eq? (car r1) 'completed)
                         (let* ((again (finish R))
                                (v (judged c (list (cadr r1) again) (noted-count kind) db start
@@ -1042,6 +1083,8 @@
                                (third (finish R1))
                                (v (judged c (list second third) (noted-count kind) db start
                                           (list r-given r1-given))))
+                          (when (and r1-at-prepare (not r-past) (equal? second (cadr (call-answers c))))
+                            (set! prepare-straddles (+ prepare-straddles 1)))
                           (list 'interleaved r1-past r-past (car v) (cadr v)
                                 (or (refusal? c second) (refusal? c third))
                                 (and (not r-past) (equal? second (cadr (call-answers c))))
@@ -1165,6 +1208,7 @@
   ;; counts once it was done.
   (define (reported verb parity pass past-a-fuel both-a-fuel)
     (pass-reset!)
+    (set! prepare-straddles 0)
     (let* ((run (dynamic-wind (lambda () (lock-object profile)) (lambda () (sweep verb parity pass))
                               (lambda () (ended!) (unlock-object profile))))
            (tally (pass-tally)))
@@ -1195,6 +1239,9 @@
         (write refused-at)
         (display "; left out, a collect request in the first slice, ")
         (write moved)
+        (when (eq? verb 'execute-script!)
+          (display "; R before the first section, R1 at the first prepare's exit and R's second run refused in ")
+          (write prepare-straddles))
         (tally-shown tally)
         (newline)
         (unless (null? deviations)
@@ -1219,7 +1266,12 @@
                    (list 'whole-new-calls-not-below-a-refusal (past-the-bound news refused-at) refused-at)))
          (if (eq? pass 'low)
              (cons (if (> straddle 0) 'straddled-the-give-back (list 'none-straddling-the-give-back straddle))
-                   (low-judged tally))
+                   (append (if (eq? verb 'execute-script!)
+                               (list (if (> prepare-straddles 0)
+                                         'refused-at-a-prepare-r1-made
+                                         (list 'refused-at-a-prepare-r1-made prepare-straddles)))
+                               '())
+                           (low-judged tally)))
              '())
          (list (list-ref run 6))))))
 

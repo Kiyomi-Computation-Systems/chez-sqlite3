@@ -545,6 +545,13 @@
 ;; The forced section at whose exit the first slice's ticks ran out.
 (define exit-k #f)
 
+;; force-source, forced-source, exit-source : (U Symbol #f)
+;; What a suite's callback names the section it forces, set around its
+;; force!; the last forced section's; and the one exit-k numbers.
+(define force-source #f)
+(define forced-source #f)
+(define exit-source #f)
+
 ;; pass-k, pass-exits : Natural (Listof Natural)
 ;; The most forced sections a first slice of the pass passed, and the
 ;; forced sections a first slice of it expired at the exit of.
@@ -564,17 +571,26 @@
           (set! forced (+ forced 1))
           (when numbering (set! forced-k (+ forced-k 1)))
           (set! forced-pending #t)
-          (set! forced-at t))))
+          (set! forced-at t)
+          (set! forced-source force-source))))
     (set! sink (make-bytevector 32768))))
 
 ;; exit-noted! : -> Void
 ;; In the request handler, once a request is handled: the forced section's
-;; request met, and, inside a first slice whose ticks it spent, the
-;; section's number noted.
+;; request met; and, inside a first slice whose ticks it spent, where the
+;; section's callback found the engine's timer running, the section's
+;; number noted, the first so noted. An expiry's unwinding runs after
+;; thunks, a ROLLBACK's step among them, with the timer already off: a
+;; section forced there is no exit a remainder was taken at. The request
+;; handled is the forced section's own, at its exit: a 32 KiB allocation
+;; always met a request inside its section at a trip of 256 bytes, 100
+;; times of 100 (chunk-probe.sps), so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
-    (when (and numbering (ticks-spent?)) (set! exit-k forced-k))))
+    (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
+      (set! exit-k forced-k)
+      (set! exit-source forced-source))))
 
 ;; slice-begun!, slice-ended! : -> Void
 ;; Around each slice: at its end, a forced section's request still due
@@ -639,6 +655,7 @@
 (define (call-begun!)
   (set! forced-k 0)
   (set! exit-k #f)
+  (set! exit-source #f)
   (set! numbering #t)
   (slice-begun!))
 (define (call-ended!)

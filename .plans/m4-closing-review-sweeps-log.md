@@ -11,8 +11,9 @@ The drivers are in [research/m4-closing-review/sweeps/](research/m4-closing-revi
 `plant.py`, reviewer B's three plants copied unchanged and builder D's; `planted.sh`, which
 makes each plant's copy of `src/` under `build/plant/`; `plants.sh`, which runs every suite
 of this log against every plant and against `src/`; `rounds.sh`, which runs each plant against
-its own suites five times; `slipped.sh`, the trip-slip plant; and two probes, `exit-probe.sps`
-and `timer-probe.sps`.
+its own suites five times; `twenty.sh`, which runs one suite 20 times, ten at once and ten one
+after another; `slipped.sh`, the trip-slip plant; and two probes, `exit-probe.sps` and
+`timer-probe.sps`.
 
 The M4 session's read-only check of the merged work found that low rows could not fail when the
 low trip stopped working. The follow-up, below the first build's sections, gives every low row
@@ -377,9 +378,9 @@ the row.
 | Plant | Rows failed in 5 of 5 runs | Rows that pass it |
 |---|---|---|
 | `P-open-advance-after` | `open-engines`: both low rows. `open-db-config-engines`: all four low rows. `open-interleave`: the `open-database` interleaved low row | `open-interleave`'s `call-with-database` interleaved row and both failing rows (below) |
-| `P-conv-advance-after` | `resumed`: the low rows of `query`, `query-row` and `execute!`, and the failed return's. `pending-execute`, `-query` (both), `-query-row`: their low rows. `transaction-engine`: the pending low row, now 5 of 5 where it was 3 of 9. `pending-query-row`'s keyboard row too, which HEAD fails | none |
+| `P-conv-advance-after` | `resumed`: the low rows of `query`, `query-row` and `execute!`, and the failed return's in these 5, but in 0 of 20 in the second follow-up's runs. `pending-execute`, `-query` (both), `-query-row`: their low rows. `transaction-engine`'s pending low row in these 5, but the M4 session's recheck caught it in 11 of 21 (the second follow-up). `pending-query-row`'s keyboard row too, which HEAD fails | none |
 | `P-fold-left-after` | `pending-fold-low` | `resumed`'s fold low row (below) |
-| `P-script-claim-after` | `pending-script-low-0`, `-1`, `-2` and `-3`, every one, where the first build caught two or three | `resumed`'s script low row, and `conveniences-reentry`'s new jump-back low row (below) |
+| `P-script-claim-after` | `pending-script-low-0`, `-1`, `-2` and `-3` in these 5, where the first build caught two or three; the recheck caught `-3` in 11 of 15 (the second follow-up) | `resumed`'s script low row, and `conveniences-reentry`'s new jump-back low row (below) |
 | `P-tx-take-after` | none; equivalent, as argued above | every row, the new claim re-entry low row among them |
 
 Beyond the two high rows the first build named, no plant failed a high row. Those two are
@@ -456,38 +457,35 @@ Each mutation below was made in a scratch copy of the suite:
 
 ### The forced reaches, by row
 
-On correct code, Guix's 3.53.1. Each line gives the forced sections the pass counted; the most
-one first slice passed, or, for a re-entry row, one call and its re-entry; and the exits a
-remainder or a capture was taken at. Every row had 0
-unmet. The floor's figures are the same, but for `transaction-engine`'s pending pass, 20,006,
-and `open-engines`' re-entry pass, 936.
+These are the second follow-up's figures. Its exit detection no longer credits an expiry's
+unwinding, and the pending suites' prepares are forced too. On correct code, Guix's 3.53.1.
+Each line gives the forced sections the pass counted; the most one first slice passed, or, for
+a re-entry row, one call and its re-entry; and the exits a remainder or a capture was taken at.
+Every row had 0 unmet.
 
-- **`open-engines`.** Resumed twice: 610; 2; exits 1 and 2. Re-entered: 942; 5; exits 1 and 2.
-- **`open-db-config-engines`.** Resumed twice: 668; 2; exits 1 and 2. Re-entered: 1,035; 5;
-  exits 1 and 2. `open-database` interleaved: 10,132; 1; exit 1. Once a call: 20,656; 4; exits
+- **`open-engines`.** Resumed twice: 610; 2; exits 1 and 2. Re-entered: 945; 5; exits 1 and 2.
+- **`open-db-config-engines`.** Resumed twice: 668; 2; exits 1 and 2. Re-entered: 1,041; 5;
+  exits 1 and 2. `open-database` interleaved: 10,137; 1; exit 1. Once a call: 20,656; 4; exits
   1 to 4.
 - **`open-interleave`.** `open-database`, `call-with-database`, and the two failing rows:
   28,325, 32,797, 835 and 809; 5 each; exits 1 to 5 each.
 - **`conveniences-resumed`.**
-  - `query`, warm and cold: 827 and 428; 4; exits 1 to 4.
+  - `query`, warm and cold: 806 and 440; 4; exits 1 to 4.
   - `query-row`, warm and cold: 189 and 132; 2; exits 1 and 2.
-  - `execute!`, warm and cold: 491 and 308; 4; exits 1 to 3, and 1 to 4.
+  - `execute!`, warm and cold: 491 and 308; 4; exits 2 and 3, and 1 to 4.
   - The failed return: 182; 2; exits 1 and 2.
-  - The fold: 506; 4; exits 2 to 4.
+  - The fold: 506; 4; exits 1 to 4.
   - The script: 953; 3; exits 1 to 3.
-- **The pending suites.**
-  - `execute!`: 1,628; 1; exit 1.
-  - `query`: 23,536; 4; exits 1 to 4.
-  - `query-failing`: 11,226; 2; exits 1 and 2.
-  - `query-row`: 4,490; 2; exits 1 and 2.
-  - The fold: 35,235; 4; exits 2 to 4.
-  - The script's four suites: about 23,000 each; 2; exits 1 and 2.
-- **`transaction-engine`.** Pending: 19,985; 3; exits 2 and 3. The claim: 496; 3; exits 2 and
-  3. The claim re-entered: 380; 3; exits 1 to 3.
+- **The pending suites, their prepares forced as well.**
+  - `execute!`: 3,211; 2; exits 1 and 2.
+  - `query`: 29,531; 5; exits 1 to 5.
+  - `query-failing`: 16,827; 3; exits 1 to 3.
+  - `query-row`: 6,536; 3; exits 1 to 3.
+  - The fold: 50,802; 5; exits 1 to 5.
+  - The script's four suites: about 49,700 each; 4; exits 1 to 4.
+- **`transaction-engine`.** Pending: 19,975; 3; exits 1 to 3, the BEGIN's, the insert's and the
+  COMMIT's. The claim: 496; 3; exits 1 to 3. The claim re-entered: 380; 3; exits 1 to 3.
 - **`conveniences-reentry`, jumped back.** 456; 4; exits 2 to 4.
-
-No first slice of either fold sweep expired at its first forced section's exit, the step
-that answers its first row, so no row asks for every exit, only for some.
 
 ### The times, and `make test`
 
@@ -525,6 +523,167 @@ script's four low suites 1.18 to 1.22. The largest suite is still `open-db-confi
 143 s. Taking the first build's ratio of 1.30 from this host to CI, that comes to about 186 s
 on CI. The script's low suites, at 109 to 113 s, come to about 145 s, under three quarters of
 `MEMORY_TIMEOUT` on CI's slower runners, at about twice the fastest's times.
+
+## The second follow-up: catches the heap decided
+
+The M4 session's recheck of `6fe29c8` found two catches that depended on luck.
+
+- **`P-conv-advance-after` against `transaction-engine`'s pending low row** was caught in 11
+  runs of 21: 3 of 5 by `rounds.sh`, 5 of 10 in parallel, and 3 of 6 one after another. Every
+  run, caught or not, printed the same tally, so the reach checks said nothing about the catch.
+- **`P-script-claim-after` against `pending-script-low-3`** was caught in 11 runs of 15.
+  `-low-0` to `-2` caught it in 5 of 5.
+
+Both are fixed below, test first. The plant is now caught in 20 of 20 runs, ten in parallel
+and ten one after another, and correct code passes 20 of 20.
+
+### What the tallies hid
+
+- **The exits `transaction-engine` printed were an unwinding's.** An engine's expiry inside
+  `with-transaction` runs its after thunk, whose ROLLBACK steps inside a section the trace
+  forces. Its request was handled with the timer already off, so `exit-noted!` read the ticks
+  spent and credited that section. The tally's "exits 2 and 3" were the ROLLBACK's, at fuels 20
+  to 57 of the low sweep, whatever the first slice had done. To reproduce: in a copy of the
+  suite, have the trace's callback note `sqlite3_sql` of its statement and `timer-ticks`, and
+  `counted-request` the timer before and after the default handler, inside first slices. Fuel
+  31 printed `(cb BEGIN IMMEDIATE 13) (req 10 13 ...) (cb ROLLBACK #f) (req #f #f ...)`: the
+  BEGIN's callback found 13 ticks left, its request left 10, and the ROLLBACK's callback found
+  the timer off.
+- **The two catches came from luck.** In `transaction-engine` each caught run had 1 or 2
+  trials with `(stray 1)`, where a natural request had fallen at a section's exit. The pending
+  trial never read its two runs' answers. In the script's suites the plant's window, inside the
+  prepare's section, met a request only where a natural one fell there: nothing forced the
+  prepares.
+
+### What changed
+
+- **`exit-noted!`, in every suite.** It credits a section only when the section's callback found
+  the engine's timer running, and keeps the first credit of a slice. With it, `transaction-engine`'s
+  pending exits are 1 to 3: the BEGIN's, the insert's and the COMMIT's. The fold's first exit,
+  which the unwinding of its wind had overwritten, now shows in `resumed`. Every row still
+  passes on correct code, and fails under the trip-slip plant.
+- **`transaction-engine`'s pending row reads each run's answer.** In both passes, each answer
+  must be one of `pending-answers`: 42, the ended condition, `&sqlite-closed` from the body's
+  `execute!`, or the re-entry's refusal. Under the plant, R's second run answers the statement
+  tier's refusal, `(not-allowed-in-state done)`.
+- **`transaction-engine`'s pending low row asks the interleaving the plant needs.** It fails by
+  name, `(refused-at-the-step-r1-made OUTER NESTED)`, unless some trial at each level has all
+  three of:
+  - R holding the body's statement ready, checked out but not yet stepped;
+  - R1 taken at the step's forced exit, the statement done, credited as above;
+  - R's second run refused by the body's claim, `&sqlite-closed` from `execute!`.
+
+  Correct code meets it in 32 to 36 trials at each level, in every run measured.
+- **The pending suites force each prepare.** The tell's authorizer allocates 32 KiB in the low
+  pass, as the trace does.
+- **The script's low rows ask the interleaving the plant needs.** They fail by name,
+  `(refused-at-a-prepare-r1-made 0)`, unless some trial has all three of:
+  - R before the call's first section;
+  - R1 taken at the exit of the first section R's resume forced, a prepare;
+  - R's second run refused by the claim.
+
+  Correct code meets it in 96 to 100 trials a suite.
+
+Each changed row was watched failing. In a scratch copy with 42 left out of
+`pending-answers`, both pending rows, high and low, failed. The plants failed the two new
+checks' rows, and the trip-slip plant failed every low row.
+
+### Why each catch is now certain
+
+- **`transaction-engine`.**
+  - The plant shows where R lies between `execute!`'s parameter-count section and its step,
+    and R1 at the step's exit, before the split advance. R's second run then reaches the step's
+    section with the claim still at it, and steps a done statement again. The statement tier
+    refuses that, whatever the heap does.
+  - The trace forces the step's section. So for each such R, the G sweep takes R1 at that exit
+    at three Gs, from the forced request alone, not from a natural one. The F sweep takes R at
+    every tick between the two sections.
+  - Under the plant that is 27 to 32 trials a run, at fuels 44 to 48. In the 20 runs, 27 to 32
+    answer `(not-allowed-in-state done)`, and 1 or 2 more show `(stray 1)`.
+  - The row's check counts more than that sub-shape. Correct code meets it at fuels 31 to 42,
+    and R may lie before the parameter-count section, whose refusal answers the same. But the
+    step's forced window exists for every R before the step. So any trial the check counts
+    means some later R, between the two sections, makes one too, and that one is the plant's
+    catch. Under the plant, 25 to 28 trials a level still meet the check: those whose R lies
+    before the parameter count.
+- **The script.**
+  - The plant sets the claim after an interrupt window inside the prepare's section. The
+    authorizer's request, due inside the prepare, is handled at the first point interrupts are
+    enabled after it. Under the plant that is the window, so R1 lies there. In correct code it
+    is the section's exit, the claim set.
+  - Every trial the check counts in correct code is one where the plant lets R's second run
+    prepare the statement again. Under the plant the check counts 0. The trial then reads two
+    calls at nearly every fuel of its suite from the first refusal on: 33 fuels each in `-0`
+    and `-3`.
+
+### The runs
+
+`twenty.sh`, in the research drivers, runs a suite 20 times against `src/` or a plant's copy:
+ten at once, then ten one after another. All on Guix's library:
+
+- **`P-conv-advance-after` against `transaction-engine`:** caught 20 of 20, always and only by
+  the pending low row, with 27 to 32 answer deviations a run.
+- **`src/` against `transaction-engine`:** passed 20 of 20, its check met in 32 to 36 trials a level each run.
+- **`P-script-claim-after` against `pending-script-low-3`:** caught 20 of 20 by its low row, two calls read at 33 fuels each run, and its check counting 0.
+- **`src/` against `pending-script-low-3`:** passed 20 of 20, its check met in 98 trials each run.
+- **`P-script-claim-after` against `pending-script-low-0` to `-2`, five runs each in parallel:**
+  caught 15 of 15, each run at 33 fuels, and the check counting 0.
+
+- **`P-conv-advance-after` against `conveniences-resumed`:** caught 20 of 20, each run by the
+  low rows of `query`, `query-row` and `execute!`. The failed return's low row caught it in 0
+  of 20, where round 2's five runs had it in 5. After its failed return the statement is
+  finalized, so every later section of a second resume answers `&sqlite-closed`, the claim's
+  own refusal, and that row can see the split only by a natural request's luck. No row relies
+  on it: the three verbs' rows see the split without a failure, every run.
+- **One round of `rounds.sh` on the final tree:** every plant's rows as in the table above, but
+  the failed return's row, as just said.
+
+The trip-slip plant, rerun on the final tree, fails all 29 low rows by name, all of them
+`(forced-sections N unmet M)` with M above 0, 14 also `(none-taken-at-a-forced-exit ())`, and no
+other row. `transaction-engine`'s pending low row fails `(refused-at-the-step-r1-made 0 0)` too,
+and each script low suite `(refused-at-a-prepare-r1-made 0)`.
+
+### The credit's soundness
+
+`exit-noted!` credits the next request handled while a forced section's request is pending.
+It can't tell, by itself, a section's exit from a later event check, or from a timer's
+handler, where `timer-ticks` also reads `#f`.
+
+It is sound because a 32 KiB allocation always trips the request inside its own section at a
+trip of 256 bytes: 100 of 100 in `chunk-probe.sps`. So the request is due as the section ends,
+and is handled at the first event check after it. A timer's handler has no such request pending
+unless a forced section just ended. The second follow-up adds only the check that the section's
+callback found the timer running, which keeps an unwinding's sections out.
+
+### The times, and `make test`, after the second follow-up
+
+`make test` passed 86 of 86 suites on Guix's 3.53.1 and on `m3-floor`, 3.45.1. The touched
+suites ran under `make test-memory` on Guix's library, in pairs as before: round 2's tree,
+`56d1102`, from a copy under `build/`, then the second follow-up's. Every run passed the gate.
+
+| Suite | Shard | Round 2, `56d1102` | Second follow-up | Ratio |
+|---|---|---|---|---|
+| `open-engines` | 1 | 33 s | 32 s | 0.97 |
+| `open-db-config-engines` | 1 | 141 s | 137 s | 0.97 |
+| `open-interleave` | 2 | 93 s | 93 s | 1.00 |
+| `conveniences-resumed` | 2 | 37 s | 36 s | 0.97 |
+| `conveniences-reentry` | 1 | 15 s | 16 s | 1.07 |
+| `pending-execute` | 1 | 25 s | 26 s | 1.04 |
+| `pending-query` | 2 | 115 s | 118 s | 1.03 |
+| `pending-query-row` | 1 | 29 s | 29 s | 1.00 |
+| `pending-fold` | 1 | 60 s | 61 s | 1.02 |
+| `pending-fold-low` | 2 | 106 s | 111 s | 1.05 |
+| `pending-script-even` | 2 | 115 s | 116 s | 1.01 |
+| `pending-script-odd` | 2 | 117 s | 120 s | 1.03 |
+| `pending-script-low-0` | 1 | 108 s | 116 s | 1.07 |
+| `pending-script-low-1` | 2 | 112 s | 121 s | 1.08 |
+| `pending-script-low-2` | 2 | 112 s | 122 s | 1.09 |
+| `pending-script-low-3` | 1 | 111 s | 118 s | 1.06 |
+| `transaction-engine` | 2 | 92 s | 94 s | 1.02 |
+
+The second follow-up adds 13 s to shard 1 and 32 s to shard 2 here. Most of it is the
+script's four low suites, 1.06 to 1.09 times, from the forced prepares. The largest suite is still
+`open-db-config-engines`, at 137 s.
 
 ## What the records need
 
@@ -592,3 +751,15 @@ Builder D edits none of these; the lead does.
   silently.
 - **The follow-up, for the Makefile:** it adds no suite. The times above are for the lead's
   rebalance.
+- **The second follow-up, for `traps.md`:**
+  - An engine's expiry inside a wind runs the after thunk with the timer off. A check that reads
+    `timer-ticks` as `#f` at a request handler's end sees that thunk's sections as exits, unless
+    it requires the section's own callback to have found the timer running.
+  - A trial that reads only state after its runs can miss a run that answered wrongly. The
+    plant's split claim showed in R's second run's answer, `(not-allowed-in-state done)`, in 30
+    trials a run. The after-state saw it in 1 or 2, by a natural request's luck.
+- **The second follow-up, for `AGENTS.md`'s low-pass bullet:** a low row's reach check
+  should be the interleaving its plant needs, met by correct code in every run: a remainder at
+  a forced exit while the other is pending, and the run that follows refused where the claim
+  must refuse it. Then the plant's catch is the check's complement, not luck. The proof is 20
+  runs, ten in parallel and ten one after another.
