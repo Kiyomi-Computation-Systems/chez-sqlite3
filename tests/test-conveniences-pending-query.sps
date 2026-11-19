@@ -3,7 +3,7 @@
 ;;; 5's part D; the maintainer's "Guard every call", ADR-0016, amended in M3
 ;;; slice 3), in (chez-sqlite3 private conveniences): one remainder of the
 ;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
-;;; schedule, the tell, the control and the judge are (conveniences-pending)'s,
+;;; schedule, the tell, the bound and the judge are (conveniences-pending)'s,
 ;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
 ;;; one a convenience, so each stays well under the memory gate's limit.
 ;;;
@@ -16,7 +16,8 @@
 ;;;                taken where it expires; then R resumed again to its end,
 ;;;                then R1. After every trial: each run answers the three rows
 ;;;                or &sqlite-closed from query; the select was prepared once,
-;;;                twice only where the control makes a whole new call; no
+;;;                twice only for a whole new call, below the sweep's
+;;;                first refusal before the call's first section; no
 ;;;                statement is tracked outside the cache, none at a row, the
 ;;;                cache holding the call's statement, ready; nothing is
 ;;;                counted once the connection is closed. Enough trials
@@ -26,6 +27,15 @@
 ;;;                call's give-back, which finalizes the failed statement;
 ;;;                every other run is refused, &sqlite-closed, never its own
 ;;;                raise
+;;;   low trip     the interleaved rows, the failing one's too, again under a collect trip of 256
+;;;                bytes, where a request due inside a critical section is
+;;;                handled at its exit and costs the engine ticks there, so R1
+;;;                is taken at a section's exit too: a claim advanced just
+;;;                after its section, not inside it, inserted execute!'s row
+;;;                twice there (M4's closing review, reviewer B's B1). Each
+;;;                fails by name unless collect requests fell in its trials,
+;;;                and unless some trial had R before the give-back and R1
+;;;                past it
 ;;;   a timer      a timer handler that raises, at every tick until the call
 ;;;                completes before it runs: the raise reaches the caller, the
 ;;;                statement given back, ready, by the call's claim of whatever
@@ -107,12 +117,20 @@
     (guard (e (#t (list 'raised (describe e))))
       (clean-call 'query noted?))))
 
-(let ((name "query's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the three rows or &sqlite-closed from query; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
+(let ((name "query's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the three rows or &sqlite-closed from query; the select is prepared once, twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
   (tell-available! registration name)
   (test-equal name
-    (list '() 'interleavings-reached zero-counts)
+    (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (reported 'query (sweep 'query 'every) past-a-fuel both-a-fuel))))
+      (reported 'query 'every 'high past-a-fuel both-a-fuel))))
+
+(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying the profile trace, which allocates 32 KiB as a statement finishes, so a collect request falls due inside the section that finishes it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials. " "query's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the three rows or &sqlite-closed from query; the select is prepared once, twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it")))
+  (tell-available! registration name)
+  (test-equal name
+    (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
+          'straddled-the-give-back 'collect-requests-met zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (reported 'query 'every 'low past-a-fuel both-a-fuel))))
 
 (let* ((name "the tell, for a query that fails: one query outside any engine of a select whose second step overflows raises SQLite's error from query, the authorizer noting the select's four selects, once; the failed statement is finalized at its return, never kept, and nothing is counted once the connection is closed")
        (noted? (tell-kept? registration name "count of the prepares the authorizer noted")))
@@ -121,12 +139,20 @@
     (guard (e (#t (list 'raised (describe e))))
       (clean-call 'query-failing noted?))))
 
-(let ((name "a query that fails, its remainder R taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: the second step's failure is raised by one run, and again by each run taken past the call's give-back, every other run raising &sqlite-closed from query, a refused run's own raise never; the select is prepared once, twice only where the control makes a whole new call; the failed statement is finalized, nothing tracked; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
+(let ((name "a query that fails, its remainder R taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: the second step's failure is raised by one run, and again by each run taken past the call's give-back, every other run raising &sqlite-closed from query, a refused run's own raise never; the select is prepared once, twice only for a whole new call, below the sweep's first refusal before the call's first section; the failed statement is finalized, nothing tracked; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
   (tell-available! registration name)
   (test-equal name
-    (list '() 'interleavings-reached zero-counts)
+    (list '() 'interleavings-reached 'refused-at-a-third-of-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (reported 'query-failing (sweep 'query-failing 'every) past-a-fuel both-a-fuel))))
+      (reported 'query-failing 'every 'high past-a-fuel both-a-fuel))))
+
+(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying the profile trace, which allocates 32 KiB as a statement finishes, so a collect request falls due inside the section that finishes it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials. " "a query that fails, its remainder R taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: the second step's failure is raised by one run, and again by each run taken past the call's give-back, every other run raising &sqlite-closed from query, a refused run's own raise never; the select is prepared once, twice only for a whole new call, below the sweep's first refusal before the call's first section; the failed statement is finalized, nothing tracked; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it")))
+  (tell-available! registration name)
+  (test-equal name
+    (list '() 'interleavings-reached 'refused-at-a-third-of-the-fuels 'whole-new-calls-below-a-refusal
+          'straddled-the-give-back 'collect-requests-met zero-counts)
+    (guard (e (#t (list 'raised (describe e))))
+      (reported 'query-failing 'every 'low past-a-fuel both-a-fuel))))
 
 (let* ((name "a timer handler that raises, at every tick from 1 until query completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once and its effect made at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none where the raise came before its check-out, and the statement given back wherever one was counted as the handler raised, a reading that needs no tell; nothing is counted once each connection is closed")
        (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))

@@ -85,6 +85,8 @@ MEMORY_SUITES_1 := \
   tests/test-conveniences-pending-execute.sps \
   tests/test-conveniences-pending-fold.sps \
   tests/test-conveniences-pending-query-row.sps \
+  tests/test-conveniences-pending-script-low-0.sps \
+  tests/test-conveniences-pending-script-low-3.sps \
   tests/test-conveniences-reentry.sps \
   tests/test-counters.sps \
   tests/test-docs.sps \
@@ -120,8 +122,11 @@ MEMORY_SUITES_2 := \
   tests/test-connection.sps \
   tests/test-contention.sps \
   tests/test-conveniences-engines.sps \
+  tests/test-conveniences-pending-fold-low.sps \
   tests/test-conveniences-pending-query.sps \
   tests/test-conveniences-pending-script-even.sps \
+  tests/test-conveniences-pending-script-low-1.sps \
+  tests/test-conveniences-pending-script-low-2.sps \
   tests/test-conveniences-pending-script-odd.sps \
   tests/test-conveniences-resumed.sps \
   tests/test-conveniences-who.sps \

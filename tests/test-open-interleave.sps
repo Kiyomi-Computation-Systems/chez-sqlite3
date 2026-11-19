@@ -32,7 +32,8 @@
 ;;;                    each setting back as asked.
 ;;;                Two connections, a whole new call each, come only from a
 ;;;                remainder taken before the call's first expression: only
-;;;                at a fuel at which the control makes one (below).
+;;;                below the first fuel at which a trial of the sweep was
+;;;                refused, R taken before the open (below).
 ;;;   a failing    open-database, then call-with-database, with busy-timeout
 ;;;   open twice   and journal-mode wal on :memory:, which mismatches,
 ;;;                journal_mode reading memory, at every fuel from 1 until
@@ -42,8 +43,9 @@
 ;;;                always when the connection was open at the expiry, or,
 ;;;                past the failure's close, raises the mismatch again,
 ;;;                either way noting nothing and changing no count; only
-;;;                where the control makes a whole new call does it open a
-;;;                connection, which mismatches the same, alone. Every
+;;;                below the first fuel at which the sweep saw one refused, R
+;;;                taken before the open, does it open a connection, a whole
+;;;                new call's, which mismatches the same, alone. Every
 ;;;                connection's PRAGMAs are a prefix of the plan, none twice,
 ;;;                and nothing is counted after
 ;;;   an escape    call-with-database, SIGINT raised inside each of its
@@ -56,6 +58,16 @@
 ;;;                timer spend no ticks inside a section, so only such an
 ;;;                interrupt reaches the end of the open's section before the
 ;;;                connection is recorded
+;;;   two passes   the interleaved and failing rows twice: with no collect
+;;;                request in a trial, and under a collect trip of 256 bytes,
+;;;                where a request due inside a critical section is handled at
+;;;                its exit and costs the engine ticks there, so a remainder is
+;;;                taken at a section's exit too, before anything after it: a
+;;;                claim advanced just after its section, not inside it,
+;;;                applied a setting twice there (M4's closing review, reviewer
+;;;                B's B1). The low pass fails by name unless collect requests
+;;;                fell in its trials; and each interleaved low row unless some
+;;;                trial had R before the call's last section and R1 past it
 ;;;
 ;;; The tell: sqlite3_auto_extension runs an entry point of this suite at
 ;;; every open, which notes the open and sets an authorizer on the new
@@ -78,21 +90,22 @@
 ;;; exactly when that answered 21 (M3's closing review, reviewer B).
 ;;;
 ;;; Which fuels lie before the call's first expression is measured, not
-;;; assumed: at each fuel, a control takes R and resumes it to its end
-;;; twice, one after the other, and the second makes a whole new call when
-;;; it opens a connection of its own. A refused call's completing fuel is no
+;;; assumed, and by the sweep itself: a remainder taken past the call's first
+;;; expression and before the open, no open noted at its expiry, is refused
+;;; at the open's section when another run of the call has opened, opening
+;;; nothing, and the sweep must meet such a refusal, at half its fuels at
+;;; least, and make every whole new call, two connections opened, below the
+;;; first fuel at which it met one. A refused call's completing fuel is no
 ;;; bound: an open's sections spend no ticks, so the open and its settings
-;;; span fewer fuels than the refusal's raise. The control is bounded by
-;;; what it can tell instead: a remainder taken past the call's first
-;;; expression and before the open, no connection counted at its expiry, is
-;;; refused the second time, opening nothing; the control must meet such a
-;;; refusal, and make every whole new call below it, the fuels in order
-;;; since each begins with a collection (M3's closing review, reviewer B). A collect request costs a run
-;;; up to a tick, and two can cost two, so a trial's R could lie before the
-;;; control's at the same fuel: each fuel begins with a collection, and
-;;; collect-trip-bytes is raised far above what a fuel's runs allocate, so
-;;; no request falls in them; a trial may make a whole new call where the
-;;; control made one at its fuel or the one before, a tick's room besides.
+;;; span fewer fuels than the refusal's raise (M3's closing review, reviewer
+;;; B). Each trial begins with a collection, so its first slice runs as every
+;;; trial's at that fuel does, unless a collect request falls in it, which
+;;; the bound sets aside (below), and a remainder lies further into the
+;;; call's first expressions at each fuel than at the one before. Until M4's
+;;; closing review a trial was judged by a control, the same call run at its
+;;; fuel, which the low trip moved from the trial; AGENTS.md forbids a bound
+;;; from a control run on the code under test (reviewer B's B2). Each trial
+;;; is judged by what it saw itself.
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
 ;;; the Scheme work between the open's sections (.plans/traps.md). The
@@ -107,7 +120,8 @@
         (srfi :64)
         (only (chezscheme) make-engine foreign-procedure foreign-callable
               foreign-callable-entry-point lock-object unlock-object foreign-ref
-              foreign-entry? keyboard-interrupt-handler collect collect-trip-bytes)
+              foreign-entry? keyboard-interrupt-handler collect collect-trip-bytes
+              collect-request-handler)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -381,14 +395,72 @@
 ;; --- engines ------------------------------------------------------------------------------
 
 ;; quieted! : -> Void
-;; A collection now, at a fuel's start, with collect-trip-bytes raised to
-;; 128 MiB, far above what one fuel's runs allocate, so no collect request
-;; falls in a control or a trial: a request costs a run up to a tick, and
-;; more than one can cost two (.plans/research/m3-slice-5/, gc-ticks.sps),
-;; and a trial is judged by the control at its fuel.
+;; A collection now, at a trial's start, with collect-trip-bytes raised to
+;; 128 MiB, far above what one trial's runs allocate, so no collect request
+;; falls in a trial of the high pass: a request costs a run up to a tick,
+;; and more than one can cost two (.plans/research/m3-slice-5/, gc-ticks.sps).
 (define (quieted!)
   (collect-trip-bytes (expt 2 27))
   (collect))
+
+;; Pass = (U 'high 'low)
+;; Each trial begins with begun!: quieted!'s collection, then PASS's trip.
+;; In the high pass it stays at 2^27, so no collect request falls in a
+;; trial. In the low pass it is 256 bytes, below what one call allocates,
+;; until the trial ends: a request then falls due all through it, and one
+;; due inside a critical section is handled at the section's exit, where it
+;; costs the engine ticks, so an expiry can fall at a section's exit, before
+;; anything after it (.plans/traps.md). Every request the trials meet goes
+;; through counted-request, which counts it, so a low pass fails by name
+;; when none fell.
+
+(define low-trip 256)
+
+;; default-request-handler : (-> Any)
+(define default-request-handler (collect-request-handler))
+
+;; requests : Natural
+;; The collect requests the trials of the pass under way met.
+(define requests 0)
+
+;; A request in a run before its expiry costs the engine ticks there, so
+;; that run's remainder lies earlier in the call than its fuel says: a whole
+;; new call came at the fuel at which a trial was refused, R before the
+;; open, where a request fell in its first slice (M4's closing review,
+;; builder D). So each trial notes whether a request fell in its first
+;; slice, and the sweep's bound on a whole new call reads only the trials
+;; where none did; a whole new call where one did is counted and printed,
+;; and judged by its other evidence. The bound's refusal may come from any
+;; trial: a request moves a remainder earlier, never later.
+
+(define (counted-request)
+  (set! requests (+ requests 1))
+  (default-request-handler))
+
+;; begun! : Pass -> Void
+(define (begun! pass)
+  (quieted!)
+  (collect-request-handler counted-request)
+  (when (eq? pass 'low) (collect-trip-bytes low-trip)))
+
+;; ended! : -> Void
+(define (ended!)
+  (collect-trip-bytes (expt 2 27))
+  (collect-request-handler default-request-handler))
+
+;; counted-pass : (-> A) -> (Values A Natural)
+;; RUN's answer, a pass's sweep, and the collect requests its trials met,
+;; the trip and the handler put back however it leaves.
+(define (counted-pass run)
+  (set! requests 0)
+  (let ((r (dynamic-wind (lambda () #f) run ended!)))
+    (values r requests)))
+
+;; requests-judged : Pass Natural -> (Listof Any)
+(define (requests-judged pass met)
+  (if (eq? pass 'low)
+      (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met)))
+      '()))
 
 ;; slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
 (define (slice e fuel)
@@ -511,15 +583,22 @@
 (define own-wind-refused
   '(raised (assertion-violation test-open-interleave (re-entered))))
 
-;; judged : Symbol Boolean Counts (Listof Run) -> (List Natural (Listof Any))
-;; RUNS, those whose answers came back in the trial, for VERB, NEW? whether
-;; the control made a whole new call at the trial's fuel, judged once the
-;; trial's events are in: how many connections the runs answered, or were
-;; given to the procedure; and what deviated. Every database answered is
+;; judged : Symbol Counts (Listof Run) Boolean Boolean -> (List Natural (Listof Any) Natural Boolean Boolean Boolean)
+;; RUNS, those whose answers came back in the trial, for VERB, judged once
+;; the trial's events are in, by the trial itself: how many connections the
+;; runs answered, or were given to the procedure; what deviated; how many
+;; connections were opened, two a whole new call each, which the sweep
+;; bounds; whether a run was refused, &sqlite-closed from VERB; REFUSED-
+;; BEFORE, whether R's own second run was, R taken before the open, the
+;; sweep's bound; and STRADDLE, R taken before the call's last section and
+;; R1 past it. R's second run alone tells: R1's run of call-with-database
+;; is refused too where R1's expiry closed the connection, though R lay
+;; before the call's first expression, its second run a whole new call.
+;; Every database answered is
 ;; checked, then closed, and the counts are then START's, those when the
 ;; trial began: zero, unless an earlier trial left something, which the
 ;; sweep's end finds.
-(define (judged verb new? start runs)
+(define (judged verb start runs refused-before straddle)
   (let* ((conns (connections-of (reverse noted)))
          (answers (let loop ((rest runs) (found '()))
                     (if (null? rest) (reverse found) (loop (cdr rest) (cons (car (car rest)) found)))))
@@ -573,14 +652,13 @@
           (unless (and c (equal? (cadr c) plan)) (deviate! (list 'answered-not-the-plan c))))
         (loop (cdr rest))))
     ;; opens: those answered alone, for open-database; one a call, at most,
-    ;; for call-with-database, and a second only from a whole new call
+    ;; for call-with-database, a second only from a whole new call, which
+    ;; the sweep bounds
     (if (eq? verb 'open-database)
         (unless (= (length conns) (length given))
           (deviate! (list 'opened (length conns) 'answered (length given))))
-        (unless (<= (length conns) (if new? 2 1))
+        (unless (<= (length conns) 2)
           (deviate! (list 'opened (length conns)))))
-    (when (and (> (length given) 1) (not new?))
-      (deviate! (list 'new-where-the-control-made-none (length given))))
     ;; the procedure given each connection, open, once at most
     (let loop ((rest conns))
       (unless (null? rest)
@@ -598,105 +676,117 @@
         (loop (cdr rest))))
     (unless (equal? (native-counts) start)
       (deviate! (list 'counts start (native-counts))))
-    (list (length given) (reverse deviations))))
+    (let ((refused (exists (lambda (run) (equal? (car run) (refused-answer verb))) runs)))
+      (list (length given) (reverse deviations) (length conns) (and refused #t)
+            (and refused-before #t) (and straddle #t)))))
 
-;; Trial = (List Symbol Natural (Listof Any))
+;; Trial = (List Symbol Natural (Listof Any) Natural Boolean Boolean Boolean Boolean)
 ;; Its kind, completed when R's first slice completed the call, last when
-;; R's resume completed within G, else interleaved; how many connections, or
-;; connections given to the procedure, were answered; and what deviated.
+;; R's resume completed within G, else interleaved; then judged's: how many
+;; connections, or connections given to the procedure, were answered; what
+;; deviated; how many were opened; whether a run was refused; whether R's
+;; own second run was, R before the open; whether R lay before the call's
+;; last section and R1 past it; and whether no collect request fell in R's
+;; first slice, so the sweep's bound reads it.
 
-;; trial : Symbol Natural Natural Boolean -> Trial
-;; One trial of VERB at FUEL, R resumed at G, NEW? the control's answer.
-(define (trial verb fuel g new?)
+;; opened? : -> Boolean
+;; Whether the trial's notes hold an open.
+(define (opened?) (exists (lambda (e) (eq? (car e) 'open)) noted))
+
+;; past-last? : Symbol Counts -> Boolean
+;; Whether VERB's run lies past the call's last section now, by the trial's
+;; notes: for open-database, a connection with the whole plan noted and no
+;; statement counted beyond START's, its last read finalized; for
+;; call-with-database, whose connection an expiry closes, the procedure
+;; given its connection.
+(define (past-last? verb start)
+  (let ((conns (connections-of (reverse noted))))
+    (if (eq? verb 'open-database)
+        (and (exists (lambda (c) (equal? (cadr c) plan)) conns)
+             (= (cdr (assq 'statement (native-counts))) (cdr (assq 'statement start))))
+        (exists (lambda (c) (> (caddr c) 0)) conns))))
+
+;; trial : Pass Symbol Natural Natural -> Trial
+;; One trial of VERB at FUEL, R resumed at G, in PASS.
+(define (trial pass verb fuel g)
+  (begun! pass)
   (set! noted '())
   (let* ((start (native-counts))
-         (r (slice (make-engine (thunk-of verb)) fuel)))
-    (if (eq? (car r) 'completed)
-        (cons 'completed (judged verb new? start (list (list (cadr r) 0 'counts-kept))))
-        (let* ((R (cadr r))
-               (r1 (slice R g)))
-          (if (eq? (car r1) 'completed)
-              (let ((second (ran (lambda () (finish R)))))
-                (cons 'last (judged verb new? start (list (list (cadr r1) 0 'counts-kept) second))))
-              (let* ((R1 (cadr r1))
-                     (second (ran (lambda () (finish R))))
-                     (third (ran (lambda () (finish R1)))))
-                (cons 'interleaved (judged verb new? start (list second third)))))))))
+         (met requests)
+         (r (slice (make-engine (thunk-of verb)) fuel))
+         (clean (= requests met))
+         (t (if (eq? (car r) 'completed)
+                (cons 'completed (judged verb start (list (list (cadr r) 0 'counts-kept)) #f #f))
+                (let* ((R (cadr r))
+                       (r-open (opened?))
+                       (r-last (past-last? verb start))
+                       (r1 (slice R g)))
+                  (if (eq? (car r1) 'completed)
+                      (let ((second (ran (lambda () (finish R)))))
+                        (cons 'last (judged verb start (list (list (cadr r1) 0 'counts-kept) second)
+                                            (and (not r-open) (equal? (car second) (refused-answer verb)))
+                                            #f)))
+                      (let* ((R1 (cadr r1))
+                             (r1-last (past-last? verb start))
+                             (second (ran (lambda () (finish R))))
+                             (third (ran (lambda () (finish R1)))))
+                        (cons 'interleaved (judged verb start (list second third)
+                                                   (and (not r-open) (equal? (car second) (refused-answer verb)))
+                                                   (and (not r-last) r1-last)))))))))
+    (ended!)
+    (append t (list clean))))
 
-;; Controlled = (U 'completed (List Boolean Boolean))
-;; control : Symbol Natural -> Controlled
-;; VERB as an engine, one slice of FUEL: completed, when it completed; else
-;; whether its remainder, resumed to its end, then resumed to its end again,
-;; made a whole new call the second time: opened a connection of its own;
-;; and whether it was refused then, before the open: no connection counted
-;; at the expiry, and the second resume raising &sqlite-closed from VERB,
-;; opening nothing. Every database either answered is closed.
-(define (control verb fuel)
-  (set! noted '())
-  (let ((r (slice (make-engine (thunk-of verb)) fuel)))
-    (if (eq? (car r) 'completed)
-        (begin (when (a-database? (cadr r)) (close-answer (cadr r))) 'completed)
-        (let* ((before (eqv? (cdr (assq 'connection (native-counts))) 0))
-               (first (finish (cadr r)))
-               (n (length noted))
-               (c0 (cdr (assq 'connection (native-counts))))
-               (second (finish (cadr r)))
-               (c1 (cdr (assq 'connection (native-counts))))
-               (new (let loop ((rest noted) (k (- (length noted) n)))
-                      (cond ((= k 0) #f)
-                            ((eq? (car (car rest)) 'open) #t)
-                            (else (loop (cdr rest) (- k 1)))))))
-          (when (a-database? first) (close-answer first))
-          (when (and (a-database? second) (not (eq? second first))) (close-answer second))
-          (list new (and before (not new) (= c1 c0) (equal? second (refused-answer verb))))))))
-
-;; made-new? : Controlled -> Boolean
-(define (made-new? made) (and (pair? made) (car made)))
-
-;; Sweep = (List Any Natural (Listof Any) Natural Natural Natural Counts (U Natural #f))
+;; Sweep = (List Any Natural (Listof Any) Natural (Listof Natural) (U Natural #f) Natural Natural Counts Natural)
 ;; The fuel at which the call completes without expiring, or
 ;; no-completion-by-20000; how many trials ran; each trial's deviations,
 ;; with its fuels; the trials in which a run answered a connection, or the
-;; procedure; those in which a remainder made a whole new call; the last
-;; fuel at which the control made one, 0 for none; the counts once the
-;; sweep is done; and the first fuel at which the control was refused
-;; before the open, #f for none.
+;; procedure; the fuels of the trials that opened two connections, whole
+;; new calls; the first fuel at which a trial was refused, R taken before
+;; the open, #f for none; how many fuels saw a refusal; the trials with R
+;; before the call's last section and R1 past it; the counts once the
+;; sweep is done; and the whole new calls left out of the bound, a collect
+;; request in their first slice.
 
-;; sweep : Symbol -> Sweep
-;; At every fuel from 1 until the call completes without expiring, the
-;; control, then trial at every G from 1 until R's resume completes within
-;; it, each fuel begun by quieted!, so no collect request falls in its
-;; runs. A trial may make a whole new call where the control made one at
-;; its fuel or the fuel before, a tick's room should a request fall all the
-;; same: one costs a run up to a tick (.plans/research/m3-slice-5/,
-;; gc-ticks.sps), so a trial's R would lie a tick before the control's.
-(define (sweep verb)
-  (let floop ((fuel 1) (trials 0) (deviations '()) (answered 0) (new 0) (last-new 0) (was-new #f)
-              (refused-at #f))
-    (let* ((made (begin (quieted!) (control verb fuel)))
-           (new? (or (made-new? made) was-new))
-           (refused-at (or refused-at (and (pair? made) (cadr made) fuel))))
-      (if (eq? made 'completed)
-          (list fuel trials (reverse deviations) answered new last-new (native-counts) refused-at)
-          (let ((last-new (if (made-new? made) fuel last-new)))
-            (let gloop ((g 1) (trials trials) (deviations deviations) (answered answered) (new new))
-              (let* ((t (trial verb fuel g new?))
-                     (kind (car t))
-                     (deviations (if (null? (caddr t)) deviations
-                                     (cons (list verb fuel g (caddr t)) deviations)))
-                     (answered (if (> (cadr t) 0) (+ answered 1) answered))
-                     (new (if (> (cadr t) 1) (+ new 1) new))
-                     (trials (+ trials 1)))
-                (cond ((eq? kind 'completed)
-                       (list fuel trials (reverse deviations) answered new last-new (native-counts)
-                             refused-at))
-                      ((>= fuel 20000)
-                       (list 'no-completion-by-20000 trials (reverse deviations) answered new last-new
-                             (native-counts) refused-at))
-                      ((eq? kind 'last)
-                       (floop (+ fuel 1) trials deviations answered new last-new (made-new? made)
-                              refused-at))
-                      (else (gloop (+ g 1) trials deviations answered new))))))))))
+;; sweep : Pass Symbol -> Sweep
+;; At every fuel from 1 until the call completes without expiring, trial in
+;; PASS at every G from 1 until R's resume completes within it.
+(define (sweep pass verb)
+  (let floop ((fuel 1) (trials 0) (deviations '()) (answered 0) (news '()) (refused-at #f)
+              (refused-fuels 0) (straddle 0) (moved 0))
+    (let gloop ((g 1) (trials trials) (deviations deviations) (answered answered) (news news)
+                (refused-at refused-at) (seen #f) (straddle straddle) (moved moved))
+      (let* ((t (trial pass verb fuel g))
+             (kind (car t))
+             (deviations (if (null? (caddr t)) deviations
+                             (cons (list verb fuel g (caddr t)) deviations)))
+             (answered (if (> (cadr t) 0) (+ answered 1) answered))
+             (new (> (cadddr t) 1))
+             (news (if (and new (list-ref t 7)) (cons fuel news) news))
+             (moved (if (and new (not (list-ref t 7))) (+ moved 1) moved))
+             (seen (or seen (list-ref t 4)))
+             (refused-at (or refused-at (and (list-ref t 5) fuel)))
+             (straddle (if (list-ref t 6) (+ straddle 1) straddle))
+             (trials (+ trials 1)))
+        (cond ((eq? kind 'completed)
+               (list fuel trials (reverse deviations) answered (reverse news) refused-at refused-fuels
+                     straddle (native-counts) moved))
+              ((>= fuel 20000)
+               (list 'no-completion-by-20000 trials (reverse deviations) answered (reverse news)
+                     refused-at refused-fuels straddle (native-counts) moved))
+              ((eq? kind 'last)
+               (floop (+ fuel 1) trials deviations answered news refused-at
+                      (if seen (+ refused-fuels 1) refused-fuels) straddle moved))
+              (else (gloop (+ g 1) trials deviations answered news refused-at seen straddle moved)))))))
+
+;; past-the-bound : (Listof Natural) (U Natural #f) -> (Listof Natural)
+;; The distinct fuels among NEWS at or past REFUSED-AT, every one when it
+;; is #f, in order: a failing row's evidence.
+(define (past-the-bound news refused-at)
+  (let loop ((rest news) (found '()))
+    (cond ((null? rest) (reverse found))
+          ((and (or (not refused-at) (>= (car rest) refused-at)) (not (memv (car rest) found)))
+           (loop (cdr rest) (cons (car rest) found)))
+          (else (loop (cdr rest) found)))))
 
 ;; tallied : (Listof (List Symbol Natural Natural (Listof Any))) -> (Listof (Pairof Symbol Natural))
 ;; How many trials among DEVIATIONS deviated by each kind, a deviation's
@@ -722,42 +812,63 @@
         ((eq? (car (car kinds)) k) (cons (cons k (+ (cdr (car kinds)) 1)) (cdr kinds)))
         (else (cons (car kinds) (counted-up k (cdr kinds))))))
 
-;; reported : Symbol Sweep -> (List Any Any Any Counts)
-;; RUN's deviations, summarized; whether its trials answered a connection,
-;; or the procedure, at least three a fuel on average, over the fuels up to
-;; the one at which the call completes: a sweep that reused one R across
-;; every G makes at most one a fuel; whether its control was refused before
-;; the open at some fuel, and made every whole new call below the first;
-;; and the counts once it was done; its fuels printed, naming VERB.
-(define (reported verb run)
-  (display "  ")
-  (display verb)
-  (display ": completed without expiring at fuel ")
-  (write (car run))
-  (display "; trials ")
-  (write (cadr run))
-  (display "; trials answering ")
-  (write (cadddr run))
-  (display "; whole new calls ")
-  (write (list-ref run 4))
-  (display "; the last fuel at which the control made a whole new call ")
-  (write (list-ref run 5))
-  (display ", below the first at which it was refused before the open, ")
-  (write (list-ref run 7))
-  (newline)
-  (unless (null? (caddr run))
-    (display "    deviations by kind: ")
-    (write (tallied (caddr run)))
-    (newline))
-  (list (if (integer? (car run)) (summarized (caddr run)) (list (car run) (summarized (caddr run))))
-        (if (and (integer? (car run)) (>= (cadddr run) (* 3 (car run))))
-            'answered-three-a-fuel
-            (list 'answered (cadddr run) 'over (car run)))
-        (let ((last-new (list-ref run 5)) (refused-at (list-ref run 7)))
-          (if (and refused-at (< last-new refused-at))
-              'whole-new-calls-below-a-refusal
-              (list 'whole-new-calls-not-below-a-refusal last-new refused-at)))
-        (list-ref run 6)))
+;; reported : Pass Symbol -> (Listof Any)
+;; sweep of VERB in PASS, printed, and judged: its deviations, summarized;
+;; whether its trials answered a connection, or the procedure, at least
+;; three a fuel on average, over the fuels up to the one at which the call
+;; completes: a sweep that reused one R across every G makes at most one a
+;; fuel; refusals at half the fuels at least; every whole new call below
+;; the first refusal the sweep saw itself, R taken before the open; in the
+;; low pass, R before the last section and R1 past it in some trial, and
+;; collect requests met in its trials; and the counts once it was done.
+(define (reported pass verb)
+  (let-values (((run met) (counted-pass (lambda () (sweep pass verb)))))
+    (let ((fuel (car run)) (news (list-ref run 4)) (refused-at (list-ref run 5))
+          (refused-fuels (list-ref run 6)) (straddle (list-ref run 7)))
+      (display "  ")
+      (display verb)
+      (when (eq? pass 'low) (display ", low trip"))
+      (display ": completed without expiring at fuel ")
+      (write fuel)
+      (display "; trials ")
+      (write (cadr run))
+      (display "; trials answering ")
+      (write (cadddr run))
+      (display "; fuels seeing a refusal ")
+      (write refused-fuels)
+      (display "; R before the last section and R1 past it in ")
+      (write straddle)
+      (display "; whole new calls ")
+      (write (length news))
+      (display ", the last at fuel ")
+      (write (if (null? news) 0 (apply max news)))
+      (display ", below the first refusal before the open, at fuel ")
+      (write refused-at)
+      (display "; whole new calls left out, a collect request in the first slice, ")
+      (write (list-ref run 9))
+      (display "; collect requests met ")
+      (write met)
+      (newline)
+      (unless (null? (caddr run))
+        (display "    deviations by kind: ")
+        (write (tallied (caddr run)))
+        (newline))
+      (append
+       (list (if (integer? fuel) (summarized (caddr run)) (list fuel (summarized (caddr run))))
+             (if (and (integer? fuel) (>= (cadddr run) (* 3 fuel)))
+                 'answered-three-a-fuel
+                 (list 'answered (cadddr run) 'over fuel))
+             (if (and (integer? fuel) (>= (* 2 refused-fuels) fuel))
+                 'refused-at-half-the-fuels
+                 (list 'refused-fuels refused-fuels 'over fuel))
+             (if (and refused-at (for-all (lambda (f) (< f refused-at)) news))
+                 'whole-new-calls-below-a-refusal
+                 (list 'whole-new-calls-not-below-a-refusal (past-the-bound news refused-at) refused-at)))
+       (if (eq? pass 'low)
+           (list (if (> straddle 0) 'straddled-the-last-section (list 'none-straddling-the-last-section straddle)))
+           '())
+       (requests-judged pass met)
+       (list (list-ref run 8))))))
 
 (test-begin "open-interleave")
 
@@ -815,17 +926,40 @@
         (list (tell-noted noted? (length conns)) (tell-noted noted? (and c (cadr c))) read
               (native-counts))))))
 
-(let ((name "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted; at least three trials a fuel on average answer a connection; and the control is refused before the open at some fuel, every whole new call it makes below the first"))
-  (tell-available! registered name)
-  (test-equal name
-    (list '() 'answered-three-a-fuel 'whole-new-calls-below-a-refusal zero-counts)
-    (reported 'open-database (sweep 'open-database))))
+(define open-name
+  "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted; at least three trials a fuel on average answer a connection; refusals come at half the fuels at least; and two connections, a whole new call's, only below the first fuel at which a trial was refused, R taken before the open")
 
-(let ((name "call-with-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the procedure's answer or &sqlite-closed, a refused run touching nothing; at most one connection a call is opened, and none is left open; each setting is applied once, in the plan's order, and wholly on the connection the procedure was given, which tracks no statement there; nothing is counted after; at least three trials a fuel on average answer the procedure; and the control is refused before the open at some fuel, every whole new call it makes below the first"))
+(define low-said
+  "the same, its trials under a collect trip of 256 bytes, so a request falls due in every run and one due inside a section costs ticks at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the call's last section and R1 past it; and collect requests met in the trials. ")
+
+(let ((name open-name))
   (tell-available! registered name)
   (test-equal name
-    (list '() 'answered-three-a-fuel 'whole-new-calls-below-a-refusal zero-counts)
-    (reported 'call-with-database (sweep 'call-with-database))))
+    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
+    (reported 'high 'open-database)))
+
+(let ((name (string-append low-said open-name)))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
+          'straddled-the-last-section 'collect-requests-met zero-counts)
+    (reported 'low 'open-database)))
+
+(define cwd-name
+  "call-with-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the procedure's answer or &sqlite-closed, a refused run touching nothing; at most one connection a call is opened, and none is left open; each setting is applied once, in the plan's order, and wholly on the connection the procedure was given, which tracks no statement there; nothing is counted after; at least three trials a fuel on average answer the procedure; refusals come at half the fuels at least; and two connections, a whole new call's, only below the first fuel at which a trial was refused, R taken before the open")
+
+(let ((name cwd-name))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
+    (reported 'high 'call-with-database)))
+
+(let ((name (string-append low-said cwd-name)))
+  (tell-available! registered name)
+  (test-equal name
+    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
+          'straddled-the-last-section 'collect-requests-met zero-counts)
+    (reported 'low 'call-with-database)))
 
 ;; --- a failing open, resumed twice ------------------------------------------------------------
 
@@ -843,117 +977,176 @@
       (lambda () (attempt (lambda () (open-database ":memory:" failing))))
       (lambda () (attempt (lambda () (call-with-database ":memory:" failing proc))))))
 
-;; failing-twice : Symbol Natural Boolean -> (U 'completed (List Symbol (Listof Any)))
-;; VERB with failing as an engine, one slice of FUEL, NEW? whether a whole
-;; new call may come at it, by the control; expired, its remainder
-;; resumed to its end, then again. Answers completed when the slice
-;; completed; else the second's kind, refused, again or new, and what
-;; deviated: the first not the mismatch, or, for call-with-database, not
-;; &sqlite-closed either, an expiry after the open having closed the
-;; connection; the second anything else, or
-;; noting what it may not; a new one where the control made none; a
-;; connection's PRAGMAs no prefix of the plan, or one twice; anything
-;; counted after. Where NOTED? is #f, the checks that read the notes are
-;; dropped: that the second notes nothing, that only a whole new call
-;; opens a connection, and each connection's PRAGMAs. A remainder taken while open-database's connection was
-;; still open, counted at the expiry beyond the counts at the start, lies
-;; before the failure's close, so
-;; the second resume is refused, there or earlier, never the mismatch
-;; again: that comes only from one taken past the close. An expiry closes
-;; call-with-database's connection, so none is counted at its expiries.
-(define (failing-twice verb fuel new? noted?)
-  (begin
-    (set! noted '())
-    (let* ((start (native-counts))
-           (r (slice (make-engine (failing-thunk-of verb)) fuel)))
-      (if (eq? (car r) 'completed)
-          'completed
-          (let* ((open-at-expiry (> (cdr (assq 'connection (native-counts)))
-                                    (cdr (assq 'connection start))))
-                 (first (finish (cadr r)))
-                 (n (length noted))
-                 (second (ran (lambda () (finish (cadr r)))))
-                 (conns (connections-of (reverse noted)))
-                 (since (let loop ((rest noted) (k (- (length noted) n)) (found '()))
-                          (if (= k 0) found (loop (cdr rest) (- k 1) (cons (car rest) found)))))
-                 (opened-since (let loop ((rest since) (k 0))
-                                 (cond ((null? rest) k)
-                                       ((eq? (car (car rest)) 'open) (loop (cdr rest) (+ k 1)))
-                                       (else (loop (cdr rest) k)))))
-                 (quiet (and (or (not noted?) (eqv? (cadr second) 0))
-                             (eq? (caddr second) 'counts-kept)))
-                 (kind (cond ((and (equal? (car second) (refused-answer verb)) quiet) 'refused)
-                             ((and (equal? (car second) (mismatched verb)) quiet) 'again)
-                             ((and (equal? (car second) (mismatched verb)) (eqv? opened-since 1)
-                                   (eq? (caddr second) 'counts-kept))
-                              'new)
-                             (else 'other)))
-                 (deviations '()))
-            (define (deviate! d) (set! deviations (cons d deviations)))
-            (unless (or (equal? first (mismatched verb))
-                        (and (eq? verb 'call-with-database) (equal? first (refused-answer verb))))
-              (deviate! (list 'first first)))
-            (when (eq? kind 'other) (deviate! (list 'second second opened-since)))
-            (when (and noted? (eq? kind 'new) (not new?))
-              (deviate! (list 'new-where-the-control-made-none)))
-            (when (and open-at-expiry (not (eq? kind 'refused)))
-              (deviate! (list 'open-at-the-expiry-but-not-refused kind)))
-            (let loop ((rest (if noted? conns '())))
-              (unless (null? rest)
-                (unless (prefix? (cadr (car rest)) failing-plan)
-                  (deviate! (list 'not-the-plan (cadr (car rest)))))
-                (loop (cdr rest))))
-            (unless (equal? (native-counts) start) (deviate! (list 'counts start (native-counts))))
-            (list kind (reverse deviations)))))))
+;; failing-twice : Pass Symbol Natural Boolean -> (U 'completed (List Symbol (Listof Any) Boolean Boolean))
+;; VERB with failing as an engine, one slice of FUEL, in PASS; expired, its
+;; remainder resumed to its end, then again. Answers completed when the
+;; slice completed; else the second's kind, refused, again or new, what
+;; deviated, and whether the remainder lay before the open: no connection
+;; counted at its expiry beyond the counts at the start, for open-database;
+;; no open noted then, for call-with-database, whose connection an expiry
+;; closes, #f where NOTED? is #f; and whether no collect request fell in
+;; the first slice, so the sweep's bound reads it. What deviated: the first not the
+;; mismatch, or, for call-with-database, not &sqlite-closed either, an
+;; expiry after the open having closed the connection; the second anything
+;; else, or noting what it may not; a connection's PRAGMAs no prefix of the
+;; plan, or one twice; anything counted after. A new one, a whole new
+;; call's, the sweep bounds. Where NOTED? is #f, the checks that read the
+;; notes are dropped: that the second notes nothing, that only a whole new
+;; call opens a connection, and each connection's PRAGMAs. A remainder
+;; taken while open-database's connection was still open, counted at the
+;; expiry beyond the counts at the start, lies before the failure's close,
+;; so the second resume is refused, there or earlier, never the mismatch
+;; again: that comes only from one taken past the close.
+(define (failing-twice pass verb fuel noted?)
+  (begun! pass)
+  (set! noted '())
+  (let* ((start (native-counts))
+         (met requests)
+         (r (slice (make-engine (failing-thunk-of verb)) fuel))
+         (clean (= requests met))
+         (t (if (eq? (car r) 'completed)
+                'completed
+                (let* ((open-at-expiry (> (cdr (assq 'connection (native-counts)))
+                                          (cdr (assq 'connection start))))
+                       (before (if (eq? verb 'open-database)
+                                   (not open-at-expiry)
+                                   (and noted? (not (opened?)))))
+                       (first (finish (cadr r)))
+                       (n (length noted))
+                       (second (ran (lambda () (finish (cadr r)))))
+                       (conns (connections-of (reverse noted)))
+                       (since (let loop ((rest noted) (k (- (length noted) n)) (found '()))
+                                (if (= k 0) found (loop (cdr rest) (- k 1) (cons (car rest) found)))))
+                       (opened-since (let loop ((rest since) (k 0))
+                                       (cond ((null? rest) k)
+                                             ((eq? (car (car rest)) 'open) (loop (cdr rest) (+ k 1)))
+                                             (else (loop (cdr rest) k)))))
+                       (quiet (and (or (not noted?) (eqv? (cadr second) 0))
+                                   (eq? (caddr second) 'counts-kept)))
+                       (kind (cond ((and (equal? (car second) (refused-answer verb)) quiet) 'refused)
+                                   ((and (equal? (car second) (mismatched verb)) quiet) 'again)
+                                   ((and (equal? (car second) (mismatched verb)) (eqv? opened-since 1)
+                                         (eq? (caddr second) 'counts-kept))
+                                    'new)
+                                   (else 'other)))
+                       (deviations '()))
+                  (define (deviate! d) (set! deviations (cons d deviations)))
+                  (unless (or (equal? first (mismatched verb))
+                              (and (eq? verb 'call-with-database) (equal? first (refused-answer verb))))
+                    (deviate! (list 'first first)))
+                  (when (eq? kind 'other) (deviate! (list 'second second opened-since)))
+                  (when (and open-at-expiry (not (eq? kind 'refused)))
+                    (deviate! (list 'open-at-the-expiry-but-not-refused kind)))
+                  (let loop ((rest (if noted? conns '())))
+                    (unless (null? rest)
+                      (unless (prefix? (cadr (car rest)) failing-plan)
+                        (deviate! (list 'not-the-plan (cadr (car rest)))))
+                      (loop (cdr rest))))
+                  (unless (equal? (native-counts) start) (deviate! (list 'counts start (native-counts))))
+                  (list kind (reverse deviations) before clean)))))
+    (ended!)
+    t))
 
-;; failing-sweep : Symbol Boolean -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)) Counts)
+;; failing-sweep : Pass Symbol Boolean -> (List Any (Listof Any) (Listof (Pairof Symbol Natural)) (Listof Natural) (U Natural #f) Counts Natural)
 ;; failing-twice, NOTED? given it, at every fuel from 1 until the call
-;; completes without expiring, at most 20000, a whole new call allowed
-;; where the succeeding call's control made one, at the fuel or the one
-;; before, as sweep allows it: the checks run in one section, which spends
-;; no ticks, so the two calls' ticks before their claims are alike. That
-;; fuel; each fuel's deviations; how many fuels each kind came at; and the
-;; counts after.
-(define (failing-sweep verb noted?)
-  (let loop ((fuel 1) (deviations '()) (kinds '()) (was-new #f))
-    (let* ((made (begin (quieted!) (control verb fuel)))
-           (t (failing-twice verb fuel (or (made-new? made) was-new) noted?)))
-      (cond ((eq? t 'completed) (list fuel (reverse deviations) kinds (native-counts)))
-            ((>= fuel 20000) (list 'no-completion-by-20000 (reverse deviations) kinds (native-counts)))
+;; completes without expiring, at most 20000, in PASS: that fuel; each
+;; fuel's deviations; how many fuels each kind came at; the fuels at which
+;; it made a whole new call, no collect request in the first slice; the
+;; first fuel at which it was refused, the remainder before the open; the
+;; counts after; and the whole new calls left out of the bound, a collect
+;; request in their first slice.
+(define (failing-sweep pass verb noted?)
+  (let loop ((fuel 1) (deviations '()) (kinds '()) (news '()) (refused-at #f) (moved 0))
+    (let ((t (failing-twice pass verb fuel noted?)))
+      (cond ((eq? t 'completed)
+             (list fuel (reverse deviations) kinds (reverse news) refused-at (native-counts) moved))
+            ((>= fuel 20000)
+             (list 'no-completion-by-20000 (reverse deviations) kinds (reverse news) refused-at (native-counts)
+                   moved))
             (else
              (loop (+ fuel 1)
                    (if (null? (cadr t)) deviations (cons (cons fuel (cadr t)) deviations))
                    (counted-up (car t) kinds)
-                   (made-new? made)))))))
+                   (if (and (eq? (car t) 'new) (cadddr t)) (cons fuel news) news)
+                   (or refused-at (and (eq? (car t) 'refused) (caddr t) fuel))
+                   (if (and (eq? (car t) 'new) (not (cadddr t))) (+ moved 1) moved)))))))
 
-;; failing-reported : Symbol (List Any (Listof Any) (Listof (Pairof Symbol Natural)) Counts)
-;;                    -> (List Any Symbol Counts)
-(define (failing-reported verb run)
-  (display "  ")
-  (display verb)
-  (display ", failing, resumed twice: completed without expiring at fuel ")
-  (write (car run))
-  (display "; second resumes ")
-  (write (caddr run))
-  (newline)
-  (list (summarized (cadr run))
-        (let ((p (assq 'refused (caddr run))))
-          (if (and p (integer? (car run)) (>= (* 3 (cdr p)) (car run)))
-              'refused-at-a-third-of-the-fuels
-              (list 'refused (if p (cdr p) 0) 'of (car run))))
-        (cadddr run)))
+;; failing-reported : Pass Symbol Boolean -> (Listof Any)
+;; failing-sweep of VERB in PASS, printed, and judged: no deviation;
+;; refusals at a third of the fuels at least; where NOTED?, every whole new
+;; call below the first refusal the sweep saw itself, the remainder before
+;; the open, else unavailable; in the low pass, collect requests met in its
+;; trials; and the counts.
+(define (failing-reported pass verb noted?)
+  (let-values (((run met) (counted-pass (lambda () (failing-sweep pass verb noted?)))))
+    (let ((news (list-ref run 3)) (refused-at (list-ref run 4)))
+      (display "  ")
+      (display verb)
+      (display ", failing, resumed twice")
+      (when (eq? pass 'low) (display ", low trip"))
+      (display ": completed without expiring at fuel ")
+      (write (car run))
+      (display "; second resumes ")
+      (write (caddr run))
+      (display "; whole new calls at ")
+      (write news)
+      (display ", below the first refusal before the open, at fuel ")
+      (write refused-at)
+      (display "; whole new calls left out, a collect request in the first slice, ")
+      (write (list-ref run 6))
+      (display "; collect requests met ")
+      (write met)
+      (newline)
+      (append
+       (list (summarized (cadr run))
+             (let ((p (assq 'refused (caddr run))))
+               (if (and p (integer? (car run)) (>= (* 3 (cdr p)) (car run)))
+                   'refused-at-a-third-of-the-fuels
+                   (list 'refused (if p (cdr p) 0) 'of (car run))))
+             (tell-noted noted?
+                         (if (and refused-at (for-all (lambda (f) (< f refused-at)) news))
+                             'whole-new-calls-below-a-refusal
+                             (list 'whole-new-calls-not-below-a-refusal news refused-at))))
+       (requests-judged pass met)
+       (list (list-ref run 5))))))
 
-(let* ((name "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, at a third of the fuels at least, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only where the control makes a whole new call does it open a connection, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after")
-       (noted? (tell-kept? registered name "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")))
+(define failing-checks
+  "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")
+
+(define failing-open-name
+  "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, at a third of the fuels at least, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only below the first fuel at which the sweep saw one refused, the remainder before the open, does it open a connection, a whole new call's, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after")
+
+(define failing-low-said
+  "the same, its trials under a collect trip of 256 bytes: the same verdicts, and collect requests met in the trials. ")
+
+(let* ((name failing-open-name)
+       (noted? (tell-kept? registered name failing-checks)))
   (test-equal name
-    (list '() 'refused-at-a-third-of-the-fuels zero-counts)
-    (failing-reported 'open-database (failing-sweep 'open-database noted?))))
+    (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal) zero-counts)
+    (failing-reported 'high 'open-database noted?)))
 
-(let* ((name "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, at a third of the fuels at least, or raises the mismatch again, noting nothing; only where the control makes a whole new call does it open a connection; nothing is counted after")
-       (noted? (tell-kept? registered name "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")))
+(let* ((name (string-append failing-low-said failing-open-name))
+       (noted? (tell-kept? registered name failing-checks)))
   (test-equal name
-    (list '() 'refused-at-a-third-of-the-fuels zero-counts)
-    (failing-reported 'call-with-database (failing-sweep 'call-with-database noted?))))
+    (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal)
+          'collect-requests-met zero-counts)
+    (failing-reported 'low 'open-database noted?)))
+
+(define failing-cwd-name
+  "call-with-database the same: the first raises the mismatch, its procedure never called, or &sqlite-closed where the expiry closed the connection; the second is refused, at a third of the fuels at least, or raises the mismatch again, noting nothing; only below the first fuel at which the sweep saw one refused, no open noted at the expiry, does it open a connection, a whole new call's; nothing is counted after")
+
+(let* ((name failing-cwd-name)
+       (noted? (tell-kept? registered name failing-checks)))
+  (test-equal name
+    (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal) zero-counts)
+    (failing-reported 'high 'call-with-database noted?)))
+
+(let* ((name (string-append failing-low-said failing-cwd-name))
+       (noted? (tell-kept? registered name failing-checks)))
+  (test-equal name
+    (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal)
+          'collect-requests-met zero-counts)
+    (failing-reported 'low 'call-with-database noted?)))
 
 ;; --- an interrupt that escapes, at each of call-with-database's sections --------------------
 
