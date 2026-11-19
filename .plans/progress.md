@@ -173,6 +173,11 @@ newest first.
     - the sweeps' low passes, with no control run.
   - **Linux arm64** stays open from the M4 plan's §7: the variadic binding there is chez-curl's
     measurement, not ours.
+  - **`check-ci` passes a cache save, or a Chez build, with its `if:` removed:** the no-load save,
+    current's SQLite save and current's Chez save (the M4 session's check of PR #48). It did so at
+    `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
+  - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
+    grows past it. The gate's `SLOW` line is the only bound.
   - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
     suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
     `memory-2` before calling it safe.

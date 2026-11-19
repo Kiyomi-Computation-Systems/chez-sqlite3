@@ -305,3 +305,14 @@ line (`make build`'s) read first:
 - **Survivors on both layouts, unchanged by the split:** H2, H6 and H8 are faults in the suites'
   own helpers that this container never exercises: mkdir never fails here, the container sets no
   `GUIX_PROFILE`, so unsetting it does nothing, and every text `lines-of` reads ends in a newline.
+
+## After the merge (the lead)
+
+The M4 session's check of PR #48 read the split against the merged tree:
+- **`rows.py`** gives 113 distinct rows after, against 112 before. The map is identical but for the
+  bare-name refusal's row, whose name builder C reworded, so "106 distinct rows held whole" is 105
+  at the head.
+- **Four loading plants no longer apply** after C's changes to `connection.sls` and
+  `extension.sls`: M4s3-Q-owner-unchecked, M4s3-C-unchecked, M4s3L-K5-reader-unowned and
+  M4s4-C09b-nul-after-absolute. None changes a result: each was caught by both layouts before.
+
