@@ -59,6 +59,15 @@ plants = {
   # F2: the section's refusal named for call-with-open-handle, not the who.
   'f2-who-lost': [("        ((wrong-thread) (raise-wrong-thread who (cadr outcome) (caddr outcome)))",
                    "        ((wrong-thread) (raise-wrong-thread 'call-with-open-handle (cadr outcome) (caddr outcome)))")],
+  # The close: its owner check before its section alone, as 776e644 had it.
+  'c-close-before-only': [("              (if (not (eqv? owner caller))\n                  (list 'wrong-thread owner caller)\n                  (guard (c (#t (list 'raised c)))\n                    (interrupt-latch-close!",
+                           "              (if #f\n                  (list 'wrong-thread owner caller)\n                  (guard (c (#t (list 'raised c)))\n                    (interrupt-latch-close!")],
+  # The close: the wrong thread raised inside its section.
+  'c-close-raise-inside': [("              (if (not (eqv? owner caller))\n                  (list 'wrong-thread owner caller)\n                  (guard (c (#t (list 'raised c)))\n                    (interrupt-latch-close!",
+                            "              (if (not (eqv? owner caller))\n                  (raise-wrong-thread who owner caller)\n                  (guard (c (#t (list 'raised c)))\n                    (interrupt-latch-close!")],
+  # The close: its section's refusal named for close-connection.
+  'c-close-who-lost': [("        ((wrong-thread) (raise-wrong-thread who (cadr outcome) (caddr outcome)))\n        ((raised) (raise (cadr outcome)))",
+                        "        ((wrong-thread) (raise-wrong-thread 'close-connection (cadr outcome) (caddr outcome)))\n        ((raised) (raise (cadr outcome)))")],
   # F3: load-extension!'s opt-in read without its who, as main had it.
   'f3-no-who': [("    (unless (database-extension-loading? who db)", "    (unless (database-extension-loading? db)", ext)],
   # F3: the reader taking a who and naming itself all the same.

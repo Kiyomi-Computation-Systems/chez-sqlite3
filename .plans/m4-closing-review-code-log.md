@@ -194,10 +194,77 @@ suites timed the same way on this machine:
 
 Every suite passed, none slow.
 
+## Round 2: the M4 session's check
+
+The lead merged round 1, `776e644`, into PR #48. The M4 session's read-only check found three
+items in this builder's files, fixed here.
+
+**1, major: `close-database!`'s owner check was outside its section,** F2's defect in the one
+handle path round 1 missed. `close-connection` ran `check-owned` before `interrupt-latch-close!`'s
+section, which finalizes and closes.
+
+- **The fix,** in `connection.sls`: a critical section around `interrupt-latch-close!` reads the
+  owner and `get-thread-id` and compares them before the latch is touched. A wrong thread is
+  answered as `(wrong-thread OWNER CALLER)` and raised after the section, from the caller's `who`.
+  What `interrupt-latch-close!` raises after its own section is caught in the outer one and raised
+  after it. `interrupt.sls` isn't this builder's file, so the check wraps the latch rather than
+  going into it.
+- **The rows,** in `test-connection`, by the sweep's method. The connection holds a statement at a
+  row, and BEFORE reads on the owner's thread whether the connection is still open, so a close made
+  on the other thread shows as open before the resume and answered after it. Two rows: the
+  refusal, from `close-database!`, with the connection open before the resume and closed by the
+  owner after it; and the refusal's handler at depth 1. The latch's section is the close's last,
+  and at this trip no tick falls after it, so neither row asks for a trial past it. The sweep now
+  records BEFORE's own answer; the earlier rows' BEFOREs answer `done`.
+- **Red, on `776e644`'s code:** 70 passed, 1 failed, at fuels 10 and 11,
+  `(10 resumed closed-it the-thread open closed)`: closed on the other thread. The depth row came
+  after the fix. **Green:** 72 passed.
+- **The plants:**
+
+  | Plant | What it does | Result |
+  |---|---|---|
+  | `c-close-before-only` | the section's comparison dropped, `776e644`'s check | 2 fail, each at one fuel |
+  | `c-close-raise-inside` | the wrong thread raised inside the section | 1 fail, the depth row: `depth-2` |
+  | `c-close-who-lost` | the refusal named for `close-connection` | 2 fail |
+
+- **Every handle path, checked again:**
+  - `call-with-open-handle` holds every verb that reaches a connection's handle: the statement
+    verbs, the counters, the conveniences, `with-transaction`, the settings and `load-extension!`.
+    Its section checks the owner (round 1).
+  - `close-connection` holds `close-database!`, the open's failure close and
+    `call-with-database`'s close. Its section now checks the owner. The last two already ran inside
+    critical sections of their own, `in-section` and the critical after thunk, so a check there
+    could not be split from its use.
+  - `connection-outcome`, the open, makes the record, the owner read inside its section.
+  - `interrupt-database/with` is any thread's by design (ADR-0019).
+  - A statement's handle is read only by `call-with-statement-handle`'s procedure and by
+    `finalize-handle!`, which runs in that procedure or in the close's work.
+  - `tracked-statements`, `database-cache-capacity`, `database-cache-count` and
+    `database-extension-loading?` check the owner outside any section, but read no handle and make
+    no C call.
+
+**2, minor: the reference's F4 paragraph overgeneralized.** It now says a setup that gives its own
+message is quoted every time, and a setup whose reason is one of its own failed calls has that
+reason added only when the call changed the connection's error code. So the reason is lost when
+the code was already that one before the load: after an earlier failure with the same code, a busy
+write's among them, or a second load failing the same way beside a held row.
+
+**3, nit: the override's "with no search".** The bullet now says the library makes no search of
+its own, though on a Mac the loader can still pick another file. The Mac paragraph says
+`DYLD_LIBRARY_PATH` "can" redirect, for Apple's path or an override's. Only Apple's path was
+measured; the override's case is inferred from dlopen(3).
+
+**Round 2's runs,** on its final tree: `make test` passed 81 of 81 on Guix's 3.53.1, `m3-floor`
+(3.45.1), `m4-current` (3.54.1) and `m4-noload` (3.54.1), each version read before its run, with
+`test-connection` passing 72 on each. Under `make test-memory` on Guix's library,
+`test-connection` took 16 s by the gate's `time:` line, and passed.
+
 ## For the records
 
 The lead's to edit; this builder edited none of them.
 
+- **ADR-0012, amended, round 2:** `close-database!`'s close checks the owner again in a section
+  around the latch's, as `call-with-open-handle` does.
 - **ADR-0012, amended:** `call-with-open-handle` checks the owner again inside its section, first,
   the thread id read there, answers the wrong thread as data, and raises `&sqlite-wrong-thread`
   after the section from the caller's `who`. Its reason: Chez resumes an engine's remainder on

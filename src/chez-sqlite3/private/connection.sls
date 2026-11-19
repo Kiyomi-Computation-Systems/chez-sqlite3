@@ -631,33 +631,53 @@
   ;; and counted; else, the connection closed, the first finalize failure
   ;; (R1), then a count-down that found the count at zero, count-down!'s
   ;; double free. The work raises nothing.
+  ;;
+  ;; The owner is checked twice, as call-with-open-handle checks it: by
+  ;; check-owned first, so the refusals keep their order, and again in a
+  ;; critical section around interrupt-latch-close!'s, with the thread id
+  ;; read there, before the latch is touched. Chez resumes an engine's
+  ;; remainder on whichever thread calls it, so a close that passed the
+  ;; first check on the owner's thread could otherwise finalize and close
+  ;; on another (M4's closing review, the M4 session's check). There the
+  ;; section answers (wrong-thread OWNER CALLER), touching nothing, and
+  ;; &sqlite-wrong-thread is raised from WHO after it. What
+  ;; interrupt-latch-close! raises after its own section, only what the
+  ;; work raised, is caught in this one and raised again after it.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
-           (interrupt-latch-close!
-            (unchecked-database-latch db)
-            (lambda ()
-              (let ((handle (unchecked-database-handle db)))
-                (if (not handle)
-                    '(already-closed)
-                    (let* ((failure (finalize-tracked! db handle))
-                           (emptied (statement-cache-clear! (unchecked-database-cache db)))
-                           (rc (sqlite3-close handle)))
-                      (if (eqv? rc sqlite-ok)
-                          (begin
-                            (set-database-handle! db #f)
-                            (let ((double-free (guard (c (#t c))
-                                                 (count-down! 'connection)
-                                                 #f)))
-                              (cond (failure (list 'finalize-failed failure))
-                                    (double-free (list 'double-free double-free))
-                                    (else '(closed)))))
-                          (let ((untracked (statements-on handle)))
-                            (if (> untracked 0)
-                                (list 'untracked untracked)
-                                (cons 'failed (details-of rc handle)))))))))
-            close-left-open?)))
+           (critical-section
+            (let ((owner (unchecked-database-owner db))
+                  (caller (get-thread-id)))
+              (if (not (eqv? owner caller))
+                  (list 'wrong-thread owner caller)
+                  (guard (c (#t (list 'raised c)))
+                    (interrupt-latch-close!
+                     (unchecked-database-latch db)
+                     (lambda ()
+                       (let ((handle (unchecked-database-handle db)))
+                         (if (not handle)
+                             '(already-closed)
+                             (let* ((failure (finalize-tracked! db handle))
+                                    (emptied (statement-cache-clear! (unchecked-database-cache db)))
+                                    (rc (sqlite3-close handle)))
+                               (if (eqv? rc sqlite-ok)
+                                   (begin
+                                     (set-database-handle! db #f)
+                                     (let ((double-free (guard (c (#t c))
+                                                          (count-down! 'connection)
+                                                          #f)))
+                                       (cond (failure (list 'finalize-failed failure))
+                                             (double-free (list 'double-free double-free))
+                                             (else '(closed)))))
+                                   (let ((untracked (statements-on handle)))
+                                     (if (> untracked 0)
+                                         (list 'untracked untracked)
+                                         (cons 'failed (details-of rc handle)))))))))
+                     close-left-open?)))))))
       (case (car outcome)
+        ((wrong-thread) (raise-wrong-thread who (cadr outcome) (caddr outcome)))
+        ((raised) (raise (cadr outcome)))
         ((untracked)
          (assertion-violation who "the connection has statements chez-sqlite3 does not track"
                               'untracked-statements (cadr outcome)))
