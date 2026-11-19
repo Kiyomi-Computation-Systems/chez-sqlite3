@@ -9,8 +9,15 @@ Every figure is from the final tree on Guix's 3.53.1 unless a line names another
 
 The drivers are in [research/m4-closing-review/sweeps/](research/m4-closing-review/sweeps/):
 `plant.py`, reviewer B's three plants copied unchanged and builder D's; `planted.sh`, which
-makes each plant's copy of `src/` under `build/plant/`; and `plants.sh`, which runs every suite
-of this log against every plant and against `src/`.
+makes each plant's copy of `src/` under `build/plant/`; `plants.sh`, which runs every suite
+of this log against every plant and against `src/`; `rounds.sh`, which runs each plant against
+its own suites five times; `slipped.sh`, the trip-slip plant; and two probes, `exit-probe.sps`
+and `timer-probe.sps`.
+
+The M4 session's read-only check of the merged work found that low rows could not fail when the
+low trip stopped working. The follow-up, below the first build's sections, gives every low row
+checks the high pass can't meet, and a trip slipped to 256 KiB fails every one of them. Where a
+first-build section says something the follow-up changed, it says so.
 
 ## What changed, suite by suite
 
@@ -28,7 +35,8 @@ section; and the fold's whole calls are counted by the rows its procedure is giv
 - **A, `test-open-engines`:** the resumed-twice and re-entered rows each have a low pass,
   their judgments the high rows', plus `answered-again-past-its-last-section` and
   `called-again-past-the-settings` by name. `sweep`, `cwd-sweep` and `untracked-sweep`, the F1
-  row among them, are as they were. 8 rows, now 10.
+  row among them, are as they were. 8 rows, now 10; 12 after the follow-up, with the forcing
+  VFS's two rows.
 - **B, `test-open-db-config-engines`:** both interleaved rows drop their control: a trial is
   judged by itself, two connections, or the stand-in's first set noted twice, a whole new
   call's, and the sweep requires refusals at half its fuels, and every whole new call below the
@@ -41,7 +49,8 @@ section; and the fold's whole calls are counted by the rows its procedure is giv
   list has one set fewer, so that row does not ask it. A first build read the last set on the
   connection's handle, noted by an entry point registered through `sqlite3_auto_extension`;
   it went with the check. The header's claim that no control bounds a whole new call is now
-  true. 12 rows, now 16.
+  true. 12 rows, now 16; 18 after the follow-up, which moves the `open-database` interleaved
+  rows from `:memory:` to a file, so the forcing VFS sees the open.
 - **C, `test-open-interleave`:** both interleaved rows and both failing-twice rows drop the
   control, as B's; each has a low pass, the interleaved low rows requiring
   `straddled-the-last-section`: for `open-database`, the whole plan noted and no statement
@@ -76,8 +85,9 @@ section; and the fold's whole calls are counted by the rows its procedure is giv
   section but the return. No row changed.
 - **G, `test-transaction-engine`:** low passes of the pending row and the claim row, each
   built for its row. In the claim's low pass the claim window, a count of fuels past the
-  thunk's own count, gives way to the sweep's own first refusal by the claim. 20 rows, now 23,
-  with the trace's lock row.
+  thunk's own count, gives way to the sweep's own first refusal by the claim; after the
+  follow-up, in the high pass too. 20 rows, now 23, with the trace's lock row; 24 after the
+  follow-up, with the claim re-entry row's low pass.
 
 ## What the build measured
 
@@ -140,7 +150,7 @@ Two more, about the suites' own instruments:
 
 ## The plants
 
-Each plant was made in a copy of `src/` under `build/plant/` by `planted.sh`, on the host, and
+The first build's run; the follow-up's, five runs each, is in its own section. Each plant was made in a copy of `src/` under `build/plant/` by `planted.sh`, on the host, and
 every suite of this log run against it by `plants.sh`. B's three are its `plant.py`'s, copied
 unchanged; D's two are Proposal 1 D's names; the six controls watch each changed high row fail.
 
@@ -184,7 +194,8 @@ unchanged; D's two are Proposal 1 D's names; the six controls watch each changed
 
 ## The rows' figures
 
-On correct code, Guix's 3.53.1, each low row beside its high one. "Left out" counts the whole
+The first build's figures; the follow-up's forced sections are in its own section. On correct
+code, Guix's 3.53.1, each low row beside its high one. "Left out" counts the whole
 new calls the bound set aside, a collect request in their first slice; "met" the collect
 requests the pass's trials met. The figures read alike on 3.45.1, 3.54.1 and the no-load
 3.54.1, the forced reaches exactly so; the no-load build's `open-database` list has one set
@@ -219,7 +230,7 @@ which is why that row no longer asks it.
 
 ## The times
 
-Each changed suite under `make test-memory` on Guix's library, HEAD's version, from a copy of
+The first build's; the follow-up's are in its own section. Each changed suite under `make test-memory` on Guix's library, HEAD's version, from a copy of
 `main`'s tree under `build/`, then the final one, back to back, so each pair met the same load:
 the host ran the other builders too, at a load of 12 to 14 on 18 threads (traps.md: "A suite's
 time under the gate can be the host's, not the code's"). Each time is the gate's `time:` line.
@@ -258,6 +269,263 @@ pass.
 for them are the five this log adds; builder E2 changes the loading suites' lines in its own
 worktree, and the lead merges the two.
 
+## The follow-up: low rows that could not fail
+
+The M4 session's read-only check of the merged work, `04fd82e`, found that low rows could not
+fail when the low trip stopped working:
+
+- ten low rows asked nothing of their reach but `collect-requests-met`. With `low-trip`
+  mistyped as 262144, `test-open-db-config-engines`' low passes ran as its high ones did, and
+  it passed 16 of 16.
+  `P-conv-advance-after` was caught by `transaction-engine`'s pending low row in 3 runs of 9.
+- the high pass meets the other rows' reach checks too: `same 21`, `again 22`, the straddles of
+  1,139 and 189, and the give-back straddles of `query-failing`, the fold and the script.
+- two claim-holding sweeps had no low pass: `conveniences-reentry`'s jump-back row and
+  `transaction-engine`'s claim re-entry row.
+- the claim rows bounded a whole new call by the count plus a window of 2. AGENTS.md says
+  "nor by a caller's own count".
+- two nits.
+
+The fix, one shape in every suite, test first: every low row now asks two checks the high pass
+can't meet, and the trip-slip plant fails every low row by name.
+
+### What a low row asks now
+
+Each low row keeps its verdicts and its `collect-requests-met`. It adds two checks, each
+failing by name:
+
+- **`every-forced-section-met-its-request`.** Something the suite owns runs inside the
+  library's sections and allocates 32 KiB there in the low pass (`force!`). This check needs
+  some such section, and needs each one's collect request handled before the next forced
+  section or before its slice ends. At 256 bytes a request falls due in every one. At 256 KiB,
+  32 KiB meets one about one time in eight. In the high pass nothing is forced. The failing
+  form is `(forced-sections N unmet M)`.
+- **`taken-at-a-forced-exit`.** Some first slice expired at a forced section's exit, or a
+  timer's capture was made there. The high pass forces nothing, so it never meets this. The
+  failing form is `(none-taken-at-a-forced-exit ())`.
+
+How a suite tells where a remainder lies, measured:
+
+- **The request costs ticks at the exit.** A request due inside a critical section is
+  handled at its exit, where the handler costs the engine ticks.
+  [exit-probe.sps](research/m4-closing-review/sweeps/exit-probe.sps) runs six sections that
+  each allocate 32 KiB, with a marker set inside each section and overwritten just after it. At
+  a trip of 256 bytes, three fuels a section expired with the section's marker, at fuels 3 to 5,
+  8 to 10, and so on. At 2^27 and at 256 KiB, no fuel did.
+- **The handler can see it.** At the handler's end the engine's timer, read through Chez's
+  own `$tc-field`, reached through `eval`, reads `#f` at exactly those fuels, and a number at
+  every other fuel ([timer-probe.sps](research/m4-closing-review/sweeps/timer-probe.sps)). So
+  the suites' `counted-request` notes, after the default handler, whether a forced section's
+  request spent the ticks. Each first slice numbers the forced sections it passes from 1, and
+  the row prints the exits it met.
+- **Two callbacks in one section count once.** One section can fire two callbacks: a close's
+  finalizes, a prepare's several authorizer calls. Counted once a callback, `query`'s warm low
+  sweep on correct code had 226 of 1,837 callbacks unmet. An engine spends no ticks inside a
+  section, so a callback whose timer reads as the last one's is counted as the same section.
+  Counted that way, 0 are unmet in every low row.
+
+Where each suite forces, and why there:
+
+| Suite | Forced through | Sections forced |
+|---|---|---|
+| `conveniences-resumed`, the pending suites, `transaction-engine` | SQLite's trace, now `SQLITE_TRACE_ROW` as well as `SQLITE_TRACE_PROFILE` | each step that answers a row, the step that finishes a statement, and `query-row`'s return |
+| `conveniences-reentry` | the trace, and an authorizer, both new to the suite | those, and each prepare |
+| `open-interleave` | the tell's entry point and authorizer | the open's section and each setting's prepare |
+| `open-engines`, `open-db-config-engines` | a forcing VFS: SQLite's default copied, its `xAccess` and `xFullPathname` wrapped, registered as the default | the open's section, through `xFullPathname`, and each setting's that begins a read, through `xAccess`; the once-a-call stand-in, each set's section, as before |
+
+`open-database` makes its connection inside its own call, and no code of the suite's runs
+inside its sections. Apple's library refuses `sqlite3_auto_extension`, so the tell can't reach
+the connection there; the VFS can. A VFS sees no `:memory:` database, so the `open-database`
+interleaved rows of `test-open-db-config-engines` now open a file in the row's own directory.
+None of their settings is kept in the file. Two new rows hold the VFS: one checks it is
+registered as SQLite's default, the other that it is unregistered and freed at the end, with its
+callbacks unlocked.
+
+Where the tell is refused, `open-interleave` forces nothing. Its interleaved low rows are
+skipped there already, and its failing low rows print their two forced checks unavailable
+through `tell-kept?`, as the rows' other tell checks are.
+
+The reach checks the high pass also meets stay in their rows as verdicts. They no longer stand
+alone: `answered-again-past-its-last-section`, `called-again-past-the-settings`,
+`straddled-the-last-section` and `straddled-the-give-back`.
+
+### The trip-slip plant
+
+[slipped.sh](research/m4-closing-review/sweeps/slipped.sh) copies each suite with `(define
+low-trip 262144)` and runs it against `src/`. It gave the same result on Guix's 3.53.1 and on
+the floor, 3.45.1: every one of the 29 low rows failed by name, and no other row did. Each
+failure includes `(forced-sections N unmet M)` with M above 0, and 17 also include
+`(none-taken-at-a-forced-exit ...)`. By suite:
+
+- `open-engines` 2
+- `open-db-config-engines` 4
+- `open-interleave` 4
+- `conveniences-resumed` 6
+- `pending-execute` 1, `pending-query` 2, `pending-query-row` 1
+- `pending-fold-low` 1, `pending-script-low-0` to `-3` 1 each
+- `transaction-engine` 3
+- `conveniences-reentry` 1
+
+`pending-fold`, `-script-even` and `-odd` have no low row, and passed.
+
+### The plants, five runs each
+
+[rounds.sh](research/m4-closing-review/sweeps/rounds.sh) ran each plant against the suites its
+low rows are for, five times, on Guix's library. The figure is how many of the 5 runs failed
+the row.
+
+| Plant | Rows failed in 5 of 5 runs | Rows that pass it |
+|---|---|---|
+| `P-open-advance-after` | `open-engines`: both low rows. `open-db-config-engines`: all four low rows. `open-interleave`: the `open-database` interleaved low row | `open-interleave`'s `call-with-database` interleaved row and both failing rows (below) |
+| `P-conv-advance-after` | `resumed`: the low rows of `query`, `query-row` and `execute!`, and the failed return's. `pending-execute`, `-query` (both), `-query-row`: their low rows. `transaction-engine`: the pending low row, now 5 of 5 where it was 3 of 9. `pending-query-row`'s keyboard row too, which HEAD fails | none |
+| `P-fold-left-after` | `pending-fold-low` | `resumed`'s fold low row (below) |
+| `P-script-claim-after` | `pending-script-low-0`, `-1`, `-2` and `-3`, every one, where the first build caught two or three | `resumed`'s script low row, and `conveniences-reentry`'s new jump-back low row (below) |
+| `P-tx-take-after` | none; equivalent, as argued above | every row, the new claim re-entry low row among them |
+
+Beyond the two high rows the first build named, no plant failed a high row. Those two are
+`P-conv-advance-after`'s keyboard row in `pending-query-row` and `P-fold-left-after`'s
+`pending-fold` interleaved row, both of which HEAD fails too. The rows that pass a plant can't
+see it, for one of two reasons:
+
+- **Their second run finds the connection closed.** `call-with-database`'s connection is
+  closed by any expiry, and a failing open closes its own. Every section of a later run then
+  answers `&sqlite-closed` from the handle check, the refusal's own answer, whatever the claim
+  says. `open-engines`' resumed-twice low row, whose connection stays open, catches the same
+  plant 5 of 5.
+- **Their runs come one after the other.** `P-fold-left-after` and `P-script-claim-after`
+  split a section's own work from its flag or claim. That matters only when another run reaches
+  the same check while one run is held in the split. A remainder resumed twice in sequence, or a
+  jump back through a timer's continuation, never has a second run pending: the first run sets
+  the flag or claim, and the second meets it, as it would in correct code. The interleaved
+  suites, `pending-fold-low` and `pending-script-low-0` to `-3`, hold R1 pending while R runs,
+  and catch each plant 5 of 5.
+
+`plants.sh` then ran every plant against every suite once, the follow-up's tree, `src/`
+passing every suite. The controls fail as the first build's table says, with two changes:
+
+- **`C-conv-unclaimed` fails `resumed` 7, where it failed 8.** The failed return's low row
+  passes it. Its high row fails at one fuel, 29, a second resume answering the row again. The
+  low pass's forced requests move that one-tick point into a handler's ticks.
+- **The claim rows bound by refusals.** `C-tx-unclaimed` fails `transaction-engine` 2, now
+  the claim re-entry rows, high and low (the claim window, below).
+
+`C-script-unclaimed` fails `conveniences-reentry` 2, the jump-back rows, high and low.
+
+### The two new low passes
+
+- **`conveniences-reentry`, the jump-back row.** It now has a low pass, under the trip, the
+  trace and an authorizer. Its 4 forced sections are each statement's prepare and step, and its
+  captures were made at the exits of sections 2, 3 and 4: none at 1, since a capture waits for
+  the first row. `P-script-claim-after` passes it for the second reason above. The low pass
+  still covers the shape at the low trip: a capture at a prepare's exit, the claim set inside
+  the section, is refused at the next prepare. 12 rows, now 14, with the callbacks' lock row.
+- **`transaction-engine`, the claim re-entry row.** It now has a low pass. Its timer, set for
+  each case's ticks, ran out at the exits of forced sections 1, 2 and 3. `C-tx-unclaimed`
+  fails both the high and the low re-entry row.
+
+### The claim window
+
+`claim-window` is gone. Both claim rows, high and low, now allow a second level only where R
+re-ran the thunk's count, or below the first fuel at which the sweep saw R refused by the claim,
+or, in the low pass, where a collect request fell in the first slice. With that bound,
+`C-tx-unclaimed` passes both claim rows: its first refusal moves to fuel 10, above its extra
+levels at fuels 1 to 9, which correct code makes at 1 to 8. A bound read from the sweep's own
+refusals can't see a plant that moves those refusals, and the window that did see it was a
+caller's count. The claim re-entry rows, high and low, catch it. `C-tx-unclaimed-unended`
+fails six rows, the changed high claim row among them, watched.
+
+### The nits
+
+- `pending-script-even.sps` and `-odd.sps` now name the four low suites.
+- `transaction-engine`'s pending, claim and claim re-entry rows run their two sweeps under
+  `let*`, high and low.
+
+### New rows, watched failing
+
+Each mutation below was made in a scratch copy of the suite:
+
+- **The VFS registered as the default.** With `makeDflt` 0 it failed,
+  `(forcing-vfs (registered ...))`, and both of `open-engines`' low rows failed with it,
+  `(forced-sections 0 unmet 0)`.
+- **The VFS unregistered at the end.** With no unregister it failed, `(0 not-sqlite-default)`.
+- **`conveniences-reentry`'s lock row.** With its answer misspelled it failed.
+- **`taken-at-a-forced-exit`.** With the exit never noted, both of `open-engines`' low rows
+  failed, `(none-taken-at-a-forced-exit ())`, while `every-forced-section-met-its-request`
+  held.
+- **The rest.** Every changed low row failed under the trip-slip plant above.
+
+### The forced reaches, by row
+
+On correct code, Guix's 3.53.1. Each line gives the forced sections the pass counted; the most
+one first slice passed, or, for a re-entry row, one call and its re-entry; and the exits a
+remainder or a capture was taken at. Every row had 0
+unmet. The floor's figures are the same, but for `transaction-engine`'s pending pass, 20,006,
+and `open-engines`' re-entry pass, 936.
+
+- **`open-engines`.** Resumed twice: 610; 2; exits 1 and 2. Re-entered: 942; 5; exits 1 and 2.
+- **`open-db-config-engines`.** Resumed twice: 668; 2; exits 1 and 2. Re-entered: 1,035; 5;
+  exits 1 and 2. `open-database` interleaved: 10,132; 1; exit 1. Once a call: 20,656; 4; exits
+  1 to 4.
+- **`open-interleave`.** `open-database`, `call-with-database`, and the two failing rows:
+  28,325, 32,797, 835 and 809; 5 each; exits 1 to 5 each.
+- **`conveniences-resumed`.**
+  - `query`, warm and cold: 827 and 428; 4; exits 1 to 4.
+  - `query-row`, warm and cold: 189 and 132; 2; exits 1 and 2.
+  - `execute!`, warm and cold: 491 and 308; 4; exits 1 to 3, and 1 to 4.
+  - The failed return: 182; 2; exits 1 and 2.
+  - The fold: 506; 4; exits 2 to 4.
+  - The script: 953; 3; exits 1 to 3.
+- **The pending suites.**
+  - `execute!`: 1,628; 1; exit 1.
+  - `query`: 23,536; 4; exits 1 to 4.
+  - `query-failing`: 11,226; 2; exits 1 and 2.
+  - `query-row`: 4,490; 2; exits 1 and 2.
+  - The fold: 35,235; 4; exits 2 to 4.
+  - The script's four suites: about 23,000 each; 2; exits 1 and 2.
+- **`transaction-engine`.** Pending: 19,985; 3; exits 2 and 3. The claim: 496; 3; exits 2 and
+  3. The claim re-entered: 380; 3; exits 1 to 3.
+- **`conveniences-reentry`, jumped back.** 456; 4; exits 2 to 4.
+
+No first slice of either fold sweep expired at its first forced section's exit, the step
+that answers its first row, so no row asks for every exit, only for some.
+
+### The times, and `make test`
+
+`make test` passed 86 of 86 suites on each of the four: Guix's 3.53.1, `m3-floor` 3.45.1,
+`m4-current` and `m4-noload`, the last two with `C_INCLUDE_PATH` set to their headers.
+
+Each touched suite ran under `make test-memory` on Guix's library, two versions back to back so
+that each pair met the same load: `04fd82e`'s, from a copy of its tree under `build/`, then the
+follow-up's. Each figure is the gate's `time:` line, and every run passed the gate. The
+follow-up adds no suite. The shard is the worktree Makefile's, which the lead rebalances.
+
+| Suite | Shard | `04fd82e` | Follow-up | Ratio |
+|---|---|---|---|---|
+| `open-engines` | 1 | 32 s | 33 s | 1.03 |
+| `open-db-config-engines` | 1 | 138 s | 143 s | 1.04 |
+| `open-interleave` | 2 | 93 s | 93 s | 1.00 |
+| `conveniences-resumed` | 2 | 34 s | 37 s | 1.09 |
+| `conveniences-reentry` | 1 | 11 s | 15 s | 1.36 |
+| `pending-execute` | 1 | 24 s | 26 s | 1.08 |
+| `pending-query` | 2 | 85 s | 114 s | 1.34 |
+| `pending-query-row` | 1 | 23 s | 28 s | 1.22 |
+| `pending-fold` | 1 | 61 s | 60 s | 0.98 |
+| `pending-fold-low` | 2 | 85 s | 108 s | 1.27 |
+| `pending-script-even` | 2 | 117 s | 116 s | 0.99 |
+| `pending-script-odd` | 2 | 120 s | 121 s | 1.01 |
+| `pending-script-low-0` | 1 | 90 s | 109 s | 1.21 |
+| `pending-script-low-1` | 2 | 93 s | 113 s | 1.22 |
+| `pending-script-low-2` | 2 | 93 s | 113 s | 1.22 |
+| `pending-script-low-3` | 1 | 93 s | 110 s | 1.18 |
+| `transaction-engine` | 2 | 92 s | 91 s | 0.99 |
+
+The follow-up adds 52 s to shard 1 and 94 s to shard 2 here. Most of it comes from
+the row trace's extra forced sections: `pending-query` 1.34 times, `fold-low` 1.27, and the
+script's four low suites 1.18 to 1.22. The largest suite is still `open-db-config-engines`, at
+143 s. Taking the first build's ratio of 1.30 from this host to CI, that comes to about 186 s
+on CI. The script's low suites, at 109 to 113 s, come to about 145 s, under three quarters of
+`MEMORY_TIMEOUT` on CI's slower runners, at about twice the fastest's times.
+
 ## What the records need
 
 Builder D edits none of these; the lead does.
@@ -290,4 +558,37 @@ Builder D edits none of these; the lead does.
   `test-conveniences-pending-query-row` already, at its keyboard row, which is no sweep; my
   `P-fold-left-after` fails HEAD's `test-conveniences-pending-fold` already.
 - **The Makefile:** the five new suites' shard lines, above, for the lead to merge with E2's.
-
+- **The follow-up, for `AGENTS.md`'s low-pass bullet.** The bullet says a low pass "fails by
+  name unless that pass reached past the section". It could say how: something the suite owns
+  allocates 32 KiB inside the sections the pass must reach. The pass then fails by name unless
+  every such section met its collect request before the next, and unless some remainder was
+  taken at such a section's exit, as the engine's timer reads at the request handler's end. The
+  test of a low pass is that a trip slipped to 256 KiB fails every low row by name.
+- **The follow-up, for `traps.md`:**
+  - A collect request due inside a critical section is handled at the section's exit. Where
+    its handler spends the engine's last ticks, the timer, `$tc-field`'s `timer-ticks`, reads
+    `#f` as the handler ends, and the remainder lies at that exit (`exit-probe.sps`,
+    `timer-probe.sps`).
+  - One section can fire a callback more than once: a close's finalizes, a prepare's
+    authorizer calls. Count sections by the timer's reading, which no tick changes inside a
+    section.
+  - A VFS sees no `:memory:` database. `open-database` admits no code of a suite's inside its
+    sections but through a VFS, or through `sqlite3_auto_extension`, which Apple's library
+    refuses.
+  - A low pass can hide a one-tick point that follows a forced section.
+    `C-conv-unclaimed`'s fuel 29 in the failed return's row is one; the high pass keeps those
+    points.
+  - A bound read from the sweep's own refusals can't see a plant that moves the sweep's first
+    refusal: `C-tx-unclaimed`.
+- **The follow-up, for `global-constraints.md`'s Conveniences rule:** the two checks above,
+  for every claim-holding sweep's low pass.
+- **The follow-up, for ADR-0017:** the claim rows bound a whole new call by the sweep's own
+  first refusal, high and low, and the claim window is gone. `C-tx-unclaimed` is caught by
+  the claim re-entry rows alone.
+- **The follow-up, for the Mac run.** Nothing here tested the forcing VFS on Apple's or
+  Homebrew's library, or `$tc-field` on the Mac's Chez. The VFS's registration row and every
+  low row of `test-open-engines` and `test-open-db-config-engines` read the VFS. Where
+  `$tc-field` can't be reached, every low row fails `taken-at-a-forced-exit` by name, never
+  silently.
+- **The follow-up, for the Makefile:** it adds no suite. The times above are for the lead's
+  rebalance.

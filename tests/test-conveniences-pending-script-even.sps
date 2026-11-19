@@ -35,7 +35,8 @@
 ;;; section. Its code is unchanged by part D, and the rows hold it so.
 ;;;
 ;;; Its low pass, the interleaved row under a collect trip of 256 bytes, is
-;;; tests/test-conveniences-pending-script-even-low.sps, a suite of its own: this one
+;;; four suites of their own, tests/test-conveniences-pending-script-low-0.sps
+;;; to -3.sps, dealt by R's fuel modulo 4, for both halves at once: this one
 ;;; took 119 to 194 s on CI under the memory gate, and the low pass costs more.
 ;;;
 ;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,

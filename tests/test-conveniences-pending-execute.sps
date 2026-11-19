@@ -28,10 +28,14 @@
 ;;;                handled at its exit and costs the engine ticks there, so R1
 ;;;                is taken at a section's exit too: a claim advanced just
 ;;;                after its section, not inside it, inserted execute!'s row
-;;;                twice there (M4's closing review, reviewer B's B1). Each
-;;;                fails by name unless collect requests fell in its trials,
-;;;                and unless some trial had R before the give-back and R1
-;;;                past it
+;;;                twice there (M4's closing review, reviewer B's B1). SQLite's
+;;;                trace allocates 32 KiB inside each section that steps a
+;;;                row or finishes a statement, so a request falls due there.
+;;;                Each fails by name unless collect requests fell in its
+;;;                trials, unless some trial had R before the give-back and R1
+;;;                past it, unless each such section met its request before
+;;;                the next, and unless some first slice expired at such a
+;;;                section's exit
 ;;;   a timer      a timer handler that raises, at every tick until the call
 ;;;                completes before it runs: the raise reaches the caller, the
 ;;;                statement given back, ready, by the call's claim of whatever
@@ -117,11 +121,12 @@
     (guard (e (#t (list 'raised (describe e))))
       (reported 'execute! 'every 'high past-a-fuel both-a-fuel))))
 
-(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying the profile trace, which allocates 32 KiB as a statement finishes, so a collect request falls due inside the section that finishes it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials. " "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it")))
+(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, which allocates 32 KiB as a step answers a row or a statement finishes, so a collect request falls due inside the section that steps it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. " "execute!'s remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute!; the insert is prepared once and its row inserted once, each twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it")))
   (tell-available! registration name)
   (test-equal name
     (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
-          'straddled-the-give-back 'collect-requests-met zero-counts)
+          'straddled-the-give-back 'collect-requests-met
+          'every-forced-section-met-its-request 'taken-at-a-forced-exit zero-counts)
     (guard (e (#t (list 'raised (describe e))))
       (reported 'execute! 'every 'low past-a-fuel both-a-fuel))))
 
