@@ -50,13 +50,17 @@
 ;;;                  foreign-entry?. sqlite3_load_extension of a file that is
 ;;;                  no shared object answers SQLITE_ERROR and a message,
 ;;;                  freed by sqlite3_free. On a library without
-;;;                  sqlite3_load_extension, ENABLE_LOAD_EXTENSION's round
-;;;                  trip and the load's rows print UNAVAILABLE, and the
-;;;                  record and the binding, both #f, are asserted in their
-;;;                  place. On x86-64 a binding of sqlite3_db_config without
-;;;                  its variadic convention round-trips too: only
-;;;                  test-conventions holds that, and make check-variadic
-;;;                  watches it fail
+;;;                  sqlite3_load_extension, the load's rows print
+;;;                  UNAVAILABLE, and the record and the binding, both #f,
+;;;                  are asserted in their place. ENABLE_LOAD_EXTENSION's
+;;;                  round trip is chosen by the op's own first answer: where
+;;;                  it is 21, as Apple's is, the round trip prints
+;;;                  UNAVAILABLE and three calls answering 21 are asserted
+;;;                  instead; a build that omits extension loading but
+;;;                  answers 0 round-trips. On x86-64 a binding of
+;;;                  sqlite3_db_config without its variadic convention
+;;;                  round-trips too: only test-conventions holds that,
+;;;                  and make check-variadic watches it fail
 ;;;   C strings      call-with-c-string: UTF-8 on bytes where encodings
 ;;;                  differ, the NUL written, U+0000 refused at every position
 ;;;                  before anything is allocated, by kind, from the WHO it is
@@ -1493,12 +1497,43 @@
           '(#f #f)
           (list load-extension-available? sqlite3-load-extension)))))
 
-;; Apple's library answers 21 to every call of ENABLE_LOAD_EXTENSION and
-;; leaves the cell, and lacks sqlite3_load_extension (the M4 pre-work's Mac
-;; step), so its round trip is chosen by native's record.
-(load-row "sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after"
-  round-tripped
-  (lambda () (config-round-trip enable-load-extension-op 7400)))
+;; ENABLE_LOAD_EXTENSION's round trip is chosen by the op's own first
+;; answer, never by native's record of sqlite3_load_extension. Apple's
+;; library answers 21, SQLITE_MISUSE, to every call of the op and leaves the
+;; cell (the M4 pre-work's Mac step); upstream's build without extension
+;; loading, -DSQLITE_OMIT_LOAD_EXTENSION, has no sqlite3_load_extension
+;; either, but answers 0 and round-trips a setting that does nothing. So
+;; where the first read answers 21, the round trip is printed unavailable,
+;; and the op's read, set to 1 and read are asserted in its place, each
+;; answering 21 with its cell at its own sentinel, as the Mac measured
+;; them; any other first answer runs the round trip, held as the other
+;; three ops are.
+
+;; misuse : Integer
+(define misuse (code-of 'misuse))
+
+;; load-op-start : Any
+;; ENABLE_LOAD_EXTENSION's first answer, a read with -1 on a :memory:
+;; connection of its own, its cell's sentinel 7400: the code and the cell.
+(define load-op-start
+  (guard (e (#t (list 'raised (describe e))))
+    (car (with-memory (lambda (db) (config-call db enable-load-extension-op -1 7400))))))
+
+(if (and (list? load-op-start) (pair? load-op-start) (eqv? (car load-op-start) misuse))
+    (begin
+      (display "UNAVAILABLE sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION: this libsqlite3 answers 21, SQLITE_MISUSE, to the op, so its three calls are asserted in its place")
+      (newline)
+      (test-equal "sqlite3_db_config of ENABLE_LOAD_EXTENSION, on a library whose first read answers 21: a read with -1, a set to 1 and a read each answer 21, SQLITE_MISUSE, and leave its cell at its own sentinel; the close answers SQLITE_OK and every count is zero after"
+        (list (list (list misuse 7411) (list misuse 7412) (list misuse 7413)) ok zero-counts)
+        (guard (e (#t (list 'raised (describe e))))
+          (with-memory
+           (lambda (db)
+             (in-order (lambda (call) (config-call db enable-load-extension-op (car call) (cadr call)))
+                       '((-1 7411) (1 7412) (-1 7413))))))))
+    (test-equal "sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding, chosen by the op's own first answer, which is not 21: read with -1, set to the other value, read, set back and read, every call SQLITE_OK and its cell the state after it, a fresh sentinel before each; the close answers SQLITE_OK and every count is zero after"
+      round-tripped
+      (guard (e (#t (list 'raised (describe e))))
+        (config-round-trip enable-load-extension-op 7400))))
 
 ;; 1999 is above SQLITE_DBCONFIG_MAX in every header measured, 1019 at the
 ;; floor and 1023 in 3.53.1's and 3.54.1's (the M4 pre-work).

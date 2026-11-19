@@ -293,8 +293,9 @@ opened.
 
 It does not survive an engine's preemption: an engine that runs out of
 fuel leaves the procedure, and the connection is closed under it. If that
-close fails, its error is raised out of the engine, and the engine is
-lost. If you use engines, use `open-database` and close it yourself.
+close fails, as it does when an extension has left a statement open on the
+connection, its error is raised out of the engine, and the engine is lost.
+If you use engines, use `open-database` and close it yourself.
 
 Each call opens once and sets each setting once, as `open-database` does.
 Going back into its open or its settings raises a condition that
@@ -379,7 +380,7 @@ On a closed connection, or one closing, it does nothing.
 
 An extension is a shared library of C code that adds functions, virtual
 tables and more to SQLite. Loading one takes two steps: open the connection
-with `(enable-load-extension . #t)`, then load the file by its absolute path.
+with `(enable-load-extension . #t)`, then name the file by its absolute path.
 
 ```scheme
 (define db (open-database "app.db" '((enable-load-extension . #t))))
@@ -411,9 +412,14 @@ Loads the extension at the path into the connection, which opted in at
 open. Call it on the connection's own thread, as every verb.
 
 The path is absolute. A relative path, a bare name and `""` are assertion
-violations: the working directory, or the loader's own search, would choose
-the file. SQLite tries the path as given, then with `.so` appended, or
-`.dylib` on a Mac, so `/opt/app/lib/ext` loads `/opt/app/lib/ext.so`.
+violations, since the working directory or the loader's own search would
+choose the file. SQLite tries the path as given, then with `.so` appended,
+or `.dylib` on a Mac, so `/opt/app/lib/ext` loads `/opt/app/lib/ext.so`.
+
+On Linux the loader takes an absolute path as it is. On a Mac it may not:
+when `DYLD_LIBRARY_PATH` is set, the Mac's loader looks in its folders
+first for a file of the same name, and loads that one instead, as it does
+for the SQLite library itself ([Which SQLite](#which-sqlite)).
 
 The second form names the extension's entry point, the C function that sets
 it up. Without it, SQLite tries `sqlite3_extension_init`, then a name made
@@ -429,7 +435,12 @@ A failure raises a condition that `sqlite-error?` holds, its code what
 SQLite answered: `error` for a file it can't load or set up, `nomem` when
 memory runs out. Its message is SQLite's own, and differs between Linux and
 a Mac. When the file can't be opened, it names the path tried last, the
-suffix appended.
+suffix appended. When the extension's setup fails, the message is SQLite's
+"error during initialization: ", then the setup's reason, the connection's
+own error, added only when the load changed that error. So when a setup
+fails the same way on two loads in turn, as beside a statement held at a
+row, the first message gives its reason, and the second SQLite's text
+alone.
 
 What a load does to the connection:
 
@@ -444,7 +455,8 @@ What a load does to the connection:
   `close-database!` refuse: that work is the extension's to finish.
 
 An extension is C code that runs in the process: load only files you trust.
-A library built without extension loading, as Apple's is, refuses the
+On a Mac, `DYLD_LIBRARY_PATH` must name only folders you trust too, or be
+unset. A library built without extension loading, as Apple's is, refuses the
 setting at open with a condition that `sqlite-extensions-unavailable?`
 holds.
 
@@ -1206,7 +1218,8 @@ Whether the value is `sql-null`.
 
 ## The library
 
-These report on the SQLite library that was found and loaded. It is loaded
+These report on the SQLite library in use, chosen as
+[Which SQLite](#which-sqlite) says. It is loaded
 once, by the first procedure that needs it: every procedure of this library
 but the conditions' predicates and accessors, `sql-null` and `sql-null?`. If
 no library can be loaded, the load raises a condition that
@@ -1222,6 +1235,39 @@ catch it, call through `eval` inside the `guard`, which needs `(rnrs eval)`:
 (guard (e ((sqlite-library-unavailable? e) 'no-sqlite))
   (eval '(sqlite-version) (environment '(chez-sqlite3))))
 ```
+
+#### Which SQLite
+
+One file is chosen, by the first rule that applies, and loaded:
+
+- **`CHEZ_SQLITE3_LIBRARY`**, when it is set, names the file by its
+  absolute path, with no search and nothing to fall back to. Any other
+  value, `""` among them, is refused as `invalid-override`.
+- **Otherwise the first file found** of a short list, by the system:
+  - Linux, when the program runs Guix's C library: `lib/libsqlite3.so.0`
+    in `$GUIX_ENVIRONMENT`, `$GUIX_PROFILE`, `~/.guix-home/profile`,
+    `~/.guix-profile`, then `/run/current-system/profile`;
+  - other Linux: `libsqlite3.so.0` in `/usr/local/lib`, the system's own
+    folder such as `/usr/lib/x86_64-linux-gnu`, `/usr/lib64`, then
+    `/usr/lib`;
+  - a Mac: Apple's `/usr/lib/libsqlite3.dylib`.
+
+  When none is there, the refusal is `not-found`, and lists every path
+  looked at.
+
+The file is then checked, and refused if it fails, never swapped for
+another: its version at least the one the
+[README](../README.org) requires, built thread-safe, and holding every
+function the library needs.
+
+The library never reads `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` itself.
+On Linux, `LD_LIBRARY_PATH` doesn't change which file an absolute path
+loads. On a Mac, `DYLD_LIBRARY_PATH` does: the Mac's loader looks in its
+folders first for a file of the same name, such as `libsqlite3.dylib`, and
+loads that one instead. Then `sqlite-version` and `sqlite-source-id`
+describe the file loaded, while `sqlite-library-path` still gives the path
+asked for. So on a Mac, set `DYLD_LIBRARY_PATH` only to folders you trust,
+or leave it unset.
 
 ### `sqlite-version`
 
@@ -1258,7 +1304,10 @@ The library's source id: its date and check-in hash.
 sqlite-library-path : -> String
 ```
 
-The absolute path the library was loaded from.
+The absolute path given to the loader. On a Mac, `DYLD_LIBRARY_PATH` can
+load another file of the same name in its place: then this is still the
+path asked for, and `sqlite-version` and `sqlite-source-id` tell you the
+file loaded ([Which SQLite](#which-sqlite)).
 
 ### `sqlite-library-source`
 
@@ -1266,7 +1315,10 @@ The absolute path the library was loaded from.
 sqlite-library-source : -> Symbol
 ```
 
-Where that path came from, such as `override` for `CHEZ_SQLITE3_LIBRARY`.
+Where that path came from: `override` for `CHEZ_SQLITE3_LIBRARY`; for
+the list's places, `guix-environment`, `guix-profile`, `guix-home`,
+`guix-user-profile`, `guix-system`, `system` for a standard Linux folder,
+or `macos-system` for Apple's ([Which SQLite](#which-sqlite)).
 
 ### `sqlite-compile-option?`
 
@@ -1645,4 +1697,5 @@ sqlite-extensions-unavailable? : Any -> Boolean
 Whether the value says an open asked for `(enable-load-extension . #t)` on a
 library built without extension loading, as Apple's is. Nothing was opened.
 It is a `chez-sqlite3-error?`, but no `sqlite-error?`. To load extensions
-there, name another library with `CHEZ_SQLITE3_LIBRARY`.
+there, name another library with `CHEZ_SQLITE3_LIBRARY`
+([Which SQLite](#which-sqlite)).

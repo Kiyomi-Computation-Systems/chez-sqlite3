@@ -35,7 +35,11 @@
     (string-copy (libsqlite3-info-source-id (loaded-libsqlite3))))
 
   ;; sqlite-library-path : -> String
-  ;; The absolute path the library was loaded from.
+  ;; The absolute path given to the loader: discovery's choice or
+  ;; CHEZ_SQLITE3_LIBRARY's. On macOS, DYLD_LIBRARY_PATH can make dyld load
+  ;; a file of the same leaf name from its folders instead, and then this
+  ;; is still the path asked for, while the version and the source id are
+  ;; the loaded file's (the M4 Mac run, dyld.txt).
   (define (sqlite-library-path)
     (string-copy (libsqlite3-info-path (loaded-libsqlite3))))
 

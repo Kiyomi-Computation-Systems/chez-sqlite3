@@ -15,9 +15,14 @@
 ;;;   4. the path          a string, else path-not-a-string; holding no
 ;;;                        U+0000, else path-holds-nul; absolute, its first
 ;;;                        character /, else path-not-absolute: no relative
-;;;                        path, bare name or "", which the working directory
-;;;                        or the loader's own search would choose (the
-;;;                        maintainer's Q16, "An absolute path")
+;;;                        path, bare name or "", whose file the working
+;;;                        directory or the loader's own search would choose
+;;;                        (the maintainer's Q16, "An absolute path"). On
+;;;                        Linux the loader takes an absolute path as it is;
+;;;                        on macOS, DYLD_LIBRARY_PATH still sends dyld to a
+;;;                        file of the same leaf name in its folders first
+;;;                        (the M4 Mac run, dyld.txt; the maintainer's
+;;;                        "Document it", 2026-11-18)
 ;;;   5. the entry point   when given, a string, else
 ;;;                        entry-point-not-a-string; holding no U+0000, else
 ;;;                        entry-point-holds-nul
@@ -154,7 +159,7 @@
                              'path-holds-nul (shown-value copy)))
       (unless (and (> (string-length copy) 0) (char=? (string-ref copy 0) #\/))
         (assertion-violation who
-                             "the extension's path is absolute, as /opt/app/lib/ext.so is: a relative path or a bare name would be the working directory's or the loader's own search's choice"
+                             "the extension's path is absolute, as /opt/app/lib/ext.so is: a relative path or a bare name leaves the choice of file to the working directory or the loader's own search"
                              'path-not-absolute (shown-value copy)))
       copy))
 
@@ -173,10 +178,12 @@
 
   ;; checked-opt-in : Database -> Void
   ;; The last check: DB opted in at open, by the record's opt-in, which
-  ;; database-extension-loading? reads after check-owned's two checks,
-  ;; which the first three made already.
+  ;; database-extension-loading? reads after check-owned's two checks, from
+  ;; load-extension!. The first three made them already, but a remainder
+  ;; taken after them can be resumed on another thread, and the refusal
+  ;; there names this verb too (ADR-0013, decision 2).
   (define (checked-opt-in db)
-    (unless (database-extension-loading? db)
+    (unless (database-extension-loading? who db)
       (assertion-violation who
                            "this connection did not opt in to extension loading: open it with (enable-load-extension . #t) in its settings list"
                            'extension-loading-not-enabled)))
