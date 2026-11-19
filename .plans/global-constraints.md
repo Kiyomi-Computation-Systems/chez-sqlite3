@@ -106,7 +106,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   connection `&sqlite-closed`. `interrupt-database!` is the one exception, and checks only that its
   argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019). `call-with-open-handle`, and
   `close-database!` around the latch's close, compare the owner again inside a section, since Chez resumes an engine's remainder on
-  whichever thread calls it, and raises after the section (ADR-0010, amended in M4's closing
+  whichever thread calls it, and raise after the section (ADR-0010, amended in M4's closing
   review).
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
