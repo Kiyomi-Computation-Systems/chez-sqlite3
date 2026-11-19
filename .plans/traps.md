@@ -270,6 +270,13 @@ told in chez-curl's `.plans/traps.md`.
   straddling a set's exit until the suite allocated 32 KiB inside that section itself. Reproduce:
   `research/m4-closing-review/sweeps/chunk-probe.sps`, which printed the same counts twice. (M4's
   closing review, chez-sqlite3)
+- **An engine's timer reads `#f` exactly when its run stops at a section's exit.** A collect request
+  due inside a critical section is handled at its exit, and when the handler spends the last
+  ticks, the engine expires there, and the timer, read through Chez's `$tc-field`, reads `#f` at the
+  handler's end. At a 256-byte trip, three fuels in every five stopped at the exit and read `#f`;
+  at 2^27 and at 256 KiB, none did. A suite proves a low pass reached an exit this way.
+  Reproduce: `research/m4-closing-review/sweeps/exit-probe.sps` and `timer-probe.sps`. (M4's
+  closing review, chez-sqlite3)
 - **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
   inside it and resumed a second time met the wind's own refusal, an assertion violation,
   `re-entered`, where the call's claim should have answered `&sqlite-closed`. M4 slice 4 makes its

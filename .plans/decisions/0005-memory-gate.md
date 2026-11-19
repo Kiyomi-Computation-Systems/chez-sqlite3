@@ -38,7 +38,7 @@
   ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): decision 5's statements check after a refused close
   ([amendment](#amendment-2026-11-17-the-statements-check-after-a-refused-close-m4s-close-fix)).
-  Amended 2026-11-18 in M4's closing review, proposed: the no-load lane, the loading suites split,
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): the no-load lane, the loading suites split,
   and the sweeps' low passes
   ([amendment](#amendment-2026-11-18-the-no-load-lane-the-loading-suites-split-and-the-sweeps-low-passes-m4s-closing-review)).
 - **Date:** 2026-11-13
@@ -780,7 +780,7 @@ the refusal names the count. `test-connection-close` is in `MEMORY_SUITES_1`.
 
 ## Amendment, 2026-11-18: the no-load lane, the loading suites split, and the sweeps' low passes (M4's closing review)
 
-Proposed in M4's closing review ([the CI log](../m4-closing-review-ci-log.md),
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review ([the CI log](../m4-closing-review-ci-log.md),
 [the loading log](../m4-closing-review-loading-log.md), [the sweeps log](../m4-closing-review-sweeps-log.md)).
 
 - **The `current` job builds a second SQLite, `--no-load`:**

@@ -178,6 +178,9 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
+  - **The next Mac run** is the first on Chez 10.4.1 for the low passes' timer, read through
+    `$tc-field`, and for the forcing VFS on Apple's and Homebrew's libraries. A missing timer fails
+    every low row by name (ADR-0016, amended in M4's closing review).
   - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
     suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
     `memory-2` before calling it safe.
@@ -242,14 +245,37 @@ newest first.
   against the guard, all caught. `with-transaction`'s claim taken just after the BEGIN's section is
   equivalent: the BEGIN's step reads the ended flag in its own section.
 - **Libraries:** on the merged tree, `make test` 92 of 92 on Guix's 3.53.1, the floor (3.45.1),
-  3.54.1, and 3.54.1 built without extension loading; `check-variadic` all 7 steps.
+  3.54.1, and 3.54.1 built without extension loading; `check-variadic` all 7 steps. After the
+  check's second round, the same on all four, with `check-variadic` and `check-ci` passing.
+- **CI** (run 44460844478, at `a323224`): every job passed. The no-load lane's first run built in
+  22 s and passed 92 of 92; `memory-1` took 31 min and `memory-2` 35 min, under the 60-minute
+  timeout, the largest suite 161 s.
 - **Times** under the gate, Guix's library:
   - the nine loading suites 52 to 85 s, against the old `-real`'s 195 to 248 s;
   - `test-open-db-config-engines` 136 to 138 s here and 161 s on CI, up from 57 s;
   - the pending script's low passes about 92 s each.
 
   Each memory job projects at about 30 suite-minutes a run, under its 60-minute timeout.
-- **The records,** proposed for the maintainer's acceptance:
+- **Checked by the M4 session** against the plan, read-only, at `a323224`: no blocker. Fixed after
+  it, in a second round:
+  - **`close-database!` compared its owner outside its section,** F2's defect in the one verb the
+    first fix missed: a close resumed on another thread closed the connection there. It now
+    compares inside a section around the latch's close (builder C);
+  - **ten low rows asked nothing of their reach,** and some reach checks the high pass met too, so
+    a trip slipped to 256 KiB passed every suite. Each low row now proves its reach through the
+    engine's timer and a forced allocation, and the slipped trip fails all 29 and no other row
+    (builder D, the maintainer's "Keep it, tests only" for `$tc-field`);
+  - **two claim-holding sweeps had no low pass,** and `with-transaction`'s claim rows used a fixed
+    window, a caller's count (builder D);
+  - **five records were missing from the PR,** written after the records branch was merged and
+    never committed: the lead's error, now merged;
+  - **the shards were unbalanced,** 1,507 s against 1,763 s, since D and E2 placed their suites
+    apart; two suites move to shard 1;
+  - and the docs' twice-failing init, the override's "no search", and the records' figures and
+    citations.
+- **The records,** accepted by the maintainer, 2026-11-19 ("Accept all"), and refined after the M4
+  session's check: ADR-0010's amendment gains the close, ADR-0016's the reach checks, `$tc-field`
+  and the claim window, and AGENTS.md's low-pass bullet how a low row proves its reach:
   - ADR-0002: DYLD;
   - ADR-0005: the no-load lane, the split and the low passes' cost;
   - ADR-0010: the owner in the section;
@@ -271,6 +297,8 @@ newest first.
   | Builder D, the sweeps | Opus | 886k | 265 | 146 min |
   | Builder E1, the no-load lane | Opus | 451k | 125 | 55 min |
   | Builder E2, the loading split | Opus | 501k | 261 | 74 min |
+  | Builder C, after the check | Opus | 443k | 35 | 15 min |
+  | Builder D, after the check | Opus | 434k | 184 | 93 min |
 
 - **Learned:**
   - **A check of the calling thread vouches only for the section it is made in.** Engines make a

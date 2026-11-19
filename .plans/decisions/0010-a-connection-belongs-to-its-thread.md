@@ -6,7 +6,7 @@
   ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)). Amended 2026-11-15, and
   accepted by the maintainer that day: the interrupt, designed (M3's plan,
   [amendment](#amendment-2026-11-15-the-interrupt-designed-m3s-plan)).
-  Amended 2026-11-18 in M4's closing review, proposed: the owner compared inside the section
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): the owner compared inside the section
   ([amendment](#amendment-2026-11-18-the-owner-compared-inside-the-section-m4s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
@@ -113,7 +113,7 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
 
 ## Amendment, 2026-11-18: the owner compared inside the section (M4's closing review)
 
-Proposed in M4's closing review ([its code log](../m4-closing-review-code-log.md)), from its review
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review ([its code log](../m4-closing-review-code-log.md)), from its review
 of the code (Opus).
 
 - **Chez resumes an engine's remainder on whichever thread calls it.** A remainder started on the

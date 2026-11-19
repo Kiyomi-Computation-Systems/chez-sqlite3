@@ -23,7 +23,7 @@
   ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
   Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): `load-extension!` as built
   ([amendment](#amendment-2026-11-18-load-extension-as-built-m4-slice-4)).
-  Amended 2026-11-18 in M4's closing review, proposed: what the closing review corrected
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): what the closing review corrected
   ([amendment](#amendment-2026-11-18-what-the-closing-review-corrected-m4s-closing-review)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
@@ -450,7 +450,7 @@ Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 
 
 ## Amendment, 2026-11-18: what the closing review corrected (M4's closing review)
 
-Proposed in M4's closing review ([its logs](../m4-closing-review-code-log.md)), from its two
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review ([its logs](../m4-closing-review-code-log.md)), from its two
 read-only reviews (Opus).
 
 - **Q16's reason for an absolute path holds on Linux.** "The process loads only the file the

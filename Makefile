@@ -66,9 +66,11 @@ MEMORY_SUITES ?= $(SUITES)
 # written out, and the two are balanced by each suite's time under the gate
 # on CI, its "time:" line (.plans/research/m3-slice-6/memory-shard-input.md),
 # the first a little lighter: its test-transaction-interrupt has taken 20 s
-# to 149 s on CI, and 434 s here. The nine loading suites were placed so in
-# M4's closing review, from main's latest three CI runs
-# (.plans/research/m4-closing-review/loading/).
+# to 149 s on CI, and 434 s here. M4's closing review placed its loading and
+# low-pass suites, then moved script-low-2 and loading-preflight to the first:
+# PR #48's run 44460844478 read 1507 s against 1763 s, and the review's
+# follow-up added about 68 s and 122 s, so the two project at about 1740 s
+# and 1720 s (.plans/research/m4-closing-review/).
 # make check-memory-shards, which make test runs, fails unless the two run
 # every tests/test-*.sps once between them, so a new suite fails make test
 # until it is put in one: the shard whose suites take less time.
@@ -89,6 +91,7 @@ MEMORY_SUITES_1 := \
   tests/test-conveniences-pending-fold.sps \
   tests/test-conveniences-pending-query-row.sps \
   tests/test-conveniences-pending-script-low-0.sps \
+  tests/test-conveniences-pending-script-low-2.sps \
   tests/test-conveniences-pending-script-low-3.sps \
   tests/test-conveniences-reentry.sps \
   tests/test-counters.sps \
@@ -101,6 +104,7 @@ MEMORY_SUITES_1 := \
   tests/test-library-loading-missing-1.sps \
   tests/test-library-loading-missing-2.sps \
   tests/test-library-loading-missing-4.sps \
+  tests/test-library-loading-preflight.sps \
   tests/test-library-loading-real.sps \
   tests/test-load-state.sps \
   tests/test-memory-check.sps \
@@ -132,7 +136,6 @@ MEMORY_SUITES_2 := \
   tests/test-conveniences-pending-query.sps \
   tests/test-conveniences-pending-script-even.sps \
   tests/test-conveniences-pending-script-low-1.sps \
-  tests/test-conveniences-pending-script-low-2.sps \
   tests/test-conveniences-pending-script-odd.sps \
   tests/test-conveniences-resumed.sps \
   tests/test-conveniences-who.sps \
@@ -145,7 +148,6 @@ MEMORY_SUITES_2 := \
   tests/test-library-loading-combined.sps \
   tests/test-library-loading-decoys.sps \
   tests/test-library-loading-missing-3.sps \
-  tests/test-library-loading-preflight.sps \
   tests/test-libsqlite3-info.sps \
   tests/test-load-extension-engines.sps \
   tests/test-load-extension.sps \

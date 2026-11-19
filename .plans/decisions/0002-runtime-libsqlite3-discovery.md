@@ -11,7 +11,7 @@
   ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
   Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): the optional entry point's prototype
   ([amendment](#amendment-2026-11-17-the-optional-entry-points-prototype-m4-slice-2)).
-  Amended 2026-11-18 in M4's closing review, proposed: an absolute path and macOS's `DYLD_*`
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): an absolute path and macOS's `DYLD_*`
   ([amendment](#amendment-2026-11-18-an-absolute-path-and-macoss-dyld_-m4s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
@@ -284,7 +284,7 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 
 
 ## Amendment, 2026-11-18: an absolute path and macOS's `DYLD_*` (M4's closing review)
 
-Proposed in M4's closing review, from the maintainer's Mac run after slice 5
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review, from the maintainer's Mac run after slice 5
 ([research/m4-mac/](../research/m4-mac/README.md), "Slices 3 to 5's Mac run", `run-dyld.sh` and
 `out/slices-3-5/dyld.txt`). The rule is the maintainer's: "Document it" (2026-11-18).
 

@@ -258,8 +258,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   allocates, and fails by name unless it reached past the call's last section (ADR-0016, amended
   in M4 slice 4). M4's and M3's claim-holding sweeps do, each bounded by its own clean trials'
   refusals, never by a control run; where a call allocates less than the trip's chunk, about
-  32 KiB, the suite allocates that inside the section, in the low pass only (ADR-0016, amended in
-  M4's closing review).
+  32 KiB, the suite allocates that inside the section, in the low pass only. Each low row fails
+  by name unless every forced section met its collect request and some run expired at a forced
+  exit, read from the engine's timer, so a trip slipped to 256 KiB fails every low row (ADR-0016,
+  amended in M4's closing review).
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the

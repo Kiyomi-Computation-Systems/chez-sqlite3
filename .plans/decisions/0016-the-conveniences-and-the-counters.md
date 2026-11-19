@@ -25,7 +25,7 @@
   ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
   Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): a sweep with collect requests falling
   ([amendment](#amendment-2026-11-18-a-sweep-with-collect-requests-falling-m4-slice-4)).
-  Amended 2026-11-18 in M4's closing review, proposed: every claim-holding sweep's low pass, and no
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): every claim-holding sweep's low pass, and no
   control run ([amendment](#amendment-2026-11-18-every-claim-holding-sweeps-low-pass-and-no-control-run-m4s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
@@ -539,7 +539,7 @@ Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 
 
 ## Amendment, 2026-11-18: every claim-holding sweep's low pass, and no control run (M4's closing review)
 
-Proposed in M4's closing review ([the sweeps log](../m4-closing-review-sweeps-log.md)), from its two
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review ([the sweeps log](../m4-closing-review-sweeps-log.md)), from its two
 read-only reviews (Opus). It answers the slice 4 amendment's open question: M3's and slice 3's
 sweeps need the pass, and now have it.
 
@@ -569,3 +569,28 @@ sweeps need the pass, and now have it.
   - a request in a trial's first slice moves its remainder earlier than its fuel says, so the
     bounds read only "clean" trials, whose first slice met none, and each row prints the whole new
     calls it left out.
+- **Each low row proves its reach,** after the M4 session's check of PR #48 found ten low rows that
+  asked nothing of it, and reach checks the high pass also met: with the trip slipped to 256 KiB,
+  the low passes ran as the high ones and every suite still passed. Each low row now fails by name
+  unless:
+  - every section the suite forces met its collect request before the next one or before its
+    slice ended, which fails at 256 KiB, where about one section in eight meets one; and
+  - some run expired exactly at a forced section's exit. The engine's timer reads `#f` at the end
+    of the request's handler exactly when the remainder lies at that exit, and nowhere else.
+
+  The suite forces 32 KiB through SQLite's trace, an authorizer, the open's tell, or, for
+  `open-database`, a forcing VFS: a copy of SQLite's default with `xAccess` and `xFullPathname`
+  wrapped, since Apple's library refuses `sqlite3_auto_extension` and a VFS never sees
+  `:memory:`. With the trip slipped to 256 KiB, all 29 low rows fail by name and no other row
+  does, on Guix's library and the floor.
+- **The timer is read through Chez's internal `$tc-field`,** by `eval`, under a guard, in the tests
+  only. The maintainer chose "Keep it, tests only" (2026-11-19). Where it can't be reached, every
+  low row fails by name, never silently. CI builds Chez 10.4.0, the floor; the Mac's 10.4.1 is
+  first measured in its next run.
+- **`with-transaction`'s claim rows bound a whole new call by the sweep's own refusals,** with the
+  fixed claim window gone, against AGENTS.md's "nor by a caller's own count". A plant that leaves
+  the call unclaimed moves its own first refusal, so no refusal-based bound sees it; the claim's
+  re-entry rows, high and low, catch it.
+- **`test-conveniences-reentry`'s jump back and the claim's re-entry through a timer** gain low
+  passes. The script's claim taken after its prepare is caught by the four script low suites, not
+  by the jump back, which abandons its later run, so no second run is ever pending there.
