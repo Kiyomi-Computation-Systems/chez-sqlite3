@@ -254,8 +254,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   expiring,** not to a fixed bound (ADR-0017, amended in M3 slice 1). A sweep of a call that holds
   a claim also runs a pass with collect requests falling, the trip below what one call
   allocates, and fails by name unless it reached past the call's last section (ADR-0016, amended
-  in M4 slice 4). M4 slice 4's sweeps do; whether M3's and slice 3's need it is for M4's closing
-  review.
+  in M4 slice 4). M4's and M3's claim-holding sweeps do, each bounded by its own clean trials'
+  refusals, never by a control run; where a call allocates less than the trip's chunk, about
+  32 KiB, the suite allocates that inside the section, in the low pass only (ADR-0016, amended in
+  M4's closing review).
 - **A critical section is no lock between threads:** it keeps out only its own thread's engines,
   timers and interrupts. M3's sections guard only what the owner thread touches (ADR-0010,
   decision 1); the one state another thread reaches, the interrupt's flag and handle, is under the

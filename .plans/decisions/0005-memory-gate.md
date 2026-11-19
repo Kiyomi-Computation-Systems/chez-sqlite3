@@ -799,5 +799,24 @@ Proposed in M4's closing review ([the CI log](../m4-closing-review-ci-log.md),
   step naming its directory, or on its save. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` are held
   per step to that step's build, and a line required twice, current's `make test`, must be the
   run line of two steps.
-- **The loading suites split:** LOADING_SPLIT.
-- **The sweeps' low passes:** SWEEPS_LOW.
+- **The loading suites split, three into nine, at most 11 children each.** A child under the gate
+  costs about 5 s here and up to about 11.5 s on a slow CI runner, so 35 children made
+  `test-library-loading-real` 258 and 264 s on `main`'s runs, over half the 450 s bound:
+  - `-missing-1` to `-4` deal the 43 missing-api entries by position mod 4, 11, 11, 11 and 10;
+  - `-real` keeps the override and discovery, 11; `-preflight` the preflight, 9; `-extension`
+    M4's load rows, 7; `-decoys` the control's switches, 11; `-combined` the combinations and
+    the marker, 9.
+
+  Every old row is kept with its expected value but the partition's, whose four rows each
+  missing suite holds; no plant the old layout caught gets past the new one. Each new suite took
+  52 to 85 s under the gate here, so at most about 169 s on a slow runner. Shard 1 holds `-real`,
+  `-missing-1`, `-2` and `-4`, and `-extension`; shard 2 `-decoys`, `-missing-3`, `-combined` and
+  `-preflight`, by the lighter shard over `main`'s last three runs.
+- **The sweeps' low passes cost gate time:** M3's and slice 3's sweeps each gain a pass with collect
+  requests falling (ADR-0016, amended the same day). Under the gate here, `test-open-db-config-engines`
+  went from 57 to 138 s, `test-open-interleave` from 37 to 93 s, `test-transaction-engine` from 47
+  to 92 s and `test-conveniences-pending-query` from 37 to 87 s. The pending fold's and script's
+  low passes are suites of their own, `test-conveniences-pending-fold-low` and
+  `-script-low-0` to `-3`, the script's dealt by fuel mod 4, about 90 s each, so none nears half
+  the bound on a slow runner. Each memory job then runs about 30 suite-minutes, under its
+  60-minute timeout; read the first runs' times before calling the margin safe.

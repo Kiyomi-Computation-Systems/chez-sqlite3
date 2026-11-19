@@ -25,6 +25,8 @@
   ([amendment](#amendment-2026-11-17-the-scripts-claim-and-the-sweeps-bound-m3s-closing-review)).
   Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): a sweep with collect requests falling
   ([amendment](#amendment-2026-11-18-a-sweep-with-collect-requests-falling-m4-slice-4)).
+  Amended 2026-11-18 in M4's closing review, proposed: every claim-holding sweep's low pass, and no
+  control run ([amendment](#amendment-2026-11-18-every-claim-holding-sweeps-low-pass-and-no-control-run-m4s-closing-review)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -534,3 +536,36 @@ Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 
   and the plant ran the init twice in 163 trials past the first refusal.
 - **M3's sweeps and slice 3's raise the trip the same way.** Whether each needs the pass is for M4's
   closing review.
+
+## Amendment, 2026-11-18: every claim-holding sweep's low pass, and no control run (M4's closing review)
+
+Proposed in M4's closing review ([the sweeps log](../m4-closing-review-sweeps-log.md)), from its two
+read-only reviews (Opus). It answers the slice 4 amendment's open question: M3's and slice 3's
+sweeps need the pass, and now have it.
+
+- **The code was right; the rows couldn't see a fault.** Reviewer A traced, for every claim-holding
+  call, what runs after its last section, and a remainder past it, resumed twice, is harmless.
+  Reviewer B planted a claim advanced on the line after its section instead of inside it, into
+  `open-database`'s `in-section`, the conveniences and `with-transaction`. The open's and the
+  conveniences' plants passed every sweep as written and, with collect requests falling, did real
+  harm: settings applied twice, a row inserted twice, `(1 2 3 9 9)`, an op set twice.
+- **Each of M3's and slice 3's claim-holding sweeps now runs a low pass:** `test-open-engines`,
+  `test-open-db-config-engines`, `test-open-interleave`, `test-conveniences-resumed`, the six
+  pending suites, and `test-transaction-engine`, row by row. Each plant now fails only low rows; the
+  high rows pass it. `with-transaction`'s plant, the claim taken just after the BEGIN's section,
+  fails nothing and is equivalent: an expiry that holds a run at that exit escapes the wind, whose
+  after thunk rolls the level back and sets its ended flag, which the BEGIN's step reads inside its
+  own section. `test-interrupt-database` keeps its gigabyte trip: the verb holds no claim.
+- **No control run bounds a trial.** Eight suites judged an interleave trial by a control run on the
+  code under test at the same fuel, which starts from a different allocation state, and moves with
+  a mutant; under a low trip, correct code failed on the control alone. Each now bounds a whole new
+  call by the first fuel at which a trial of its own pass was refused with R taken before the first
+  section, and requires refusals at half the fuels (a third, for `query`'s failing sweep).
+- **Two measured limits of the low pass:**
+  - `collect-trip-bytes` is read only when an allocation chunk of about 32 KiB runs out, so a call
+    smaller than that meets a request at the same point at every fuel. Where a pass must reach an
+    exit, something the suite owns allocates 32 KiB inside that section, in the low pass only: the
+    `db_config` stand-in, and a SQLite profile-trace callback;
+  - a request in a trial's first slice moves its remainder earlier than its fuel says, so the
+    bounds read only "clean" trials, whose first slice met none, and each row prints the whole new
+    calls it left out.
