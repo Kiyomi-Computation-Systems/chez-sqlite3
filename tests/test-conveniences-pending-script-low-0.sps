@@ -14,14 +14,16 @@
 ;;;
 ;;;   interleaved  the high row, its trials at those fuels, each under a
 ;;;                collect trip of 256 bytes from its start to its end, its
-;;;                connection carrying the profile trace, which allocates
-;;;                32 KiB as a statement finishes: a request due inside a
+;;;                connection carrying SQLite's trace, which allocates
+;;;                32 KiB as a step answers a row or a statement finishes: a request due inside a
 ;;;                critical section is handled at its exit and costs the
 ;;;                engine ticks there, so R1 is taken at a section's exit too.
 ;;;                The same verdicts, each trial judged by itself and bounded
 ;;;                by the sweep's own refusals; and it fails by name unless
-;;;                collect requests fell in its trials, and unless some trial
-;;;                had R before the give-back and R1 past it
+;;;                collect requests fell in its trials, unless some trial had
+;;;                R before the give-back and R1 past it, unless each section
+;;;                the trace forces met its request before the next, and
+;;;                unless some first slice expired at such a section's exit
 ;;;
 ;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
 ;;; there is no tell, and the row is skipped through (conveniences-pending)'s
@@ -92,11 +94,12 @@
   zero-counts
   (native-counts))
 
-(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying the profile trace, which allocates 32 KiB as a statement finishes, so a collect request falls due inside the section that finishes it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials. " "execute-script!'s remainder R, taken at every fuel whose remainder by 4 is 0 until the call completes without expiring, the other fuels the three other suites', resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block")))
+(let ((name (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, which allocates 32 KiB as a step answers a row or a statement finishes, so a collect request falls due inside the section that steps it and is handled at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the give-back and R1 past it; and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. " "execute-script!'s remainder R, taken at every fuel whose remainder by 4 is 0 until the call completes without expiring, the other fuels the three other suites', resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block")))
   (tell-available! registration name)
   (test-equal name
     (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
-          'straddled-the-give-back 'collect-requests-met zero-counts)
+          'straddled-the-give-back 'collect-requests-met
+          'every-forced-section-met-its-request 'taken-at-a-forced-exit zero-counts)
     (guard (e (#t (list 'raised (describe e))))
       (reported 'execute-script! '(mod 4 0) 'low past-a-fuel both-a-fuel))))
 

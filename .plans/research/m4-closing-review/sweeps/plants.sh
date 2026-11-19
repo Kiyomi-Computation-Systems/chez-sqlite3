@@ -10,7 +10,7 @@ set -u
 out=$1
 here=$(dirname -- "$0")
 plants="P-open-advance-after P-conv-advance-after P-tx-take-after P-fold-left-after P-script-claim-after C-open-settings-unclaimed C-open-open-unclaimed C-conv-unclaimed C-fold-unflagged C-script-unclaimed C-tx-unclaimed C-tx-unclaimed-unended"
-suites="test-open-engines test-open-db-config-engines test-open-interleave test-conveniences-resumed test-conveniences-pending-execute test-conveniences-pending-query test-conveniences-pending-query-row test-conveniences-pending-fold test-conveniences-pending-fold-low test-conveniences-pending-script-even test-conveniences-pending-script-odd test-conveniences-pending-script-low-0 test-conveniences-pending-script-low-1 test-conveniences-pending-script-low-2 test-conveniences-pending-script-low-3 test-transaction-engine"
+suites="test-open-engines test-open-db-config-engines test-open-interleave test-conveniences-resumed test-conveniences-pending-execute test-conveniences-pending-query test-conveniences-pending-query-row test-conveniences-pending-fold test-conveniences-pending-fold-low test-conveniences-pending-script-even test-conveniences-pending-script-odd test-conveniences-pending-script-low-0 test-conveniences-pending-script-low-1 test-conveniences-pending-script-low-2 test-conveniences-pending-script-low-3 test-transaction-engine test-conveniences-reentry"
 for p in $plants; do
   if diff -rq src "build/plant/$p/src" >/dev/null; then
     echo "plants.sh: build/plant/$p/src is src/ unplanted; run planted.sh on the host" >&2; exit 2

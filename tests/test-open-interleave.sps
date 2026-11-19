@@ -65,9 +65,15 @@
 ;;;                taken at a section's exit too, before anything after it: a
 ;;;                claim advanced just after its section, not inside it,
 ;;;                applied a setting twice there (M4's closing review, reviewer
-;;;                B's B1). The low pass fails by name unless collect requests
-;;;                fell in its trials; and each interleaved low row unless some
-;;;                trial had R before the call's last section and R1 past it
+;;;                B's B1). The tell's callbacks allocate 32 KiB inside the
+;;;                open's section and each setting's prepare, so a request
+;;;                falls due there. The low pass fails by name unless collect
+;;;                requests fell in its trials, unless each forced section met
+;;;                its request before the next, which a trip slipped to
+;;;                256 KiB does not, and unless some first slice expired at a
+;;;                forced section's exit, which the high pass never does; and
+;;;                each interleaved low row unless some trial had R before the
+;;;                call's last section and R1 past it
 ;;;
 ;;; The tell: sqlite3_auto_extension runs an entry point of this suite at
 ;;; every open, which notes the open and sets an authorizer on the new
@@ -121,7 +127,7 @@
         (only (chezscheme) make-engine foreign-procedure foreign-callable
               foreign-callable-entry-point lock-object unlock-object foreign-ref
               foreign-entry? keyboard-interrupt-handler collect collect-trip-bytes
-              collect-request-handler)
+              collect-request-handler scheme-environment)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -217,6 +223,7 @@
 (define authorizer
   (foreign-callable __collect_safe
     (lambda (data action name value schema trigger)
+      (force!)
       (when (eqv? action sqlite-pragma)
         (note! (list 'pragma data (c-text name) (c-text value))))
       0)
@@ -230,6 +237,7 @@
 (define entry-point
   (foreign-callable __collect_safe
     (lambda (db message api)
+      (force!)
       (note! (list 'open db))
       (set-authorizer db (foreign-callable-entry-point authorizer) db))
     (uptr uptr uptr) int))
@@ -411,8 +419,8 @@
 ;; due inside a critical section is handled at the section's exit, where it
 ;; costs the engine ticks, so an expiry can fall at a section's exit, before
 ;; anything after it (.plans/traps.md). Every request the trials meet goes
-;; through counted-request, which counts it, so a low pass fails by name
-;; when none fell.
+;; through counted-request, which counts it, and the low rows judge where
+;; they fell (where a remainder lies, below).
 
 (define low-trip 256)
 
@@ -435,36 +443,252 @@
 
 (define (counted-request)
   (set! requests (+ requests 1))
-  (default-request-handler))
+  (default-request-handler)
+  (exit-noted!))
+
+;; --- where a remainder lies: at a forced section's exit ----------------------------------------
+;; The tell's callbacks run inside the library's critical sections: the
+;; entry point inside sqlite3_open_v2, the open's section, and the
+;; authorizer inside each setting's prepare (the tell, above). Where the
+;; tell is refused, nothing is forced, and the failing low rows print their
+;; forced checks unavailable through tell-kept?.
+;; In the low pass force! allocates 32 KiB there, so a collect request falls
+;; due inside the section and is handled at its exit, the first event check
+;; once the section enables interrupts again. The handler's own work costs
+;; the engine ticks. Where they run out in it, the engine's timer reads #f
+;; at its end, and the engine expires as the handler returns: the remainder
+;; lies at that section's exit, before anything after it. A probe's marker,
+;; set inside a section and overwritten just after it, read the section's
+;; at exactly those fuels, three a section, at the low trip, and at none at
+;; the high trip or at 256 KiB (M4's closing review, builder D's
+;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a
+;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
+;; about one time in eight; and unless some first slice expired at a forced
+;; section's exit, which the high pass, forcing none, never does. Each first
+;; slice numbers the forced sections it passes, from 1, and the row shows
+;; whose exits were met. The timer is read through Chez's own $tc-field,
+;; reached through eval.
+
+;; tc-field, tc : (U Procedure #f)
+(define tc-field
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc-field")) (scheme-environment))))
+(define tc
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc")) (scheme-environment))))
+
+;; ticks-now : -> (U Natural #f)
+;; The running engine's timer: its ticks left, #f once they are spent.
+(define (ticks-now) (and tc-field tc (tc-field 'timer-ticks (tc))))
+
+;; ticks-spent? : -> Boolean
+(define (ticks-spent?) (and tc-field tc (not (ticks-now)) #t))
+
+;; forcing : Boolean
+;; Whether force! allocates: in the low pass's trials alone.
+(define forcing #f)
+
+;; sink : Any
+;; Where force!'s allocation is kept, so no compiler drops it.
+(define sink #f)
+
+;; forced-pending : Boolean
+;; A forced section's allocation made inside a slice, its request not yet
+;; handled.
+(define forced-pending #f)
+
+;; forced, unmet : Natural
+;; The pass's forced sections inside an engine's slice, and those whose
+;; request was not handled before the next forced section or the slice's
+;; end. A forced callback whose timer reads as the last one's is in the same
+;; section: an engine spends no ticks inside one, and one section can fire
+;; two, as a close's finalizes do.
+(define forced 0)
+(define unmet 0)
+
+;; slicing, numbering : Boolean
+;; Whether an engine's slice runs now; whether a first slice does, numbering
+;; the forced sections it passes.
+(define slicing #f)
+(define numbering #f)
+
+;; forced-at : Any
+;; The timer as the last forced section read it.
+(define forced-at 'none)
+
+;; forced-k : Natural
+;; The forced sections the first slice under way has passed.
+(define forced-k 0)
+
+;; exit-k : (U Natural #f)
+;; The forced section at whose exit the first slice's ticks ran out.
+(define exit-k #f)
+
+;; pass-k, pass-exits : Natural (Listof Natural)
+;; The most forced sections a first slice of the pass passed, and the
+;; forced sections a first slice of it expired at the exit of.
+(define pass-k 0)
+(define pass-exits '())
+
+;; force! : -> Void
+;; In the low pass, 32 KiB allocated; inside a slice, a new section counted,
+;; and numbered inside a first slice, the last one counted unmet if its
+;; request is still due.
+(define (force!)
+  (when forcing
+    (when slicing
+      (let ((t (ticks-now)))
+        (unless (and forced-pending (eqv? t forced-at))
+          (when forced-pending (set! unmet (+ unmet 1)))
+          (set! forced (+ forced 1))
+          (when numbering (set! forced-k (+ forced-k 1)))
+          (set! forced-pending #t)
+          (set! forced-at t))))
+    (set! sink (make-bytevector 32768))))
+
+;; exit-noted! : -> Void
+;; In the request handler, once a request is handled: the forced section's
+;; request met, and, inside a first slice whose ticks it spent, the
+;; section's number noted.
+(define (exit-noted!)
+  (when forced-pending
+    (set! forced-pending #f)
+    (when (and numbering (ticks-spent?)) (set! exit-k forced-k))))
+
+;; slice-begun!, slice-ended! : -> Void
+;; Around each slice: at its end, a forced section's request still due
+;; counted unmet.
+(define (slice-begun!)
+  (set! forced-pending #f)
+  (set! forced-at 'none)
+  (set! slicing #t))
+(define (slice-ended!)
+  (set! slicing #f)
+  (when forced-pending
+    (set! unmet (+ unmet 1))
+    (set! forced-pending #f)))
+
+;; expired-slice? : Any -> Boolean
+;; Whether R, a slice's answer, is an expiry's: (expired E), or E itself.
+(define (expired-slice? r) (or (procedure? r) (and (pair? r) (eq? (car r) 'expired))))
+
+;; first-slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
+;; slice, its forced sections numbered and its exit noted for the pass.
+(define (first-slice e fuel)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (let ((r (slice e fuel)))
+    (set! numbering #f)
+    (set! pass-k (max pass-k forced-k))
+    (when (and exit-k (expired-slice? r) (not (memv exit-k pass-exits)))
+      (set! pass-exits (cons exit-k pass-exits)))
+    r))
+
+;; Tally = (List Natural Natural Natural Natural (Listof Natural))
+;; A pass's collect requests, its forced sections, those unmet, the most a
+;; first slice passed, and those a first slice expired at the exit of.
+
+;; pass-reset! : -> Void
+(define (pass-reset!)
+  (set! requests 0)
+  (set! forced 0)
+  (set! unmet 0)
+  (set! pass-k 0)
+  (set! pass-exits '())
+  (set! forced-pending #f))
+
+;; pass-tally : -> Tally
+(define (pass-tally) (list requests forced unmet pass-k (list-sort < pass-exits)))
+
+;; low-judged : Tally -> (Listof Any)
+;; low-checks' three, each failing by name.
+(define (low-judged tally)
+  (let ((met (car tally)) (forced (cadr tally)) (unmet (caddr tally)) (exits (list-ref tally 4)))
+    (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
+          (if (and (> forced 0) (= unmet 0))
+              'every-forced-section-met-its-request
+              (list 'forced-sections forced 'unmet unmet))
+          (if (pair? exits) 'taken-at-a-forced-exit (list 'none-taken-at-a-forced-exit exits)))))
+
+;; low-checks : (Listof Symbol)
+(define low-checks '(collect-requests-met every-forced-section-met-its-request taken-at-a-forced-exit))
+
+;; tally-shown : Tally -> Void
+(define (tally-shown tally)
+  (display "; collect requests met ")
+  (write (car tally))
+  (display "; forced sections ")
+  (write (cadr tally))
+  (display ", unmet ")
+  (write (caddr tally))
+  (display "; a first slice's forced sections ")
+  (write (cadddr tally))
+  (display ", remainders at the exit of ")
+  (write (list-ref tally 4)))
+
+;; call-begun!, call-ended! : -> Void
+;; Around a re-entry row's call, its timer firing at every tick, in place of
+;; a first slice: its forced sections numbered, and once it is over, the
+;; count kept for the pass and a forced section's request still due counted
+;; unmet.
+(define (call-begun!)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (slice-begun!))
+(define (call-ended!)
+  (set! numbering #f)
+  (set! pass-k (max pass-k forced-k))
+  (slice-ended!))
+
+;; ticked! : -> (U Natural #f)
+;; At each fire of such a timer: the forced section at whose exit its ticks
+;; ran out, if they did, cleared for the next fire.
+(define (ticked!)
+  (let ((k exit-k))
+    (set! exit-k #f)
+    k))
+
+;; captured-at! : (U Natural #f) -> Void
+;; A capture made at forced section K's exit noted for the pass.
+(define (captured-at! k)
+  (when (and k (not (memv k pass-exits)))
+    (set! pass-exits (cons k pass-exits))))
 
 ;; begun! : Pass -> Void
 (define (begun! pass)
   (quieted!)
   (collect-request-handler counted-request)
+  (set! forcing (eq? pass 'low))
   (when (eq? pass 'low) (collect-trip-bytes low-trip)))
 
 ;; ended! : -> Void
 (define (ended!)
+  (set! forcing #f)
   (collect-trip-bytes (expt 2 27))
   (collect-request-handler default-request-handler))
 
-;; counted-pass : (-> A) -> (Values A Natural)
-;; RUN's answer, a pass's sweep, and the collect requests its trials met,
-;; the trip and the handler put back however it leaves.
+;; counted-pass : (-> A) -> (Values A Tally)
+;; RUN's answer, a pass's sweep, and its tally, the trip and the handler
+;; put back however it leaves.
 (define (counted-pass run)
-  (set! requests 0)
+  (pass-reset!)
   (let ((r (dynamic-wind (lambda () #f) run ended!)))
-    (values r requests)))
+    (values r (pass-tally))))
 
-;; requests-judged : Pass Natural -> (Listof Any)
-(define (requests-judged pass met)
-  (if (eq? pass 'low)
-      (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met)))
-      '()))
+;; requests-judged : Pass Tally -> (Listof Any)
+(define (requests-judged pass tally)
+  (if (eq? pass 'low) (low-judged tally) '()))
 
 ;; slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
+;; Each slice's forced sections are judged met or unmet.
 (define (slice e fuel)
-  (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) (list 'expired more))))
+  (slice-begun!)
+  (let ((r (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) (list 'expired more)))))
+    (slice-ended!)
+    r))
 
 ;; finish : Engine -> Any
 ;; E resumed a million ticks at a time until it completes, at most 1000
@@ -713,7 +937,7 @@
   (set! noted '())
   (let* ((start (native-counts))
          (met requests)
-         (r (slice (make-engine (thunk-of verb)) fuel))
+         (r (first-slice (make-engine (thunk-of verb)) fuel))
          (clean (= requests met))
          (t (if (eq? (car r) 'completed)
                 (cons 'completed (judged verb start (list (list (cadr r) 0 'counts-kept)) #f #f))
@@ -846,8 +1070,7 @@
       (write refused-at)
       (display "; whole new calls left out, a collect request in the first slice, ")
       (write (list-ref run 9))
-      (display "; collect requests met ")
-      (write met)
+      (tally-shown met)
       (newline)
       (unless (null? (caddr run))
         (display "    deviations by kind: ")
@@ -930,7 +1153,7 @@
   "open-database's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the connection or is refused with &sqlite-closed, touching nothing; every connection opened is answered; each setting is applied once, in the plan's order, on the connection answered; it tracks no statement and reads back as asked; once it is closed, nothing is counted; at least three trials a fuel on average answer a connection; refusals come at half the fuels at least; and two connections, a whole new call's, only below the first fuel at which a trial was refused, R taken before the open")
 
 (define low-said
-  "the same, its trials under a collect trip of 256 bytes, so a request falls due in every run and one due inside a section costs ticks at its exit: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the call's last section and R1 past it; and collect requests met in the trials. ")
+  "the same, its trials under a collect trip of 256 bytes, so a request falls due in every run and one due inside a section costs ticks at its exit, the tell's callbacks allocating 32 KiB inside the open's section and each setting's prepare: the same verdicts, each trial judged by itself and bounded by the sweep's own refusals; some trial has R before the call's last section and R1 past it; and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. ")
 
 (let ((name open-name))
   (tell-available! registered name)
@@ -941,8 +1164,9 @@
 (let ((name (string-append low-said open-name)))
   (tell-available! registered name)
   (test-equal name
-    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
-          'straddled-the-last-section 'collect-requests-met zero-counts)
+    (append (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
+                  'straddled-the-last-section)
+            low-checks (list zero-counts))
     (reported 'low 'open-database)))
 
 (define cwd-name
@@ -957,8 +1181,9 @@
 (let ((name (string-append low-said cwd-name)))
   (tell-available! registered name)
   (test-equal name
-    (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
-          'straddled-the-last-section 'collect-requests-met zero-counts)
+    (append (list '() 'answered-three-a-fuel 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal
+                  'straddled-the-last-section)
+            low-checks (list zero-counts))
     (reported 'low 'call-with-database)))
 
 ;; --- a failing open, resumed twice ------------------------------------------------------------
@@ -1002,7 +1227,7 @@
   (set! noted '())
   (let* ((start (native-counts))
          (met requests)
-         (r (slice (make-engine (failing-thunk-of verb)) fuel))
+         (r (first-slice (make-engine (failing-thunk-of verb)) fuel))
          (clean (= requests met))
          (t (if (eq? (car r) 'completed)
                 'completed
@@ -1075,8 +1300,9 @@
 ;; failing-sweep of VERB in PASS, printed, and judged: no deviation;
 ;; refusals at a third of the fuels at least; where NOTED?, every whole new
 ;; call below the first refusal the sweep saw itself, the remainder before
-;; the open, else unavailable; in the low pass, collect requests met in its
-;; trials; and the counts.
+;; the open, else unavailable; in the low pass, low-judged's three, its
+;; two forced checks unavailable where NOTED? is #f, the tell refused, which
+;; forces nothing; and the counts.
 (define (failing-reported pass verb noted?)
   (let-values (((run met) (counted-pass (lambda () (failing-sweep pass verb noted?)))))
     (let ((news (list-ref run 3)) (refused-at (list-ref run 4)))
@@ -1094,8 +1320,7 @@
       (write refused-at)
       (display "; whole new calls left out, a collect request in the first slice, ")
       (write (list-ref run 6))
-      (display "; collect requests met ")
-      (write met)
+      (tally-shown met)
       (newline)
       (append
        (list (summarized (cadr run))
@@ -1107,17 +1332,18 @@
                          (if (and refused-at (for-all (lambda (f) (< f refused-at)) news))
                              'whole-new-calls-below-a-refusal
                              (list 'whole-new-calls-not-below-a-refusal news refused-at))))
-       (requests-judged pass met)
+       (let ((j (requests-judged pass met)))
+         (if (null? j) j (list (car j) (tell-noted noted? (cadr j)) (tell-noted noted? (caddr j)))))
        (list (list-ref run 5))))))
 
 (define failing-checks
-  "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs")
+  "checks of what the callbacks noted: that the second resume notes nothing, that only a whole new call opens a connection, and each connection's PRAGMAs; and, in the low pass, where the callbacks' allocations met their requests")
 
 (define failing-open-name
   "open-database with busy-timeout and journal-mode wal on :memory:, which mismatches, its remainder taken at every fuel from 1 until it completes without expiring and resumed to its end twice: the first raises the mismatch, the connection closed; the second is refused with &sqlite-closed, at a third of the fuels at least, or, past the failure's close, raises the mismatch again, noting nothing and changing no count; only below the first fuel at which the sweep saw one refused, the remainder before the open, does it open a connection, a whole new call's, which mismatches alone; no PRAGMA is prepared twice on a connection; nothing is counted after")
 
 (define failing-low-said
-  "the same, its trials under a collect trip of 256 bytes: the same verdicts, and collect requests met in the trials. ")
+  "the same, its trials under a collect trip of 256 bytes, the tell's callbacks allocating 32 KiB inside the open's section and each setting's prepare: the same verdicts, and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. ")
 
 (let* ((name failing-open-name)
        (noted? (tell-kept? registered name failing-checks)))
@@ -1129,7 +1355,8 @@
        (noted? (tell-kept? registered name failing-checks)))
   (test-equal name
     (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal)
-          'collect-requests-met zero-counts)
+          'collect-requests-met (tell-noted noted? 'every-forced-section-met-its-request)
+          (tell-noted noted? 'taken-at-a-forced-exit) zero-counts)
     (failing-reported 'low 'open-database noted?)))
 
 (define failing-cwd-name
@@ -1145,7 +1372,8 @@
        (noted? (tell-kept? registered name failing-checks)))
   (test-equal name
     (list '() 'refused-at-a-third-of-the-fuels (tell-noted noted? 'whole-new-calls-below-a-refusal)
-          'collect-requests-met zero-counts)
+          'collect-requests-met (tell-noted noted? 'every-forced-section-met-its-request)
+          (tell-noted noted? 'taken-at-a-forced-exit) zero-counts)
     (failing-reported 'low 'call-with-database noted?)))
 
 ;; --- an interrupt that escapes, at each of call-with-database's sections --------------------

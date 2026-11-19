@@ -92,7 +92,9 @@
         (rnrs eval)
         (srfi :64)
         (only (chezscheme) make-engine set-timer timer-interrupt-handler foreign-procedure collect
-              collect-trip-bytes collect-request-handler)
+              collect-trip-bytes collect-request-handler foreign-callable foreign-callable-entry-point
+              lock-object unlock-object define-ftype ftype-ref ftype-set! make-ftype-pointer ftype-sizeof
+              foreign-alloc foreign-free foreign-set! scheme-environment)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -151,6 +153,146 @@
 (define prepare-v2 (bound 'sqlite3_prepare_v2 (foreign-procedure "sqlite3_prepare_v2" (uptr uptr int uptr uptr) int)))
 ;; int sqlite3_finalize(sqlite3_stmt*)
 (define raw-finalize (bound 'sqlite3_finalize (foreign-procedure "sqlite3_finalize" (uptr) int)))
+
+;; --- the forcing VFS ---------------------------------------------------------------------------
+;; open-database admits no code of the suite's inside its sections, and its
+;; connection does not exist before its open, so no trace or authorizer can
+;; be given it: the low passes force through SQLite's VFS. The suite
+;; registers, as SQLite's default, a copy of SQLite's own default VFS, its
+;; every method SQLite's own but xAccess and xFullPathname, which call
+;; force! and then SQLite's own, with SQLite's own VFS. SQLite calls
+;; xFullPathname inside sqlite3_open_v2, the open's section, and xAccess as
+;; a read transaction begins, inside the settings' prepares and steps. Both
+;; callbacks are __collect_safe, as the library's calls into SQLite are;
+;; they raise nothing, and they are locked until the suite's end, where the
+;; VFS is unregistered and its memory freed. Apple's library takes a VFS,
+;; though it refuses sqlite3_auto_extension.
+
+;; sqlite3_vfs, as sqlite3.h has it, to iVersion 3.
+(define-ftype sqlite3-vfs
+  (struct (iVersion int) (szOsFile int) (mxPathname int) (pNext uptr) (zName uptr) (pAppData uptr)
+          (xOpen uptr) (xDelete uptr) (xAccess uptr) (xFullPathname uptr)
+          (xDlOpen uptr) (xDlError uptr) (xDlSym uptr) (xDlClose uptr)
+          (xRandomness uptr) (xSleep uptr) (xCurrentTime uptr) (xGetLastError uptr)
+          (xCurrentTimeInt64 uptr)
+          (xSetSystemCall uptr) (xGetSystemCall uptr) (xNextSystemCall uptr)))
+
+;; sqlite3_vfs *sqlite3_vfs_find(const char *zVfsName)
+(define vfs-find (bound 'sqlite3_vfs_find (foreign-procedure "sqlite3_vfs_find" (uptr) uptr)))
+
+;; int sqlite3_vfs_register(sqlite3_vfs*, int makeDflt)
+(define vfs-register (bound 'sqlite3_vfs_register (foreign-procedure "sqlite3_vfs_register" (uptr int) int)))
+
+;; int sqlite3_vfs_unregister(sqlite3_vfs*)
+(define vfs-unregister (bound 'sqlite3_vfs_unregister (foreign-procedure "sqlite3_vfs_unregister" (uptr) int)))
+
+;; sqlite-vfs : Natural
+;; SQLite's default VFS, before the suite's: 0 where none was found.
+(define sqlite-vfs (guard (e (#t 0)) (vfs-find 0)))
+
+;; sqlite-method : Natural -> (U Natural #f)
+;; Of SQLite's default VFS, the entry of xAccess (0) or xFullPathname (1).
+(define (sqlite-method which)
+  (and (not (eqv? sqlite-vfs 0))
+       (let ((src (make-ftype-pointer sqlite3-vfs sqlite-vfs)))
+         (if (eqv? which 0)
+             (ftype-ref sqlite3-vfs (xAccess) src)
+             (ftype-ref sqlite3-vfs (xFullPathname) src)))))
+
+;; int (*xAccess)(sqlite3_vfs*, const char *zName, int flags, int *pResOut)
+;; int (*xFullPathname)(sqlite3_vfs*, const char *zName, int nOut, char *zOut)
+;; SQLite's own, bound by their entries; 1, SQLITE_ERROR, where none was found.
+(define sqlite-access
+  (let ((entry (sqlite-method 0)))
+    (if entry (foreign-procedure entry (uptr uptr int uptr) int) (lambda args 1))))
+(define sqlite-full-pathname
+  (let ((entry (sqlite-method 1)))
+    (if entry (foreign-procedure entry (uptr uptr int uptr) int) (lambda args 1))))
+
+(define forcing-access
+  (foreign-callable __collect_safe
+    (lambda (vfs name flags out)
+      (force!)
+      (sqlite-access sqlite-vfs name flags out))
+    (uptr uptr int uptr) int))
+
+(define forcing-full-pathname
+  (foreign-callable __collect_safe
+    (lambda (vfs name n out)
+      (force!)
+      (sqlite-full-pathname sqlite-vfs name n out))
+    (uptr uptr int uptr) int))
+
+;; copied-fields : the named fields of sqlite3-vfs copied from SRC to DST.
+(define-syntax copied-fields
+  (syntax-rules ()
+    ((_ src dst field ...)
+     (begin (ftype-set! sqlite3-vfs (field) dst (ftype-ref sqlite3-vfs (field) src)) ...))))
+
+;; c-text-copy : String -> Natural
+;; S, ASCII, as a NUL-terminated C string, foreign-allocated.
+(define (c-text-copy s)
+  (let* ((n (string-length s))
+         (p (foreign-alloc (+ n 1))))
+    (let loop ((i 0))
+      (when (< i n)
+        (foreign-set! 'unsigned-8 p i (char->integer (string-ref s i)))
+        (loop (+ i 1))))
+    (foreign-set! 'unsigned-8 p n 0)
+    p))
+
+;; forcing-vfs : (U (List 'registered Natural Natural) (List Symbol Any))
+;; The copy registered as the default, its address and its name's; or what
+;; stopped it. The copy keeps the version of SQLite's, and the fields that
+;; version has.
+(define forcing-vfs
+  (guard (e (#t (list 'raised (describe e))))
+    (if (eqv? sqlite-vfs 0)
+        (list 'no-default-vfs 0)
+        (let* ((src (make-ftype-pointer sqlite3-vfs sqlite-vfs))
+               (version (ftype-ref sqlite3-vfs (iVersion) src))
+               (p (foreign-alloc (ftype-sizeof sqlite3-vfs)))
+               (dst (make-ftype-pointer sqlite3-vfs p))
+               (name (c-text-copy "chez-sqlite3-forcing")))
+          (let loop ((i 0))
+            (when (< i (ftype-sizeof sqlite3-vfs))
+              (foreign-set! 'unsigned-8 p i 0)
+              (loop (+ i 1))))
+          (copied-fields src dst iVersion szOsFile mxPathname pAppData xOpen xDelete
+                         xDlOpen xDlError xDlSym xDlClose xRandomness xSleep xCurrentTime xGetLastError)
+          (when (>= version 2) (copied-fields src dst xCurrentTimeInt64))
+          (when (>= version 3) (copied-fields src dst xSetSystemCall xGetSystemCall xNextSystemCall))
+          (ftype-set! sqlite3-vfs (zName) dst name)
+          (lock-object forcing-access)
+          (lock-object forcing-full-pathname)
+          (ftype-set! sqlite3-vfs (xAccess) dst (foreign-callable-entry-point forcing-access))
+          (ftype-set! sqlite3-vfs (xFullPathname) dst (foreign-callable-entry-point forcing-full-pathname))
+          (let ((rc (vfs-register p 1)))
+            (if (eqv? rc 0)
+                (list 'registered p name)
+                (begin (foreign-free name) (foreign-free p) (list 'register-answered rc))))))))
+
+;; forcing-vfs-default : -> Any
+;; registered when SQLite's default VFS is now the suite's copy.
+(define (forcing-vfs-default)
+  (if (and (eq? (car forcing-vfs) 'registered) (eqv? (vfs-find 0) (cadr forcing-vfs)))
+      'registered
+      (list 'forcing-vfs forcing-vfs)))
+
+;; forcing-vfs-removed : -> Any
+;; The copy unregistered, SQLite's own the default again, the copy's memory
+;; freed and its callbacks unlocked, once; or what went wrong.
+(define (forcing-vfs-removed)
+  (guard (e (#t (list 'raised (describe e))))
+    (if (not (eq? (car forcing-vfs) 'registered))
+        (list 'forcing-vfs forcing-vfs)
+        (let ((rc (vfs-unregister (cadr forcing-vfs))))
+          (foreign-free (cadr forcing-vfs))
+          (foreign-free (caddr forcing-vfs))
+          (unlock-object forcing-full-pathname)
+          (unlock-object forcing-access)
+          (list rc (if (eqv? (vfs-find 0) sqlite-vfs) 'sqlite-default 'not-sqlite-default))))))
+
 
 ;; --- helpers ------------------------------------------------------------------------------
 
@@ -235,7 +377,8 @@
 ;; handled at the section's exit, where it costs the engine ticks. So an
 ;; expiry, or a timer's tick, can fall at a section's exit, before anything
 ;; after it (.plans/traps.md). Every request the trials meet goes through
-;; counted-request, which counts it, so a pass fails by name when none fell.
+;; counted-request, which counts it, and the low rows judge where they fell
+;; (where a remainder lies, below).
 
 (define low-trip 256)
 
@@ -261,30 +404,248 @@
 ;; counted-request : -> Any
 (define (counted-request)
   (set! requests (+ requests 1))
-  (default-request-handler))
+  (default-request-handler)
+  (exit-noted!))
+
+;; --- where a remainder lies: at a forced section's exit ----------------------------------------
+;; The forcing VFS calls back inside the library's critical sections: the
+;; open's, through xFullPathname, and each setting's that begins a read
+;; transaction, through xAccess (the forcing VFS, above). The re-entered
+;; row's timer fires at every tick, so its ticks run out in every forced
+;; request's handler, and it fires at that section's exit.
+;; In the low pass force! allocates 32 KiB there, so a collect request falls
+;; due inside the section and is handled at its exit, the first event check
+;; once the section enables interrupts again. The handler's own work costs
+;; the engine ticks. Where they run out in it, the engine's timer reads #f
+;; at its end, and the engine expires as the handler returns: the remainder
+;; lies at that section's exit, before anything after it. A probe's marker,
+;; set inside a section and overwritten just after it, read the section's
+;; at exactly those fuels, three a section, at the low trip, and at none at
+;; the high trip or at 256 KiB (M4's closing review, builder D's
+;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a
+;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
+;; about one time in eight; and unless some first slice expired at a forced
+;; section's exit, which the high pass, forcing none, never does. Each first
+;; slice numbers the forced sections it passes, from 1, and the row shows
+;; whose exits were met. The timer is read through Chez's own $tc-field,
+;; reached through eval.
+
+;; tc-field, tc : (U Procedure #f)
+(define tc-field
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc-field")) (scheme-environment))))
+(define tc
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc")) (scheme-environment))))
+
+;; ticks-now : -> (U Natural #f)
+;; The running engine's timer: its ticks left, #f once they are spent.
+(define (ticks-now) (and tc-field tc (tc-field 'timer-ticks (tc))))
+
+;; ticks-spent? : -> Boolean
+(define (ticks-spent?) (and tc-field tc (not (ticks-now)) #t))
+
+;; forcing : Boolean
+;; Whether force! allocates: in the low pass's trials alone.
+(define forcing #f)
+
+;; sink : Any
+;; Where force!'s allocation is kept, so no compiler drops it.
+(define sink #f)
+
+;; forced-pending : Boolean
+;; A forced section's allocation made inside a slice, its request not yet
+;; handled.
+(define forced-pending #f)
+
+;; forced, unmet : Natural
+;; The pass's forced sections inside an engine's slice, and those whose
+;; request was not handled before the next forced section or the slice's
+;; end. A forced callback whose timer reads as the last one's is in the same
+;; section: an engine spends no ticks inside one, and one section can fire
+;; two, as a close's finalizes do.
+(define forced 0)
+(define unmet 0)
+
+;; slicing, numbering : Boolean
+;; Whether an engine's slice runs now; whether a first slice does, numbering
+;; the forced sections it passes.
+(define slicing #f)
+(define numbering #f)
+
+;; forced-at : Any
+;; The timer as the last forced section read it.
+(define forced-at 'none)
+
+;; forced-k : Natural
+;; The forced sections the first slice under way has passed.
+(define forced-k 0)
+
+;; exit-k : (U Natural #f)
+;; The forced section at whose exit the first slice's ticks ran out.
+(define exit-k #f)
+
+;; pass-k, pass-exits : Natural (Listof Natural)
+;; The most forced sections a first slice of the pass passed, and the
+;; forced sections a first slice of it expired at the exit of.
+(define pass-k 0)
+(define pass-exits '())
+
+;; force! : -> Void
+;; In the low pass, 32 KiB allocated; inside a slice, a new section counted,
+;; and numbered inside a first slice, the last one counted unmet if its
+;; request is still due.
+(define (force!)
+  (when forcing
+    (when slicing
+      (let ((t (ticks-now)))
+        (unless (and forced-pending (eqv? t forced-at))
+          (when forced-pending (set! unmet (+ unmet 1)))
+          (set! forced (+ forced 1))
+          (when numbering (set! forced-k (+ forced-k 1)))
+          (set! forced-pending #t)
+          (set! forced-at t))))
+    (set! sink (make-bytevector 32768))))
+
+;; exit-noted! : -> Void
+;; In the request handler, once a request is handled: the forced section's
+;; request met, and, inside a first slice whose ticks it spent, the
+;; section's number noted.
+(define (exit-noted!)
+  (when forced-pending
+    (set! forced-pending #f)
+    (when (and numbering (ticks-spent?)) (set! exit-k forced-k))))
+
+;; slice-begun!, slice-ended! : -> Void
+;; Around each slice: at its end, a forced section's request still due
+;; counted unmet.
+(define (slice-begun!)
+  (set! forced-pending #f)
+  (set! forced-at 'none)
+  (set! slicing #t))
+(define (slice-ended!)
+  (set! slicing #f)
+  (when forced-pending
+    (set! unmet (+ unmet 1))
+    (set! forced-pending #f)))
+
+;; expired-slice? : Any -> Boolean
+;; Whether R, a slice's answer, is an expiry's: (expired E), or E itself.
+(define (expired-slice? r) (or (procedure? r) (and (pair? r) (eq? (car r) 'expired))))
+
+;; first-slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
+;; slice, its forced sections numbered and its exit noted for the pass.
+(define (first-slice e fuel)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (let ((r (slice e fuel)))
+    (set! numbering #f)
+    (set! pass-k (max pass-k forced-k))
+    (when (and exit-k (expired-slice? r) (not (memv exit-k pass-exits)))
+      (set! pass-exits (cons exit-k pass-exits)))
+    r))
+
+;; Tally = (List Natural Natural Natural Natural (Listof Natural))
+;; A pass's collect requests, its forced sections, those unmet, the most a
+;; first slice passed, and those a first slice expired at the exit of.
+
+;; pass-reset! : -> Void
+(define (pass-reset!)
+  (set! requests 0)
+  (set! forced 0)
+  (set! unmet 0)
+  (set! pass-k 0)
+  (set! pass-exits '())
+  (set! forced-pending #f))
+
+;; pass-tally : -> Tally
+(define (pass-tally) (list requests forced unmet pass-k (list-sort < pass-exits)))
+
+;; low-judged : Tally -> (Listof Any)
+;; low-checks' three, each failing by name.
+(define (low-judged tally)
+  (let ((met (car tally)) (forced (cadr tally)) (unmet (caddr tally)) (exits (list-ref tally 4)))
+    (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
+          (if (and (> forced 0) (= unmet 0))
+              'every-forced-section-met-its-request
+              (list 'forced-sections forced 'unmet unmet))
+          (if (pair? exits) 'taken-at-a-forced-exit (list 'none-taken-at-a-forced-exit exits)))))
+
+;; low-checks : (Listof Symbol)
+(define low-checks '(collect-requests-met every-forced-section-met-its-request taken-at-a-forced-exit))
+
+;; tally-shown : Tally -> Void
+(define (tally-shown tally)
+  (display "; collect requests met ")
+  (write (car tally))
+  (display "; forced sections ")
+  (write (cadr tally))
+  (display ", unmet ")
+  (write (caddr tally))
+  (display "; a first slice's forced sections ")
+  (write (cadddr tally))
+  (display ", remainders at the exit of ")
+  (write (list-ref tally 4)))
+
+;; call-begun!, call-ended! : -> Void
+;; Around a re-entry row's call, its timer firing at every tick, in place of
+;; a first slice: its forced sections numbered, and once it is over, the
+;; count kept for the pass and a forced section's request still due counted
+;; unmet.
+(define (call-begun!)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (slice-begun!))
+(define (call-ended!)
+  (set! numbering #f)
+  (set! pass-k (max pass-k forced-k))
+  (slice-ended!))
+
+;; ticked! : -> (U Natural #f)
+;; At each fire of such a timer: the forced section at whose exit its ticks
+;; ran out, if they did, cleared for the next fire.
+(define (ticked!)
+  (let ((k exit-k))
+    (set! exit-k #f)
+    k))
+
+;; captured-at! : (U Natural #f) -> Void
+;; A capture made at forced section K's exit noted for the pass.
+(define (captured-at! k)
+  (when (and k (not (memv k pass-exits)))
+    (set! pass-exits (cons k pass-exits))))
 
 ;; begun! : Pass -> Void
 (define (begun! pass)
   (quieted!)
   (collect-request-handler counted-request)
+  (set! forcing (eq? pass 'low))
   (when (eq? pass 'low) (collect-trip-bytes low-trip)))
 
 ;; ended! : -> Void
 (define (ended!)
+  (set! forcing #f)
   (collect-trip-bytes (expt 2 27))
   (collect-request-handler default-request-handler))
 
-;; counted-pass : (-> A) -> (Values A Natural)
-;; RUN's answer, a pass's sweep, and the collect requests its trials met,
-;; the trip and the handler put back however it leaves.
+;; counted-pass : (-> A) -> (Values A Tally)
+;; RUN's answer, a pass's sweep, and its tally, the trip and the handler
+;; put back however it leaves.
 (define (counted-pass run)
-  (set! requests 0)
+  (pass-reset!)
   (let ((r (dynamic-wind (lambda () #f) run ended!)))
-    (values r requests)))
+    (values r (pass-tally))))
 
 ;; slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
+;; Each slice's forced sections are judged met or unmet.
 (define (slice e fuel)
-  (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) (list 'expired more))))
+  (slice-begun!)
+  (let ((r (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) (list 'expired more)))))
+    (slice-ended!)
+    r))
 
 ;; resumed-at : Engine Positive-Integer -> Any
 ;; E's answer, resumed one slice of FUEL at a time until it completes, at
@@ -369,6 +730,10 @@
   zero-counts
   (native-counts))
 
+(test-equal "the forcing VFS, a copy of SQLite's default whose xAccess and xFullPathname call force! first, is registered as SQLite's default"
+  'registered
+  (forcing-vfs-default))
+
 ;; --- every fuel ---------------------------------------------------------------------------------
 
 ;; at-fuel : String Positive-Integer -> (List Boolean Boolean (Listof Any))
@@ -426,7 +791,7 @@
 (define (twice pass path fuel)
   (begun! pass)
   (let* ((met requests)
-         (r (slice (make-engine (open-thunk path)) fuel))
+         (r (first-slice (make-engine (open-thunk path)) fuel))
          (clean (= requests met)))
     (if (eq? (car r) 'completed)
         (begin (close-answer (cadr r)) (ended!) (list #f 'none '() #f clean))
@@ -508,11 +873,11 @@
 ;; twice-reported : String Pass -> Any
 ;; twice-sweep in PASS, printed, naming WHAT, and judged: no deviation; a
 ;; refusal before the open seen, and refusals at half the fuels at least;
-;; and, in the low pass, collect requests met in its trials, and a remainder
-;; past the call's last section answering the same connection at some fuel,
-;; each failing by name.
+;; and, in the low pass, a remainder past the call's last section answering
+;; the same connection at some fuel, and low-judged's three, each failing
+;; by name.
 (define (twice-reported what pass)
-  (let-values (((r met) (counted-pass (lambda () (in-dir (lambda (dir) (twice-sweep pass (string-append dir "/t.db"))))))))
+  (let-values (((r tally) (counted-pass (lambda () (in-dir (lambda (dir) (twice-sweep pass (string-append dir "/t.db"))))))))
     (if (and (pair? r) (eq? (car r) 'raised))
         r
         (let ((kinds (caddr r)) (refused-at (cadddr r)))
@@ -526,8 +891,7 @@
           (write refused-at)
           (display "; whole new calls past it, a collect request in the first slice, ")
           (write (list-ref r 4))
-          (display "; collect requests met ")
-          (write met)
+          (tally-shown tally)
           (newline)
           (append
            (list (summarized (cadr r))
@@ -536,10 +900,10 @@
                        'refused-before-the-open-and-at-half-the-fuels
                        (list 'refused refused 'of (car r) 'before-the-open-first-at refused-at))))
            (if (eq? pass 'low)
-               (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
-                     (if (> (kind-count kinds 'same) 0)
+               (cons (if (> (kind-count kinds 'same) 0)
                          'answered-again-past-its-last-section
-                         (list 'none-past-its-last-section kinds)))
+                         (list 'none-past-its-last-section kinds))
+                     (low-judged tally))
                '())
            (list (native-counts)))))))
 
@@ -547,9 +911,9 @@
   (list '() 'refused-before-the-open-and-at-half-the-fuels zero-counts)
   (twice-reported "open-database resumed twice" 'high))
 
-(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, so a request falls due in every run and one due inside a section costs ticks at its exit: the same verdicts; collect requests met in the trials; and at some fuel a remainder past the call's last section answers its connection again. " twice-name)
-  (list '() 'refused-before-the-open-and-at-half-the-fuels 'collect-requests-met
-        'answered-again-past-its-last-section zero-counts)
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, so a request falls due in every run and one due inside a section costs ticks at its exit, the forcing VFS allocating 32 KiB inside the open's section and each setting's that begins a read: the same verdicts; at some fuel a remainder past the call's last section answers its connection again; and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. " twice-name)
+  (append (list '() 'refused-before-the-open-and-at-half-the-fuels 'answered-again-past-its-last-section)
+          low-checks (list zero-counts))
   (twice-reported "open-database resumed twice, low trip" 'low))
 
 ;; --- call-with-database, re-entered through a timer's continuation ------------------------------
@@ -597,20 +961,25 @@
         (timer-interrupt-handler
          (lambda ()
            (set! ticks (+ ticks 1))
-           (if (= ticks i)
-               (begin (set! phase (connection-count))
-                      (set! requests-at-capture requests)
-                      (call/cc (lambda (k) (set! saved k))))
-               (set-timer 1)))))
+           (let ((at-exit (ticked!)))
+             (if (= ticks i)
+                 (begin (set! phase (connection-count))
+                        (set! requests-at-capture requests)
+                        (captured-at! at-exit)
+                        (call/cc (lambda (k) (set! saved k))))
+                 (set-timer 1))))))
       (lambda ()
+        (call-begun!)
         (set-timer 1)
         (let ((r (attempt (lambda () (call-with-database path settings proc)))))
           (set-timer 0)
+          (call-ended!)
           (if return-to
               (let ((back return-to)) (set! return-to #f) (back r))
               r)))
       (lambda ()
         (set-timer 0)
+        (call-ended!)
         (timer-interrupt-handler old)))))
 
 ;; reentry-sweep : Pass String -> (List Natural (Listof Any) (Listof (Pairof Symbol Natural)) (U Natural #f) Natural)
@@ -681,11 +1050,11 @@
 ;; reentry-reported : String Pass -> Any
 ;; reentry-sweep in PASS, printed, naming WHAT, and judged: no deviation;
 ;; refusals at half the ticks at least, one before the open; and, in the
-;; low pass, collect requests met in its trials, and a continuation past the
-;; settings' last section calling the procedure again at some tick, each
-;; failing by name.
+;; low pass, a continuation past the settings' last section calling the
+;; procedure again at some tick, and low-judged's three, each failing by
+;; name.
 (define (reentry-reported what pass)
-  (let-values (((r met) (counted-pass (lambda () (in-dir (lambda (dir) (reentry-sweep pass (string-append dir "/c.db"))))))))
+  (let-values (((r tally) (counted-pass (lambda () (in-dir (lambda (dir) (reentry-sweep pass (string-append dir "/c.db"))))))))
     (if (and (pair? r) (eq? (car r) 'raised))
         r
         (let ((kinds (caddr r)) (refused-at (cadddr r)))
@@ -699,8 +1068,7 @@
           (write refused-at)
           (display "; whole new calls past it, a collect request before the capture, ")
           (write (list-ref r 4))
-          (display "; collect requests met ")
-          (write met)
+          (tally-shown tally)
           (newline)
           (append
            (list (summarized (cadr r))
@@ -709,10 +1077,10 @@
                        'refused-before-the-open-and-at-half-the-ticks
                        (list 'refused refused 'of (car r) 'before-the-open-first-at refused-at))))
            (if (eq? pass 'low)
-               (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
-                     (if (> (kind-count kinds 'again) 0)
+               (cons (if (> (kind-count kinds 'again) 0)
                          'called-again-past-the-settings
-                         (list 'none-past-the-settings kinds)))
+                         (list 'none-past-the-settings kinds))
+                     (low-judged tally))
                '())
            (list (native-counts)))))))
 
@@ -720,9 +1088,9 @@
   (list '() 'refused-before-the-open-and-at-half-the-ticks zero-counts)
   (reentry-reported "call-with-database re-entered" 'high))
 
-(test-equal (string-append "the same, its trials under a collect trip of 256 bytes: the same verdicts; collect requests met in the trials; and at some tick a continuation past the settings' last section calls the procedure again. " reentry-name)
-  (list '() 'refused-before-the-open-and-at-half-the-ticks 'collect-requests-met
-        'called-again-past-the-settings zero-counts)
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, the forcing VFS allocating 32 KiB inside the open's section and each setting's that begins a read: the same verdicts; at some tick a continuation past the settings' last section calls the procedure again; and collect requests met in the trials, each forced section's request met before the next, and some capture made at a forced section's exit. " reentry-name)
+  (append (list '() 'refused-before-the-open-and-at-half-the-ticks 'called-again-past-the-settings)
+          low-checks (list zero-counts))
   (reentry-reported "call-with-database re-entered, low trip" 'low))
 
 ;; --- call-with-database under an engine ---------------------------------------------------------
@@ -905,6 +1273,10 @@
           (write (car r))
           (newline)
           (list (summarized (cadr r)) (caddr r) (native-counts))))))
+
+(test-equal "the forcing VFS is unregistered once every connection is closed, SQLite's own the default again, its memory freed and its callbacks unlocked"
+  '(0 sqlite-default)
+  (forcing-vfs-removed))
 
 (test-equal "every count is zero at the end"
   zero-counts
