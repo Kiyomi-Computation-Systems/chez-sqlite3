@@ -119,7 +119,9 @@ of the code (Opus).
 - **Chez resumes an engine's remainder on whichever thread calls it.** A remainder started on the
   owner's thread and taken between `call-with-open-handle`'s owner check and its section finished
   on another: swept at every fuel, with each remainder resumed on a new thread, the section that
-  makes the C call ran on threads 8, 9 and 10 in 3 of 12 trials. The check, made before the
+  makes the C call ran on another thread in 3 of 12 trials, on threads 8, 9 and 10 (reviewer A's
+  run; 3 of 13, on threads 9 to 11, in the M4 session's check; the probe is
+  `research/m4-closing-review/code/probes/handle-other-thread.sps`). The check, made before the
   section, vouched for a thread the section no longer ran on. M1 made that check, and every verb
   since leans on it; M4's own calls were immune only because each wraps `call-with-open-handle` in
   a critical section of its own.

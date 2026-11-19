@@ -258,8 +258,8 @@ told in chez-curl's `.plans/traps.md`.
   follows it. A sweep that raises `collect-trip-bytes` above what its runs allocate never sees a
   remainder there. M4 slice 4's sweeps first read "both past the section in 0; R before it and R1
   past it in 0", and a plant that set the claim's flag after the section passed them all. With
-  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 184" (186 before
-  the check of PR #45 added two variants to each trial's build), and the plant ran the init
+  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 186" (the count
+  moves with each trial's allocations: 184, then 180, as the build grew), and the plant ran the init
   twice. Reproduce: `test-load-extension-engines`' two interleave rows print both counts. (M4
   slice 4, from its review, chez-sqlite3)
 - **`collect-trip-bytes` is read only when an allocation chunk runs out.** With the trip at 256
@@ -280,10 +280,12 @@ told in chez-curl's `.plans/traps.md`.
   (M4 slice 4, chez-sqlite3)
 - **An engine's remainder resumes on whichever thread calls it.** A remainder taken on the
   owner's thread between `call-with-open-handle`'s owner check and its section made its C call on
-  another thread: in 3 of 12 trials the section ran on threads 8, 9 and 10. A check of the calling
+  another thread: in 3 of 12 trials the section ran on threads 8, 9 and 10, and in 3 of 13 on
+  threads 9 to 11 in another run. A check of the calling
   thread vouches only for the section it is made in. Reproduce: sweep a bare
   `call-with-open-handle` at every fuel and finish each remainder on a forked thread, as
-  `test-connection`'s owner rows do, against M3's `connection.sls`. (M4's closing review,
+  `test-connection`'s owner rows do, against `34721b4`'s `connection.sls`, or run
+  `research/m4-closing-review/code/probes/handle-other-thread.sps`. (M4's closing review,
   chez-sqlite3)
 - **Renaming thread ids across a whole value renames every 0 in it.** The main thread's
   `get-thread-id` is 0, so a row that maps ids to names over a result read `changes`' 0 as `main`.

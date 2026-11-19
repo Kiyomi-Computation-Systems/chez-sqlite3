@@ -240,7 +240,7 @@ newest first.
   3.54.1, and 3.54.1 built without extension loading; `check-variadic` all 7 steps.
 - **Times** under the gate, Guix's library:
   - the nine loading suites 52 to 85 s, against the old `-real`'s 195 to 248 s;
-  - `test-open-db-config-engines` 136 s, up from 57 s;
+  - `test-open-db-config-engines` 136 to 138 s here and 161 s on CI, up from 57 s;
   - the pending script's low passes about 92 s each.
 
   Each memory job projects at about 30 suite-minutes a run, under its 60-minute timeout.

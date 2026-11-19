@@ -293,7 +293,8 @@ Proposed in M4's closing review, from the maintainer's Mac run after slice 5
     its leaf name. Naming Homebrew's folder, it made discovery's `/usr/lib/libsqlite3.dylib` load
     Homebrew's 3.54.1, while `sqlite-library-path` still answered `/usr/lib/libsqlite3.dylib`
     (case L1).
-  - `DYLD_FALLBACK_LIBRARY_PATH` didn't redirect a path that names an existing file (E2).
+  - `DYLD_FALLBACK_LIBRARY_PATH` didn't find another folder's file for an absolute path where no
+    file stands (E2): the load failed, as it would with the variable unset.
   - On Linux, `LD_LIBRARY_PATH` redirected neither the override's path nor discovery's.
 - **So decision 4's "a loaded library is reported with its path" reports the path asked for.** On
   the Mac, under `DYLD_LIBRARY_PATH`, that may not be the file loaded. `sqlite3_libversion` and

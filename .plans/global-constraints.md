@@ -309,7 +309,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **A suite's rows for what a library may lack** are chosen by what the library reports:
   FTS5 by `sqlite-compile-option? "ENABLE_FTS5"`, held to `pragma_module_list`; extension
   loading by native's record of `sqlite3_load_extension`, and `ENABLE_LOAD_EXTENSION`'s round
-  trip by the op's own first answer, where Apple's answers 21. The rest are named unavailable, never
+  trip by the op's own first answer, where Apple's answers 21 (ADR-0021, amended in M4's closing
+  review). The rest are named unavailable, never
   silently, and the refusal is asserted in their place, so each suite runs on every lane. Where
   native records no `sqlite3_load_extension`, the suites' extension isn't built, and the build is
   named unavailable too (ADR-0001, amended in M4 slice 4). The

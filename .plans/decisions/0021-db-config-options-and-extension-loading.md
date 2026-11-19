@@ -468,7 +468,11 @@ read-only reviews (Opus).
   reference says so.
 - **A wrong-thread refusal names `load-extension!`:** the opt-in is read by a reader that takes the
   caller's `who` (ADR-0013, decision 2), where `database-extension-loading?` had named itself in
-  99 of 109 remainders resumed on another thread.
-- **The slice 4 amendment's figure** "R before the section and R1 past it in 186 of 2,134" was the
-  tree before the check of PR #45. The final tree reads 184 of 2,132; the build's two extra
-  variants change what each trial allocates.
+  99 of 109 remainders resumed on another thread (reviewer A's probe, kept in
+  `research/m4-closing-review/code/probes/`).
+- **`test-native`'s `ENABLE_LOAD_EXTENSION` round trip is chosen by the op's own first answer,**
+  not native's record of `sqlite3_load_extension`: a library built without extension loading
+  answers 0 and round-trips the op, and Apple's answers 21, which the row asserts in its place.
+- **The slice 4 amendment's figure** "R before the section and R1 past it in 186 of 2,134" moves
+  with what each trial allocates: 184 of 2,132 after the check of PR #45 added two variants to the
+  build, and 180 of 2,128 at this review's head. The row asks only that it be above 0.
