@@ -1,0 +1,254 @@
+C0-control                                                 old passed(0)   new passed(0)   old: new:
+D1-empty-switch-as-unset                                   old CAUGHT(1)   new CAUGHT(1)   old:decoys new:decoys
+D2-below-floor-number-at-floor                             old CAUGHT(5)   new CAUGHT(5)   old:decoys,real new:combined,decoys,preflight
+F1-preflight-refusal-without-counts                        old CAUGHT(3)   new CAUGHT(3)   old:real new:preflight
+F2b-preflight-remedy-own-text                              old CAUGHT(3)   new CAUGHT(3)   old:real new:preflight
+H1-field-always-absent                                     old CAUGHT(14)  new CAUGHT(14)  old:real new:preflight,real
+H2-make-directory-never-checks                             old passed(0)   new passed(0)   old: new:
+H3-platform-other                                          old CAUGHT(2)   new CAUGHT(2)   old:real new:real
+H4-world-always-fhs                                        old CAUGHT(3)   new CAUGHT(3)   old:real new:real
+H5-override-left-set                                       old CAUGHT(4)   new CAUGHT(4)   old:real new:preflight,real
+H6-guix-profile-left-set                                   old passed(0)   new passed(0)   old: new:
+H7-candidates-lack-guix-system                             old CAUGHT(1)   new CAUGHT(1)   old:real died:real new:preflight,real died:preflight
+H8-lines-drop-the-last                                     old passed(0)   new passed(0)   old: new:
+H9-accepted-text-without-source                            old CAUGHT(2)   new CAUGHT(2)   old:real new:preflight,real
+L1-no-re-raise                                             old CAUGHT(62)  new CAUGHT(62)  old:decoys,missing,real new:combined,decoys,missing-1,missing-2,missing-3,missing-4,real
+L2-libversion-null-named-sourceid                          old CAUGHT(1)   new CAUGHT(1)   old:decoys new:decoys
+M4s2-all-builds-no-optional                                old CAUGHT(4)   new CAUGHT(4)   old:real new:extension
+M4s2-available-by-entry                                    old passed(0)   new passed(0)   old: new:
+M4s2-available-false                                       old CAUGHT(3)   new CAUGHT(3)   old:real new:extension
+M4s2-available-true                                        old CAUGHT(4)   new CAUGHT(4)   old:real new:extension
+M4s2-bind-optional-no-check                                old CAUGHT(4)   new CAUGHT(4)   old:real new:extension
+M4s2-bind-optional-refuses                                 old CAUGHT(4)   new CAUGHT(4)   old:real new:extension
+M4s2-decoy-dbc-inverted                                    old CAUGHT(16)  new CAUGHT(16)  old:decoys,missing,real new:combined,decoys,extension,missing-2,missing-3,preflight
+M4s2-decoy-dbc-not-variadic                                old CAUGHT(69)  new CAUGHT(69)  old:decoys,missing,real new:combined,decoys,extension,missing-1,missing-2,missing-3,missing-4,preflight
+M4s2-decoy-free-inverted                                   old CAUGHT(15)  new CAUGHT(15)  old:decoys,missing,real new:combined,decoys,extension,missing-3,preflight
+M4s2-decoy-load-inverted                                   old CAUGHT(7)   new CAUGHT(7)   old:real new:extension
+M4s2-decoy-parts-moved                                     old CAUGHT(1)   new CAUGHT(1)   old:decoys,missing,real new:missing-1,missing-2,missing-3,missing-4
+M4s2-optional-appended                                     old CAUGHT(3)   new CAUGHT(3)   old:decoys,missing,real new:decoys,missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+    rows failing in new only: the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+M4s2-optional-moved                                        old CAUGHT(6)   new CAUGHT(6)   old:decoys,missing,real new:extension,missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+    rows failing in new only: the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+M4s2-order-optional-first                                  old passed(0)   new passed(0)   old: new:
+M4s2-probe-always-true                                     old CAUGHT(4)   new CAUGHT(4)   old:real new:extension
+M4s2-probe-flag-ignored                                    old CAUGHT(7)   new CAUGHT(7)   old:real new:extension
+M4s3-C-field-f                                             old passed(0)   new not-run     old:
+M4s3-C-unchecked                                           old passed(0)   new not-run     old:
+M4s3-F-join-sample                                         old passed(0)   new not-run     old:
+M4s3-G1                                                    old passed(0)   new not-run     old:
+M4s3-J-extra-op                                            old passed(0)   new not-run     old:
+M4s3-J-messages                                            old passed(0)   new not-run     old:
+M4s3-J-messages-domain                                     old passed(0)   new not-run     old:
+M4s3-J-names                                               old passed(0)   new not-run     old:
+M4s3-J-names-order                                         old passed(0)   new not-run     old:
+M4s3-J-no-row                                              old passed(0)   new not-run     old:
+M4s3-J-op-wrong                                            old passed(0)   new not-run     old:
+M4s3-J-opt-in-list                                         old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3-J-opt-in-name                                         old passed(0)   new not-run     old:
+M4s3-J-order                                               old passed(0)   new not-run     old:
+M4s3-J-seen                                                old passed(0)   new not-run     old:
+M4s3-J-sentinel                                            old passed(0)   new not-run     old:
+M4s3-J-step-loose                                          old passed(0)   new not-run     old:
+M4s3-J-unknown                                             old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3-O-all-errors                                          old passed(0)   new not-run     old:
+M4s3-O-check-before-m2                                     old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3-O-check-first                                         old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3-O-claim-unchecked                                     old passed(0)   new not-run     old:
+M4s3-O-cwd-opt-in-f                                        old passed(0)   new not-run     old:
+M4s3-O-errstr-1                                            old passed(0)   new not-run     old:
+M4s3-O-expected-written                                    old passed(0)   new not-run     old:
+M4s3-O-export-extra                                        old passed(0)   new not-run     old:
+M4s3-O-low-zero                                            old passed(0)   new not-run     old:
+M4s3-O-no-close                                            old passed(0)   new not-run     old:
+M4s3-O-noclaim                                             old passed(0)   new not-run     old:
+M4s3-O-not-error-who                                       old passed(0)   new not-run     old:
+M4s3-O-opt-in-f                                            old passed(0)   new not-run     old:
+M4s3-O-split-claim                                         old passed(0)   new not-run     old:
+M4s3-O-steps-dropped                                       old passed(0)   new not-run     old:
+M4s3-O-value-bool                                          old passed(0)   new not-run     old:
+M4s3-O-whole-code                                          old passed(0)   new not-run     old:
+M4s3-P-code-conn                                           old passed(0)   new not-run     old:
+M4s3-P-defensive-skipped                                   old passed(0)   new not-run     old:
+M4s3-P-errmsg                                              old passed(0)   new not-run     old:
+M4s3-P-false-call                                          old passed(0)   new not-run     old:
+M4s3-P-fill0                                               old passed(0)   new not-run     old:
+M4s3-P-fill1                                               old passed(0)   new not-run     old:
+M4s3-P-literal                                             old passed(0)   new not-run     old:
+M4s3-P-nocell                                              old passed(0)   new not-run     old:
+M4s3-P-nocode                                              old passed(0)   new not-run     old:
+M4s3-P-opt-in-check                                        old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3-P-opt-in-inverted                                     old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s3-P-unasked-defensive                                   old passed(0)   new not-run     old:
+M4s3-P-unasked-dqs-ddl                                     old passed(0)   new not-run     old:
+M4s3-P-unasked-dqs-dml                                     old passed(0)   new not-run     old:
+M4s3-P-unasked-load                                        old passed(0)   new not-run     old:
+M4s3-Q-dqs-beside-pragma                                   old passed(0)   new not-run     old:
+M4s3-Q-identity                                            old passed(0)   new not-run     old:
+M4s3-Q-identity-R1                                         old passed(0)   new not-run     old:
+M4s3-Q-idle-turns                                          old passed(0)   new not-run     old:
+M4s3-Q-move-raises                                         old passed(0)   new not-run     old:
+M4s3-Q-not-integer                                         old passed(0)   new not-run     old:
+M4s3-Q-owner-unchecked                                     old passed(0)   new not-run     old:
+M4s3-Q-reorder                                             old passed(0)   new not-run     old:
+M4s3-Q-switch-raises                                       old passed(0)   new not-run     old:
+M4s3-R1                                                    old passed(0)   new not-run     old:
+M4s3-R2                                                    old passed(0)   new not-run     old:
+M4s3-R3                                                    old passed(0)   new not-run     old:
+M4s3-R4                                                    old passed(0)   new not-run     old:
+M4s3-R6                                                    old passed(0)   new not-run     old:
+M4s3-V-def0-beside-pragma                                  old passed(0)   new not-run     old:
+M4s3-X-docs                                                old passed(0)   new not-run     old:
+M4s3-X-export                                              old passed(0)   new not-run     old:
+M4s3L-K1-dqs-beside-pragma                                 old passed(0)   new not-run     old:
+M4s3L-K2-moves-identity                                    old passed(0)   new not-run     old:
+M4s3L-K2b-moves-identity-with-R1                           old passed(0)   new not-run     old:
+M4s3L-K3-pragmas-before-sets                               old passed(0)   new not-run     old:
+M4s3L-K4-code-not-exact-checked                            old passed(0)   new not-run     old:
+M4s3L-K5-reader-unowned                                    old passed(0)   new not-run     old:
+M4s3L-M1-dqs-swapped-r3                                    old passed(0)   new not-run     old:
+M4s3L-M2-opt-in-any-set-r3                                 old passed(0)   new not-run     old:
+M4s3L-M3-unavailable-who-fixed-r3                          old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s3L-M4-mismatch-swapped-r3                               old passed(0)   new not-run     old:
+M4s3L-M5-record-opt-in-always-r3                           old passed(0)   new not-run     old:
+M4s3L-N1-defensive-0-every-open-r3                         old passed(0)   new not-run     old:
+M4s3L-N2-dqs-dml-1-every-open-r3                           old passed(0)   new not-run     old:
+M4s3L-N3-defensive-1-beside-opt-in-r3                      old passed(0)   new not-run     old:
+M4s3L-N4-defensive-f-skipped-r3                            old passed(0)   new not-run     old:
+M4s4-C01-open-check-dropped                                old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s4-C02-open-check-after-arguments                        old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s4-C03-open-check-raises-inside                          old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s4-C04-path-string-check-dropped                         old passed(0)   new not-run     old:
+M4s4-C05-path-nul-check-dropped                            old passed(0)   new not-run     old:
+M4s4-C06-absolute-check-dropped                            old passed(0)   new not-run     old:
+M4s4-C07-absolute-lets-a-dot-through                       old passed(0)   new not-run     old:
+M4s4-C08-path-copy-unused                                  old passed(0)   new not-run     old:
+M4s4-C08e-entry-copy-unused                                old passed(0)   new not-run     old:
+M4s4-C09-empty-path-let-through                            old passed(0)   new not-run     old:
+M4s4-C09b-nul-after-absolute                               old passed(0)   new not-run     old:
+M4s4-C09c-nul-scan-skips-the-last                          old passed(0)   new not-run     old:
+M4s4-C10-entry-string-check-dropped                        old passed(0)   new not-run     old:
+M4s4-C11-entry-nul-check-dropped                           old passed(0)   new not-run     old:
+M4s4-C12-non-string-entry-ignored                          old passed(0)   new not-run     old:
+M4s4-C13-opt-in-check-dropped                              old passed(0)   new not-run     old:
+M4s4-C14-opt-in-before-arguments                           old passed(0)   new not-run     old:
+M4s4-C15-opt-in-raised-inside-a-section                    old passed(0)   new not-run     old:
+M4s4-C16-opt-in-message-without-the-fix                    old passed(0)   new not-run     old:
+M4s4-C17-opt-in-rule-renamed                               old passed(0)   new not-run     old:
+M4s4-C18-path-refusal-who                                  old passed(0)   new not-run     old:
+M4s4-C19-open-check-outside-a-section                      old passed(0)   new not-run     old:
+M4s4-D01-binding-used-at-the-librarys-load                 old CAUGHT(1)   new CAUGHT(1)   old:real new:extension
+M4s4-F01-message-never-freed                               old passed(0)   new not-run     old:
+M4s4-F02-freed-only-on-failure                             old passed(0)   new not-run     old:
+M4s4-F03-not-freed-when-the-copy-raises                    old passed(0)   new not-run     old:
+M4s4-F04-copy-unguarded                                    old passed(0)   new not-run     old:
+M4s4-F05-freed-before-the-copy                             old passed(0)   new not-run     old:
+M4s4-K01-entry-null-always                                 old passed(0)   new not-run     old:
+M4s4-K02-entry-given-when-absent                           old passed(0)   new not-run     old:
+M4s4-K03-code-from-the-connection                          old passed(0)   new not-run     old:
+M4s4-K04-before-read-after-the-call                        old passed(0)   new not-run     old:
+M4s4-K05-connection-message-dropped                        old passed(0)   new not-run     old:
+M4s4-K06-connection-message-always                         old passed(0)   new not-run     old:
+M4s4-K07-message-from-errmsg                               old passed(0)   new not-run     old:
+M4s4-K08-no-errstr-for-an-empty-slot                       old passed(0)   new not-run     old:
+M4s4-K09-joined-always-direct                              old passed(0)   new not-run     old:
+M4s4-K10-joined-always-colon                               old passed(0)   new not-run     old:
+M4s4-K11-not-an-error-unchecked                            old passed(0)   new not-run     old:
+M4s4-K12-no-error-taken-as-success                         old passed(0)   new not-run     old:
+M4s4-K13-connection-message-for-any-change                 old passed(0)   new not-run     old:
+M4s4-K14-slot-text-only-without-an-entry-point             old passed(0)   new not-run     old:
+M4s4-N01-load-bound-plain                                  old passed(0)   new not-run     old:
+M4s4-O01-both-owner-checks-dropped                         old passed(0)   new not-run     old:
+M4s4-O02-entry-before-path                                 old passed(0)   new not-run     old:
+M4s4-P01-verb-not-exported                                 old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s4-P02-signature-comment-changed                         old passed(0)   new not-run     old:
+M4s4-Q01-sql-loading-turned-on                             old passed(0)   new not-run     old:
+M4s4-R02-failure-raised-inside                             old passed(0)   new not-run     old:
+M4s4-S01-claim-dropped                                     old passed(0)   new not-run     old:
+M4s4-S02-claim-outside-the-section                         old passed(0)   new not-run     old:
+M4s4-S03-flag-set-after-the-section                        old passed(0)   new not-run     old:
+M4s4-S04-claim-made-after-the-checks                       old passed(0)   new not-run     old:
+M4s4-S05-call-outside-the-claims-section                   old passed(0)   new not-run     old:
+M4s4-S06-claim-at-position-1                               old passed(0)   new not-run     old:
+M4s4-S07-claim-not-last                                    old passed(0)   new not-run     old:
+M4s4-S08-refused-answers-nothing                           old passed(0)   new not-run     old:
+M4s4-S09-refused-another-condition                         old passed(0)   new not-run     old:
+M4s4-S10-claim-section-unwrapped                           old passed(0)   new not-run     old:
+M4s4-X01-no-compiler                                       old passed(0)   new not-run     old:
+M4s4-X02-no-header                                         old passed(0)   new not-run     old:
+M4s4-X03-suites-told-no-load-extension                     old passed(0)   new not-run     old:
+M4s4-X04-build-skipped-everywhere                          old passed(0)   new not-run     old:
+M4s4-X05-build-made-everywhere                             old passed(0)   new not-run     old:
+M4s4-Z01-close-names-no-untracked-statement                old passed(0)   new not-run     old:
+M4s4L-E1-opt-in-check-dropped-r3                           old passed(0)   new not-run     old:
+M4s4L-E2-code-from-connection-r3                           old passed(0)   new not-run     old:
+M4s4L-E3-unfreed-when-copy-raises-r3                       old passed(0)   new not-run     old:
+M4s4L-E4-claim-not-compared-r3                             old passed(0)   new not-run     old:
+M4s4L-E5-owner-after-arguments-r3                          old CAUGHT(2)   new CAUGHT(2)   old:real new:extension
+M4s4L-E6-dot-paths-allowed-r3                              old passed(0)   new not-run     old:
+M4s4L-E7-join-always-colon-r3                              old passed(0)   new not-run     old:
+M4s4L-E8-empty-entry-as-none-r3                            old passed(0)   new not-run     old:
+M4s4L-G1-claim-after-the-section-r3                        old passed(0)   new not-run     old:
+M4s4L-G2-caller-path-to-c-r3                               old passed(0)   new not-run     old:
+M4s4L-G3-caller-entry-to-c-r3                              old passed(0)   new not-run     old:
+M4s4L-G4-claim-made-before-the-section-r3                  old passed(0)   new not-run     old:
+M4s4L-H1-errmsg-on-any-change                              old passed(0)   new not-run     old:
+M4s4L-H2-slot-dropped-with-an-entry                        old passed(0)   new not-run     old:
+M4s4L-H3-close-count-dropped                               old passed(0)   new not-run     old:
+N1-floor-after-threadsafe                                  old CAUGHT(4)   new CAUGHT(4)   old:decoys new:combined,decoys
+N10-override-hidden                                        old CAUGHT(78)  new CAUGHT(78)  old:decoys,missing,real new:combined,decoys,extension,missing-1,missing-2,missing-3,missing-4,preflight,real
+N19-initialize-after-rest                                  old CAUGHT(40)  new CAUGHT(40)  old:decoys,missing,real new:combined,missing-1,missing-2,missing-3,missing-4
+N2-rest-before-floor                                       old CAUGHT(2)   new CAUGHT(2)   old:decoys,missing new:combined,missing-2
+N20-close-carries-no-report                                old CAUGHT(1)   new CAUGHT(1)   old:real new:missing-1
+N21-foreign-entry-never-asked                              old CAUGHT(45)  new CAUGHT(45)  old:decoys,missing,real new:combined,missing-1,missing-2,missing-3,missing-4
+N26-initialize-code-taken-as-0                             old CAUGHT(3)   new CAUGHT(3)   old:decoys new:combined,decoys
+N27-threadsafe-handed-1                                    old CAUGHT(16)  new CAUGHT(16)  old:decoys,real new:combined,decoys,extension
+N3-errstr-bound-at-each-call                               old CAUGHT(1)   new CAUGHT(1)   old:missing new:missing-3
+P1-probe-imports-native                                    old CAUGHT(66)  new CAUGHT(66)  old:decoys,missing,real new:combined,decoys,missing-1,missing-2,missing-3,missing-4,preflight,real
+P2-again-always-same                                       old CAUGHT(1)   new CAUGHT(1)   old:real new:preflight
+R10-any-override-taken                                     old CAUGHT(2)   new CAUGHT(2)   old:real new:preflight,real
+R11-first-candidate-taken                                  old CAUGHT(2)   new CAUGHT(2)   old:real new:preflight,real
+R4-floor-check-fed-a-literal                               old CAUGHT(5)   new CAUGHT(5)   old:decoys,real new:combined,decoys,preflight
+R5-initialize-never-checked                                old CAUGHT(3)   new CAUGHT(3)   old:decoys new:combined,decoys
+R6-libversion-null-dropped                                 old CAUGHT(1)   new CAUGHT(1)   old:decoys new:decoys
+R7-missing-api-library-f                                   old CAUGHT(41)  new CAUGHT(41)  old:decoys,missing,real new:combined,missing-1,missing-2,missing-3,missing-4
+R8-threadsafe-never-checked                                old CAUGHT(3)   new CAUGHT(3)   old:decoys new:combined,decoys
+R9-loader-raise-escapes                                    old CAUGHT(3)   new CAUGHT(3)   old:real new:real
+S1-entry-dropped-from-a-part                               old CAUGHT(2)   new CAUGHT(2)   old:decoys,missing,real new:missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+    rows failing in new only: the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+S2-entry-in-two-parts                                      old CAUGHT(2)   new CAUGHT(2)   old:decoys,missing,real new:missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+    rows failing in new only: the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+S3-entry-moved-order-kept                                  old CAUGHT(1)   new CAUGHT(1)   old:decoys,missing,real new:missing-1,missing-2,missing-3,missing-4
+S4-pattern-places-swapped                                  old CAUGHT(2)   new CAUGHT(2)   old:decoys,missing,real new:missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite
+    rows failing in new only: the pattern deals positions 0, 1, 2 and 3 of every four to the missing suites 1, 2, 3 and 4
+S5-part-found-by-another-name                              old CAUGHT(1)   new CAUGHT(1)   old:missing new:missing-1
+S6-exit-line-dropped                                       old CAUGHT(0)   new CAUGHT(0)   old: check-suites=2 new: check-suites=2
+S6-exit-line-dropped-combined                              old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-decoys                                old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-extension                             old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-missing-2                             old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-missing-3                             old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-missing-4                             old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-preflight                             old -           new CAUGHT(0)   new: check-suites=2
+S6-exit-line-dropped-real                                  old -           new CAUGHT(0)   new: check-suites=2
+S7-left-out-of-the-shards-combined                         old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-decoys                           old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-extension                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-missing                          old CAUGHT(0)   new -           old: check-memory-shards=2
+S7-left-out-of-the-shards-missing-1                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-missing-2                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-missing-3                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-missing-4                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-preflight                        old -           new CAUGHT(0)   new: check-memory-shards=2
+S7-left-out-of-the-shards-real                             old -           new CAUGHT(0)   new: check-memory-shards=2
+T1-entry-dropped-from-list                                 old CAUGHT(4)   new CAUGHT(4)   old:decoys,missing,real new:decoys,missing-1,missing-2,missing-3,missing-4
+    rows failing in old only: the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+    rows failing in new only: the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once
+T2-entries-reordered                                       old CAUGHT(2)   new CAUGHT(2)   old:decoys,missing,real new:decoys,missing-1,missing-2,missing-3,missing-4
+W2-guix-system-dropped                                     old CAUGHT(2)   new CAUGHT(2)   old:real new:preflight,real
+counts: {'both': 67, 'neither': 6, 'new-only': 0, 'old-only': 0, 'one-layout': 167} stale: 0
+caught by old, not by new: none

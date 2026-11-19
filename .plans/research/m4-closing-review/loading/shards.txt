@@ -1,0 +1,18 @@
+old suites here: {'tests/test-library-loading-real.sps': 226.5, 'tests/test-library-loading-missing.sps': 158.0, 'tests/test-library-loading-decoys.sps': 169.5}
+build/e2/ci/job-135204536493.log shard 2: old loading suites 190 s on CI, rate 1.12 of here
+build/e2/ci/job-135204536502.log shard 1: old loading suites 204+171 s on CI, rate 0.98 of here
+build/e2/ci/job-135222728631.log shard 1: old loading suites 264+221 s on CI, rate 1.26 of here
+build/e2/ci/job-135222728734.log shard 2: old loading suites 250 s on CI, rate 1.47 of here
+build/e2/ci/job-135254560855.log shard 1: old loading suites 258+216 s on CI, rate 1.23 of here
+build/e2/ci/job-135254560910.log shard 2: old loading suites 140 s on CI, rate 0.83 of here
+the shards without the loading suites, three runs: {1: 2716, 2: 3027}
+with -real in 1 and -decoys in 2, as now: {1: 2917, 2: 3263}
+tests/test-library-loading-missing-1.sps       76.0 s here -> shard 1; totals {1: 3181, 2: 3263}
+tests/test-library-loading-missing-2.sps       76.0 s here -> shard 1; totals {1: 3445, 2: 3263}
+tests/test-library-loading-missing-3.sps       70.0 s here -> shard 2; totals {1: 3445, 2: 3503}
+tests/test-library-loading-missing-4.sps       62.0 s here -> shard 1; totals {1: 3660, 2: 3503}
+tests/test-library-loading-combined.sps        58.5 s here -> shard 2; totals {1: 3660, 2: 3703}
+tests/test-library-loading-extension.sps       57.5 s here -> shard 1; totals {1: 3859, 2: 3703}
+tests/test-library-loading-preflight.sps       53.5 s here -> shard 2; totals {1: 3859, 2: 3886}
+shard 1: ['tests/test-library-loading-extension.sps', 'tests/test-library-loading-missing-1.sps', 'tests/test-library-loading-missing-2.sps', 'tests/test-library-loading-missing-4.sps', 'tests/test-library-loading-real.sps']
+shard 2: ['tests/test-library-loading-combined.sps', 'tests/test-library-loading-decoys.sps', 'tests/test-library-loading-missing-3.sps', 'tests/test-library-loading-preflight.sps']
