@@ -1,10 +1,13 @@
 #!/bin/sh
-# scripts/ci/check-sqlite.sh PREFIX [--current]
+# scripts/ci/check-sqlite.sh PREFIX [--current | --no-load]
 #
 # Fails unless PREFIX holds the SQLite a CI lane needs, and the lane's
 # environment points at it: the floor, for the floor lane, read from
 # packaging/floors.sexp by scripts/ci/floor.sh (ADR-0008); or, with
-# --current, the pinned current release, which reads no floors file.
+# --current, the pinned current release, which reads no floors file; or,
+# with --no-load, the same release as build-sqlite.sh --no-load builds it,
+# without extension loading, for the current job's second build (M4's
+# closing review).
 # scripts/ci/build-sqlite.sh runs it on what it built, before a cache saves
 # it, and each lane runs it again after restoring SQLite from a cache, so a
 # cache that serves another build is caught before any suite runs on it.
@@ -28,10 +31,11 @@
 #      serialized, to sqlite3_threadsafe(), and lists every compile option
 #      the release lists when build-sqlite.sh builds it, line for line, in
 #      SQLite's order, and no other. A lane tests SQLite's defaults, built
-#      here with known flags, and the current lane FTS5 besides
-#      (ADR-0003, amended): so a build with DEFAULT_MEMSTATUS=0, which
-#      ADR-0005's memory check cannot read, or with THREADSAFE=0, fails, and
-#      so does a current build without ENABLE_FTS5.
+#      here with known flags, the current lane FTS5 besides (ADR-0003,
+#      amended), and the no-load build FTS5 and OMIT_LOAD_EXTENSION: so a
+#      build with DEFAULT_MEMSTATUS=0, which ADR-0005's memory check cannot
+#      read, or with THREADSAFE=0, fails, and so does a current build
+#      without ENABLE_FTS5, or a no-load build without either.
 #
 # The release's version number is computed from its version, X*1000000 +
 # Y*1000 + Z, never written. Its source id is the one sqlite.org's release
@@ -45,7 +49,8 @@
 # and floor_source_id and floor_options below must move with it, as
 # build-sqlite.sh's pins must.
 #
-# current_version is written here, in build-sqlite.sh, and in
+# current_version, which --no-load checks too, is written here, in
+# build-sqlite.sh, and in
 # tests/test-ci-sqlite.sps: a change to one that misses another fails at
 # build-sqlite.sh's own call to this script, before any cache is saved.
 #
@@ -55,7 +60,7 @@
 set -eu
 
 usage() {
-  echo "usage: check-sqlite.sh PREFIX [--current]" >&2
+  echo "usage: check-sqlite.sh PREFIX [--current | --no-load]" >&2
   exit 2
 }
 
@@ -63,8 +68,11 @@ usage() {
 prefix=$1
 role=floor
 if [ "$#" -eq 2 ]; then
-  [ "$2" = "--current" ] || usage
-  role=current
+  case $2 in
+    --current) role=current ;;
+    --no-load) role=no-load ;;
+    *) usage ;;
+  esac
 fi
 
 case $prefix in
@@ -83,20 +91,23 @@ export LC_ALL
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
-# current_version: the current SQLite, built with --current: sqlite.org's
-# newest release on 2026-11-14, chosen that day (the M1 plan, section 7). It
-# is no floor, so it is not in packaging/floors.sexp.
+# current_version: the current SQLite, built with --current and --no-load:
+# sqlite.org's newest release on 2026-11-14, chosen that day (the M1 plan,
+# section 7). It is no floor, so it is not in packaging/floors.sexp.
 current_version=3.54.1
 
 # The source ids sqlite.org's release logs publish, by role
-# (https://sqlite.org/releaselog/X_Y_Z.html).
+# (https://sqlite.org/releaselog/X_Y_Z.html): --no-load's is the current
+# release's.
 floor_source_id='2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a'
 current_source_id='2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76'
 
 # The compile options each role's library lists, in SQLite's order, as
 # build-sqlite.sh builds it, with $compiler where SQLite lists the compiler:
-# the floor's SQLite's defaults, and the current release's with ENABLE_FTS5,
-# which build-sqlite.sh adds for that role alone (ADR-0003, amended).
+# the floor's SQLite's defaults; the current release's with ENABLE_FTS5,
+# which build-sqlite.sh adds for that role and --no-load's (ADR-0003,
+# amended); and --no-load's with OMIT_LOAD_EXTENSION too, between
+# MUTEX_PTHREADS and SYSTEM_MALLOC.
 floor_options() {
   cat <<EOF
 ATOMIC_INTRINSICS=1
@@ -183,15 +194,65 @@ THREADSAFE=1
 EOF
 }
 
-if [ "$role" = current ]; then
-  version=$current_version
-  source_id=$current_source_id
-  what="the pinned current SQLite"
-else
-  version=$(sh "$here/floor.sh" sqlite) || fail "no SQLite floor to check against"
-  source_id=$floor_source_id
-  what="the SQLite floor"
-fi
+no_load_options() {
+  cat <<EOF
+ATOMIC_INTRINSICS=1
+$compiler
+DEFAULT_AUTOVACUUM
+DEFAULT_CACHE_SIZE=-2000
+DEFAULT_FILE_FORMAT=4
+DEFAULT_JOURNAL_SIZE_LIMIT=-1
+DEFAULT_MMAP_SIZE=0
+DEFAULT_PAGE_SIZE=4096
+DEFAULT_PCACHE_INITSZ=20
+DEFAULT_RECURSIVE_TRIGGERS
+DEFAULT_SECTOR_SIZE=4096
+DEFAULT_SYNCHRONOUS=2
+DEFAULT_WAL_AUTOCHECKPOINT=1000
+DEFAULT_WAL_SYNCHRONOUS=2
+DEFAULT_WORKER_THREADS=0
+DIRECT_OVERFLOW_READ
+ENABLE_FTS5
+MALLOC_SOFT_LIMIT=1024
+MAX_ATTACHED=10
+MAX_COLUMN=2000
+MAX_COMPOUND_SELECT=500
+MAX_DEFAULT_PAGE_SIZE=8192
+MAX_EXPR_DEPTH=1000
+MAX_FUNCTION_ARG=1000
+MAX_LENGTH=1000000000
+MAX_LIKE_PATTERN_LENGTH=50000
+MAX_MMAP_SIZE=0x7fff0000
+MAX_PAGE_COUNT=0xfffffffe
+MAX_PAGE_SIZE=65536
+MAX_SCHEMA=10000000
+MAX_SQL_LENGTH=1000000000
+MAX_TRIGGER_DEPTH=1000
+MAX_VARIABLE_NUMBER=32766
+MAX_VDBE_OP=250000000
+MAX_WORKER_THREADS=8
+MUTEX_PTHREADS
+OMIT_LOAD_EXTENSION
+SYSTEM_MALLOC
+TEMP_STORE=1
+THREADSAFE=1
+EOF
+}
+
+case $role in
+  current)
+    version=$current_version
+    source_id=$current_source_id
+    what="the pinned current SQLite" ;;
+  no-load)
+    version=$current_version
+    source_id=$current_source_id
+    what="the pinned no-load SQLite" ;;
+  *)
+    version=$(sh "$here/floor.sh" sqlite) || fail "no SQLite floor to check against"
+    source_id=$floor_source_id
+    what="the SQLite floor" ;;
+esac
 
 # floor.sh gives three naturals with no leading zero; so is current_version.
 major=${version%%.*}
@@ -287,11 +348,11 @@ EOF
 compiler=$(sed -n 's/^chez_sqlite3_compiler//p' "$work/compiler.i" |
   sed -e 's/^ *//' -e 's/" *"//g' -e 's/^"//' -e 's/"$//')
 
-if [ "$role" = current ]; then
-  current_options | sed '/^$/d' >"$work/expected"
-else
-  floor_options | sed '/^$/d' >"$work/expected"
-fi
+case $role in
+  current) current_options | sed '/^$/d' >"$work/expected" ;;
+  no-load) no_load_options | sed '/^$/d' >"$work/expected" ;;
+  *) floor_options | sed '/^$/d' >"$work/expected" ;;
+esac
 count=$(grep -c '' "$work/expected")
 
 # 5. The library, through the FFI: its identity, threadsafe, then each

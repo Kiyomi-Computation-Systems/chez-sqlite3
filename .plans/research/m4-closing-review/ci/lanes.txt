@@ -1,0 +1,72 @@
+### e1-sqlite-no-load
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       ROOT/build/e1/sqlite-no-load/lib/libsqlite3.so.0 (override)
+  version:    3.54.1 (3054001)
+  source id:  2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane e1/sqlite-no-load: exit 0 in 151 s
+### guix
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       /gnu/store/5v2iykmw4z9r6wvq5kqbh2yx1zz1ncan-profile/lib/libsqlite3.so.0 (override)
+  version:    3.53.1 (3053001)
+  source id:  2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane guix: exit 0 in 147 s
+### m3-floor
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       ROOT/build/m3-floor/lib/libsqlite3.so.0 (override)
+  version:    3.45.1 (3045001)
+  source id:  2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane m3-floor: exit 0 in 142 s
+### m4-current-fts5
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       ROOT/build/m4-current-fts5/lib/libsqlite3.so.0 (override)
+  version:    3.54.1 (3054001)
+  source id:  2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane m4-current-fts5: exit 0 in 136 s
+### m4-current
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       ROOT/build/m4-current/lib/libsqlite3.so.0 (override)
+  version:    3.54.1 (3054001)
+  source id:  2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane m4-current: exit 0 in 156 s
+### m4-noload
+chez-sqlite3: libsqlite3 loaded and accepted
+  path:       ROOT/build/m4-noload/lib/libsqlite3.so.0 (override)
+  version:    3.54.1 (3054001)
+  source id:  2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76
+  counts:     ((block . 0) (connection . 0) (statement . 0))
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+test: ran 81, passed 81, failed 0, hung 0
+lane m4-noload: exit 0 in 161 s
+### make test-memory, Guix's library
+test-memory: pass tests/test-check-ci.sps
+  time: 134s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+test-memory: pass tests/test-ci-sqlite.sps
+  time: 34s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+test-memory: ran 2, passed 2, failed 0, hung 0, slow 0
+### the same at main's 34721b4
+test-memory: pass tests/test-check-ci.sps
+  time: 108s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+test-memory: pass tests/test-ci-sqlite.sps
+  time: 38s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
+test-memory: ran 2, passed 2, failed 0, hung 0, slow 0

@@ -1,0 +1,65 @@
+### check-sqlite.sh --no-load on build/e1/sqlite-no-load
+check-sqlite.sh: ROOT/build/e1/sqlite-no-load/lib/libsqlite3.so.0 is SQLite 3.54.1 (3054001), source id 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76: the pinned no-load SQLite
+check-sqlite.sh: it is threadsafe (1), and its 40 compile options are the pinned no-load SQLite's, line for line:
+  ...the 40 lines, and the header line
+(exit 0)
+### check-sqlite.sh --no-load on build/m4-current
+check-sqlite.sh: ROOT/build/m4-current/lib/libsqlite3.so.0's compile options are not the 40 of the pinned no-load SQLite, line for line:
+--- expected
++++ library
+@@ -14,7 +14,6 @@
+ DEFAULT_WAL_SYNCHRONOUS=2
+ DEFAULT_WORKER_THREADS=0
+ DIRECT_OVERFLOW_READ
+-ENABLE_FTS5
+ MALLOC_SOFT_LIMIT=1024
+ MAX_ATTACHED=10
+ MAX_COLUMN=2000
+@@ -34,7 +33,6 @@
+ MAX_VDBE_OP=250000000
+ MAX_WORKER_THREADS=8
+ MUTEX_PTHREADS
+-OMIT_LOAD_EXTENSION
+ SYSTEM_MALLOC
+ TEMP_STORE=1
+ THREADSAFE=1
+(exit 1)
+### check-sqlite.sh --no-load on build/m4-current-fts5
+check-sqlite.sh: ROOT/build/m4-current-fts5/lib/libsqlite3.so.0's compile options are not the 40 of the pinned no-load SQLite, line for line:
+--- expected
++++ library
+@@ -34,7 +34,6 @@
+ MAX_VDBE_OP=250000000
+ MAX_WORKER_THREADS=8
+ MUTEX_PTHREADS
+-OMIT_LOAD_EXTENSION
+ SYSTEM_MALLOC
+ TEMP_STORE=1
+ THREADSAFE=1
+(exit 1)
+### check-sqlite.sh --no-load on build/m4-noload
+check-sqlite.sh: ROOT/build/m4-noload/lib/libsqlite3.so.0's compile options are not the 40 of the pinned no-load SQLite, line for line:
+--- expected
++++ library
+@@ -14,7 +14,6 @@
+ DEFAULT_WAL_SYNCHRONOUS=2
+ DEFAULT_WORKER_THREADS=0
+ DIRECT_OVERFLOW_READ
+-ENABLE_FTS5
+ MALLOC_SOFT_LIMIT=1024
+ MAX_ATTACHED=10
+ MAX_COLUMN=2000
+(exit 1)
+### check-sqlite.sh --current on build/e1/sqlite-no-load
+check-sqlite.sh: ROOT/build/e1/sqlite-no-load/lib/libsqlite3.so.0's compile options are not the 39 of the pinned current SQLite, line for line:
+--- expected
++++ library
+@@ -34,6 +34,7 @@
+ MAX_VDBE_OP=250000000
+ MAX_WORKER_THREADS=8
+ MUTEX_PTHREADS
++OMIT_LOAD_EXTENSION
+ SYSTEM_MALLOC
+ TEMP_STORE=1
+ THREADSAFE=1
+(exit 1)
