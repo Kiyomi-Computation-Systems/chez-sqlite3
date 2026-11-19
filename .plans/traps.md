@@ -272,6 +272,15 @@ told in chez-curl's `.plans/traps.md`.
   `TMPDIR=/tmp` the load completed unexpired at fuel 60; with `TMPDIR` 6, 14, 25 and 50 characters
   long, at 70, 80, 93 and 124. A recorded fuel names its `TMPDIR`, and a row never asserts one.
   (M4 slice 4, from the M4 session's check, chez-sqlite3)
+- **Chez's `assq` raises on a list that holds anything but pairs.** `(assq 'default
+  '(unavailable))` raised "improperly formed alist" on Chez 10.4.0 and 10.4.1; R6RS asks for an
+  alist and says no more. M4 slice 4's engines suite looked a variant up with `assq` in the
+  build's answer, an alist of paths where SQLite loads extensions and `(unavailable)` where it
+  can't. Only Apple's library reached the second, and the row read `#f`, SRFI-64's turn of the
+  raise. Check `(for-all pair? x)` before an `assq` on a value that may be a refusal.
+  Reproduce: `(assq 'default '(unavailable))` in Chez, or `test-load-extension-engines` at
+  `ec48a9d` on a SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION`, which fails the same row.
+  (M4's Mac run after slice 5, chez-sqlite3)
 
 ## SQLite
 
@@ -926,6 +935,15 @@ told in chez-curl's `.plans/traps.md`.
   (`research/m4-mac/fifo.c`). Reproduced on Linux with L6 pointed at a missing file: the old
   probe exited 142 after 20 s, its output cut off mid-line, and the new one ended at once.
   (M4's Mac load, chez-sqlite3)
+- **On macOS, `DYLD_LIBRARY_PATH` redirects an absolute path by its leaf name.** Naming
+  Homebrew's SQLite folder, it made the library discovery found, `/usr/lib/libsqlite3.dylib`, load
+  as 3.54.1, Homebrew's, while `sqlite-library-path` still answered `/usr/lib/libsqlite3.dylib`.
+  Naming another folder, it made `load-extension!` of an absolute path run that folder's file of
+  the same leaf name. On Linux, `LD_LIBRARY_PATH` redirected neither. dyld documents that it
+  strips `DYLD_*` when it launches a protected binary, `/usr/bin/env` and `/bin/sh` among them,
+  so the probe sets each variable on Chez's own command line and prints what Chez saw.
+  Reproduce: `research/m4-mac/run-dyld.sh`, cases `L1` and `E1`. (M4's Mac run after slice 5,
+  chez-sqlite3)
 
 ## Editing the records
 

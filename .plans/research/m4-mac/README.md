@@ -19,6 +19,7 @@ Mac before slice 4 is written, where the plan left them to the hand run after sl
 | [run-dyld.sh](run-dyld.sh), [dyld.sps](dyld.sps) | Whether `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` redirects an absolute path: the library chez-sqlite3 loads, and an extension `load-extension!` loads, each case in a Chez of its own; `LD_LIBRARY_PATH` on Linux as the control |
 | [out/run-1/](out/run-1/), [out/run-2/](out/run-2/) | Each run's files, as `run-mac.sh` wrote them |
 | [out/slice-2/](out/slice-2/) | Slice 2's Mac step: `make test` and `make check-variadic`, with each library, as `tee` wrote them |
+| [out/slices-3-5/](out/slices-3-5/) | The Mac run after slice 5: `make test` with each library, and `run-dyld.sh`'s `dyld.txt` |
 
 The probes are the plan's own, [l1-load-extension.c](../m4-plan/l1-load-extension.c) and
 [x1-ffi-load.sps](../m4-plan/x1-ffi-load.sps), with [ext.c](../m4-plan/ext.c) and
@@ -155,6 +156,55 @@ The files are [out/slice-2/](out/slice-2/). Chez's machine type is `tarm64osx`.
   - on the mutant, `test-native` failed 6 rows: Apple's 3, `ENABLE_LOAD_EXTENSION`'s round trip,
     and the two load rows, which set `ENABLE_LOAD_EXTENSION` through the binding.
 
+### Slices 3 to 5's Mac run, 2026-11-18
+
+The maintainer's Mac, macOS 26.7.1 (25G241), arm64, on `main` at `ec48a9d`, the steps' merge
+(PR #46) after slice 4's, by [slices-3-5.md](slices-3-5.md). The files are
+[out/slices-3-5/](out/slices-3-5/).
+
+- **Homebrew's 3.54.1 passed everything:** `make test` ran 81 suites and passed 81.
+  - Apple clang built `tests/extension.c` with `-Wall -Werror -dynamiclib` against Homebrew's
+    `sqlite3ext.h`, and `test-load-extension` passed 44 and its engines suite 14.
+  - So dyld words a missing file, an empty file, a directory and a file that is no Mach-O the same
+    across two loads: the failures row compares the verb's message with a raw load's.
+  - The relative-path row passed, its raw load climbing to the temporary folder through `/var`.
+  - The engine suites passed under the Mac's temporary folder.
+  - The starts read `(0 0) (0 0) (0 1) (0 1)`, and every op moved off its start, to
+    `(0 1) (0 1) (0 0) (0 0)`.
+  - `test-fts5` passed 19, and `test-json` 16.
+- **Apple's 3.51.0 ran 81 suites and passed 80:**
+  - `defensive` starts on: the starts read `((21 left) (0 1) (0 1) (0 1))`, the load's op
+    answering 21, `SQLITE_MISUSE`, its cell left at the sentinel. The moves read `unread`, since
+    Apple's library refuses `sqlite3_auto_extension` (M3's Mac run). `test-open-db-config`
+    passed 33;
+  - `test-load-extension` passed 44, its load rows unavailable and the opt-in's refusal,
+    `&sqlite-extensions-unavailable`, asserted in their place;
+  - `test-fts5` passed 19, FTS5 compiled in, and `test-json` 16;
+  - **`test-load-extension-engines` failed 1 of 14:** its build row expected
+    `((unavailable) no-pin)` and read `#f`. The row looked up `'default` with `assq` in the
+    build's answer, which on a library without `sqlite3_load_extension` is `(unavailable)`, and
+    Chez's `assq` raises on a list that holds a symbol, "improperly formed alist". SRFI-64 turned
+    that raise into `#f`. A SQLite 3.54.1 built `-DSQLITE_OMIT_LOAD_EXTENSION` reproduced it on
+    Linux: 13 passed, the same row failed. The row now checks `(for-all pair? built)` first, as
+    `tests/extension-build.sls`'s own lookup does, and passes 14 on that build and on Guix's
+    library. Planting a build that always compiles fails the row on the build without loading,
+    and one that never compiles fails it on Guix's. No CI lane has a library without
+    `sqlite3_load_extension`, so only the Mac had run these branches.
+- **`dyld.txt`: `DYLD_LIBRARY_PATH` redirects an absolute path on the Mac.** Each line's
+  `(seen …)` shows the variable reached Chez.
+  - `L0`: discovery loaded `/usr/lib/libsqlite3.dylib`, 3.51.0. `L1`, with `DYLD_LIBRARY_PATH`
+    naming Homebrew's folder, loaded 3.54.1, Homebrew's, while `sqlite-library-path` still
+    answered `/usr/lib/libsqlite3.dylib`. So ADR-0002's library path, loaded "as given", is
+    redirected by the environment there, and the path the library reports is not the file
+    loaded.
+  - `E1`: `b`'s absolute path, with `DYLD_LIBRARY_PATH` naming `a`, ran `a`'s init, "chez_failing
+    refused", as `E3` did, where `E0` loaded `b`'s, `(loaded 1.5)`. So Q16's reason for an
+    absolute path, that the environment can't redirect it, holds on Linux and not on the Mac.
+  - `E2`: a path where no file stands, with `DYLD_FALLBACK_LIBRARY_PATH` naming `b`, wasn't
+    found: the message is the suffixed retry's, `ext.dylib.dylib`, cut at SQLite's limit. The
+    fallback didn't find `b`'s file here.
+  - On Linux, `LD_LIBRARY_PATH` reached Chez and redirected neither (the control run, PR #46).
+
 ### What it means for the slices
 
 - **Slice 2, `test-native`'s load FIFO row:** the load waits on a FIFO on the Mac too, so the
@@ -169,3 +219,7 @@ The files are [out/slice-2/](out/slice-2/). Chez's machine type is `tarm64osx`.
   initialization: …", reads the same on both.
 - **A bare name loads from the working directory on the Mac,** so Q16's refusal before the call
   is the only thing that keeps the same rule on both systems.
+- **An absolute path doesn't hold on the Mac either, under `DYLD_LIBRARY_PATH`** (slices 3 to 5's
+  run): it redirected the library discovery found and an extension's absolute path, by their leaf
+  names. Q16's reason and ADR-0002's "as given" hold on Linux only. What to do about it is for
+  M4's closing review.

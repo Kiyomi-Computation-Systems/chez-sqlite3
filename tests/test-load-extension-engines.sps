@@ -259,7 +259,7 @@
     (when (eq? available #f)
       (display "UNAVAILABLE the extension's build: this libsqlite3 has no sqlite3_load_extension, so no connection can load it")
       (newline))
-    (list (if (and (list? built) (assq 'default built)) 'built built)
+    (list (if (and (list? built) (for-all pair? built) (assq 'default built)) 'built built)
           (if (eq? available #t) (if (a-database? pin) (pin-inits) pin) 'no-pin))))
 
 ;; --- clean -------------------------------------------------------------------------------------

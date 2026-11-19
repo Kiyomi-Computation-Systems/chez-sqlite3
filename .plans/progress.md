@@ -86,8 +86,9 @@ newest first.
     maintainer accepted its amendments to ADR-0001, ADR-0002 and ADR-0011 (2026-11-17, "Accept
     all"). **Slice 5,** FTS5 and JSON, is done, as PR #40, `7dac918`, below. **Slice 3,** the
     four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
-    4,** `load-extension!`, is PR #45, below. Then the maintainer's Mac run for slices 3 to 5, and
-    M4's closing review.
+    4,** `load-extension!`, is done, as PR #45, `a795fa2`, below. **The maintainer's Mac run for
+    slices 3 to 5** ran on 2026-11-18, below, and its one fault, a row of the suites, is fixed in
+    PR #47. Then M4's closing review.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
@@ -119,6 +120,21 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run for M4's slices 3 to 5** (macOS 26.7.1, arm64, 2026-11-18), on
+  `main` at `ec48a9d`, by the M4 session's
+  [research/m4-mac/slices-3-5.md](research/m4-mac/slices-3-5.md)
+  ([its results](research/m4-mac/README.md)):
+  - **With Homebrew's 3.54.1,** `make test` ran 81 and passed 81: the extension built by Apple
+    clang with `-Wall -Werror -dynamiclib`, the load suites 44 and 14, dyld's failure messages the
+    same across two loads, every op moved off its start, FTS5 19 and JSON 16.
+  - **With Apple's 3.51.0,** 80 of 81 passed: `defensive` on at start, the load rows unavailable
+    and the opt-in's refusal asserted, FTS5 19 and JSON 16. `test-load-extension-engines`' build
+    row read `#f`: its `assq` raised on the build's `(unavailable)` ([traps.md](traps.md)). A
+    SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION` reproduced it on Linux, and PR #47 fixes the row,
+    by the M4 session, as PR #30 fixed M3's run's faults.
+  - **`run-dyld.sh`:** `DYLD_LIBRARY_PATH` redirected both absolute paths by their leaf names, the
+    library discovery found, `sqlite-library-path` still naming Apple's, and an extension's; the
+    fallback variable didn't. On Linux `LD_LIBRARY_PATH` redirected neither (Open, below).
 - **The maintainer's Mac run for M3** (macOS 26.7.1, arm64, Chez 10.4.1, 2026-11-17), on PR #29's
   branch ([research/m3-mac/](research/m3-mac/README.md)):
   - **With Apple's 3.51.0,** `make test` ran 73, passed 66 and failed 7: the six
@@ -148,6 +164,15 @@ newest first.
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
 - **Open:**
+  - **For M4's closing review: `DYLD_LIBRARY_PATH` redirects an absolute path on the Mac** (the
+    Mac run after slice 5, `run-dyld.sh`). It redirected the library ADR-0002 loads "as given",
+    with `sqlite-library-path` naming the path given and not the file loaded, and an extension's
+    absolute path, the environment choosing the file that Q16's reason says it can't. Both hold on
+    Linux. Whether to document, check or refuse it is the maintainer's choice.
+  - **For M4's closing review: no CI lane has a library without `sqlite3_load_extension`,** so
+    the suites' unavailable branches ran first on the Mac, after slice 4 merged, and one row
+    failed there. A SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION` from the pinned release runs them on
+    Linux.
   - **For M4's closing review: the loading suites' cost under the gate is climbing** (the M4
     session's reading of CI). On `c92d397`'s run 44325663052, `test-library-loading-real` took
     223 s, against 156 to 158 s on the three runs before; `-missing` 202 s, from 164 to 166 s; and
@@ -437,8 +462,8 @@ newest first.
   replay shims, built that library byte for byte and passed its own check.
 - **After PR #37,** rebased onto `1735a66`: both add to `MEMORY_SUITES_1`, in different
   hunks, and edit the Now line, resolved by hand.
-- **The Mac run is owed** (the plan, §5): FTS5 and JSON with Apple's library and with Homebrew's,
-  in the hand run after slices 3 to 5.
+- **The Mac run** (the plan, §5) passed FTS5 and JSON with Apple's library and with Homebrew's,
+  19 and 16 rows each, in the hand run after slices 3 to 5 (Now, 2026-11-18).
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

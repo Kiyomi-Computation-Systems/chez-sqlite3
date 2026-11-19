@@ -1,0 +1,15 @@
+uname: Darwin 25.6.0 arm64
+ProductName:		macOS ProductVersion:		26.7.1 BuildVersion:		25G241 
+commit: ec48a9d docs: M4's Mac run after slice 5, its steps and a redirect probe (#46)
+CHEZ_SQLITE3_LIBRARY: (unset)
+loader: /opt/homebrew/opt/sqlite/lib/libsqlite3.dylib
+other: /opt/homebrew/opt/sqlite/lib
+-- the library, as CHEZ_SQLITE3_LIBRARY or discovery gives it
+L0, as given [ ]: (seen #f #f #f) (library "3.51.0" "/usr/lib/libsqlite3.dylib") (exit 0)
+L1, DYLD_LIBRARY_PATH naming OTHER [ DYLD_LIBRARY_PATH='/opt/homebrew/opt/sqlite/lib' ]: (seen "/opt/homebrew/opt/sqlite/lib" #f #f) (library "3.54.1" "/usr/lib/libsqlite3.dylib") (exit 0)
+-- the extension: a/ext.dylib refuses (failing), b/ext.dylib registers chez_half
+E0, b's path [ CHEZ_SQLITE3_LIBRARY='/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib' ]: (seen #f #f #f) (loaded 1.5) (exit 0)
+E1, b's path, DYLD_LIBRARY_PATH naming a [ CHEZ_SQLITE3_LIBRARY='/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib' DYLD_LIBRARY_PATH='OUT/scratch/a' ]: (seen "OUT/scratch/a" #f #f) (raised (&sqlite-error &who &message) "error during initialization: chez_failing refused") (exit 0)
+E2, a path no file stands at, DYLD_FALLBACK_LIBRARY_PATH naming b [ CHEZ_SQLITE3_LIBRARY='/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib' DYLD_FALLBACK_LIBRARY_PATH='OUT/scratch/b' ]: (seen #f "OUT/scratch/b" #f) (raised (&sqlite-error &who &message) "dlopen(OUT/scratch/none/ext.dylib.dylib, 0x000A): tried: 'OUT/scratch/none/ext.dylib.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSOUT/scratch/none/ext.dylib.dylib' (no such file), '~/github/chez-sqlite") (exit 0)
+E3, a's path, as a control [ CHEZ_SQLITE3_LIBRARY='/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib' ]: (seen #f #f #f) (raised (&sqlite-error &who &message) "error during initialization: chez_failing refused") (exit 0)
+run-dyld.sh: done
