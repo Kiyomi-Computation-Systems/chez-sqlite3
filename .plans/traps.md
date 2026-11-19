@@ -250,14 +250,16 @@ told in chez-curl's `.plans/traps.md`.
   equivalent change, let a third run answer, and the row failed correct code at fuel 76,
   `(new-where-the-control-made-none 2)`. Count each whole call from the stand-in's notes instead.
   Reproduce: plant `research/m4-slice-3/lead/trap-idle-turns.json` and judge `e-once` by its
-  runs' answers. (M4 slice 3, from the M4 session's check, chez-sqlite3)
+  runs' answers, as `0f9b92e`'s suite did; that commit is kept only by GitHub's
+  `refs/pull/44/head` (the entry on dropped commits, below). (M4 slice 3, from the M4 session's
+  check, chez-sqlite3)
 - **A collect request due inside a critical section costs an engine's ticks at the section's
   exit.** So an engine can expire just past a call's last section, though no procedure call
   follows it. A sweep that raises `collect-trip-bytes` above what its runs allocate never sees a
   remainder there. M4 slice 4's sweeps first read "both past the section in 0; R before it and R1
   past it in 0", and a plant that set the claim's flag after the section passed them all. With
-  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 186", and the
-  plant ran the init twice. Reproduce: `test-load-extension-engines`' two interleave rows print
+  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 184" (186 before
+  the check of PR #45 added two variants to each trial's build), and the plant ran the init twice. Reproduce: `test-load-extension-engines`' two interleave rows print
   both counts. (M4 slice 4, from its review, chez-sqlite3)
 - **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
   inside it and resumed a second time met the wind's own refusal, an assertion violation,
@@ -946,6 +948,16 @@ told in chez-curl's `.plans/traps.md`.
   chez-sqlite3)
 
 ## Editing the records
+
+- **A squash merge drops the commits a log cites.** Every PR here is squash-merged and its branch
+  deleted, so the commits a slice's log names, its red tree's, a plant's base, a round's head,
+  are reachable from no branch. Of the 53 such commits the records cited by M4's closing review,
+  GitHub kept 30 under a PR's `refs/pull/N/head` and served 18 more by hash from no ref; five are
+  gone: `f7ba038`, `3ae146d`, `00dbb28`, `635f5c5` and `edecfff`. No local ref keeps any of them,
+  so `git gc` prunes them here. Recover one with `git fetch origin refs/pull/N/head:refs/pr/N`, or
+  read it with `gh api repos/OWNER/REPO/commits/HASH`. Cite a branch's commit with its PR's
+  number, and base anything a reader must rerun on a commit a ref keeps, `main`'s or a PR's.
+  (M4's closing review, chez-sqlite3)
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
   `sed 's/ \*(provisional)\*//g'` over `global-constraints.md` removed every rule's marker. It also

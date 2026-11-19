@@ -88,7 +88,9 @@ newest first.
     four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
     4,** `load-extension!`, is done, as PR #45, `a795fa2`, below. **The maintainer's Mac run for
     slices 3 to 5** ran on 2026-11-18, below, and its one fault, a row of the suites, is fixed in
-    PR #47. Then M4's closing review.
+    PR #47, `34721b4`. **M4's closing review** is PR CLOSING_PR, below.
+  - **M5's pre-work** is merged, by the M4 session, as PR #41, `2102131`: the release's facts and
+    the maintainer's questions.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
     `close-database!` refusing every connection that had used an FTS5 table, FTS5's own statements
     counted as untracked. The maintainer chose "Close first, count on failure", in a PR of its own
@@ -130,8 +132,8 @@ newest first.
   - **With Apple's 3.51.0,** 80 of 81 passed: `defensive` on at start, the load rows unavailable
     and the opt-in's refusal asserted, FTS5 19 and JSON 16. `test-load-extension-engines`' build
     row read `#f`: its `assq` raised on the build's `(unavailable)` ([traps.md](traps.md)). A
-    SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION` reproduced it on Linux, and PR #47 fixes the row,
-    by the M4 session, as PR #30 fixed M3's run's faults.
+    SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION` reproduced it on Linux, and PR #47, `34721b4`,
+    fixes the row, by the M4 session, as PR #30 fixed M3's run's faults.
   - **`run-dyld.sh`:** `DYLD_LIBRARY_PATH` redirected both absolute paths by their leaf names, the
     library discovery found, `sqlite-library-path` still naming Apple's, and an extension's; the
     fallback variable didn't. On Linux `LD_LIBRARY_PATH` redirected neither (Open, below).
@@ -272,7 +274,8 @@ newest first.
 - **Times** under the gate, on Guix's library:
   - `test-load-extension` 13 to 14 s;
   - its engines suite 31 s, from 16 s with the second passes;
-  - `test-library-loading-real` 188 to 192 s, from 175 to 177 s with two more children.
+  - `test-library-loading-real` 188 to 193 s, the lead's run and the log's, from 175 to 177 s
+    with two more children.
 - **The engine rows' figures:** ADR-0021, amended 2026-11-18.
 - **For the Mac run** (slices 3 to 5):
   - with Apple's library, the build and the load rows print UNAVAILABLE, and the opt-in's
@@ -737,6 +740,8 @@ newest first.
     state is another call's more often than not.
 
 ### 2026-11-17 — M3's closing review and its fixes (PR #32)
+
+Merged as `6b44154`; its builders' drivers followed in PR #33, `a3edef1`, kept with the log.
 
 - **Reviewed** by two Opus reviewers, read-only, on `c0a5408`, all of M3, on disjoint dimensions:
   A the code and its seams, B the tests, the gate and the records. No blocker; nine majors and

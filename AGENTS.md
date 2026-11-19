@@ -168,7 +168,13 @@
 * A collect request costs an engine's run ticks. A row that judges one
   run by another at the same fuel collects first, with
   `collect-trip-bytes` raised above what the runs allocate, or judges
-  each run by what it saw itself (`.plans/traps.md`).
+  each run by what it saw itself (`.plans/traps.md`). A raised trip
+  hides a remainder just past a call's last section, since a request due
+  inside a section costs its ticks at the exit: a sweep of a call that
+  holds a claim also runs a pass with the trip below what one call
+  allocates, judges each trial by its own effects, and fails by name
+  unless that pass reached past the section (ADR-0016, amended in M4
+  slice 4).
 
 **Chez and the FFI**
 

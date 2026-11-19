@@ -23,6 +23,8 @@
   ([amendment](#amendment-2026-11-18-the-four-set-at-open-m4-slice-3)).
   Amended 2026-11-18 in M4 slice 4, and accepted by the maintainer that day ("Accept all"): `load-extension!` as built
   ([amendment](#amendment-2026-11-18-load-extension-as-built-m4-slice-4)).
+  Amended 2026-11-18 in M4's closing review, proposed: what the closing review corrected
+  ([amendment](#amendment-2026-11-18-what-the-closing-review-corrected-m4s-closing-review)).
 - **Date:** 2026-11-17
 - **Scope:** chez-sqlite3 v1: `sqlite3_db_config`, and loading an extension
 - **Settles:** brief §2.5 and §2.8, as the M4 plan amends them
@@ -282,8 +284,9 @@ Apple's 3.51.0 and Homebrew's 3.54.1 (pre-work); and on the first three again, o
   exclusion of callbacks into Scheme.
 - **The suites need a loadable extension:** they compile one at test time from a C file under
   `tests/`, with the compiler the constants check uses, as the decoy is compiled. A missing
-  compiler or `sqlite3ext.h` fails the suite, never skips it (ADR-0001, decision 3). On the Mac it
-  is a `.dylib`.
+  compiler or `sqlite3ext.h` fails the suite, never skips it (ADR-0001, decision 3), except where
+  native records no `sqlite3_load_extension`: there the build is named unavailable (ADR-0001,
+  amended in M4 slice 4). On the Mac it is a `.dylib`.
 - **`docs/reference.md`** gains the four settings, their starts by library, and, in slice 4, an
   Extensions entry that opens with the method: open with `(enable-load-extension . #t)`, load by
   an absolute path, and the refusal, naming the setting, without it. It says that a failure's
@@ -444,3 +447,28 @@ Accepted by the maintainer on 2026-11-18 ("Accept all"), proposed in M4 slice 4 
   | resumed twice | fuels 1 to 8 a whole new call; refused from fuel 9 | 3 taken past the section, answering again |
   | interleaved | 1,759 trials; 444 whole new calls, all below the first refusal at fuel 9 | 2,134 trials; 492 whole new calls below the first refusal at 9; R before the section and R1 past it in 186 |
   | a timer's continuation called after the call | refused from tick 8 | 3 taken past the section |
+
+## Amendment, 2026-11-18: what the closing review corrected (M4's closing review)
+
+Proposed in M4's closing review ([its logs](../m4-closing-review-code-log.md)), from its two
+read-only reviews (Opus).
+
+- **Q16's reason for an absolute path holds on Linux.** "The process loads only the file the
+  caller named, which the environment can't redirect" (the plan's Q16) is false on macOS, where
+  `DYLD_LIBRARY_PATH` redirects an absolute path by its leaf name: `load-extension!` of b's
+  absolute path ran a's init, "chez_failing refused" (the Mac run after slice 5, case E1). The
+  maintainer chose "Document it" (2026-11-18): the environment is the caller's to control, and a
+  relative path or a bare name stays refused, since both are searched on every platform
+  ([ADR-0002](0002-runtime-libsqlite3-discovery.md), amended the same day).
+- **Decision 7's join, as amended in slice 4, narrows decision 7** and ADR-0013's M4 amendment:
+  the connection's message follows a load's only when the extended code after the call names an
+  error and differs from the code before. An init that fails the same way twice beside a held row
+  leaves the code at 5 both times, so the second failure's message is the slot's alone,
+  "error during initialization: ". The maintainer chose "Document it" (2026-11-18); the
+  reference says so.
+- **A wrong-thread refusal names `load-extension!`:** the opt-in is read by a reader that takes the
+  caller's `who` (ADR-0013, decision 2), where `database-extension-loading?` had named itself in
+  99 of 109 remainders resumed on another thread.
+- **The slice 4 amendment's figure** "R before the section and R1 past it in 186 of 2,134" was the
+  tree before the check of PR #45. The final tree reads 184 of 2,132; the build's two extra
+  variants change what each trial allocates.
