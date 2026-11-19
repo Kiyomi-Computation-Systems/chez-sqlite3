@@ -6,6 +6,8 @@
   ([amendment](#amendment-2026-11-14-the-mutex-measured-m1-slice-4)). Amended 2026-11-15, and
   accepted by the maintainer that day: the interrupt, designed (M3's plan,
   [amendment](#amendment-2026-11-15-the-interrupt-designed-m3s-plan)).
+  Amended 2026-11-18 in M4's closing review, proposed: the owner compared inside the section
+  ([amendment](#amendment-2026-11-18-the-owner-compared-inside-the-section-m4s-closing-review)).
 - **Date:** 2026-11-14
 - **Scope:** chez-sqlite3 v1: every connection, and the library's load
 - **Settles:** brief §3c and D2. Closes ADR-0002's open question.
@@ -108,3 +110,25 @@ Accepted by the maintainer on 2026-11-15 ("Accept all"), proposed in M3 slice 0
   Under `FULLMUTEX`, another thread's `sqlite3_errmsg` waited 200 ms for a running step, and its
   `sqlite3_interrupt` returned before the step did (M3's research, concurrency I8). So the
   interrupt calls nothing else of the connection.
+
+## Amendment, 2026-11-18: the owner compared inside the section (M4's closing review)
+
+Proposed in M4's closing review ([its code log](../m4-closing-review-code-log.md)), from its review
+of the code (Opus).
+
+- **Chez resumes an engine's remainder on whichever thread calls it.** A remainder started on the
+  owner's thread and taken between `call-with-open-handle`'s owner check and its section finished
+  on another: swept at every fuel, with each remainder resumed on a new thread, the section that
+  makes the C call ran on threads 8, 9 and 10 in 3 of 12 trials. The check, made before the
+  section, vouched for a thread the section no longer ran on. M1 made that check, and every verb
+  since leans on it; M4's own calls were immune only because each wraps `call-with-open-handle` in
+  a critical section of its own.
+- **So `call-with-open-handle` reads the owner, the calling thread and the handle inside its
+  section,** owner first, then open. A wrong thread is answered as data and raised after the
+  section, `&sqlite-wrong-thread` from the procedure the caller called. The check before the
+  section stays, so an argument's refusal still comes after a wrong thread's.
+- **Rows hold it:** seven, each sweeping every fuel and finishing each remainder on a forked
+  thread, with every wait bounded: a bare call, open and closed, and `changes`,
+  `in-transaction?`, `step!` and `prepare-statement`, and the refusal's handler at depth 1. On
+  `main`'s code before the fix, six failed by three trials each; the seventh, the depth, was
+  watched failing against a plant that raises inside the section.

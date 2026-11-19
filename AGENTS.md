@@ -202,6 +202,10 @@
   by an expiry: read a flag inside the section of the step it guards, and
   sweep an engine row's fuel until the call completes without expiring,
   not to a fixed bound (`.plans/traps.md`).
+* An engine's remainder resumes on whichever thread calls it, so a check
+  of the calling thread vouches only for the section it is made in.
+  Compare the owner inside the section that makes the C call (ADR-0010,
+  amended in M4's closing review).
 * An engine's remainder can be resumed twice, and runs twice from the same
   point; a timer's, a keyboard's or a collect request's handler is the
   caller's code, run between any two critical sections, and can capture a

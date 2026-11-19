@@ -269,6 +269,16 @@ told in chez-curl's `.plans/traps.md`.
   `research/m4-slice-4/scripts/`; `e-twice` reads
   `(second (raised (assertion-violation load-extension! (re-entered))) 0)` at fuels 15 to 17.
   (M4 slice 4, chez-sqlite3)
+- **An engine's remainder resumes on whichever thread calls it.** A remainder taken on the
+  owner's thread between `call-with-open-handle`'s owner check and its section made its C call on
+  another thread: in 3 of 12 trials the section ran on threads 8, 9 and 10. A check of the calling
+  thread vouches only for the section it is made in. Reproduce: sweep a bare
+  `call-with-open-handle` at every fuel and finish each remainder on a forked thread, as
+  `test-connection`'s owner rows do, against M3's `connection.sls`. (M4's closing review,
+  chez-sqlite3)
+- **Renaming thread ids across a whole value renames every 0 in it.** The main thread's
+  `get-thread-id` is 0, so a row that maps ids to names over a result read `changes`' 0 as `main`.
+  Compare ids raw, or rename only the fields that hold ids. (M4's closing review, chez-sqlite3)
 - **An engine row's fuels grow with the scratch path's length.** `load-extension!` copies and
   encodes its path inside the call, so a longer path costs more ticks. Under the container's
   `TMPDIR=/tmp` the load completed unexpired at fuel 60; with `TMPDIR` 6, 14, 25 and 50 characters

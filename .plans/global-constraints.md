@@ -104,7 +104,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   argument is a database, that it runs on the owning thread, and that the connection is open,
   before anything reaches C. The wrong thread raises `&sqlite-wrong-thread`, and a closed
   connection `&sqlite-closed`. `interrupt-database!` is the one exception, and checks only that its
-  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019).
+  argument is a database (ADR-0010 and ADR-0012, amended; ADR-0019). `call-with-open-handle`
+  compares the owner again inside its section, since Chez resumes an engine's remainder on
+  whichever thread calls it, and raises after the section (ADR-0010, amended in M4's closing
+  review).
 - **Connections open with `SQLITE_OPEN_FULLMUTEX`,** or `NOMUTEX` when given `'no-mutex`, and
   always with `SQLITE_OPEN_EXRESCODE` (ADR-0010, ADR-0012).
 - **Closing is explicit: no guardians, no finalizers.** Closing finalizes tracked statements,
@@ -301,7 +304,8 @@ Proposed record is marked *(provisional)* until that record is accepted.
   as an op, `sqlite3_auto_extension` and its siblings (ADR-0021, decision 11).
 - **A suite's rows for what a library may lack** are chosen by what the library reports:
   FTS5 by `sqlite-compile-option? "ENABLE_FTS5"`, held to `pragma_module_list`; extension
-  loading by native's record of `sqlite3_load_extension`. The rest are named unavailable, never
+  loading by native's record of `sqlite3_load_extension`, and `ENABLE_LOAD_EXTENSION`'s round
+  trip by the op's own first answer, where Apple's answers 21. The rest are named unavailable, never
   silently, and the refusal is asserted in their place, so each suite runs on every lane. Where
   native records no `sqlite3_load_extension`, the suites' extension isn't built, and the build is
   named unavailable too (ADR-0001, amended in M4 slice 4). The
@@ -366,8 +370,10 @@ Proposed record is marked *(provisional)* until that record is accepted.
   the workflow changes `tests/check-ci.sh` with it (ADR-0005, amended). The banned names include
   `CC`, `C_INCLUDE_PATH`, `CPATH`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `CHEZ_SQLITE3_DECOY` and
   `CHEZ_SQLITE3_GATE_CHILD`. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` stand only in `floor` and
-  `current`, as exact env keys of the three steps that name the lane's build; `main`, the job that
-  tests discovery, refuses both (M1 slices 3 and 5).
+  `current`, as exact env keys of the steps that name a build, each with that build's value:
+  `floor`'s three, and `current`'s five, its `--no-load` build's check and `make test` among them;
+  `main`, the job that tests discovery, refuses both (M1 slices 3 and 5; ADR-0005, amended in M4's
+  closing review).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own

@@ -38,6 +38,9 @@
   ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): decision 5's statements check after a refused close
   ([amendment](#amendment-2026-11-17-the-statements-check-after-a-refused-close-m4s-close-fix)).
+  Amended 2026-11-18 in M4's closing review, proposed: the no-load lane, the loading suites split,
+  and the sweeps' low passes
+  ([amendment](#amendment-2026-11-18-the-no-load-lane-the-loading-suites-split-and-the-sweeps-low-passes-m4s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -774,3 +777,27 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close 
 close ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The gate keeps its property:
 SQLite refuses a close while any statement is left, so no close succeeds beside a leaked one, and
 the refusal names the count. `test-connection-close` is in `MEMORY_SUITES_1`.
+
+## Amendment, 2026-11-18: the no-load lane, the loading suites split, and the sweeps' low passes (M4's closing review)
+
+Proposed in M4's closing review ([the CI log](../m4-closing-review-ci-log.md),
+[the loading log](../m4-closing-review-loading-log.md), [the sweeps log](../m4-closing-review-sweeps-log.md)).
+
+- **The `current` job builds a second SQLite, `--no-load`:**
+  - the same release and flags, FTS5 among them, with `-DSQLITE_OMIT_LOAD_EXTENSION`, so it lacks
+    `sqlite3_load_extension` as Apple's library does, and keeps FTS5 as Apple's does;
+  - five steps after the job's `make test`: its cache's restore, build and save, keyed and guarded
+    by their own id, `sqlite-no-load`; then `check-sqlite.sh --no-load`, which holds its 40
+    compile options line for line; then the whole `make test` again, with this build's env.
+
+  The maintainer chose "In CI's current job" and "The whole make test" (2026-11-18). A suite's
+  branch for a library without extension loading runs on every run, not only on the Mac, where
+  one first crashed (#47). It costs about 2 s a run, about 30 s to compile on a cache miss, and
+  about 2 min of runner time, but no wall time.
+- **`check-ci` is keyed by build, not by job:** `floor` makes one build and `current` two. Each
+  build has one restore, with its id held, and one save. Each build's `if` stands only on the
+  step naming its directory, or on its save. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` are held
+  per step to that step's build, and a line required twice, current's `make test`, must be the
+  run line of two steps.
+- **The loading suites split:** LOADING_SPLIT.
+- **The sweeps' low passes:** SWEEPS_LOW.
