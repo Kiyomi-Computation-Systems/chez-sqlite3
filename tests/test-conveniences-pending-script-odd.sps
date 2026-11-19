@@ -3,7 +3,7 @@
 ;;; (ADR-0016, amended in M3 slice 5's part D; the maintainer's "Guard every
 ;;; call", ADR-0016, amended in M3 slice 3), in (chez-sqlite3 private
 ;;; conveniences): one remainder of the call, R, resumed again while an earlier
-;;; resume of it, R1, is pending. The schedule, the tell, the control and the
+;;; resume of it, R1, is pending. The schedule, the tell, the bound and the
 ;;; judge are (conveniences-pending)'s, tests/conveniences-pending.sls, shared
 ;;; with the other conveniences' suites, one a convenience, so each stays well
 ;;; under the memory gate's limit.
@@ -20,7 +20,8 @@
 ;;;                refusal of a re-entry: the script does not survive a
 ;;;                preemption; each insert was prepared at most once, and its
 ;;;                rows are a prefix of the script's, in order, none twice,
-;;;                each twice only where the control makes a whole new call; no
+;;;                each twice only for a whole new call, below the sweep's
+;;;                first refusal before the call's first section; no
 ;;;                statement is tracked, none at a row; nothing is counted once
 ;;;                the connection is closed. Enough trials interleave past the
 ;;;                call's first section
@@ -36,6 +37,10 @@
 ;;; runs the rest. Every section of the script lies inside its block, and an
 ;;; expiry there frees the block, so no trial has both runs past its first
 ;;; section. Its code is unchanged by part D, and the rows hold it so.
+;;;
+;;; Its low pass, the interleaved row under a collect trip of 256 bytes, is
+;;; tests/test-conveniences-pending-script-odd-low.sps, a suite of its own: this one
+;;; took 121 to 196 s on CI under the memory gate, and the low pass costs more.
 ;;;
 ;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
 ;;; there is no tell. A row whose every check needs it is skipped, through
@@ -114,12 +119,12 @@
     (guard (e (#t (list 'raised (describe e))))
       (clean-call 'execute-script! noted?))))
 
-(let ((name "execute-script!'s remainder R, taken at every odd fuel from 1 until the call completes without expiring, the even fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only where the control makes a whole new call; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block"))
+(let ((name "execute-script!'s remainder R, taken at every odd fuel from 1 until the call completes without expiring, the even fuels the other suite's, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers no value or &sqlite-closed from execute-script!, or the block's refusal of a re-entry; each insert is prepared at most once and its first once, its rows a prefix of the script's, none twice, each twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked, none at a row; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, none both past it, every section of the script lying inside its block"))
   (tell-available! registration name)
   (test-equal name
-    (list '() 'interleavings-reached zero-counts)
+    (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (reported 'execute-script! (sweep 'execute-script! 'odd) past-a-fuel both-a-fuel))))
+      (reported 'execute-script! 'odd 'high past-a-fuel both-a-fuel))))
 
 (let* ((name "a timer handler that raises, at every tick from 1 until execute-script! completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; each insert is prepared at most once, and the rows are a prefix of the script's; no statement is tracked outside the cache, none at a row; nothing is counted once each connection is closed")
        (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))

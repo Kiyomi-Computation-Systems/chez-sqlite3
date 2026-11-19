@@ -3,7 +3,7 @@
 ;;; slice 5's part D; the maintainer's "Guard every call", ADR-0016, amended in
 ;;; M3 slice 3), in (chez-sqlite3 private conveniences): one remainder of the
 ;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
-;;; schedule, the tell, the control and the judge are (conveniences-pending)'s,
+;;; schedule, the tell, the bound and the judge are (conveniences-pending)'s,
 ;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
 ;;; one a convenience, so each stays well under the memory gate's limit.
 ;;;
@@ -17,8 +17,9 @@
 ;;;                then R1. After every trial: each run answers the sum, 6, or
 ;;;                &sqlite-closed from query-fold, or call-with-open-handle's
 ;;;                refusal of a re-entry: the fold does not survive a
-;;;                preemption; the select was prepared once, twice only where
-;;;                the control makes a whole new call; no statement is tracked
+;;;                preemption; the select was prepared once, twice only for a
+;;;                whole new call, below the sweep's first refusal before the
+;;;                call's first section; no statement is tracked
 ;;;                outside the cache, none at a row, the cache holding the
 ;;;                call's statement, ready, or none, an expiry inside the
 ;;;                fold's wind having finalized it; nothing is counted once the
@@ -31,6 +32,10 @@
 ;;; The fold keeps slice 3's flag: an expiry inside its wind finishes the
 ;;; statement and sets the flag, so no second run reaches a statement another
 ;;; holds. Its code is unchanged by part D, and the row holds it so.
+;;;
+;;; Its low pass, the interleaved row under a collect trip of 256 bytes, is
+;;; tests/test-conveniences-pending-fold-low.sps, a suite of its own: this one
+;;; took 73 to 85 s on CI under the memory gate, and the low pass costs more.
 ;;;
 ;;; Where this libsqlite3 refuses sqlite3_auto_extension, as Apple's does,
 ;;; there is no tell. A row whose every check needs it is skipped, through
@@ -105,12 +110,12 @@
     (guard (e (#t (list 'raised (describe e))))
       (clean-call 'query-fold noted?))))
 
-(let ((name "query-fold's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the sum or &sqlite-closed from query-fold, or a re-entry's refusal; the select is prepared once, twice only where the control makes a whole new call; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, an expiry inside the fold's wind having finalized it; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
+(let ((name "query-fold's remainder R, taken at every fuel from 1 until the call completes without expiring, resumed at every later fuel until it expires again as R1, then R resumed again to its end, then R1: each run answers the sum or &sqlite-closed from query-fold, or a re-entry's refusal; the select is prepared once, twice only for a whole new call, below the sweep's first refusal before the call's first section; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, an expiry inside the fold's wind having finalized it; nothing is counted once each connection is closed; and at least three trials a fuel on average interleave past the call's first section, and as many both past it"))
   (tell-available! registration name)
   (test-equal name
-    (list '() 'interleavings-reached zero-counts)
+    (list '() 'interleavings-reached 'refused-at-half-the-fuels 'whole-new-calls-below-a-refusal zero-counts)
     (guard (e (#t (list 'raised (describe e))))
-      (reported 'query-fold (sweep 'query-fold 'every) past-a-fuel both-a-fuel))))
+      (reported 'query-fold 'every 'high past-a-fuel both-a-fuel))))
 
 (let* ((name "a timer handler that raises, at every tick from 1 until query-fold completes before it runs, the raise reaching the caller from between two of the call's sections: the call answers, or the raise reaches the caller, the very symbol; the statement is prepared at most once; no statement is tracked outside the cache, none at a row, the cache holding the call's statement, ready, or none, the raise having finalized it; nothing is counted once each connection is closed")
        (prepares? (tell-kept? registration name "check that the statement is prepared at most once, as the authorizer noted")))

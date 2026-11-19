@@ -61,6 +61,18 @@
 ;;; tests/test-interrupt-close.sps a running step after a failed close and the
 ;;; race under the gate.
 ;;;
+;;; The engine rows run with collect-trip-bytes at a gigabyte, and no low
+;;; pass. The gigabyte is for coverage: no collect request falls in a sweep,
+;;; so each fuel stops the call at one point of its code, and the sweep
+;;; passes every point it has. A low pass is what a call that holds a claim
+;;; needs, since a request due inside a section costs the engine ticks at
+;;; the section's exit, and a claim advanced just after its section is split
+;;; from it only there (M4's closing review, reviewer B's B1). This verb holds
+;;; no claim: the latch's one section reads the flag and the handle and makes
+;;; the call, and nothing follows that section but the verb's return, so a
+;;; remainder taken at its exit does nothing more when resumed, once or
+;;; twice (M4's closing review, Proposal 1, item F).
+;;;
 ;;; A thread this suite forks answers whatever it raises, and every wait for
 ;;; it is bounded (AGENTS.md). The loading procedures are reached through
 ;;; eval, under a guard, so a refused library or a missing name fails rows by
