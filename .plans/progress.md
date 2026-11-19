@@ -270,7 +270,8 @@ newest first.
   - **five records were missing from the PR,** written after the records branch was merged and
     never committed: the lead's error, now merged;
   - **the shards were unbalanced,** 1,507 s against 1,763 s, since D and E2 placed their suites
-    apart; two suites move to shard 1;
+    apart; two suites move to shard 1, which with both follow-ups projects about 1,770 s against
+    1,750 s;
   - and the docs' twice-failing init, the override's "no search", and the records' figures and
     citations.
 - **Rechecked by the M4 session** at `6fe29c8`: one major. `test-transaction-engine`'s pending low

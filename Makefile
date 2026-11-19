@@ -69,8 +69,8 @@ MEMORY_SUITES ?= $(SUITES)
 # to 149 s on CI, and 434 s here. M4's closing review placed its loading and
 # low-pass suites, then moved script-low-2 and loading-preflight to the first:
 # PR #48's run 44460844478 read 1507 s against 1763 s, and the review's
-# follow-up added about 68 s and 122 s, so the two project at about 1740 s
-# and 1720 s (.plans/research/m4-closing-review/).
+# two follow-ups added about 97 s and 150 s, so the two project at about
+# 1770 s and 1750 s (.plans/research/m4-closing-review/).
 # make check-memory-shards, which make test runs, fails unless the two run
 # every tests/test-*.sps once between them, so a new suite fails make test
 # until it is put in one: the shard whose suites take less time.

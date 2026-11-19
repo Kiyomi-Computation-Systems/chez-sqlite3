@@ -545,13 +545,6 @@
 ;; The forced section at whose exit the first slice's ticks ran out.
 (define exit-k #f)
 
-;; force-source, forced-source, exit-source : (U Symbol #f)
-;; What a suite's callback names the section it forces, set around its
-;; force!; the last forced section's; and the one exit-k numbers.
-(define force-source #f)
-(define forced-source #f)
-(define exit-source #f)
-
 ;; pass-k, pass-exits : Natural (Listof Natural)
 ;; The most forced sections a first slice of the pass passed, and the
 ;; forced sections a first slice of it expired at the exit of.
@@ -571,8 +564,7 @@
           (set! forced (+ forced 1))
           (when numbering (set! forced-k (+ forced-k 1)))
           (set! forced-pending #t)
-          (set! forced-at t)
-          (set! forced-source force-source))))
+          (set! forced-at t))))
     (set! sink (make-bytevector 32768))))
 
 ;; exit-noted! : -> Void
@@ -589,8 +581,7 @@
   (when forced-pending
     (set! forced-pending #f)
     (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
-      (set! exit-k forced-k)
-      (set! exit-source forced-source))))
+      (set! exit-k forced-k))))
 
 ;; slice-begun!, slice-ended! : -> Void
 ;; Around each slice: at its end, a forced section's request still due
@@ -655,7 +646,6 @@
 (define (call-begun!)
   (set! forced-k 0)
   (set! exit-k #f)
-  (set! exit-source #f)
   (set! numbering #t)
   (slice-begun!))
 (define (call-ended!)
