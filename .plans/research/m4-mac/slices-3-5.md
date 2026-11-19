@@ -10,6 +10,11 @@ These are its commands, for zsh, in your chez-sqlite3 clone, on `main` once PR #
 They carry no comments, and they write only under `build/m4s35-mac/`, which git ignores. Each
 `make test` runs every suite, so this takes a while.
 
+It ran on 2026-11-18: Homebrew's library passed everything, Apple's all but one row, a fault in
+the suite since fixed, and `DYLD_LIBRARY_PATH` redirected both absolute paths. The results are in
+[README.md](README.md), "Slices 3 to 5's Mac run", and the files in
+[out/slices-3-5/](out/slices-3-5/).
+
 ## 1. Get `main`, with slice 4 in it
 
 Start from a clean tree: `git status --short` should print nothing that git tracks. The
