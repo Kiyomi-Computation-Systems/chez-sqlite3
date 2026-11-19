@@ -168,7 +168,20 @@
 * A collect request costs an engine's run ticks. A row that judges one
   run by another at the same fuel collects first, with
   `collect-trip-bytes` raised above what the runs allocate, or judges
-  each run by what it saw itself (`.plans/traps.md`).
+  each run by what it saw itself (`.plans/traps.md`). A raised trip
+  hides a remainder just past a call's last section, since a request due
+  inside a section costs its ticks at the exit: a sweep of a call that
+  holds a claim also runs a pass with the trip below what one call
+  allocates, judges each trial by its own effects, and fails by name
+  unless that pass reached past the section (ADR-0016, amended in M4
+  slice 4). A low row proves its reach: every section the suite forces
+  met its collect request, and some run expired exactly at a forced exit,
+  read from the engine's timer where the section's own callback saw it
+  running; where a plant needs two runs to overlap, the row counts that
+  interleaving, met by correct code in every run. Its tests: with the trip
+  slipped to 256 KiB every low row fails by name and no other row does,
+  and each plant is caught in 20 runs of 20, 10 at once and 10 one after
+  another (ADR-0016, amended in M4's closing review).
 
 **Chez and the FFI**
 
@@ -196,6 +209,10 @@
   by an expiry: read a flag inside the section of the step it guards, and
   sweep an engine row's fuel until the call completes without expiring,
   not to a fixed bound (`.plans/traps.md`).
+* An engine's remainder resumes on whichever thread calls it, so a check
+  of the calling thread vouches only for the section it is made in.
+  Compare the owner inside the section that makes the C call (ADR-0010,
+  amended in M4's closing review).
 * An engine's remainder can be resumed twice, and runs twice from the same
   point; a timer's, a keyboard's or a collect request's handler is the
   caller's code, run between any two critical sections, and can capture a
@@ -256,6 +273,12 @@
   count, since each procedure entry before the call's first expression costs
   a tick. Count a guard against the fuels swept, never one trial
   (`.plans/traps.md`).
+* `collect-trip-bytes` is read only when an allocation chunk of about
+  32 KiB runs out, and a request in a trial's first slice moves its
+  remainder earlier than its fuel says. A low pass allocates that much
+  inside the section it must reach, and its bounds read only the trials
+  whose first slice met no request (ADR-0016, amended in M4's closing
+  review; `.plans/traps.md`).
 
 ## Closing ritual
 

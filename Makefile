@@ -45,12 +45,13 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 # run, so that it is split before a slow runner kills it (ADR-0005, amended).
 # Valgrind runs 10 to 50 times slower than Chez alone. Most suites take 7 to
 # 12 s under it in the container (.plans/research/memory-gate/). The
-# exceptions are tests/test-library-loading-decoys.sps, -real.sps and
-# -missing.sps, whose children each run under a Valgrind of their own, about
-# 25 to 28 apiece. They were one suite, which took 562 s with its 76 children
-# on CI's slowest runner of M2, 38 s short of the limit, then two, which took
-# 319 s and 272 s on a slow runner of M3's slice 2. 600 s is far below CI's
-# 60-minute job limit, so a hang is named HUNG before the job is killed.
+# exceptions are the nine tests/test-library-loading-*.sps, whose children
+# each run under a Valgrind of their own, at most 11 apiece. They were one
+# suite, which took 562 s with its 76 children on CI's slowest runner of M2,
+# 38 s short of the limit, then two, which took 319 s and 272 s on a slow
+# runner of M3's slice 2, then three, whose -real took 264 s with 35 children
+# on M4's. 600 s is far below CI's 60-minute job limit, so a hang is named
+# HUNG before the job is killed.
 # make test-memory refuses a MEMORY_TIMEOUT that is not a positive whole
 # number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
@@ -65,7 +66,11 @@ MEMORY_SUITES ?= $(SUITES)
 # written out, and the two are balanced by each suite's time under the gate
 # on CI, its "time:" line (.plans/research/m3-slice-6/memory-shard-input.md),
 # the first a little lighter: its test-transaction-interrupt has taken 20 s
-# to 149 s on CI, and 434 s here.
+# to 149 s on CI, and 434 s here. M4's closing review placed its loading and
+# low-pass suites, then moved script-low-2 and loading-preflight to the first:
+# PR #48's run 44460844478 read 1507 s against 1763 s, and the review's
+# two follow-ups added about 97 s and 150 s, so the two project at about
+# 1770 s and 1750 s (.plans/research/m4-closing-review/).
 # make check-memory-shards, which make test runs, fails unless the two run
 # every tests/test-*.sps once between them, so a new suite fails make test
 # until it is put in one: the shard whose suites take less time.
@@ -85,6 +90,9 @@ MEMORY_SUITES_1 := \
   tests/test-conveniences-pending-execute.sps \
   tests/test-conveniences-pending-fold.sps \
   tests/test-conveniences-pending-query-row.sps \
+  tests/test-conveniences-pending-script-low-0.sps \
+  tests/test-conveniences-pending-script-low-2.sps \
+  tests/test-conveniences-pending-script-low-3.sps \
   tests/test-conveniences-reentry.sps \
   tests/test-counters.sps \
   tests/test-docs.sps \
@@ -92,7 +100,11 @@ MEMORY_SUITES_1 := \
   tests/test-fts5.sps \
   tests/test-interrupt-database.sps \
   tests/test-json.sps \
-  tests/test-library-loading-missing.sps \
+  tests/test-library-loading-extension.sps \
+  tests/test-library-loading-missing-1.sps \
+  tests/test-library-loading-missing-2.sps \
+  tests/test-library-loading-missing-4.sps \
+  tests/test-library-loading-preflight.sps \
   tests/test-library-loading-real.sps \
   tests/test-load-state.sps \
   tests/test-memory-check.sps \
@@ -120,8 +132,10 @@ MEMORY_SUITES_2 := \
   tests/test-connection.sps \
   tests/test-contention.sps \
   tests/test-conveniences-engines.sps \
+  tests/test-conveniences-pending-fold-low.sps \
   tests/test-conveniences-pending-query.sps \
   tests/test-conveniences-pending-script-even.sps \
+  tests/test-conveniences-pending-script-low-1.sps \
   tests/test-conveniences-pending-script-odd.sps \
   tests/test-conveniences-resumed.sps \
   tests/test-conveniences-who.sps \
@@ -131,7 +145,9 @@ MEMORY_SUITES_2 := \
   tests/test-interrupt-close.sps \
   tests/test-interrupt-reach.sps \
   tests/test-interrupt.sps \
+  tests/test-library-loading-combined.sps \
   tests/test-library-loading-decoys.sps \
+  tests/test-library-loading-missing-3.sps \
   tests/test-libsqlite3-info.sps \
   tests/test-load-extension-engines.sps \
   tests/test-load-extension.sps \
@@ -242,7 +258,8 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 # detail, the candidates checked and a remedy, and, when the refusal came
 # after the version was read, that library's own report. Its last line, on
 # either stream, is its counts, all zero (ADR-0005, decision 4);
-# tests/test-library-loading-real.sps holds the whole output. chez-sqlite3
+# tests/test-library-loading-real.sps and -preflight.sps hold the whole
+# output. chez-sqlite3
 # compiles nothing (ADR-0001), so this is the question an install asks. It
 # writes nothing: no build output, under src/ or anywhere. build is in
 # .PHONY: the build/ directory exists, and without it make would answer that
@@ -548,12 +565,11 @@ check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy
 # that runs from another working directory.
 # Not covered (ADR-0005, amended):
 #   - a child started without gated-command runs outside Valgrind, unseen:
-#     the children of tests/test-library-loading-decoys.sps, -real.sps,
-#     -missing.sps and test-blocks.sps each say whether they ran under
-#     memcheck (preflight's, which prints no such line, by the one new log in
-#     the gate's directory),
-#     and those suites fail if one did not; no other suite's children are
-#     held so;
+#     the children of the nine tests/test-library-loading-*.sps and of
+#     test-blocks.sps each say whether they ran under memcheck (preflight's,
+#     which prints no such line, by the one new log in the gate's
+#     directory), and those suites fail if one did not; no other suite's
+#     children are held so;
 #   - the gate trusts the programs VALGRIND, TIMEOUT and CHEZ name: a
 #     compiled CHEZ that runs Chez as a child passes the leak plant;
 #   - its evidence holds against accident, not against a suite that means

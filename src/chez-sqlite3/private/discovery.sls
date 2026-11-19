@@ -9,7 +9,12 @@
 ;;;   1. CHEZ_SQLITE3_LIBRARY, when set, must be an absolute path, and is
 ;;;      chosen as given: never checked with exists?, since loading decides,
 ;;;      and never a fallback. Anything else set, the empty string too, is
-;;;      invalid-override.
+;;;      invalid-override. The path chosen, here or below, is what the
+;;;      loader is given, not always the file it loads: on macOS,
+;;;      DYLD_LIBRARY_PATH sends dyld to a file of the same leaf name in its
+;;;      folders first, while on Linux LD_LIBRARY_PATH redirects neither
+;;;      (the M4 Mac run, dyld.txt; the maintainer's "Document it",
+;;;      2026-11-18).
 ;;;   2. Otherwise the platform comes from the machine type: a name ending
 ;;;      in le is Linux, one ending in osx is macOS, any other has no
 ;;;      candidates.
@@ -66,7 +71,7 @@
         ((absolute? override) (values override 'override))
         (else
          (refuse 'invalid-override #f 'override override '()
-                 "CHEZ_SQLITE3_LIBRARY must be an absolute path to libsqlite3, which is loaded as given and never searched for; set one, or unset it to use discovery"
+                 "CHEZ_SQLITE3_LIBRARY must be an absolute path to libsqlite3, which chez-sqlite3 loads with no search of its own; set one, or unset it to use discovery"
                  override)))))
 
   ;; first-existing : (Listof (Pairof String Symbol)) (String -> Boolean)

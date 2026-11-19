@@ -38,6 +38,9 @@
   ([amendment](#amendment-2026-11-17-m4s-entry-points-suites-and-extension-m4s-plan)).
   Amended 2026-11-17 in M4's close fix, and accepted by the maintainer that day ("Accept all"): decision 5's statements check after a refused close
   ([amendment](#amendment-2026-11-17-the-statements-check-after-a-refused-close-m4s-close-fix)).
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): the no-load lane, the loading suites split,
+  and the sweeps' low passes
+  ([amendment](#amendment-2026-11-18-the-no-load-lane-the-loading-suites-split-and-the-sweeps-low-passes-m4s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -774,3 +777,46 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4's close 
 close ([ADR-0012](0012-explicit-close-and-the-handle.md), amended). The gate keeps its property:
 SQLite refuses a close while any statement is left, so no close succeeds beside a leaked one, and
 the refusal names the count. `test-connection-close` is in `MEMORY_SUITES_1`.
+
+## Amendment, 2026-11-18: the no-load lane, the loading suites split, and the sweeps' low passes (M4's closing review)
+
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review ([the CI log](../m4-closing-review-ci-log.md),
+[the loading log](../m4-closing-review-loading-log.md), [the sweeps log](../m4-closing-review-sweeps-log.md)).
+
+- **The `current` job builds a second SQLite, `--no-load`:**
+  - the same release and flags, FTS5 among them, with `-DSQLITE_OMIT_LOAD_EXTENSION`, so it lacks
+    `sqlite3_load_extension` as Apple's library does, and keeps FTS5 as Apple's does;
+  - five steps after the job's `make test`: its cache's restore, build and save, keyed and guarded
+    by their own id, `sqlite-no-load`; then `check-sqlite.sh --no-load`, which holds its 40
+    compile options line for line; then the whole `make test` again, with this build's env.
+
+  The maintainer chose "In CI's current job" and "The whole make test" (2026-11-18). A suite's
+  branch for a library without extension loading runs on every run, not only on the Mac, where
+  one first crashed (#47). It costs about 2 s a run, about 30 s to compile on a cache miss, and
+  about 2 min of runner time, but no wall time.
+- **`check-ci` is keyed by build, not by job:** `floor` makes one build and `current` two. Each
+  build has one restore, with its id held, and one save. Each build's `if` stands only on the
+  step naming its directory, or on its save. `CHEZ_SQLITE3_LIBRARY` and `C_INCLUDE_PATH` are held
+  per step to that step's build, and a line required twice, current's `make test`, must be the
+  run line of two steps.
+- **The loading suites split, three into nine, at most 11 children each.** A child under the gate
+  costs about 5 s here and up to about 11.5 s on a slow CI runner, so 35 children made
+  `test-library-loading-real` 258 and 264 s on `main`'s runs, over half the 450 s bound:
+  - `-missing-1` to `-4` deal the 43 missing-api entries by position mod 4, 11, 11, 11 and 10;
+  - `-real` keeps the override and discovery, 11; `-preflight` the preflight, 9; `-extension`
+    M4's load rows, 7; `-decoys` the control's switches, 11; `-combined` the combinations and
+    the marker, 9.
+
+  Every old row is kept with its expected value but the partition's, whose four rows each
+  missing suite holds; no plant the old layout caught gets past the new one. Each new suite took
+  52 to 85 s under the gate here, so at most about 169 s on a slow runner. Shard 1 holds `-real`,
+  `-missing-1`, `-2` and `-4`, and `-extension`; shard 2 `-decoys`, `-missing-3`, `-combined` and
+  `-preflight`, by the lighter shard over `main`'s last three runs.
+- **The sweeps' low passes cost gate time:** M3's and slice 3's sweeps each gain a pass with collect
+  requests falling (ADR-0016, amended the same day). Under the gate here, `test-open-db-config-engines`
+  went from 57 to 138 s, `test-open-interleave` from 37 to 93 s, `test-transaction-engine` from 47
+  to 92 s and `test-conveniences-pending-query` from 37 to 87 s. The pending fold's and script's
+  low passes are suites of their own, `test-conveniences-pending-fold-low` and
+  `-script-low-0` to `-3`, the script's dealt by fuel mod 4, about 90 s each, so none nears half
+  the bound on a slow runner. Each memory job then runs about 30 suite-minutes, under its
+  60-minute timeout; read the first runs' times before calling the margin safe.

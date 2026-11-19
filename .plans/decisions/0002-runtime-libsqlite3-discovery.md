@@ -11,6 +11,8 @@
   ([amendment](#amendment-2026-11-17-m4s-entry-points-and-where-extension-loadings-guarantee-lives-m4s-plan)).
   Amended 2026-11-17 in M4 slice 2, and accepted by the maintainer that day ("Accept all"): the optional entry point's prototype
   ([amendment](#amendment-2026-11-17-the-optional-entry-points-prototype-m4-slice-2)).
+  Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): an absolute path and macOS's `DYLD_*`
+  ([amendment](#amendment-2026-11-18-an-absolute-path-and-macoss-dyld_-m4s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3 v1, on Linux distributions, Guix environments and macOS
 - **Settles:** brief §3b
@@ -279,3 +281,27 @@ Accepted by the maintainer on 2026-11-17 ("Accept all"), proposed in M4 slice 2 
   prototype and the library lacks the entry point, its check is named UNAVAILABLE with both facts
   asserted, not failed. Every required entry point's check, a missing header and a missing
   compiler still fail the suite. The global constraints now say so.
+
+## Amendment, 2026-11-18: an absolute path and macOS's `DYLD_*` (M4's closing review)
+
+Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closing review, from the maintainer's Mac run after slice 5
+([research/m4-mac/](../research/m4-mac/README.md), "Slices 3 to 5's Mac run", `run-dyld.sh` and
+`out/slices-3-5/dyld.txt`). The rule is the maintainer's: "Document it" (2026-11-18).
+
+- **"Loaded as given, with no search and no fallback" holds on Linux, not on macOS.**
+  - On the Mac, `DYLD_LIBRARY_PATH`, set on Chez's own command line, redirects an absolute path by
+    its leaf name. Naming Homebrew's folder, it made discovery's `/usr/lib/libsqlite3.dylib` load
+    Homebrew's 3.54.1, while `sqlite-library-path` still answered `/usr/lib/libsqlite3.dylib`
+    (case L1).
+  - `DYLD_FALLBACK_LIBRARY_PATH` didn't find another folder's file for an absolute path where no
+    file stands (E2): the load failed, as it would with the variable unset.
+  - On Linux, `LD_LIBRARY_PATH` redirected neither the override's path nor discovery's.
+- **So decision 4's "a loaded library is reported with its path" reports the path asked for.** On
+  the Mac, under `DYLD_LIBRARY_PATH`, that may not be the file loaded. `sqlite3_libversion` and
+  `sqlite3_sourceid`, read from the library, are the loaded file's own.
+- **No code changes for it.** Whoever can set `DYLD_*` in the process's environment can also
+  inject code with `DYLD_INSERT_LIBRARIES`, so the environment is the caller's to control, inside
+  the process's own trust boundary. The reference says so, under "Which SQLite"; this decision's
+  Rejected bullet on a bare soname still holds, since a bare name is searched on every platform.
+- **The same holds for an extension's absolute path** ([ADR-0021](0021-db-config-options-and-extension-loading.md),
+  amended 2026-11-18).

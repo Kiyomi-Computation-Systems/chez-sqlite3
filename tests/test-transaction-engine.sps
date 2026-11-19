@@ -48,6 +48,25 @@
 ;;;                  again: a second level only from a whole new call, the
 ;;;                  call's claim, made by its first expression, refusing a
 ;;;                  second run at the BEGIN (M3's closing review)
+;;;   low passes     the resumed-while-pending row, the claim's row and its
+;;;                  re-entry row again, each trial under a collect trip of
+;;;                  256 bytes from its start to its end, its connection
+;;;                  carrying SQLite's trace, which allocates 32 KiB as a step
+;;;                  answers a row or a statement finishes, the BEGIN inside
+;;;                  its own section among them: a request due inside a
+;;;                  critical section is handled at its exit and costs the
+;;;                  engine ticks there, so a remainder, or a timer's
+;;;                  continuation, is taken at the BEGIN's exit too, where a
+;;;                  claim taken just after the section, not inside it, passed
+;;;                  both rows (M4's closing review, reviewer B's B1). Each low
+;;;                  row fails by name unless collect requests fell in its
+;;;                  trials, unless each section the trace forces met its
+;;;                  request before the next, which a trip slipped to 256 KiB
+;;;                  does not, and unless some first slice, or timer, ran out
+;;;                  at such a section's exit, which the high pass never
+;;;                  does. A whole-suite
+;;;                  trip of 256 bytes, reviewer B's, failed four rows on
+;;;                  correct code, so the low passes are built row by row
 ;;;   the plan       another engine's BEGIN at the call's first expiry: the
 ;;;                  resumed call plans its level in the BEGIN's own section,
 ;;;                  so it makes a savepoint, never a refused BEGIN that takes
@@ -69,7 +88,8 @@
         (rnrs eval)
         (srfi :64)
         (only (chezscheme) make-engine foreign-procedure timer-interrupt-handler set-timer list-head
-              disable-interrupts enable-interrupts)
+              disable-interrupts enable-interrupts collect collect-trip-bytes collect-request-handler
+              foreign-callable foreign-callable-entry-point lock-object unlock-object scheme-environment)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3) chez-sqlite3-error? sqlite-error? sqlite-error-code
@@ -240,12 +260,20 @@
 (define (complete left . vals) (list 'completed (car vals)))
 (define (expire more) more)
 
+;; slice : Engine Positive-Integer -> (U (List 'completed Any) Engine)
+;; E run for FUEL ticks, its forced sections judged met or unmet.
+(define (slice e fuel)
+  (slice-begun!)
+  (let ((r (e fuel complete expire)))
+    (slice-ended!)
+    r))
+
 ;; finish : Engine Positive-Integer -> Any
 ;; The answer of E, an engine's remainder, resumed with FUEL a slice until
 ;; it completes, at most 100000 times.
 (define (finish e fuel)
   (let loop ((e e) (n 0))
-    (let ((next (e fuel (lambda (left . vals) (list 'completed (car vals))) (lambda (more) more))))
+    (let ((next (slice e fuel)))
       (cond ((pair? next) (cadr next))
             ((>= n 100000) 'never-completed)
             (else (loop next (+ n 1)))))))
@@ -325,6 +353,312 @@
                    (execute! db "create table t (x)")
                    (proc db))))
       (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))
+
+;; --- the low passes -----------------------------------------------------------------------------
+;; Pass = (U 'high 'low)
+;; The low passes of the pending and claim rows, below. Each trial begins
+;; with begun!: a collection, then PASS's trip, 2^27 in the high pass and 256
+;; bytes in the low, until the trial ends. A request then falls due all
+;; through a low trial, and one due inside a critical section is handled at
+;; the section's exit, where it costs the engine ticks (.plans/traps.md).
+;; A request fell only where a call's allocation crossed a chunk, the same
+;; point at every fuel once each trial collects first, so in the low pass
+;; each trial's connection also carries SQLite's trace, whose callback
+;; allocates 32 KiB as a step answers a row and as a statement finishes:
+;; inside the BEGIN's section, the one its claim is taken in, among the
+;; rest. Past 32 KiB a
+;; collect request always fell inside a critical section under the low
+;; trip. The callback is __collect_safe, as sqlite3_step is; it answers 0
+;; and raises nothing; it is locked from here to the suite's end. Every
+;; request the trials meet goes through counted-request, which counts it,
+;; and the low rows judge where they fell (where a remainder lies, below).
+;; The high rows run as before, with no collection of their own.
+
+(define low-trip 256)
+
+;; default-request-handler : (-> Any)
+(define default-request-handler (collect-request-handler))
+
+;; requests : Natural
+;; The collect requests the trials of the pass under way met.
+(define requests 0)
+
+(define (counted-request)
+  (set! requests (+ requests 1))
+  (default-request-handler)
+  (exit-noted!))
+
+;; --- where a remainder lies: at a forced section's exit ----------------------------------------
+;; SQLite's trace calls back inside one of the library's critical sections,
+;; once a section: each step that answers a row, the step that finishes a
+;; statement, the BEGIN's among them (the low passes, above).
+;; In the low pass force! allocates 32 KiB there, so a collect request falls
+;; due inside the section and is handled at its exit, the first event check
+;; once the section enables interrupts again. The handler's own work costs
+;; the engine ticks. Where they run out in it, the engine's timer reads #f
+;; at its end, and the engine expires as the handler returns: the remainder
+;; lies at that section's exit, before anything after it. A probe's marker,
+;; set inside a section and overwritten just after it, read the section's
+;; at exactly those fuels, three a section, at the low trip, and at none at
+;; the high trip or at 256 KiB (M4's closing review, builder D's
+;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a
+;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
+;; about one time in eight; and unless some first slice expired at a forced
+;; section's exit, which the high pass, forcing none, never does. Each first
+;; slice numbers the forced sections it passes, from 1, and the row shows
+;; whose exits were met. The timer is read through Chez's own $tc-field,
+;; reached through eval.
+
+;; tc-field, tc : (U Procedure #f)
+(define tc-field
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc-field")) (scheme-environment))))
+(define tc
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc")) (scheme-environment))))
+
+;; ticks-now : -> (U Natural #f)
+;; The running engine's timer: its ticks left, #f once they are spent.
+(define (ticks-now) (and tc-field tc (tc-field 'timer-ticks (tc))))
+
+;; ticks-spent? : -> Boolean
+(define (ticks-spent?) (and tc-field tc (not (ticks-now)) #t))
+
+;; forcing : Boolean
+;; Whether force! allocates: in the low pass's trials alone.
+(define forcing #f)
+
+;; sink : Any
+;; Where force!'s allocation is kept, so no compiler drops it.
+(define sink #f)
+
+;; forced-pending : Boolean
+;; A forced section's allocation made inside a slice, its request not yet
+;; handled.
+(define forced-pending #f)
+
+;; forced, unmet : Natural
+;; The pass's forced sections inside an engine's slice, and those whose
+;; request was not handled before the next forced section or the slice's
+;; end. A forced callback whose timer reads as the last one's is in the same
+;; section: an engine spends no ticks inside one, and one section can fire
+;; two, as a close's finalizes do.
+(define forced 0)
+(define unmet 0)
+
+;; slicing, numbering : Boolean
+;; Whether an engine's slice runs now; whether a first slice does, numbering
+;; the forced sections it passes.
+(define slicing #f)
+(define numbering #f)
+
+;; forced-at : Any
+;; The timer as the last forced section read it.
+(define forced-at 'none)
+
+;; forced-k : Natural
+;; The forced sections the first slice under way has passed.
+(define forced-k 0)
+
+;; exit-k : (U Natural #f)
+;; The forced section at whose exit the first slice's ticks ran out.
+(define exit-k #f)
+
+;; pass-k, pass-exits : Natural (Listof Natural)
+;; The most forced sections a first slice of the pass passed, and the
+;; forced sections a first slice of it expired at the exit of.
+(define pass-k 0)
+(define pass-exits '())
+
+;; force! : -> Void
+;; In the low pass, 32 KiB allocated; inside a slice, a new section counted,
+;; and numbered inside a first slice, the last one counted unmet if its
+;; request is still due.
+(define (force!)
+  (when forcing
+    (when slicing
+      (let ((t (ticks-now)))
+        (unless (and forced-pending (eqv? t forced-at))
+          (when forced-pending (set! unmet (+ unmet 1)))
+          (set! forced (+ forced 1))
+          (when numbering (set! forced-k (+ forced-k 1)))
+          (set! forced-pending #t)
+          (set! forced-at t))))
+    (set! sink (make-bytevector 32768))))
+
+;; exit-noted! : -> Void
+;; In the request handler, once a request is handled: the forced section's
+;; request met; and, inside a first slice whose ticks it spent, where the
+;; section's callback found the engine's timer running, the section's
+;; number noted, the first so noted. An expiry's unwinding runs after
+;; thunks, a ROLLBACK's step among them, with the timer already off: a
+;; section forced there is no exit a remainder was taken at. The request
+;; handled is the forced section's own, at its exit: a 32 KiB allocation
+;; always met a request inside its section at a trip of 256 bytes, 100
+;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+(define (exit-noted!)
+  (when forced-pending
+    (set! forced-pending #f)
+    (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
+      (set! exit-k forced-k))))
+
+;; slice-begun!, slice-ended! : -> Void
+;; Around each slice: at its end, a forced section's request still due
+;; counted unmet.
+(define (slice-begun!)
+  (set! forced-pending #f)
+  (set! forced-at 'none)
+  (set! slicing #t))
+(define (slice-ended!)
+  (set! slicing #f)
+  (when forced-pending
+    (set! unmet (+ unmet 1))
+    (set! forced-pending #f)))
+
+;; expired-slice? : Any -> Boolean
+;; Whether R, a slice's answer, is an expiry's: (expired E), or E itself.
+(define (expired-slice? r) (or (procedure? r) (and (pair? r) (eq? (car r) 'expired))))
+
+;; first-slice : Engine Positive-Integer -> (U (List 'completed Any) (List 'expired Engine))
+;; slice, its forced sections numbered and its exit noted for the pass.
+(define (first-slice e fuel)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (let ((r (slice e fuel)))
+    (set! numbering #f)
+    (set! pass-k (max pass-k forced-k))
+    (when (and exit-k (expired-slice? r) (not (memv exit-k pass-exits)))
+      (set! pass-exits (cons exit-k pass-exits)))
+    r))
+
+;; Tally = (List Natural Natural Natural Natural (Listof Natural))
+;; A pass's collect requests, its forced sections, those unmet, the most a
+;; first slice passed, and those a first slice expired at the exit of.
+
+;; pass-reset! : -> Void
+(define (pass-reset!)
+  (set! requests 0)
+  (set! forced 0)
+  (set! unmet 0)
+  (set! pass-k 0)
+  (set! pass-exits '())
+  (set! forced-pending #f))
+
+;; pass-tally : -> Tally
+(define (pass-tally) (list requests forced unmet pass-k (list-sort < pass-exits)))
+
+;; low-judged : Tally -> (Listof Any)
+;; low-checks' three, each failing by name.
+(define (low-judged tally)
+  (let ((met (car tally)) (forced (cadr tally)) (unmet (caddr tally)) (exits (list-ref tally 4)))
+    (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
+          (if (and (> forced 0) (= unmet 0))
+              'every-forced-section-met-its-request
+              (list 'forced-sections forced 'unmet unmet))
+          (if (pair? exits) 'taken-at-a-forced-exit (list 'none-taken-at-a-forced-exit exits)))))
+
+;; low-checks : (Listof Symbol)
+(define low-checks '(collect-requests-met every-forced-section-met-its-request taken-at-a-forced-exit))
+
+;; tally-shown : Tally -> Void
+(define (tally-shown tally)
+  (display "; collect requests met ")
+  (write (car tally))
+  (display "; forced sections ")
+  (write (cadr tally))
+  (display ", unmet ")
+  (write (caddr tally))
+  (display "; a first slice's forced sections ")
+  (write (cadddr tally))
+  (display ", remainders at the exit of ")
+  (write (list-ref tally 4)))
+
+;; timer-armed!, timer-fired!, timer-done! : -> Void
+;; A re-entry row's timer, in place of a first slice: from its setting,
+;; its forced sections numbered; as its handler runs, whether its ticks ran
+;; out in a forced request's handler, its continuation taken at that
+;; section's exit, noted for the pass; once the call is over, a forced
+;; section's request still due counted unmet. Past the handler the timer is
+;; off, its reading #f, so every forced callback after it reads as one
+;; section's, and the unmet count runs only to there.
+(define (timer-armed!)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (slice-begun!))
+(define (timer-fired!)
+  (when numbering
+    (set! numbering #f)
+    (set! pass-k (max pass-k forced-k))
+    (when (and exit-k (not (memv exit-k pass-exits)))
+      (set! pass-exits (cons exit-k pass-exits)))))
+(define (timer-done!)
+  (set! numbering #f)
+  (slice-ended!))
+
+
+;; int (*xCallback)(unsigned, void *pCtx, void *P, void *X)
+(define profile
+  (foreign-callable __collect_safe
+    (lambda (mask ctx p x)
+      (force!)
+      0)
+    (unsigned-32 uptr uptr uptr) int))
+
+;; profile-locked : Any
+(define profile-locked (guard (e (#t (list 'raised (describe e)))) (lock-object profile) 'locked))
+
+;; int sqlite3_trace_v2(sqlite3*, unsigned uMask, int(*xCallback)(...), void *pCtx)
+(define trace-v2
+  (bound 'sqlite3_trace_v2 (foreign-procedure "sqlite3_trace_v2" (uptr unsigned-32 uptr uptr) int)))
+
+;; sqlite-trace-profile, sqlite-trace-row : Natural
+;; SQLITE_TRACE_PROFILE, as a statement finishes, and SQLITE_TRACE_ROW, as a
+;; step answers a row.
+(define sqlite-trace-profile 2)
+(define sqlite-trace-row 4)
+
+;; traced! : Database -> Void
+;; DB given the trace, a row's and a finish's, its answer required 0.
+(define (traced! db)
+  (let ((rc (call-with-open-handle 'test-transaction-engine db
+              (lambda (h) (trace-v2 h (+ sqlite-trace-profile sqlite-trace-row)
+                                    (foreign-callable-entry-point profile) 0)))))
+    (unless (eqv? rc 0) (error 'traced! "sqlite3_trace_v2 did not answer 0" rc))))
+
+;; begun! : Pass -> Void
+(define (begun! pass)
+  (collect-trip-bytes (expt 2 27))
+  (collect)
+  (collect-request-handler counted-request)
+  (set! forcing (eq? pass 'low))
+  (when (eq? pass 'low) (collect-trip-bytes low-trip)))
+
+;; ended! : -> Void
+(define (ended!)
+  (set! forcing #f)
+  (collect-trip-bytes (expt 2 27))
+  (collect-request-handler default-request-handler))
+
+;; counted-pass : (-> A) -> (Values A Tally)
+;; RUN's answer, a pass's sweep, and its tally, the trip and the handler
+;; put back however it leaves.
+(define (counted-pass run)
+  (pass-reset!)
+  (let ((r (dynamic-wind (lambda () #f) run ended!)))
+    (values r (pass-tally))))
+
+;; low-reported : String Tally -> (Listof Any)
+;; TALLY shown for the low row WHAT, and low-judged's three.
+(define (low-reported what tally)
+  (display "  ")
+  (display what)
+  (display ", low trip")
+  (tally-shown tally)
+  (newline)
+  (low-judged tally))
 
 ;; --- the sweeps -------------------------------------------------------------------------------
 
@@ -1191,6 +1525,45 @@
         (when (eq? (car r) 'hit) (database-cache-return! db sql (cadr r)))
         (eq? (car r) 'hit)))))
 
+;; body-sql : String
+;; The pending row's body's one statement.
+(define body-sql "insert into t values (1)")
+
+;; body-held : Database -> (U Symbol #f)
+;; Read between two slices: the state of the body's statement while its
+;; execute! holds it out of DB's cache, ready before its step, done after
+;; it; #f when the call holds none.
+(define (body-held db)
+  (and (> (length (tracked-statements db)) (database-cache-count db))
+       (not (cached? db body-sql))
+       (let loop ((rest (tracked-statements db)))
+         (cond ((null? rest) #f)
+               ((string=? (statement-sql (car rest)) body-sql) (statement-state (car rest)))
+               (else (loop (cdr rest)))))))
+
+;; pending-answers : (Listof Any)
+;; What each run of a pending trial may answer: the body's 42; the ended
+;; condition; &sqlite-closed from the body's execute!, its claim refusing a
+;; second run's section; or with-transaction's refusal of a re-entry. A
+;; second run that stepped the body's statement again, its claim's advance
+;; split from its section, answered the statement tier's refusal of a step
+;; at done (M4's closing review, the M4 session's recheck).
+(define pending-answers
+  (list 42 '(raised (transaction-ended with-transaction)) '(raised (closed execute!))
+        '(raised (assertion-violation with-transaction (re-entered)))))
+
+;; straddles : Natural
+;; The trials of the pending sweep under way whose R held the body's
+;; statement ready, whose R1 was taken at its step's exit, the step done,
+;; and whose R's second run was refused by the body's claim, &sqlite-closed
+;; from execute!: it reached the step's section once R1's run had made it.
+;; A claim whose advance is split from its section, just after it, lets
+;; that run step the statement again, which the statement tier refuses, at
+;; done: an answer pending-answers lacks. So every such trial of correct
+;; code is one the split would fail by name, whatever the heap's layout,
+;; and the low row requires some at each level.
+(define straddles 0)
+
 ;; own-left : Database -> (Listof Any)
 ;; Of with-transaction's own statements DB tracks: those not ready, those
 ;; tracked twice, and those whose SQL the cache does not hold.
@@ -1203,38 +1576,49 @@
             (map (lambda (s) (list 'outside-the-cache (car s)))
                  (filter (lambda (s) (not (cached? db (car s)))) (distinct-sql own))))))
 
-;; pending-trial : Boolean Positive-Integer Positive-Integer
+;; pending-trial : Pass Boolean Positive-Integer Positive-Integer
 ;;                 -> (U 'completed-at-f 'r-completed-at-g (Listof Any))
-;; One (F, G) on a fresh in-memory database: 'completed-at-f when the call
-;; completed within F, 'r-completed-at-g when R completed within G, else the
-;; deviations, '() for none.
-(define (pending-trial nested? f g)
+;; One (F, G) on a fresh in-memory database, in PASS: 'completed-at-f when
+;; the call completed within F, 'r-completed-at-g when R completed within G,
+;; else the deviations, '() for none. R's and R1's runs each answer one of
+;; pending-answers. A trial whose R held the body's statement ready, whose
+;; R1, taken at a forced section's exit, held it done, and whose R's second
+;; run the body's claim refused, is counted in straddles.
+(define (pending-trial pass nested? f g)
   (let ((db #f))
     (dynamic-wind
-      (lambda () #f)
+      (lambda () (begun! pass))
       (lambda ()
         (let ((r (attempt
                   (lambda ()
                     (set! db (open-database ":memory:"))
+                    (when (eq? pass 'low) (traced! db))
                     (execute! db "create table t (x)")
                     (let* ((inside #f)
                            (run (lambda ()
-                                  (let ((first ((make-engine
+                                  (let ((first (first-slice
+                                                (make-engine
                                                  (lambda ()
                                                    (attempt (lambda ()
                                                               (with-transaction db
                                                                 (lambda ()
                                                                   (execute! db "insert into t values (1)")
                                                                   42))))))
-                                                f complete expire)))
+                                                f)))
                                     (if (pair? first)
                                         'completed-at-f
-                                        (let ((second (first g complete expire)))
+                                        (let* ((r-held (body-held db))
+                                               (second (first-slice first g))
+                                               (r1-exit exit-k))
                                           (if (pair? second)
                                               'r-completed-at-g
-                                              (let* ((a (finish first 1000000))
+                                              (let* ((r1-held (body-held db))
+                                                     (a (finish first 1000000))
                                                      (b (finish second 1000000)))
-                                                'ran)))))))
+                                                (when (and (eq? r-held 'ready) r1-exit (eq? r1-held 'done)
+                                                           (equal? a '(raised (closed execute!))))
+                                                  (set! straddles (+ straddles 1)))
+                                                (list 'ran a b))))))))
                            (outcome
                             (if nested?
                                 (let ((w (with-transaction db 'deferred
@@ -1246,12 +1630,16 @@
                                 (run))))
                       (if (memq outcome '(completed-at-f r-completed-at-g))
                           outcome
-                          (let* ((depth (database-depth db))
+                          (let* ((answers (cdr outcome))
+                                 (depth (database-depth db))
                                  (in (in-transaction? db))
                                  (left (own-left db))
                                  (stray (- (length (tracked-statements db)) (database-cache-count db)))
                                  (later (attempt (lambda () (with-transaction db (lambda () 'later-committed))))))
                             (append
+                             (if (for-all (lambda (a) (member a pending-answers)) answers)
+                                 '()
+                                 (list (cons 'answers answers)))
                              (if (and nested? (not (equal? inside '(1 ())))) (list (list 'inside inside)) '())
                              (if (eqv? depth 0) '() (list (list 'depth depth)))
                              (if in (list 'in-transaction-after) '())
@@ -1262,7 +1650,8 @@
                 ((and (pair? r) (eq? (car r) 'raised)) (list (list 'the-trial-raised r)))
                 (else r))))
       (lambda ()
-        (when db (guard (e (#t #f)) (close-database! db)))))))
+        (when db (guard (e (#t #f)) (close-database! db)))
+        (ended!)))))
 
 ;; pending-stride : Positive-Integer
 ;; G steps by this, from 1: every G. Slice 4 swept every fourth, its full
@@ -1272,23 +1661,27 @@
 ;; (.plans/traps.md).
 (define pending-stride 1)
 
-;; pending : Boolean -> (Listof Any)
-;; pending-trial at every F from 1 until the call completes unexpired, and G
+;; pending : Pass Boolean -> (Listof Any)
+;; In PASS, pending-trial at every F from 1 until the call completes unexpired, and G
 ;; from 1 by pending-stride until R completes within G: the (F G deviation ...) of the trials
 ;; that deviated. Prints the trials made, each with R1 existing; fewer than
 ;; ten a fuel on average, or any other collapse of the whole sweep, is
 ;; itself a deviation, the sweep having reached nothing. An average: a
 ;; collapse over a stretch of fuels can pass it. A count fixed in trials broke when part
 ;; D made the call cheaper: 647 at every fourth G.
-(define (pending nested?)
+(define (pending pass nested?)
+  (set! straddles 0)
   (let floop ((f 1) (found '()) (trials 0))
     (let gloop ((g 1) (found found) (trials trials))
-      (let ((r (pending-trial nested? f g)))
+      (let ((r (pending-trial pass nested? f g)))
         (cond ((eq? r 'completed-at-f)
-               (display (if nested? "  pending, nested: " "  pending, the outer level: "))
+               (display (if nested? "  pending, nested" "  pending, the outer level"))
+               (display (if (eq? pass 'low) ", low trip: " ": "))
                (write trials)
                (display " trials, the call completed unexpired at fuel ")
                (write f)
+               (display "; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in ")
+               (write straddles)
                (newline)
                (append (reverse found)
                        (if (< trials (* 10 f)) (list (list 'too-few-trials-with-r1 trials 'fuel f)) '())))
@@ -1297,9 +1690,28 @@
               ((>= g 1000) (floop (+ f 1) (cons (list f g 'r-never-completed) found) trials))
               (else (gloop (+ g pending-stride) (if (null? r) found (cons (cons f (cons g r)) found)) (+ trials 1))))))))
 
-(test-equal "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; at least ten trials a fuel on average"
+(define pending-name
+  "a remainder resumed while an earlier resume of it is pending leaves the level and its statements whole: at fuel F the call's first remainder R, resumed with fuel G until it expires as R1, then R to its end, then R1 to its end, at every F until the call completes unexpired and every G until R completes within G, at the outer level and nested in an outer with-transaction: the depth is restored, in-transaction? is #f after the outer level, a later with-transaction commits, none of with-transaction's own statements is tracked other than ready, tracked twice, or outside the cache, and no statement, the body's included, is tracked outside the cache; each run answers 42, the ended condition, &sqlite-closed from the body's execute!, or the re-entry's refusal; at least ten trials a fuel on average")
+
+(test-equal pending-name
   '(() ())
-  (list (pending #f) (pending #t)))
+  (let* ((outer (pending 'high #f))
+         (nested (pending 'high #t)))
+    (list outer nested)))
+
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, which allocates 32 KiB as a step answers a row or a statement finishes, the BEGIN in its own section among them, so a request falls due inside the section and is handled at its exit: the same verdicts, and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit; and, at the outer level and nested, some trial with R holding the body's statement ready, R1 taken at its step's exit, and R's second run refused by the body's claim there, &sqlite-closed from execute!, the step R1's run had made. " pending-name)
+  (append '(() () refused-at-the-step-r1-made) low-checks)
+  (let-values (((r tally) (counted-pass (lambda ()
+                                          (let* ((outer (pending 'low #f))
+                                                 (outer-straddles straddles)
+                                                 (nested (pending 'low #t))
+                                                 (nested-straddles straddles))
+                                            (list outer nested
+                                                  (if (and (> outer-straddles 0) (> nested-straddles 0))
+                                                      'refused-at-the-step-r1-made
+                                                      (list 'refused-at-the-step-r1-made outer-straddles
+                                                            nested-straddles))))))))
+    (append r (low-reported "pending" tally))))
 
 ;; --- the call's claim: a remainder resumed twice begins one level ------------------------------
 ;;
@@ -1320,31 +1732,34 @@
 ;; thunk's count re-runs that count, and so is told by it. One taken after
 ;; the count but before the claim cannot be told from outside the call: the
 ;; entries of with-transaction and of its work, two procedure calls, lie
-;; between, and an engine can expire at each. So a second level is allowed
-;; only where R re-ran the count, or at the claim-window fuels just after
-;; the first fuel whose first slice made it, and only where the first slice
-;; began nothing.
+;; between, and an engine can expire at each, a count of ticks that moves
+;; with the code: AGENTS.md forbids bounding a whole new call by a caller's
+;; own count. So a second level is allowed only where the first slice began
+;; nothing, and R re-ran the count, or lay below the first fuel at which the
+;; sweep saw R refused by the claim, which a remainder taken past the
+;; claim's making meets. Until M4's closing review a window of two fuels
+;; past the count's bounded it (reviewer B's B2, the M4 session's check):
+;; C-tx-unclaimed, a claim that never refuses, passes this bound, its own
+;; first refusal moved past its extra level by the flags' check, and the
+;; claim's re-entry row catches it (.plans/m4-closing-review-sweeps-log.md).
 
-;; claim-window : Natural
-;; The fuels after the count at which a first slice can stop before the
-;; claim: with-transaction's entry and transaction's.
-(define claim-window 2)
-
-;; claim-trial : Boolean Positive-Integer -> (U 'completed (List Any ...))
-;; One trial at FUEL, on a fresh in-memory connection, nested inside an
-;; outer with-transaction, deferred, when NESTED: 'completed when the first
-;; slice completed the call; else the entries counted by the first slice
-;; and by the end; the levels the first slice began; R's two answers; the
-;; levels begun and committed over the trial; the rows of FUEL; the depth
-;; and in-transaction? after it, the outer level over.
-(define (claim-trial nested? fuel)
-  (let ((db #f))
+;; claim-trial : Pass Boolean Positive-Integer -> (U 'completed (List Any ...))
+;; One trial at FUEL, in PASS, on a fresh in-memory connection, nested
+;; inside an outer with-transaction, deferred, when NESTED: 'completed when
+;; the first slice completed the call; else the entries counted by the first
+;; slice and by the end; the levels the first slice began; R's two answers;
+;; the levels begun and committed over the trial; the rows of FUEL; the
+;; depth and in-transaction? after it, the outer level over; and whether no
+;; collect request fell in the first slice.
+(define (claim-trial pass nested? fuel)
+  (let ((db #f) (clean #t))
     (dynamic-wind
-      (lambda () #f)
+      (lambda () (begun! pass))
       (lambda ()
         (attempt
          (lambda ()
            (set! db (open-database ":memory:"))
+           (when (eq? pass 'low) (traced! db))
            (execute! db "create table t (x)")
            (let* ((begin-sql (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))
                   (entries 0)
@@ -1354,7 +1769,9 @@
                                       (with-transaction db 'deferred
                                         (lambda () (execute! db "insert into t values (?)" fuel) 42))))))
                   (run (lambda ()
-                         (let ((first ((make-engine thunk) fuel complete expire)))
+                         (let* ((met requests)
+                                (first (first-slice (make-engine thunk) fuel)))
+                           (set! clean (= requests met))
                            (if (pair? first)
                                'completed
                                (let* ((e0 entries)
@@ -1374,25 +1791,32 @@
                  (append r
                          (list (vector-ref (query-row db "select count(*) from t where x = ?" fuel) 0)
                                (database-depth db)
-                               (if (in-transaction? db) 'open 'closed))))))))
-      (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))
+                               (if (in-transaction? db) 'open 'closed)
+                               clean)))))))
+      (lambda ()
+        (when db (guard (e (#t #f)) (close-database! db)))
+        (ended!)))))
 
-;; claim-sweep : Boolean -> (Listof Any)
-;; claim-trial at every fuel from 1 until the first slice completes the
-;; call: the fuels that deviated. A deviation is a second level not allowed
-;; above, more commits than levels, a first answer but 42 or the ended
+;; claim-sweep : Pass Boolean -> (Listof Any)
+;; claim-trial in PASS at every fuel from 1 until the first slice completes
+;; the call: the fuels that deviated. A deviation is a second level not
+;; allowed above, more commits than levels, a first answer but 42 or the ended
 ;; condition, a second but those, the re-entry's refusal or the body's
 ;; execute! refused by its own claim, &sqlite-closed, fewer rows than commits,
 ;; a depth but 0, or a transaction left open. Prints the fuels at which R
 ;; made a whole new call, was refused by the claim, and lay past the BEGIN;
 ;; fewer than three refused, or than three past, is itself a deviation, the
-;; sweep having reached nothing.
-(define (claim-sweep nested?)
+;; sweep having reached nothing. A second level is allowed only where R
+;; re-ran the count, or below the first fuel at which the sweep saw R
+;; refused by the claim, or, in the low pass, where a collect request fell
+;; in the first slice, its remainder earlier than its fuel says.
+(define (claim-sweep pass nested?)
   (let loop ((fuel 1) (counted #f) (found '()) (new '()) (refused '()) (past 0))
-    (let ((r (claim-trial nested? fuel)))
+    (let ((r (claim-trial pass nested? fuel)))
       (cond
         ((or (eq? r 'completed) (>= fuel 5000))
-         (display (if nested? "  the claim, nested: " "  the claim, the outer level: "))
+         (display (if nested? "  the claim, nested" "  the claim, the outer level"))
+         (display (if (eq? pass 'low) ", low trip: " ": "))
          (display "completed unexpired at fuel ")
          (write fuel)
          (display "; the thunk's count first made at fuel ")
@@ -1409,18 +1833,16 @@
                  (if (eq? r 'completed) '() '(no-completion))
                  (if (< (length refused) 3) (list (list 'too-few-refused (length refused))) '())
                  (if (< past 3) (list (list 'too-few-past-the-begin past)) '())))
-        ((not (and (list? r) (= (length r) 10)))
+        ((not (and (list? r) (= (length r) 11)))
          (loop (+ fuel 1) counted (cons (list fuel 'the-trial-raised r) found) new refused past))
         (else
          (let* ((e0 (list-ref r 0)) (e (list-ref r 1)) (b0 (list-ref r 2))
                 (a1 (list-ref r 3)) (a2 (list-ref r 4)) (begins (list-ref r 5)) (commits (list-ref r 6))
-                (rows (list-ref r 7)) (depth (list-ref r 8)) (open (list-ref r 9))
+                (rows (list-ref r 7)) (depth (list-ref r 8)) (open (list-ref r 9)) (clean (list-ref r 10))
                 (counted* (or counted (and (eqv? e0 1) fuel)))
                 (ended '(raised (transaction-ended with-transaction)))
                 (whole-new (eqv? begins 2))
-                (allowed-new (and (eqv? b0 0)
-                                  (or (eqv? e 2)
-                                      (and counted* (< fuel (+ counted* claim-window))))))
+                (allowed-new (and (eqv? b0 0) (or (eqv? e 2) (not clean) (null? refused))))
                 (bad (append
                       (if (and whole-new (not allowed-new)) '(a-second-level) '())
                       (if (memv begins '(1 2)) '() (list (list 'levels begins)))
@@ -1510,12 +1932,25 @@
   (let ((r (claim-depths)))
     (list (if (>= (car r) 3) 'many (list 'too-few-refused (car r))) (cadr r))))
 
-(test-equal "the call's claim: at every fuel from 1 until the call completes unexpired, on a fresh connection, its first remainder resumed to its end and then again, at the outer level and nested: a second level is begun only by a whole new call, from a remainder taken before the call's first expression, told by the thunk's own count or within the claim window after it; never more commits than levels; each answer 42 or the ended condition, the second also the re-entry's refusal or the body's execute! refused by its own claim; the depth 0 and nothing left open; at least three fuels refused by the claim, and three past the BEGIN"
-  '(() ())
-  (list (claim-sweep #f) (claim-sweep #t)))
+(define claim-name
+  "the call's claim: at every fuel from 1 until the call completes unexpired, on a fresh connection, its first remainder resumed to its end and then again, at the outer level and nested: a second level is begun only by a whole new call, from a remainder taken before the call's first expression, told by the thunk's own count or below the sweep's first refusal by the claim; never more commits than levels; each answer 42 or the ended condition, the second also the re-entry's refusal or the body's execute! refused by its own claim; the depth 0 and nothing left open; at least three fuels refused by the claim, and three past the BEGIN")
 
-;; claim-reentry-case : Boolean Positive-Integer -> (List Boolean Boolean Any)
-;; At TICKS, on a fresh in-memory connection, nested inside an outer
+(test-equal claim-name
+  '(() ())
+  (let* ((outer (claim-sweep 'high #f))
+         (nested (claim-sweep 'high #t)))
+    (list outer nested)))
+
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, each trial's connection carrying SQLite's trace, so a request falls due inside the BEGIN's section and is handled at its exit: the same verdicts, a whole new call also allowed where a collect request fell in its first slice, and collect requests met in the trials, each forced section's request met before the next, and some first slice expired at a forced section's exit. " claim-name)
+  (append '(() ()) low-checks)
+  (let-values (((r tally) (counted-pass (lambda ()
+                                          (let* ((outer (claim-sweep 'low #f))
+                                                 (nested (claim-sweep 'low #t)))
+                                            (list outer nested))))))
+    (append r (low-reported "the claim" tally))))
+
+;; claim-reentry-case : Pass Boolean Positive-Integer -> (List Boolean Boolean Any)
+;; In PASS, at TICKS, on a fresh in-memory connection, nested inside an outer
 ;; with-transaction, deferred, when NESTED: a timer of TICKS set just
 ;; before with-transaction, deferred, whose handler takes a continuation K
 ;; once; the body inserts 1 and, on its first entry, when K was taken, calls
@@ -1524,20 +1959,26 @@
 ;; whether the body called K; and the call's answer, with-transaction's
 ;; BEGIN or SAVEPOINT runs, the extended code, the depth and in-transaction?
 ;; after it, the outer level over.
-(define (claim-reentry-case nested? ticks)
+(define (claim-reentry-case pass nested? ticks)
   (let* ((old (timer-interrupt-handler))
          (fired #f)
          (called #f)
-         (r (with-memory
-             (lambda (db)
-               (let* ((k #f) (entries 0)
+         (r (dynamic-wind
+             (lambda () (begun! pass))
+             (lambda ()
+              (with-memory
+               (lambda (db)
+                (when (eq? pass 'low) (traced! db))
+                (let* ((k #f) (entries 0)
                       (begin-sql (if nested? "SAVEPOINT chez_sqlite3_1" "BEGIN DEFERRED"))
                       (call (lambda ()
                               (timer-interrupt-handler
                                (lambda ()
                                  (timer-interrupt-handler old)
+                                 (timer-fired!)
                                  (set! fired #t)
                                  (call/cc (lambda (c) (set! k c)))))
+                              (timer-armed!)
                               (set-timer ticks)
                               (let ((a (attempt
                                         (lambda ()
@@ -1550,32 +1991,35 @@
                                               (execute! db "insert into t values (1)")
                                               42))))))
                                 (set-timer 0)
+                                (timer-done!)
                                 (timer-interrupt-handler old)
                                 a)))
                       (answer (if nested? (with-transaction db 'deferred call) (call))))
                  (list answer (car (delta '() (own-runs db) (list begin-sql))) (extended db)
-                       (database-depth db) (if (in-transaction? db) 'open 'closed)))))))
+                       (database-depth db) (if (in-transaction? db) 'open 'closed))))))
+             ended!)))
     (set-timer 0)
     (timer-interrupt-handler old)
     (list fired called r)))
 
-;; claim-reentries : Boolean -> (Listof Any)
-;; claim-reentry-case at every tick from 1 until four in a row do not fire
+;; claim-reentries : Pass Boolean -> (Listof Any)
+;; claim-reentry-case in PASS at every tick from 1 until four in a row do not fire
 ;; the handler: the ticks whose call answered other than 42 or the ended
 ;; condition, left a code, a depth or a transaction. Prints how many
 ;; re-entered the call; fewer than ten is itself a deviation.
-(define (claim-reentries nested?)
+(define (claim-reentries pass nested?)
   (let loop ((ticks 1) (unfired 0) (reentered 0) (found '()))
     (if (or (> unfired 3) (>= ticks 2000))
         (begin
-          (display (if nested? "  the claim re-entered, nested: " "  the claim re-entered, the outer level: "))
+          (display (if nested? "  the claim re-entered, nested" "  the claim re-entered, the outer level"))
+          (display (if (eq? pass 'low) ", low trip: " ": "))
           (write reentered)
           (display " of ")
           (write (- ticks 1))
           (display " ticks re-entered the call from its body")
           (newline)
           (append (reverse found) (if (< reentered 10) (list (list 'too-few-reentries reentered)) '())))
-        (let* ((c (claim-reentry-case nested? ticks))
+        (let* ((c (claim-reentry-case pass nested? ticks))
                (r (caddr c))
                (ok (and (list? r) (= (length r) 5)
                         (member (car r) '(42 (raised (transaction-ended with-transaction))))
@@ -1586,9 +2030,22 @@
           (loop (+ ticks 1) (if (car c) 0 (+ unfired 1)) (if (cadr c) (+ reentered 1) reentered)
                 (if ok found (cons (list ticks c) found)))))))
 
-(test-equal "the claim is read in the BEGIN's own section: a continuation a timer's handler took inside the call, called from the body's first entry while the level is open, at every tick until four in a row do not fire, at the outer level and nested: the call answers 42 or the ended condition, never SQLite's refused BEGIN; the extended code is 0, the depth 0 and nothing left open; at least ten ticks re-enter"
+(define reentry-name
+  "the claim is read in the BEGIN's own section: a continuation a timer's handler took inside the call, called from the body's first entry while the level is open, at every tick until four in a row do not fire, at the outer level and nested: the call answers 42 or the ended condition, never SQLite's refused BEGIN; the extended code is 0, the depth 0 and nothing left open; at least ten ticks re-enter")
+
+(test-equal reentry-name
   '(() ())
-  (list (claim-reentries #f) (claim-reentries #t)))
+  (let* ((outer (claim-reentries 'high #f))
+         (nested (claim-reentries 'high #t)))
+    (list outer nested)))
+
+(test-equal (string-append "the same, each case under a collect trip of 256 bytes, its connection carrying SQLite's trace, so a request falls due inside the BEGIN's section and is handled at its exit, where the timer's ticks can run out and its handler take the continuation: the same verdicts, and collect requests met in the cases, each forced section's request met before the next, until the timer fired, and some timer run out at a forced section's exit. " reentry-name)
+  (append '(() ()) low-checks)
+  (let-values (((r tally) (counted-pass (lambda ()
+                                          (let* ((outer (claim-reentries 'low #f))
+                                                 (nested (claim-reentries 'low #t)))
+                                            (list outer nested))))))
+    (append r (low-reported "the claim re-entered" tally))))
 
 ;; --- the BEGIN's plan, read in the BEGIN's section --------------------------------------------
 ;;
@@ -1722,6 +2179,13 @@
              (if (> fuel 2) (reverse found*) (cons 'too-few-expiring-fuels (reverse found*))))
             ((or (not ok) (>= fuel 5000)) (cons 'no-completion (reverse found*)))
             (else (loop (+ fuel 1) found*))))))
+
+(test-equal "the profile trace's callback was locked at the load, and is unlocked once every connection is closed"
+  '(locked unlocked)
+  (list profile-locked
+        (guard (e (#t (list 'raised (describe e))))
+          (unlock-object profile)
+          'unlocked)))
 
 (test-equal "every count is zero at the end"
   zero-counts

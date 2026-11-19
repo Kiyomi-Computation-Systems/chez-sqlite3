@@ -211,6 +211,9 @@
   ;; between these two and call-with-open-handle's open check, as
   ;; prepare-statement checks its SQL. It hands over no handle, and raises
   ;; outside any section: neither a database's type nor its owner can change.
+  ;; The calling thread can, when an engine's remainder is resumed on
+  ;; another, so it orders the refusals and guards nothing:
+  ;; call-with-open-handle checks the owner again inside its section.
   (define (check-database-owner who db)
     (check-who 'check-database-owner who)
     (check-owned who db))
@@ -222,10 +225,18 @@
   ;; that is no symbol and a PROC that is no procedure are assertion
   ;; violations first.
   ;;
-  ;; The first two checks come before the critical section: a database's
-  ;; type, its owner, which is immutable, and the caller's own thread id
-  ;; cannot change. The open check and PROC run in the section, so the handle
-  ;; cannot be closed between the check and its use. PROC runs with
+  ;; The first two checks come before the critical section, so a wrong
+  ;; thread is refused before anything else is touched. The owner check is
+  ;; made again inside the section, first, with the thread id read there:
+  ;; Chez resumes an engine's remainder on whichever thread calls it, so a
+  ;; call that passed the first check on the owner's thread, then expired,
+  ;; can go on on another (M4's closing review, F2). There the section
+  ;; answers (wrong-thread OWNER CALLER), touching nothing, and
+  ;; &sqlite-wrong-thread is raised from WHO after it, the procedure the
+  ;; caller called, whatever state the connection is in, as the first check
+  ;; does. The open check and PROC run in the section after it, so the
+  ;; handle cannot be closed, nor the thread change, between the checks and
+  ;; its use. PROC runs with
   ;; interrupts disabled, so it keeps to the C call and its reads, and answers
   ;; data: what it raises is caught in the section and raised again after it,
   ;; the same object, with raise. So a raise-continuable from PROC cannot be
@@ -262,18 +273,22 @@
               (lambda ()
                 (let ((outcome
                        (critical-section
-                        (let ((handle (unchecked-database-handle db)))
-                          (if (not handle)
-                              '(closed)
-                              (guard (c (#t (list 'raised c)))
-                                (call-with-values (lambda () (proc handle))
-                                  (lambda answers (cons 'answered answers)))))))))
+                        (let ((owner (unchecked-database-owner db))
+                              (caller (get-thread-id))
+                              (handle (unchecked-database-handle db)))
+                          (cond ((not (eqv? owner caller)) (list 'wrong-thread owner caller))
+                                ((not handle) '(closed))
+                                (else
+                                 (guard (c (#t (list 'raised c)))
+                                   (call-with-values (lambda () (proc handle))
+                                     (lambda answers (cons 'answered answers))))))))))
                   (set! finished #t)
                   outcome))
               (lambda () #f))))
       (case (car outcome)
         ((answered) (apply values (cdr outcome)))
         ((closed) (raise-closed who))
+        ((wrong-thread) (raise-wrong-thread who (cadr outcome) (caddr outcome)))
         (else (raise (cadr outcome))))))
 
   ;; --- the statements a connection tracks ------------------------------------------------
@@ -402,18 +417,26 @@
     (check-owned 'database-cache-capacity db)
     (statement-cache-capacity (unchecked-database-cache db)))
 
-  ;; database-extension-loading? : Database -> Boolean
+  ;; database-extension-loading? : (case-> (Database -> Boolean) (Symbol Database -> Boolean))
   ;; Whether DB opted in to extension loading at open: its settings list
   ;; held (enable-load-extension . #t), so its plan held the opt-in's step,
   ;; and that set matched; #f for its #f, which makes no call, and for no
   ;; setting (ADR-0021, decisions 5 and 6). Fixed when the record was made,
-  ;; read whether DB is open or closed. DB checked by check-owned first, from
-  ;; database-extension-loading?, as database-cache-capacity is. For the
-  ;; suites, and for M4 slice 4's load-extension!, which makes its own owner
-  ;; check first and reads this last of its checks.
-  (define (database-extension-loading? db)
-    (check-owned 'database-extension-loading? db)
-    (unchecked-database-opt-in db))
+  ;; read whether DB is open or closed. DB checked by check-owned first, as
+  ;; database-cache-capacity is: from WHO when it is given, else from
+  ;; database-extension-loading?. A WHO that is no symbol is an assertion
+  ;; violation first. For the suites, and, with its WHO, for M4 slice 4's
+  ;; load-extension!, which reads it last of its checks. A remainder of that
+  ;; call can be resumed on another thread after its first checks, so this
+  ;; read's own owner check refuses it there, and names the verb the caller
+  ;; called (ADR-0013, decision 2; M4's closing review, F3).
+  (define database-extension-loading?
+    (case-lambda
+      ((db) (database-extension-loading? 'database-extension-loading? db))
+      ((who db)
+       (check-who 'database-extension-loading? who)
+       (check-owned who db)
+       (unchecked-database-opt-in db))))
 
   ;; database-cache-count : Database -> Natural
   ;; How many statements DB's cache holds now, read in one critical section;
@@ -608,33 +631,53 @@
   ;; and counted; else, the connection closed, the first finalize failure
   ;; (R1), then a count-down that found the count at zero, count-down!'s
   ;; double free. The work raises nothing.
+  ;;
+  ;; The owner is checked twice, as call-with-open-handle checks it: by
+  ;; check-owned first, so the refusals keep their order, and again in a
+  ;; critical section around interrupt-latch-close!'s, with the thread id
+  ;; read there, before the latch is touched. Chez resumes an engine's
+  ;; remainder on whichever thread calls it, so a close that passed the
+  ;; first check on the owner's thread could otherwise finalize and close
+  ;; on another (M4's closing review, the M4 session's check). There the
+  ;; section answers (wrong-thread OWNER CALLER), touching nothing, and
+  ;; &sqlite-wrong-thread is raised from WHO after it. What
+  ;; interrupt-latch-close! raises after its own section, only what the
+  ;; work raised, is caught in this one and raised again after it.
   (define (close-connection who db)
     (check-owned who db)
     (let ((outcome
-           (interrupt-latch-close!
-            (unchecked-database-latch db)
-            (lambda ()
-              (let ((handle (unchecked-database-handle db)))
-                (if (not handle)
-                    '(already-closed)
-                    (let* ((failure (finalize-tracked! db handle))
-                           (emptied (statement-cache-clear! (unchecked-database-cache db)))
-                           (rc (sqlite3-close handle)))
-                      (if (eqv? rc sqlite-ok)
-                          (begin
-                            (set-database-handle! db #f)
-                            (let ((double-free (guard (c (#t c))
-                                                 (count-down! 'connection)
-                                                 #f)))
-                              (cond (failure (list 'finalize-failed failure))
-                                    (double-free (list 'double-free double-free))
-                                    (else '(closed)))))
-                          (let ((untracked (statements-on handle)))
-                            (if (> untracked 0)
-                                (list 'untracked untracked)
-                                (cons 'failed (details-of rc handle)))))))))
-            close-left-open?)))
+           (critical-section
+            (let ((owner (unchecked-database-owner db))
+                  (caller (get-thread-id)))
+              (if (not (eqv? owner caller))
+                  (list 'wrong-thread owner caller)
+                  (guard (c (#t (list 'raised c)))
+                    (interrupt-latch-close!
+                     (unchecked-database-latch db)
+                     (lambda ()
+                       (let ((handle (unchecked-database-handle db)))
+                         (if (not handle)
+                             '(already-closed)
+                             (let* ((failure (finalize-tracked! db handle))
+                                    (emptied (statement-cache-clear! (unchecked-database-cache db)))
+                                    (rc (sqlite3-close handle)))
+                               (if (eqv? rc sqlite-ok)
+                                   (begin
+                                     (set-database-handle! db #f)
+                                     (let ((double-free (guard (c (#t c))
+                                                          (count-down! 'connection)
+                                                          #f)))
+                                       (cond (failure (list 'finalize-failed failure))
+                                             (double-free (list 'double-free double-free))
+                                             (else '(closed)))))
+                                   (let ((untracked (statements-on handle)))
+                                     (if (> untracked 0)
+                                         (list 'untracked untracked)
+                                         (cons 'failed (details-of rc handle)))))))))
+                     close-left-open?)))))))
       (case (car outcome)
+        ((wrong-thread) (raise-wrong-thread who (cadr outcome) (caddr outcome)))
+        ((raised) (raise (cadr outcome)))
         ((untracked)
          (assertion-violation who "the connection has statements chez-sqlite3 does not track"
                               'untracked-statements (cadr outcome)))

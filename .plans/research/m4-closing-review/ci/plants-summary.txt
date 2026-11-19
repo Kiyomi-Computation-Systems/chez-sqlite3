@@ -1,0 +1,1300 @@
+C01: the no-load build's run line is required (only the first build's)
+  exit 1, passed 486, failed 10
+    FAIL no-load: the build deleted
+    FAIL no-load: the build written twice
+    FAIL no-load: the build with --current
+    FAIL no-load: the build into the current build's directory
+    FAIL no-load: the build into a directory below its cache's, sqlite-no-load/x
+    FAIL no-load: the build without its if
+    FAIL no-load: the build without CHEZ
+    FAIL no-load: the five steps before the current build's make test
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+C02: the no-load check's run line is required (only the first build's)
+  exit 1, passed 8, failed 488
+    FAIL a stray scripts/ci/ line: a double-quoted path
+    FAIL a stray scripts/ci/ line: a single-quoted path
+    FAIL a stray scripts/ci/ line: two spaces after run:
+    FAIL a stray scripts/ci/ line: a block scalar, run: |
+    FAIL a stray scripts/ci/ line: a block scalar, run: >-
+    FAIL a stray scripts/ci/ line: ./scripts/ci/NAME
+    FAIL a stray scripts/ci/ line: scripts/ci//NAME
+    FAIL a stray scripts/ci/ line: scripts/ci/sub/NAME
+    FAIL a stray scripts/ci/ line: NAME;true
+    FAIL a stray scripts/ci/ line: NAME&&true
+    FAIL a stray scripts/ci/ line: after another command, true && scripts/ci/NAME
+    FAIL a stray scripts/ line: scripts/./ci/NAME, which holds no scripts/ci/
+    FAIL a stray scripts/ line: scripts//ci/NAME, which holds no scripts/ci/
+    FAIL the unedited file passes
+    FAIL a quoted key, "if": false
+    FAIL a single-quoted key, 'if': false
+    FAIL white space between a key and its colon, if : false
+    FAIL an explicit key, ? if
+    FAIL an anchor where a key goes
+    FAIL an alias where a key goes
+    FAIL an anchor on a step's key, - &a uses: x
+    FAIL an unpinned action hidden by - ? uses / : owner/action@main
+    FAIL a flow mapping in a name
+    FAIL a { inside a quoted scalar passes
+    FAIL a backslash after a double quote
+    FAIL a quoted scalar left open
+    FAIL a tab in a structural line
+    FAIL a tab in a block scalar's content
+    FAIL a character beyond ASCII in a structural line
+    FAIL a key spelled with a dotless i
+    FAIL a character beyond ASCII in a block scalar's content
+    FAIL key-looking lines inside a block scalar are content, and pass
+    FAIL a line dedented out of a block scalar is read again
+    FAIL GITHUB_ENV written as MAKE""FLAGS
+    FAIL GITHUB_PATH in a block scalar
+    FAIL a word of the allowed set, SUITES_X, is no name held
+    FAIL CHEZ_SQLITE3_LIBRARY at the workflow's top level
+    FAIL CHEZ_SQLITE3_LIBRARY in a step's env
+    FAIL a block scalar names MAKEFLAGS
+    FAIL a block scalar names MFLAGS
+    FAIL a block scalar names GNUMAKEFLAGS
+    FAIL a block scalar names VALGRIND
+    FAIL a block scalar names VALGRIND_OPTS
+    FAIL a block scalar names VALGRIND_LIB
+    FAIL a block scalar names MEMORY_SUITES
+    FAIL a block scalar names MEMORY_TIMEOUT
+    FAIL a block scalar names TEST_TIMEOUT
+    FAIL a block scalar names LIBDIRS
+    FAIL a block scalar names TIMEOUT
+    FAIL a block scalar names SUITES
+    FAIL a block scalar names CHEZ_SQLITE3_LIBRARY
+    FAIL a block scalar names CHEZ_SQLITE3_DECOY
+    FAIL a block scalar names CHEZ_SQLITE3_GATE_CHILD
+    FAIL a block scalar names CC
+    FAIL a block scalar names C_INCLUDE_PATH
+    FAIL a block scalar names CPATH
+    FAIL a block scalar names LD_LIBRARY_PATH
+    FAIL a block scalar names LD_PRELOAD
+    FAIL a block scalar names CHECK_CI_ROOT
+    FAIL a block scalar names MEMORY_SHARD
+    FAIL a block scalar names MEMORY_SUITES_1
+    FAIL a block scalar names MEMORY_SUITES_2
+    FAIL a block scalar names MEMORY_LOGS
+    FAIL a block scalar names check-memory-gate, a gate
+    FAIL a block scalar names test-memory, a gate
+    FAIL a block scalar names check-nothreads, a gate
+    FAIL the on block gets a path filter
+    FAIL the on block gets another trigger
+    FAIL the on block loses a trigger
+    FAIL the permissions widen
+    FAIL the concurrency group changes
+    FAIL a top-level defaults
+    FAIL a top-level key twice
+    FAIL permissions after concurrency
+    FAIL the nothreads job deleted
+    FAIL a job added
+    FAIL a job's runs-on changes
+    FAIL a job's timeout-minutes is no number
+    FAIL a job without timeout-minutes
+    FAIL a job key twice
+    FAIL a job key with a value where a block goes, steps: x
+    FAIL O7: MAKEFLAGS in memory-1's gate step's env
+    FAIL O8: a run block that names the gate
+    FAIL O9: VALGRIND_OPTS written through GITHUB_ENV
+    FAIL a trailing comment on a shard's run line
+    FAIL a shard's run line as a block scalar
+    FAIL a shard's run line in the wrong job
+    FAIL a third shard, in a job of its own, memory-3
+    FAIL a step key shell
+    FAIL a step key working-directory
+    FAIL a step key continue-on-error
+    FAIL a step key timeout-minutes
+    FAIL a with key outside the three
+    FAIL a flow mapping under with
+    FAIL an env key besides CHEZ
+    FAIL the CHEZ path of main swapped to nothreads's
+    FAIL the CHEZ path of nothreads swapped to main's
+    FAIL an if with another value
+    FAIL the nothreads build without its if
+    FAIL the cache's if on the wrong step
+    FAIL an if on a required check
+    FAIL main's make line without check-help
+    FAIL main's make line without check-suites
+    FAIL main's make line without check-pins
+    FAIL main's make line without check-floors
+    FAIL main's make line without check-ci
+    FAIL main's make line without test
+    FAIL main's make line without check-test-fails
+    FAIL main's make line without check-variadic
+    FAIL main's make line without check-dev
+    FAIL main's make line without check-clean
+    FAIL main's pin step deleted
+    FAIL main's checkout without submodules
+    FAIL main's checkout with submodules: false
+    FAIL main's launcher step deleted
+    FAIL main's check-chez step deleted
+    FAIL main's install check deleted
+    FAIL main's install check written twice
+    FAIL main's install check moved after Checks and suites
+    FAIL main's install check moved before Check the Chez
+    FAIL an if on main's install check
+    FAIL main's install check with an argument, make build X
+    FAIL main's install check as a block scalar
+    FAIL an env key CC on main's install check
+    FAIL nothreads's check-chez without --nothreads
+    FAIL nothreads's check-nothreads step deleted
+    FAIL the versions step deleted
+    FAIL the SQLite step deleted
+    FAIL both report steps deleted
+    FAIL the versions step renamed
+    FAIL the SQLite step renamed
+    FAIL the versions step written twice
+    FAIL the two report steps swapped
+    FAIL the versions step moved after Checks and suites
+    FAIL the SQLite step moved after Checks and suites
+    FAIL the versions step moved before Check the Chez
+    FAIL the SQLite step moved before Check the Chez
+    FAIL a line at the start of the versions block
+    FAIL a line in the middle of the versions block
+    FAIL a line at the end of the versions block
+    FAIL a comment at the end of the versions block
+    FAIL a line removed from the middle of the versions block
+    FAIL the last line removed from the versions block
+    FAIL a line of the versions block changed
+    FAIL a line of the versions block re-indented
+    FAIL the versions block clipped, run: |-
+    FAIL the SQLite step's run line changed
+    FAIL the SQLite step's env dropped
+    FAIL nothreads's cache key drops 'packaging/floors.sexp', 
+    FAIL nothreads's cache key drops , 'scripts/ci/floor.sh'
+    FAIL nothreads's cache key drops , 'scripts/ci/build-chez.sh'
+    FAIL nothreads's cache key drops , 'scripts/ci/check-chez.sh'
+    FAIL nothreads's cache key takes threads's prefix
+    FAIL nothreads's cache key has a tail that is no suffix
+    FAIL a cache key that is no expression at all
+    FAIL nothreads's cache key hashes one file more
+    FAIL main's cache key drops a file
+    FAIL memory-1: the job deleted
+    FAIL memory-1: the gate step deleted
+    FAIL memory-1: the shard's step deleted
+    FAIL memory-1: the check-chez step deleted
+    FAIL memory-1: the shard's step before the gate step
+    FAIL memory-1: an if: always() on the step that runs make check-memory-gate
+    FAIL memory-1: continue-on-error on the step that runs make check-memory-gate
+    FAIL memory-1: an if: always() on the step that runs make test-memory MEMORY_SHARD=1
+    FAIL memory-1: continue-on-error on the step that runs make test-memory MEMORY_SHARD=1
+    FAIL memory-1: the shard's step runs the other job's shard, so both jobs run it
+    FAIL memory-1: the shard's step runs a third shard
+    FAIL memory-1: the shard's step runs every suite, no shard
+    FAIL memory-1: the shard's step names suites of its own too
+    FAIL memory-1: the shard's step takes its number from env as well
+    FAIL memory-1: the gate step's env names the shard's list
+    FAIL memory-1: the shard's CHEZ is the nothreads Chez
+    FAIL memory-1: its cache key takes nothreads's prefix
+    FAIL memory-1: a job key if
+    FAIL memory-1: a job key needs
+    FAIL memory-1: a job key continue-on-error
+    FAIL memory-1: a job key strategy
+    FAIL memory-1: a job key container
+    FAIL memory-1: a job key services
+    FAIL memory-1: a job key defaults
+    FAIL memory-1: a job key env
+    FAIL memory-1: a job key permissions
+    FAIL memory-1: a job key outputs
+    FAIL memory-1: a job key environment
+    FAIL memory-2: the job deleted
+    FAIL memory-2: the gate step deleted
+    FAIL memory-2: the shard's step deleted
+    FAIL memory-2: the check-chez step deleted
+    FAIL memory-2: the shard's step before the gate step
+    FAIL memory-2: an if: always() on the step that runs make check-memory-gate
+    FAIL memory-2: continue-on-error on the step that runs make check-memory-gate
+    FAIL memory-2: an if: always() on the step that runs make test-memory MEMORY_SHARD=2
+    FAIL memory-2: continue-on-error on the step that runs make test-memory MEMORY_SHARD=2
+    FAIL memory-2: the shard's step runs the other job's shard, so both jobs run it
+    FAIL memory-2: the shard's step runs a third shard
+    FAIL memory-2: the shard's step runs every suite, no shard
+    FAIL memory-2: the shard's step names suites of its own too
+    FAIL memory-2: the shard's step takes its number from env as well
+    FAIL memory-2: the gate step's env names the shard's list
+    FAIL memory-2: the shard's CHEZ is the nothreads Chez
+    FAIL memory-2: its cache key takes nothreads's prefix
+    FAIL memory-2: a job key if
+    FAIL memory-2: a job key needs
+    FAIL memory-2: a job key continue-on-error
+    FAIL memory-2: a job key strategy
+    FAIL memory-2: a job key container
+    FAIL memory-2: a job key services
+    FAIL memory-2: a job key defaults
+    FAIL memory-2: a job key env
+    FAIL memory-2: a job key permissions
+    FAIL memory-2: a job key outputs
+    FAIL memory-2: a job key environment
+    FAIL the floor job deleted
+    FAIL a seventh job
+    FAIL main's install check gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL main's install check gains C_INCLUDE_PATH, with floor's exact value
+    FAIL memory-1's gate step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL memory-2's gate step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL nothreads's step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL nothreads's step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL main: the Chez restore moved below check-chez.sh
+    FAIL main: the Chez save moved below check-chez.sh
+    FAIL main: the Chez save moved above the Chez build
+    FAIL floor: the Chez restore moved below check-chez.sh
+    FAIL floor: the Chez save moved below check-chez.sh
+    FAIL floor: the Chez save moved above the Chez build
+    FAIL floor: the checkout without submodules
+    FAIL floor: the checkout with submodules: false
+    FAIL floor: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" deleted
+    FAIL floor: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL floor: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" deleted
+    FAIL floor: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL floor: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor" deleted
+    FAIL floor: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor" deleted
+    FAIL floor: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs make build deleted
+    FAIL floor: the step that runs make build written twice
+    FAIL floor: the step that runs make test deleted
+    FAIL floor: the step that runs make test written twice
+    FAIL floor: the check after make build
+    FAIL floor: make test before make build
+    FAIL floor: the SQLite build before check-chez
+    FAIL floor: the SQLite build without its if
+    FAIL floor: an if with another value on the SQLite build
+    FAIL floor: an if: always() on the SQLite check
+    FAIL floor: an if: always() on make build
+    FAIL floor: an if: always() on make test
+    FAIL floor: continue-on-error on make test
+    FAIL floor: make test X
+    FAIL floor: make test as a block scalar
+    FAIL floor: make build with an argument
+    FAIL floor: the check with --current
+    FAIL floor: the build with the other lane's flag
+    FAIL floor: the build into another directory
+    FAIL floor: the compiler step's line changed
+    FAIL floor: the compiler step without its id
+    FAIL floor: check-chez with --nothreads
+    FAIL floor: the SQLite if on the Chez build
+    FAIL floor: the Chez if on the SQLite build
+    FAIL floor: the SQLite if on the Chez save
+    FAIL floor: the Chez if on the SQLite save
+    FAIL floor: the SQLite if on make test
+    FAIL floor: the Chez if on make test
+    FAIL floor: the SQLite key drops 'packaging/floors.sexp', 
+    FAIL floor: the SQLite key drops , 'scripts/ci/floor.sh'
+    FAIL floor: the SQLite key drops , 'scripts/ci/build-sqlite.sh'
+    FAIL floor: the SQLite key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL floor: the SQLite key hashes one file more
+    FAIL floor: the SQLite key drops the compiler
+    FAIL floor: the SQLite key drops the image
+    FAIL floor: the SQLite key takes the other lane's prefix
+    FAIL floor: the SQLite key takes the other lane's whole key
+    FAIL floor: the SQLite key has a tail
+    FAIL floor: the SQLite restore's path is the other lane's
+    FAIL floor: the SQLite save's path is the other lane's
+    FAIL floor: the SQLite save is keyed by the Chez cache
+    FAIL floor: the Chez save is keyed by the SQLite cache
+    FAIL floor: the SQLite save is keyed as a restore is
+    FAIL floor: the SQLite restore deleted
+    FAIL floor: the SQLite restore written twice
+    FAIL floor: the SQLite save deleted
+    FAIL floor: the SQLite restore without its id
+    FAIL floor: the SQLite restore's id is another
+    FAIL floor: the Chez key drops a file
+    FAIL floor: the Chez cache's path is the SQLite cache's
+    FAIL floor: the check's library is the other lane's
+    FAIL floor: the suites' header directory has a second directory
+    FAIL floor: the library's value is relative
+    FAIL floor: the check's CHEZ is the nothreads Chez
+    FAIL floor: make test without C_INCLUDE_PATH
+    FAIL floor: make build without CHEZ_SQLITE3_LIBRARY
+    FAIL floor: the check without CHEZ
+    FAIL floor: the check without any env
+    FAIL floor: the SQLite build without CHEZ
+    FAIL floor: the SQLite build with the override
+    FAIL floor: the SQLite restore with the header directory
+    FAIL floor: the Chez build with the override
+    FAIL floor: the suites' env gains CPATH
+    FAIL floor: the suites' env gains LD_LIBRARY_PATH
+    FAIL floor: the suites' env gains CC
+    FAIL floor: the suites' env gains MAKEFLAGS
+    FAIL floor: the suites' env gains CHEZ_SQLITE3_DECOY
+    FAIL floor: a run block exports CHEZ_SQLITE3_LIBRARY
+    FAIL floor: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL floor: a step's name names C_INCLUDE_PATH
+    FAIL floor: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL floor: a run line names C_INCLUDE_PATH
+    FAIL floor: a quoted key, "if": false
+    FAIL floor: an explicit key, ? if
+    FAIL floor: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL floor: the SQLite restore moved below the check
+    FAIL floor: the compiler step moved below the SQLite restore
+    FAIL floor: the SQLite save moved below the check
+    FAIL floor: the SQLite save moved above the build
+    FAIL floor: a job key if
+    FAIL floor: a job key needs
+    FAIL floor: a job key continue-on-error
+    FAIL floor: a job key strategy
+    FAIL floor: a job key container
+    FAIL floor: a job key services
+    FAIL floor: a job key defaults
+    FAIL floor: a job key env
+    FAIL floor: a job key permissions
+    FAIL floor: a job key outputs
+    FAIL floor: a job key environment
+    FAIL floor: runs-on is not ubuntu-24.04
+    FAIL floor: the job has no timeout-minutes
+    FAIL current: the checkout without submodules
+    FAIL current: the checkout with submodules: false
+    FAIL current: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" deleted
+    FAIL current: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL current: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" deleted
+    FAIL current: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL current: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current deleted
+    FAIL current: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current deleted
+    FAIL current: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs make build deleted
+    FAIL current: the step that runs make build written twice
+    FAIL current: the step that runs make test deleted
+    FAIL current: the step that runs make test written twice
+    FAIL current: the check after make build
+    FAIL current: make test before make build
+    FAIL current: the SQLite build before check-chez
+    FAIL current: the SQLite build without its if
+    FAIL current: an if with another value on the SQLite build
+    FAIL current: an if: always() on the SQLite check
+    FAIL current: an if: always() on make build
+    FAIL current: an if: always() on make test
+    FAIL current: continue-on-error on make test
+    FAIL current: make test X
+    FAIL current: make test as a block scalar
+    FAIL current: make build with an argument
+    FAIL current: the check without --current
+    FAIL current: the build with the other lane's flag
+    FAIL current: the build into another directory
+    FAIL current: the compiler step's line changed
+    FAIL current: the compiler step without its id
+    FAIL current: check-chez with --nothreads
+    FAIL current: the SQLite if on the Chez build
+    FAIL current: the Chez if on the SQLite build
+    FAIL current: the SQLite if on the Chez save
+    FAIL current: the Chez if on the SQLite save
+    FAIL current: the SQLite if on make test
+    FAIL current: the Chez if on make test
+    FAIL current: the SQLite key drops 'scripts/ci/build-sqlite.sh', 
+    FAIL current: the SQLite key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL current: the SQLite key hashes one file more
+    FAIL current: the SQLite key drops the compiler
+    FAIL current: the SQLite key drops the image
+    FAIL current: the SQLite key takes the other lane's prefix
+    FAIL current: the SQLite key takes the other lane's whole key
+    FAIL current: the SQLite key has a tail
+    FAIL current: the SQLite restore's path is the other lane's
+    FAIL current: the SQLite save's path is the other lane's
+    FAIL current: the SQLite save is keyed by the Chez cache
+    FAIL current: the Chez save is keyed by the SQLite cache
+    FAIL current: the SQLite save is keyed as a restore is
+    FAIL current: the SQLite restore deleted
+    FAIL current: the SQLite restore written twice
+    FAIL current: the SQLite save deleted
+    FAIL current: the SQLite restore without its id
+    FAIL current: the SQLite restore's id is another
+    FAIL current: the Chez key drops a file
+    FAIL current: the Chez cache's path is the SQLite cache's
+    FAIL current: the check's library is the other lane's
+    FAIL current: the suites' header directory has a second directory
+    FAIL current: the library's value is relative
+    FAIL current: the check's CHEZ is the nothreads Chez
+    FAIL current: make test without C_INCLUDE_PATH
+    FAIL current: make build without CHEZ_SQLITE3_LIBRARY
+    FAIL current: the check without CHEZ
+    FAIL current: the check without any env
+    FAIL current: the SQLite build without CHEZ
+    FAIL current: the SQLite build with the override
+    FAIL current: the SQLite restore with the header directory
+    FAIL current: the Chez build with the override
+    FAIL current: the suites' env gains CPATH
+    FAIL current: the suites' env gains LD_LIBRARY_PATH
+    FAIL current: the suites' env gains CC
+    FAIL current: the suites' env gains MAKEFLAGS
+    FAIL current: the suites' env gains CHEZ_SQLITE3_DECOY
+    FAIL current: a run block exports CHEZ_SQLITE3_LIBRARY
+    FAIL current: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL current: a step's name names C_INCLUDE_PATH
+    FAIL current: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL current: a run line names C_INCLUDE_PATH
+    FAIL current: a quoted key, "if": false
+    FAIL current: an explicit key, ? if
+    FAIL current: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL current: the SQLite restore moved below the check
+    FAIL current: the compiler step moved below the SQLite restore
+    FAIL current: the SQLite save moved below the check
+    FAIL current: the SQLite save moved above the build
+    FAIL current: a job key if
+    FAIL current: a job key needs
+    FAIL current: a job key continue-on-error
+    FAIL current: a job key strategy
+    FAIL current: a job key container
+    FAIL current: a job key services
+    FAIL current: a job key defaults
+    FAIL current: a job key env
+    FAIL current: a job key permissions
+    FAIL current: a job key outputs
+    FAIL current: a job key environment
+    FAIL current: runs-on is not ubuntu-24.04
+    FAIL current: the job has no timeout-minutes
+    FAIL no-load: the restore deleted
+    FAIL no-load: the restore written twice
+    FAIL no-load: the restore without its id
+    FAIL no-load: the restore's id is the current build's, sqlite
+    FAIL no-load: the restore's path misspelt, sqlite-noload
+    FAIL no-load: the restore's key drops 'scripts/ci/build-sqlite.sh', 
+    FAIL no-load: the restore's key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL no-load: the restore's key drops -${{ steps.image.outputs.id }}
+    FAIL no-load: the restore's key drops -${{ steps.cc.outputs.id }}
+    FAIL no-load: the restore's key hashes the floors file too
+    FAIL no-load: the restore's key takes the current build's prefix
+    FAIL no-load: the restore's key is the current build's whole key
+    FAIL no-load: the restore's key has a tail
+    FAIL no-load: the build deleted
+    FAIL no-load: the build written twice
+    FAIL no-load: the build with --current
+    FAIL no-load: the build into the current build's directory
+    FAIL no-load: the build into a directory below its cache's, sqlite-no-load/x
+    FAIL no-load: the build without its if
+    FAIL no-load: the build without CHEZ
+    FAIL no-load: the build's if names the current build's restore, steps.sqlite
+    FAIL no-load: the current build's if names the no-load restore
+    FAIL no-load: the build's if is the Chez cache's
+    FAIL no-load: the build's env gains C_INCLUDE_PATH
+    FAIL no-load: the save deleted
+    FAIL no-load: the save keyed by the current build's restore
+    FAIL no-load: the save keyed as its restore is
+    FAIL no-load: the save's path misspelt, sqlite-noload
+    FAIL no-load: the save before its build
+    FAIL no-load: the save after its check
+    FAIL no-load: the restore before the current build's make test
+    FAIL no-load: the restore before the compiler step
+    FAIL no-load: the restore's env names the library
+    FAIL no-load: the check deleted
+    FAIL no-load: the check with --current
+    FAIL no-load: the check's header directory is the current build's
+    FAIL no-load: the check without CHEZ
+    FAIL no-load: the make test deleted
+    FAIL no-load: the make test without its env
+    FAIL no-load: the make test with the current build's library
+    FAIL no-load: the current build's make test with the no-load library
+    FAIL no-load: the two make tests' env blocks swapped
+    FAIL no-load: an if: always() on the make test
+    FAIL no-load: the five steps before the current build's make test
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+    FAIL a second workflow in the directory
+    FAIL a hidden file in the directory
+    FAIL a subdirectory in the directory
+    FAIL the real scripts, each executable: the workflow passes
+    FAIL check-action-pins.sh without its execute bit: every step that runs it is named
+    FAIL build-chez.sh without its execute bit: every step that runs it is named
+    FAIL check-chez.sh without its execute bit: every step that runs it is named
+    FAIL report-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL build-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL check-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL build-chez.sh missing: every step that runs it is named
+    FAIL report-sqlite.sh missing: every step that runs it is named
+    FAIL floor.sh without its execute bit: the workflow passes
+C03: a line required n times is run by n steps (n or more)
+  exit 1, passed 481, failed 15
+    FAIL main's install check written twice
+    FAIL floor: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL floor: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL floor: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs make build written twice
+    FAIL floor: the step that runs make test written twice
+    FAIL current: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL current: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL current: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs make build written twice
+    FAIL current: the step that runs make test written twice
+    FAIL no-load: the build written twice
+    FAIL no-load: the five steps in job floor
+C04: the kth time a line is required is its kth step (always the first)
+  exit 1, passed 15, failed 481
+    FAIL a stray scripts/ci/ line: a double-quoted path
+    FAIL a stray scripts/ci/ line: a single-quoted path
+    FAIL a stray scripts/ci/ line: two spaces after run:
+    FAIL a stray scripts/ci/ line: a block scalar, run: |
+    FAIL a stray scripts/ci/ line: a block scalar, run: >-
+    FAIL a stray scripts/ci/ line: ./scripts/ci/NAME
+    FAIL a stray scripts/ci/ line: scripts/ci//NAME
+    FAIL a stray scripts/ci/ line: scripts/ci/sub/NAME
+    FAIL a stray scripts/ci/ line: NAME;true
+    FAIL a stray scripts/ci/ line: NAME&&true
+    FAIL a stray scripts/ci/ line: after another command, true && scripts/ci/NAME
+    FAIL a stray scripts/ line: scripts/./ci/NAME, which holds no scripts/ci/
+    FAIL a stray scripts/ line: scripts//ci/NAME, which holds no scripts/ci/
+    FAIL the unedited file passes
+    FAIL a quoted key, "if": false
+    FAIL a single-quoted key, 'if': false
+    FAIL white space between a key and its colon, if : false
+    FAIL an explicit key, ? if
+    FAIL an anchor where a key goes
+    FAIL an alias where a key goes
+    FAIL an anchor on a step's key, - &a uses: x
+    FAIL an unpinned action hidden by - ? uses / : owner/action@main
+    FAIL a flow mapping in a name
+    FAIL a { inside a quoted scalar passes
+    FAIL a backslash after a double quote
+    FAIL a quoted scalar left open
+    FAIL a tab in a structural line
+    FAIL a tab in a block scalar's content
+    FAIL a character beyond ASCII in a structural line
+    FAIL a key spelled with a dotless i
+    FAIL a character beyond ASCII in a block scalar's content
+    FAIL key-looking lines inside a block scalar are content, and pass
+    FAIL a line dedented out of a block scalar is read again
+    FAIL GITHUB_ENV written as MAKE""FLAGS
+    FAIL GITHUB_PATH in a block scalar
+    FAIL a word of the allowed set, SUITES_X, is no name held
+    FAIL CHEZ_SQLITE3_LIBRARY at the workflow's top level
+    FAIL CHEZ_SQLITE3_LIBRARY in a step's env
+    FAIL a block scalar names MAKEFLAGS
+    FAIL a block scalar names MFLAGS
+    FAIL a block scalar names GNUMAKEFLAGS
+    FAIL a block scalar names VALGRIND
+    FAIL a block scalar names VALGRIND_OPTS
+    FAIL a block scalar names VALGRIND_LIB
+    FAIL a block scalar names MEMORY_SUITES
+    FAIL a block scalar names MEMORY_TIMEOUT
+    FAIL a block scalar names TEST_TIMEOUT
+    FAIL a block scalar names LIBDIRS
+    FAIL a block scalar names TIMEOUT
+    FAIL a block scalar names SUITES
+    FAIL a block scalar names CHEZ_SQLITE3_LIBRARY
+    FAIL a block scalar names CHEZ_SQLITE3_DECOY
+    FAIL a block scalar names CHEZ_SQLITE3_GATE_CHILD
+    FAIL a block scalar names CC
+    FAIL a block scalar names C_INCLUDE_PATH
+    FAIL a block scalar names CPATH
+    FAIL a block scalar names LD_LIBRARY_PATH
+    FAIL a block scalar names LD_PRELOAD
+    FAIL a block scalar names CHECK_CI_ROOT
+    FAIL a block scalar names MEMORY_SHARD
+    FAIL a block scalar names MEMORY_SUITES_1
+    FAIL a block scalar names MEMORY_SUITES_2
+    FAIL a block scalar names MEMORY_LOGS
+    FAIL a block scalar names check-memory-gate, a gate
+    FAIL a block scalar names test-memory, a gate
+    FAIL a block scalar names check-nothreads, a gate
+    FAIL the on block gets a path filter
+    FAIL the on block gets another trigger
+    FAIL the on block loses a trigger
+    FAIL the permissions widen
+    FAIL the concurrency group changes
+    FAIL a top-level defaults
+    FAIL a top-level key twice
+    FAIL permissions after concurrency
+    FAIL the nothreads job deleted
+    FAIL a job added
+    FAIL a job's runs-on changes
+    FAIL a job's timeout-minutes is no number
+    FAIL a job without timeout-minutes
+    FAIL a job key twice
+    FAIL a job key with a value where a block goes, steps: x
+    FAIL O7: MAKEFLAGS in memory-1's gate step's env
+    FAIL O8: a run block that names the gate
+    FAIL O9: VALGRIND_OPTS written through GITHUB_ENV
+    FAIL a trailing comment on a shard's run line
+    FAIL a shard's run line as a block scalar
+    FAIL a shard's run line in the wrong job
+    FAIL a third shard, in a job of its own, memory-3
+    FAIL a step key shell
+    FAIL a step key working-directory
+    FAIL a step key continue-on-error
+    FAIL a step key timeout-minutes
+    FAIL a with key outside the three
+    FAIL a flow mapping under with
+    FAIL an env key besides CHEZ
+    FAIL the CHEZ path of main swapped to nothreads's
+    FAIL the CHEZ path of nothreads swapped to main's
+    FAIL an if with another value
+    FAIL the nothreads build without its if
+    FAIL the cache's if on the wrong step
+    FAIL an if on a required check
+    FAIL main's make line without check-help
+    FAIL main's make line without check-suites
+    FAIL main's make line without check-pins
+    FAIL main's make line without check-floors
+    FAIL main's make line without check-ci
+    FAIL main's make line without test
+    FAIL main's make line without check-test-fails
+    FAIL main's make line without check-variadic
+    FAIL main's make line without check-dev
+    FAIL main's make line without check-clean
+    FAIL main's pin step deleted
+    FAIL main's checkout without submodules
+    FAIL main's checkout with submodules: false
+    FAIL main's launcher step deleted
+    FAIL main's check-chez step deleted
+    FAIL main's install check deleted
+    FAIL main's install check written twice
+    FAIL main's install check moved after Checks and suites
+    FAIL main's install check moved before Check the Chez
+    FAIL an if on main's install check
+    FAIL main's install check with an argument, make build X
+    FAIL main's install check as a block scalar
+    FAIL an env key CC on main's install check
+    FAIL nothreads's check-chez without --nothreads
+    FAIL nothreads's check-nothreads step deleted
+    FAIL the versions step deleted
+    FAIL the SQLite step deleted
+    FAIL both report steps deleted
+    FAIL the versions step renamed
+    FAIL the SQLite step renamed
+    FAIL the versions step written twice
+    FAIL the two report steps swapped
+    FAIL the versions step moved after Checks and suites
+    FAIL the SQLite step moved after Checks and suites
+    FAIL the versions step moved before Check the Chez
+    FAIL the SQLite step moved before Check the Chez
+    FAIL a line at the start of the versions block
+    FAIL a line in the middle of the versions block
+    FAIL a line at the end of the versions block
+    FAIL a comment at the end of the versions block
+    FAIL a line removed from the middle of the versions block
+    FAIL the last line removed from the versions block
+    FAIL a line of the versions block changed
+    FAIL a line of the versions block re-indented
+    FAIL the versions block clipped, run: |-
+    FAIL the SQLite step's run line changed
+    FAIL the SQLite step's env dropped
+    FAIL nothreads's cache key drops 'packaging/floors.sexp', 
+    FAIL nothreads's cache key drops , 'scripts/ci/floor.sh'
+    FAIL nothreads's cache key drops , 'scripts/ci/build-chez.sh'
+    FAIL nothreads's cache key drops , 'scripts/ci/check-chez.sh'
+    FAIL nothreads's cache key takes threads's prefix
+    FAIL nothreads's cache key has a tail that is no suffix
+    FAIL a cache key that is no expression at all
+    FAIL nothreads's cache key hashes one file more
+    FAIL main's cache key drops a file
+    FAIL memory-1: the job deleted
+    FAIL memory-1: the gate step deleted
+    FAIL memory-1: the shard's step deleted
+    FAIL memory-1: the check-chez step deleted
+    FAIL memory-1: the shard's step before the gate step
+    FAIL memory-1: an if: always() on the step that runs make check-memory-gate
+    FAIL memory-1: continue-on-error on the step that runs make check-memory-gate
+    FAIL memory-1: an if: always() on the step that runs make test-memory MEMORY_SHARD=1
+    FAIL memory-1: continue-on-error on the step that runs make test-memory MEMORY_SHARD=1
+    FAIL memory-1: the shard's step runs the other job's shard, so both jobs run it
+    FAIL memory-1: the shard's step runs a third shard
+    FAIL memory-1: the shard's step runs every suite, no shard
+    FAIL memory-1: the shard's step names suites of its own too
+    FAIL memory-1: the shard's step takes its number from env as well
+    FAIL memory-1: the gate step's env names the shard's list
+    FAIL memory-1: the shard's CHEZ is the nothreads Chez
+    FAIL memory-1: its cache key takes nothreads's prefix
+    FAIL memory-1: a job key if
+    FAIL memory-1: a job key needs
+    FAIL memory-1: a job key continue-on-error
+    FAIL memory-1: a job key strategy
+    FAIL memory-1: a job key container
+    FAIL memory-1: a job key services
+    FAIL memory-1: a job key defaults
+    FAIL memory-1: a job key env
+    FAIL memory-1: a job key permissions
+    FAIL memory-1: a job key outputs
+    FAIL memory-1: a job key environment
+    FAIL memory-2: the job deleted
+    FAIL memory-2: the gate step deleted
+    FAIL memory-2: the shard's step deleted
+    FAIL memory-2: the check-chez step deleted
+    FAIL memory-2: the shard's step before the gate step
+    FAIL memory-2: an if: always() on the step that runs make check-memory-gate
+    FAIL memory-2: continue-on-error on the step that runs make check-memory-gate
+    FAIL memory-2: an if: always() on the step that runs make test-memory MEMORY_SHARD=2
+    FAIL memory-2: continue-on-error on the step that runs make test-memory MEMORY_SHARD=2
+    FAIL memory-2: the shard's step runs the other job's shard, so both jobs run it
+    FAIL memory-2: the shard's step runs a third shard
+    FAIL memory-2: the shard's step runs every suite, no shard
+    FAIL memory-2: the shard's step names suites of its own too
+    FAIL memory-2: the shard's step takes its number from env as well
+    FAIL memory-2: the gate step's env names the shard's list
+    FAIL memory-2: the shard's CHEZ is the nothreads Chez
+    FAIL memory-2: its cache key takes nothreads's prefix
+    FAIL memory-2: a job key if
+    FAIL memory-2: a job key needs
+    FAIL memory-2: a job key continue-on-error
+    FAIL memory-2: a job key strategy
+    FAIL memory-2: a job key container
+    FAIL memory-2: a job key services
+    FAIL memory-2: a job key defaults
+    FAIL memory-2: a job key env
+    FAIL memory-2: a job key permissions
+    FAIL memory-2: a job key outputs
+    FAIL memory-2: a job key environment
+    FAIL the floor job deleted
+    FAIL a seventh job
+    FAIL main's install check gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL main's install check gains C_INCLUDE_PATH, with floor's exact value
+    FAIL memory-1's gate step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL memory-2's gate step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL nothreads's step gains CHEZ_SQLITE3_LIBRARY, with floor's exact value
+    FAIL nothreads's step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL main: the Chez restore moved below check-chez.sh
+    FAIL main: the Chez save moved below check-chez.sh
+    FAIL main: the Chez save moved above the Chez build
+    FAIL floor: the Chez restore moved below check-chez.sh
+    FAIL floor: the Chez save moved below check-chez.sh
+    FAIL floor: the Chez save moved above the Chez build
+    FAIL floor: the checkout without submodules
+    FAIL floor: the checkout with submodules: false
+    FAIL floor: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" deleted
+    FAIL floor: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL floor: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" deleted
+    FAIL floor: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL floor: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor" deleted
+    FAIL floor: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor" deleted
+    FAIL floor: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-floor" written twice
+    FAIL floor: the step that runs make build deleted
+    FAIL floor: the step that runs make build written twice
+    FAIL floor: the step that runs make test deleted
+    FAIL floor: the step that runs make test written twice
+    FAIL floor: the check after make build
+    FAIL floor: make test before make build
+    FAIL floor: the SQLite build before check-chez
+    FAIL floor: the SQLite build without its if
+    FAIL floor: an if with another value on the SQLite build
+    FAIL floor: an if: always() on the SQLite check
+    FAIL floor: an if: always() on make build
+    FAIL floor: an if: always() on make test
+    FAIL floor: continue-on-error on make test
+    FAIL floor: make test X
+    FAIL floor: make test as a block scalar
+    FAIL floor: make build with an argument
+    FAIL floor: the check with --current
+    FAIL floor: the build with the other lane's flag
+    FAIL floor: the build into another directory
+    FAIL floor: the compiler step's line changed
+    FAIL floor: the compiler step without its id
+    FAIL floor: check-chez with --nothreads
+    FAIL floor: the SQLite if on the Chez build
+    FAIL floor: the Chez if on the SQLite build
+    FAIL floor: the SQLite if on the Chez save
+    FAIL floor: the Chez if on the SQLite save
+    FAIL floor: the SQLite if on make test
+    FAIL floor: the Chez if on make test
+    FAIL floor: the SQLite key drops 'packaging/floors.sexp', 
+    FAIL floor: the SQLite key drops , 'scripts/ci/floor.sh'
+    FAIL floor: the SQLite key drops , 'scripts/ci/build-sqlite.sh'
+    FAIL floor: the SQLite key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL floor: the SQLite key hashes one file more
+    FAIL floor: the SQLite key drops the compiler
+    FAIL floor: the SQLite key drops the image
+    FAIL floor: the SQLite key takes the other lane's prefix
+    FAIL floor: the SQLite key takes the other lane's whole key
+    FAIL floor: the SQLite key has a tail
+    FAIL floor: the SQLite restore's path is the other lane's
+    FAIL floor: the SQLite save's path is the other lane's
+    FAIL floor: the SQLite save is keyed by the Chez cache
+    FAIL floor: the Chez save is keyed by the SQLite cache
+    FAIL floor: the SQLite save is keyed as a restore is
+    FAIL floor: the SQLite restore deleted
+    FAIL floor: the SQLite restore written twice
+    FAIL floor: the SQLite save deleted
+    FAIL floor: the SQLite restore without its id
+    FAIL floor: the SQLite restore's id is another
+    FAIL floor: the Chez key drops a file
+    FAIL floor: the Chez cache's path is the SQLite cache's
+    FAIL floor: the check's library is the other lane's
+    FAIL floor: the suites' header directory has a second directory
+    FAIL floor: the library's value is relative
+    FAIL floor: the check's CHEZ is the nothreads Chez
+    FAIL floor: make test without C_INCLUDE_PATH
+    FAIL floor: make build without CHEZ_SQLITE3_LIBRARY
+    FAIL floor: the check without CHEZ
+    FAIL floor: the check without any env
+    FAIL floor: the SQLite build without CHEZ
+    FAIL floor: the SQLite build with the override
+    FAIL floor: the SQLite restore with the header directory
+    FAIL floor: the Chez build with the override
+    FAIL floor: the suites' env gains CPATH
+    FAIL floor: the suites' env gains LD_LIBRARY_PATH
+    FAIL floor: the suites' env gains CC
+    FAIL floor: the suites' env gains MAKEFLAGS
+    FAIL floor: the suites' env gains CHEZ_SQLITE3_DECOY
+    FAIL floor: a run block exports CHEZ_SQLITE3_LIBRARY
+    FAIL floor: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL floor: a step's name names C_INCLUDE_PATH
+    FAIL floor: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL floor: a run line names C_INCLUDE_PATH
+    FAIL floor: a quoted key, "if": false
+    FAIL floor: an explicit key, ? if
+    FAIL floor: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL floor: the SQLite restore moved below the check
+    FAIL floor: the compiler step moved below the SQLite restore
+    FAIL floor: the SQLite save moved below the check
+    FAIL floor: the SQLite save moved above the build
+    FAIL floor: a job key if
+    FAIL floor: a job key needs
+    FAIL floor: a job key continue-on-error
+    FAIL floor: a job key strategy
+    FAIL floor: a job key container
+    FAIL floor: a job key services
+    FAIL floor: a job key defaults
+    FAIL floor: a job key env
+    FAIL floor: a job key permissions
+    FAIL floor: a job key outputs
+    FAIL floor: a job key environment
+    FAIL floor: runs-on is not ubuntu-24.04
+    FAIL floor: the job has no timeout-minutes
+    FAIL current: the checkout without submodules
+    FAIL current: the checkout with submodules: false
+    FAIL current: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" deleted
+    FAIL current: the step that runs scripts/ci/check-chez.sh "$RUNNER_TEMP/chez-threads" written twice
+    FAIL current: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" deleted
+    FAIL current: the step that runs echo "id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')" >> "$GITHUB_OUTPUT" written twice
+    FAIL current: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current deleted
+    FAIL current: the step that runs scripts/ci/build-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current deleted
+    FAIL current: the step that runs scripts/ci/check-sqlite.sh "$RUNNER_TEMP/sqlite-current" --current written twice
+    FAIL current: the step that runs make build deleted
+    FAIL current: the step that runs make build written twice
+    FAIL current: the check after make build
+    FAIL current: make test before make build
+    FAIL current: the SQLite build before check-chez
+    FAIL current: the SQLite build without its if
+    FAIL current: an if with another value on the SQLite build
+    FAIL current: an if: always() on the SQLite check
+    FAIL current: an if: always() on make build
+    FAIL current: an if: always() on make test
+    FAIL current: continue-on-error on make test
+    FAIL current: make build with an argument
+    FAIL current: the check without --current
+    FAIL current: the build with the other lane's flag
+    FAIL current: the build into another directory
+    FAIL current: the compiler step's line changed
+    FAIL current: the compiler step without its id
+    FAIL current: check-chez with --nothreads
+    FAIL current: the SQLite if on the Chez build
+    FAIL current: the Chez if on the SQLite build
+    FAIL current: the SQLite if on the Chez save
+    FAIL current: the Chez if on the SQLite save
+    FAIL current: the SQLite if on make test
+    FAIL current: the Chez if on make test
+    FAIL current: the SQLite key drops 'scripts/ci/build-sqlite.sh', 
+    FAIL current: the SQLite key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL current: the SQLite key hashes one file more
+    FAIL current: the SQLite key drops the compiler
+    FAIL current: the SQLite key drops the image
+    FAIL current: the SQLite key takes the other lane's prefix
+    FAIL current: the SQLite key takes the other lane's whole key
+    FAIL current: the SQLite key has a tail
+    FAIL current: the SQLite restore's path is the other lane's
+    FAIL current: the SQLite save's path is the other lane's
+    FAIL current: the SQLite save is keyed by the Chez cache
+    FAIL current: the Chez save is keyed by the SQLite cache
+    FAIL current: the SQLite save is keyed as a restore is
+    FAIL current: the SQLite restore deleted
+    FAIL current: the SQLite restore written twice
+    FAIL current: the SQLite save deleted
+    FAIL current: the SQLite restore without its id
+    FAIL current: the SQLite restore's id is another
+    FAIL current: the Chez key drops a file
+    FAIL current: the Chez cache's path is the SQLite cache's
+    FAIL current: the check's library is the other lane's
+    FAIL current: the suites' header directory has a second directory
+    FAIL current: the library's value is relative
+    FAIL current: the check's CHEZ is the nothreads Chez
+    FAIL current: make test without C_INCLUDE_PATH
+    FAIL current: make build without CHEZ_SQLITE3_LIBRARY
+    FAIL current: the check without CHEZ
+    FAIL current: the check without any env
+    FAIL current: the SQLite build without CHEZ
+    FAIL current: the SQLite build with the override
+    FAIL current: the SQLite restore with the header directory
+    FAIL current: the Chez build with the override
+    FAIL current: the suites' env gains CPATH
+    FAIL current: the suites' env gains LD_LIBRARY_PATH
+    FAIL current: the suites' env gains CC
+    FAIL current: the suites' env gains MAKEFLAGS
+    FAIL current: the suites' env gains CHEZ_SQLITE3_DECOY
+    FAIL current: a run block exports CHEZ_SQLITE3_LIBRARY
+    FAIL current: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL current: a step's name names C_INCLUDE_PATH
+    FAIL current: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL current: a run line names C_INCLUDE_PATH
+    FAIL current: a quoted key, "if": false
+    FAIL current: an explicit key, ? if
+    FAIL current: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL current: the SQLite restore moved below the check
+    FAIL current: the compiler step moved below the SQLite restore
+    FAIL current: the SQLite save moved below the check
+    FAIL current: the SQLite save moved above the build
+    FAIL current: a job key if
+    FAIL current: a job key needs
+    FAIL current: a job key continue-on-error
+    FAIL current: a job key strategy
+    FAIL current: a job key container
+    FAIL current: a job key services
+    FAIL current: a job key defaults
+    FAIL current: a job key env
+    FAIL current: a job key permissions
+    FAIL current: a job key outputs
+    FAIL current: a job key environment
+    FAIL current: runs-on is not ubuntu-24.04
+    FAIL current: the job has no timeout-minutes
+    FAIL no-load: the restore deleted
+    FAIL no-load: the restore written twice
+    FAIL no-load: the restore without its id
+    FAIL no-load: the restore's id is the current build's, sqlite
+    FAIL no-load: the restore's path misspelt, sqlite-noload
+    FAIL no-load: the restore's key drops 'scripts/ci/build-sqlite.sh', 
+    FAIL no-load: the restore's key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL no-load: the restore's key drops -${{ steps.image.outputs.id }}
+    FAIL no-load: the restore's key drops -${{ steps.cc.outputs.id }}
+    FAIL no-load: the restore's key hashes the floors file too
+    FAIL no-load: the restore's key takes the current build's prefix
+    FAIL no-load: the restore's key is the current build's whole key
+    FAIL no-load: the restore's key has a tail
+    FAIL no-load: the build deleted
+    FAIL no-load: the build written twice
+    FAIL no-load: the build with --current
+    FAIL no-load: the build into the current build's directory
+    FAIL no-load: the build into a directory below its cache's, sqlite-no-load/x
+    FAIL no-load: the build without its if
+    FAIL no-load: the build without CHEZ
+    FAIL no-load: the build's if names the current build's restore, steps.sqlite
+    FAIL no-load: the current build's if names the no-load restore
+    FAIL no-load: the build's if is the Chez cache's
+    FAIL no-load: the build's env gains C_INCLUDE_PATH
+    FAIL no-load: the save deleted
+    FAIL no-load: the save keyed by the current build's restore
+    FAIL no-load: the save keyed as its restore is
+    FAIL no-load: the save's path misspelt, sqlite-noload
+    FAIL no-load: the save before its build
+    FAIL no-load: the save after its check
+    FAIL no-load: the restore before the current build's make test
+    FAIL no-load: the restore before the compiler step
+    FAIL no-load: the restore's env names the library
+    FAIL no-load: the check deleted
+    FAIL no-load: the check with --current
+    FAIL no-load: the check's header directory is the current build's
+    FAIL no-load: the check without CHEZ
+    FAIL no-load: the make test without its env
+    FAIL no-load: the make test with the current build's library
+    FAIL no-load: the current build's make test with the no-load library
+    FAIL no-load: the two make tests' env blocks swapped
+    FAIL no-load: an if: always() on the make test
+    FAIL no-load: the five steps before the current build's make test
+    FAIL a second workflow in the directory
+    FAIL a hidden file in the directory
+    FAIL a subdirectory in the directory
+    FAIL the real scripts, each executable: the workflow passes
+    FAIL check-action-pins.sh without its execute bit: every step that runs it is named
+    FAIL build-chez.sh without its execute bit: every step that runs it is named
+    FAIL check-chez.sh without its execute bit: every step that runs it is named
+    FAIL report-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL build-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL check-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL build-chez.sh missing: every step that runs it is named
+    FAIL report-sqlite.sh missing: every step that runs it is named
+    FAIL floor.sh without its execute bit: the workflow passes
+C05: each build's env values are held (the second build's not)
+  exit 1, passed 492, failed 4
+    FAIL no-load: the check's header directory is the current build's
+    FAIL no-load: the make test with the current build's library
+    FAIL no-load: the two make tests' env blocks swapped
+    FAIL no-load: the five steps before the current build's make test
+C06: each build's env values are held (none)
+  exit 1, passed 485, failed 11
+    FAIL floor: the check's library is the other lane's
+    FAIL floor: the suites' header directory has a second directory
+    FAIL floor: the library's value is relative
+    FAIL current: the check's library is the other lane's
+    FAIL current: the suites' header directory has a second directory
+    FAIL current: the library's value is relative
+    FAIL no-load: the check's header directory is the current build's
+    FAIL no-load: the make test with the current build's library
+    FAIL no-load: the current build's make test with the no-load library
+    FAIL no-load: the two make tests' env blocks swapped
+    FAIL no-load: the five steps before the current build's make test
+C07: the second build's steps must carry the two names (not held)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the make test without its env
+C08: the second build's steps must carry CHEZ (not held)
+  exit 1, passed 493, failed 3
+    FAIL no-load: the build without CHEZ
+    FAIL no-load: the check without CHEZ
+    FAIL no-load: the make test without its env
+C09: a build's if stands on the step that names its directory (on any build-sqlite.sh step, as before)
+  exit 1, passed 490, failed 6
+    FAIL floor: the build into another directory
+    FAIL current: the build into another directory
+    FAIL no-load: the build into the current build's directory
+    FAIL no-load: the build into a directory below its cache's, sqlite-no-load/x
+    FAIL no-load: the build's if names the current build's restore, steps.sqlite
+    FAIL no-load: the current build's if names the no-load restore
+C10: a build's if stands on its own save (on any save)
+  exit 1, passed 491, failed 5
+    FAIL floor: the SQLite if on the Chez save
+    FAIL floor: the SQLite save's path is the other lane's
+    FAIL current: the SQLite if on the Chez save
+    FAIL current: the SQLite save's path is the other lane's
+    FAIL no-load: the save's path misspelt, sqlite-noload
+C11: the second build's step has its if (not held)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the build without its if
+C12: a SQLite restore's id is held (not held)
+  exit 1, passed 488, failed 8
+    FAIL floor: the SQLite restore without its id
+    FAIL floor: the SQLite restore's id is another
+    FAIL floor: the Chez cache's path is the SQLite cache's
+    FAIL current: the SQLite restore without its id
+    FAIL current: the SQLite restore's id is another
+    FAIL current: the Chez cache's path is the SQLite cache's
+    FAIL no-load: the restore without its id
+    FAIL no-load: the restore's id is the current build's, sqlite
+C13: the second build's restore key is held (not held)
+  exit 1, passed 488, failed 8
+    FAIL no-load: the restore's key drops 'scripts/ci/build-sqlite.sh', 
+    FAIL no-load: the restore's key drops , 'scripts/ci/check-sqlite.sh'
+    FAIL no-load: the restore's key drops -${{ steps.image.outputs.id }}
+    FAIL no-load: the restore's key drops -${{ steps.cc.outputs.id }}
+    FAIL no-load: the restore's key hashes the floors file too
+    FAIL no-load: the restore's key takes the current build's prefix
+    FAIL no-load: the restore's key is the current build's whole key
+    FAIL no-load: the restore's key has a tail
+C14: a save is keyed by its own restore's id (or by sqlite's)
+  exit 1, passed 493, failed 3
+    FAIL floor: the Chez save is keyed by the SQLite cache
+    FAIL current: the Chez save is keyed by the SQLite cache
+    FAIL no-load: the save keyed by the current build's restore
+C15: each build's cache has one restore (not counted)
+  exit 1, passed 479, failed 17
+    FAIL floor: the SQLite restore's path is the other lane's
+    FAIL floor: the SQLite restore deleted
+    FAIL floor: the SQLite restore written twice
+    FAIL floor: the Chez cache's path is the SQLite cache's
+    FAIL floor: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL floor: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL current: the SQLite restore's path is the other lane's
+    FAIL current: the SQLite restore deleted
+    FAIL current: the SQLite restore written twice
+    FAIL current: the Chez cache's path is the SQLite cache's
+    FAIL current: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL current: the SQLite restore uses actions/cache, not actions/cache/restore
+    FAIL no-load: the restore deleted
+    FAIL no-load: the restore written twice
+    FAIL no-load: the restore's path misspelt, sqlite-noload
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+C16: each build's cache has one save (not counted)
+  exit 1, passed 488, failed 8
+    FAIL floor: the SQLite save's path is the other lane's
+    FAIL floor: the SQLite save deleted
+    FAIL current: the SQLite save's path is the other lane's
+    FAIL current: the SQLite save deleted
+    FAIL no-load: the save deleted
+    FAIL no-load: the save's path misspelt, sqlite-noload
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+C17: the second build's cache is held in order (skipped)
+  exit 1, passed 491, failed 5
+    FAIL no-load: the save before its build
+    FAIL no-load: the save after its check
+    FAIL no-load: the restore before the current build's make test
+    FAIL no-load: the restore before the compiler step
+    FAIL no-load: the five steps before the current build's make test
+C18: a later build's restore comes after the build before it's make test (not held)
+  exit 1, passed 493, failed 3
+    FAIL no-load: the restore before the current build's make test
+    FAIL no-load: the restore before the compiler step
+    FAIL no-load: the five steps before the current build's make test
+C19: each build's restore comes after the compiler step (the first build's only)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the restore before the compiler step
+C20: the two names stand only on the steps of a build's check, make build and make test (on any step after the first make test)
+  exit 1, passed 493, failed 3
+    FAIL no-load: the build's env gains C_INCLUDE_PATH
+    FAIL no-load: the restore's env names the library
+    FAIL no-load: the check with --current
+C21: a lane's cache paths are its own builds' (any build's)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the five steps in job floor
+C22: a lane's ifs are its own builds' (any build's)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the five steps in job floor
+C23: an out-of-order line is named against the last line in order (the line required before it)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the five steps before the current build's make test
+C24: a line required twice says not two (not one)
+  exit 1, passed 489, failed 7
+    FAIL current: the step that runs make test deleted
+    FAIL current: the step that runs make test written twice
+    FAIL current: make test X
+    FAIL current: make test as a block scalar
+    FAIL no-load: the make test deleted
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+C25: current's problems list its three ifs and three paths (with or between each)
+  exit 1, passed 486, failed 10
+    FAIL current: an if with another value on the SQLite build
+    FAIL current: an if: always() on the SQLite check
+    FAIL current: an if: always() on make build
+    FAIL current: an if: always() on make test
+    FAIL current: the SQLite restore's path is the other lane's
+    FAIL current: the SQLite save's path is the other lane's
+    FAIL current: a with value names CHEZ_SQLITE3_LIBRARY
+    FAIL no-load: the restore's path misspelt, sqlite-noload
+    FAIL no-load: the save's path misspelt, sqlite-noload
+    FAIL no-load: an if: always() on the make test
+C26: a no-load cache is a SQLite cache (the old path pattern)
+  exit 1, passed 491, failed 5
+    FAIL no-load: the save before its build
+    FAIL no-load: the save after its check
+    FAIL no-load: the restore before the current build's make test
+    FAIL no-load: the restore before the compiler step
+    FAIL no-load: the five steps before the current build's make test
+C27: a step names a build's directory only when nothing but a space follows it (anything may)
+  exit 1, passed 495, failed 1
+    FAIL no-load: the build into a directory below its cache's, sqlite-no-load/x
+C28: CHEZ is held at its line (not held)
+  exit 1, passed 490, failed 6
+    FAIL the CHEZ path of main swapped to nothreads's
+    FAIL the CHEZ path of nothreads swapped to main's
+    FAIL memory-1: the shard's CHEZ is the nothreads Chez
+    FAIL memory-2: the shard's CHEZ is the nothreads Chez
+    FAIL floor: the check's CHEZ is the nothreads Chez
+    FAIL current: the check's CHEZ is the nothreads Chez
+S01: check --no-load holds the no-load list (current's)
+  exit 1, passed 94, failed 5
+    FAIL check-sqlite.sh: --no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --no-load: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION
+    FAIL check-sqlite.sh: --no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S02: check --current holds current's list (the no-load one)
+  exit 1, passed 93, failed 6
+    FAIL check-sqlite.sh: --current: the pinned release's library passes, with its 39 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --current: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --current: the pinned release's identity with the floor's 37 options is refused
+    FAIL check-sqlite.sh: --current: the pinned release built without FTS5, its 38 options, is refused, naming ENABLE_FTS5
+    FAIL check-sqlite.sh: --current: the no-load build's 40 options are refused, naming OMIT_LOAD_EXTENSION
+    FAIL build-sqlite.sh: --current, both digests right and a library that is the pinned release's: built, checked with --current, and the last line printed, exit 0
+S03: check --no-load names its own role (current's)
+  exit 1, passed 92, failed 7
+    FAIL check-sqlite.sh: --no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --no-load: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION
+    FAIL check-sqlite.sh: --no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5
+    FAIL check-sqlite.sh: --no-load: the floor's library and header are refused, at the header, which is checked first
+    FAIL check-sqlite.sh: --no-load: the pinned release's header with a library one source id character off is refused, at the library
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S04: check --no-load holds the current release's identity (the floor's source id)
+  exit 1, passed 92, failed 7
+    FAIL check-sqlite.sh: --no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --no-load: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION
+    FAIL check-sqlite.sh: --no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5
+    FAIL check-sqlite.sh: --no-load: the floor's library and header are refused, at the header, which is checked first
+    FAIL check-sqlite.sh: --no-load: the pinned release's header with a library one source id character off is refused, at the library
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S05: check --no-load's list holds OMIT_LOAD_EXTENSION (dropped)
+  exit 1, passed 94, failed 5
+    FAIL check-sqlite.sh: --no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --no-load: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION
+    FAIL check-sqlite.sh: --no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S06: check takes --no-load alone (--noload too)
+  exit 1, passed 98, failed 1
+    FAIL check-sqlite.sh: --noload, a misspelling, is a usage error
+S07: build --no-load compiles without extension loading (the flag dropped)
+  exit 1, passed 97, failed 2
+    FAIL build-sqlite.sh: --no-load, both digests right, in a tree with no floors file: the pinned release compiled with FTS5 and without extension loading, then checked
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S08: build --no-load keeps FTS5 (dropped)
+  exit 1, passed 97, failed 2
+    FAIL build-sqlite.sh: --no-load, both digests right, in a tree with no floors file: the pinned release compiled with FTS5 and without extension loading, then checked
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S09: build --no-load checks with --no-load (--current)
+  exit 1, passed 98, failed 1
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S10: build --no-load names the current release's pins (by its role, no-load_archive)
+  exit 1, passed 97, failed 2
+    FAIL build-sqlite.sh: --no-load: the current archive with the floor's digest is refused, naming current_archive
+    FAIL build-sqlite.sh: --no-load: the current archive's pin with the floor's sqlite3.c digest is refused, naming current_source, before the compiler runs
+S11: build --no-load builds the current release (the floor, by floors.sexp)
+  exit 1, passed 93, failed 6
+    FAIL build-sqlite.sh: --no-load reaches the pinned current release, 3540100 from 2026, with no floors file: its pins are the current release's
+    FAIL build-sqlite.sh: --no-load reaches the pinned current release with a floor of 8.1.2
+    FAIL build-sqlite.sh: --no-load: the current archive with the floor's digest is refused, naming current_archive
+    FAIL build-sqlite.sh: --no-load: the current archive's pin with the floor's sqlite3.c digest is refused, naming current_source, before the compiler runs
+    FAIL build-sqlite.sh: --no-load, both digests right, in a tree with no floors file: the pinned release compiled with FTS5 and without extension loading, then checked
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S12: build --no-load's download failure names the current release's pins (the floor's)
+  exit 1, passed 97, failed 2
+    FAIL build-sqlite.sh: --no-load reaches the pinned current release, 3540100 from 2026, with no floors file: its pins are the current release's
+    FAIL build-sqlite.sh: --no-load reaches the pinned current release with a floor of 8.1.2
+S13: build takes --no-load alone (--noload too)
+  exit 1, passed 98, failed 1
+    FAIL build-sqlite.sh: --noload, a misspelling, is a usage error
+S14: the suite's no-load copy holds OMIT_LOAD_EXTENSION (dropped from the copy)
+  exit 1, passed 92, failed 7
+    FAIL the copies hold 37, 39 and 40 lines, the COMPILER= entry among them when SQLite lists one
+    FAIL the no-load copy is the current copy with OMIT_LOAD_EXTENSION, and the only difference
+    FAIL check-sqlite.sh: --no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file
+    FAIL check-sqlite.sh: --no-load: it passes whatever floor the tree has: the floors file is not read
+    FAIL check-sqlite.sh: --no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION
+    FAIL check-sqlite.sh: --no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5
+    FAIL build-sqlite.sh: --no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0
+S15: the suite's no-load copy is current's and one line (a second extra line)
+  exit 1, passed 97, failed 2
+    FAIL the copies hold 37, 39 and 40 lines, the COMPILER= entry among them when SQLite lists one
+    FAIL the no-load copy is the current copy with OMIT_LOAD_EXTENSION, and the only difference
+C29: the Chez cache's if stands only on the Chez build and save, in a lane (anywhere)
+  exit 1, passed 489, failed 7
+    FAIL floor: the Chez if on the SQLite build
+    FAIL floor: the Chez if on the SQLite save
+    FAIL floor: the Chez if on make test
+    FAIL current: the Chez if on the SQLite build
+    FAIL current: the Chez if on the SQLite save
+    FAIL current: the Chez if on make test
+    FAIL no-load: the build's if is the Chez cache's
+C30: the second build's save is keyed exactly (not held)
+  exit 1, passed 494, failed 2
+    FAIL no-load: the save keyed by the current build's restore
+    FAIL no-load: the save keyed as its restore is
+C31: the second build's check is counted (its count not told)
+  exit 1, passed 492, failed 4
+    FAIL no-load: the check deleted
+    FAIL no-load: the check with --current
+    FAIL no-load: the five steps in job floor
+    FAIL no-load: the five steps in job main
+C32: every job is there (current not held)
+  exit 1, passed 495, failed 1
+    FAIL the current job deleted
+C33: no job but the six (any job)
+  exit 1, passed 493, failed 3
+    FAIL a job added
+    FAIL a third shard, in a job of its own, memory-3
+    FAIL a seventh job
+C34: every step that runs a script by its path is read for its execute bit (the first 560 lines only)
+  exit 1, passed 494, failed 2
+    FAIL build-sqlite.sh without its execute bit: every step that runs it is named
+    FAIL check-sqlite.sh without its execute bit: every step that runs it is named
+C35: C_INCLUDE_PATH is a name no line may hold (it may)
+  exit 1, passed 484, failed 12
+    FAIL a block scalar names C_INCLUDE_PATH
+    FAIL no jobs key
+    FAIL main's install check gains C_INCLUDE_PATH, with floor's exact value
+    FAIL memory-1's gate step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL nothreads's step gains C_INCLUDE_PATH, with floor's exact value
+    FAIL floor: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL floor: a step's name names C_INCLUDE_PATH
+    FAIL floor: a run line names C_INCLUDE_PATH
+    FAIL current: C_INCLUDE_PATH is written to GITHUB_ENV
+    FAIL current: a step's name names C_INCLUDE_PATH
+    FAIL current: a run line names C_INCLUDE_PATH
+    FAIL no-load: the five steps in job main

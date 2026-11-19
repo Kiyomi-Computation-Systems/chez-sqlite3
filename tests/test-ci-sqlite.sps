@@ -1,8 +1,9 @@
 #!r6rs
 ;;; The suite for scripts/ci/check-sqlite.sh and scripts/ci/build-sqlite.sh,
-;;; the two scripts behind CI's floor and current lanes: they build SQLite
-;;; from sqlite.org's source, and check what was built before any suite runs
-;;; on it (ADR-0003, decision 3; ADR-0005; ADR-0008).
+;;; the two scripts behind CI's floor and current lanes and the current job's
+;;; no-load build: they build SQLite from sqlite.org's source, and check what
+;;; was built before any suite runs on it (ADR-0003, decision 3; ADR-0005;
+;;; ADR-0008).
 ;;;
 ;;; Both scripts find packaging/floors.sexp from their own place, through
 ;;; scripts/ci/floor.sh, so every row runs a copy of scripts/ci in a fresh
@@ -17,10 +18,11 @@
 ;;;     source id, threadsafe and compile options, and writes a
 ;;;     PREFIX/include/sqlite3.h that defines the row's three macros. The
 ;;;     base row's floor is 8.1.2, a version no SQLite has, so a version
-;;;     written in the script fails it. Its options are the floor's 37 lines
-;;;     and the current release's 39, ENABLE_FTS5 among them, written here as
-;;;     a reviewed copy of what SQLite, built with build-sqlite.sh's flags by
-;;;     role, lists (M1 slice 5's log; M4's research, F0), with the COMPILER=
+;;;     written in the script fails it. Its options are the floor's 37 lines,
+;;;     the current release's 39, ENABLE_FTS5 among them, and the no-load
+;;;     build's 40, OMIT_LOAD_EXTENSION too, written here as a reviewed copy
+;;;     of what SQLite, built with build-sqlite.sh's flags by role, lists (M1
+;;;     slice 5's log; M4's research, F0; M4's closing review), with the COMPILER=
 ;;;     entry this suite computes from $CC's own macros, by another route
 ;;;     than the script's. Every other row is one edit of a passing row, and
 ;;;     names what it breaks;
@@ -310,9 +312,56 @@
      "TEMP_STORE=1"
      "THREADSAFE=1")))
 
-(test-equal "the copies hold 37 and 39 lines, the COMPILER= entry among them when SQLite lists one"
-  (if (string? compiler-option) '(37 39) '(36 38))
-  (list (length floor-options) (length current-options)))
+;; The no-load build: the current release's flags and -DSQLITE_OMIT_LOAD_EXTENSION,
+;; so FTS5 is kept and the list is the current one's with OMIT_LOAD_EXTENSION
+;; between MUTEX_PTHREADS and SYSTEM_MALLOC, as M4's closing review measured it
+;; through the FFI on the pinned release built so.
+(define no-load-options
+  (with-compiler
+   '("ATOMIC_INTRINSICS=1"
+     compiler
+     "DEFAULT_AUTOVACUUM"
+     "DEFAULT_CACHE_SIZE=-2000"
+     "DEFAULT_FILE_FORMAT=4"
+     "DEFAULT_JOURNAL_SIZE_LIMIT=-1"
+     "DEFAULT_MMAP_SIZE=0"
+     "DEFAULT_PAGE_SIZE=4096"
+     "DEFAULT_PCACHE_INITSZ=20"
+     "DEFAULT_RECURSIVE_TRIGGERS"
+     "DEFAULT_SECTOR_SIZE=4096"
+     "DEFAULT_SYNCHRONOUS=2"
+     "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+     "DEFAULT_WAL_SYNCHRONOUS=2"
+     "DEFAULT_WORKER_THREADS=0"
+     "DIRECT_OVERFLOW_READ"
+     "ENABLE_FTS5"
+     "MALLOC_SOFT_LIMIT=1024"
+     "MAX_ATTACHED=10"
+     "MAX_COLUMN=2000"
+     "MAX_COMPOUND_SELECT=500"
+     "MAX_DEFAULT_PAGE_SIZE=8192"
+     "MAX_EXPR_DEPTH=1000"
+     "MAX_FUNCTION_ARG=1000"
+     "MAX_LENGTH=1000000000"
+     "MAX_LIKE_PATTERN_LENGTH=50000"
+     "MAX_MMAP_SIZE=0x7fff0000"
+     "MAX_PAGE_COUNT=0xfffffffe"
+     "MAX_PAGE_SIZE=65536"
+     "MAX_SCHEMA=10000000"
+     "MAX_SQL_LENGTH=1000000000"
+     "MAX_TRIGGER_DEPTH=1000"
+     "MAX_VARIABLE_NUMBER=32766"
+     "MAX_VDBE_OP=250000000"
+     "MAX_WORKER_THREADS=8"
+     "MUTEX_PTHREADS"
+     "OMIT_LOAD_EXTENSION"
+     "SYSTEM_MALLOC"
+     "TEMP_STORE=1"
+     "THREADSAFE=1")))
+
+(test-equal "the copies hold 37, 39 and 40 lines, the COMPILER= entry among them when SQLite lists one"
+  (if (string? compiler-option) '(37 39 40) '(36 38 39))
+  (list (length floor-options) (length current-options) (length no-load-options)))
 
 ;; --- trees ---------------------------------------------------------------------------
 
@@ -380,6 +429,8 @@
 (define floor-header (list (q "8.1.2") "8001002" (q floor-source-id)))
 (define current-lib (list current-version current-number current-source-id 1 current-options))
 (define current-header (list (q current-version) (number->string current-number) (q current-source-id)))
+;; The no-load build is the same release, with the same header.
+(define no-load-lib (list current-version current-number current-source-id 1 no-load-options))
 
 ;; c-string : String -> String
 ;; S as a C string literal.
@@ -478,6 +529,11 @@
                 (cons 'args (lambda (root prefix) (list prefix "--current"))))
           floor-spec))
 
+(define no-load-spec
+  (append (list (cons 'lib no-load-lib)
+                (cons 'args (lambda (root prefix) (list prefix "--no-load"))))
+          current-spec))
+
 ;; spec-with : Spec Symbol Any ... -> Spec
 ;; SPEC with each KEY given its VALUE.
 (define (spec-with spec . changes)
@@ -538,6 +594,7 @@
 
 (define floor-role "the SQLite floor")
 (define current-role "the pinned current SQLite")
+(define no-load-role "the pinned no-load SQLite")
 
 ;; passes : String String Natural String String (Listof String) -> Expected
 (define (passes prefix version number source-id role options)
@@ -562,6 +619,9 @@
 
 (define (current-passes prefix)
   (passes prefix current-version current-number current-source-id current-role current-options))
+
+(define (no-load-passes prefix)
+  (passes prefix current-version current-number current-source-id no-load-role no-load-options))
 
 ;; refused : String ... -> Expected
 (define (refused . words)
@@ -945,9 +1005,59 @@
   (lambda (root prefix)
     (header-refused prefix floor-header current-role current-identity)))
 
+;; --- check-sqlite.sh: --no-load ---------------------------------------------------------
+;;
+;; The current job's second build: the pinned release with the current
+;; lane's flags and -DSQLITE_OMIT_LOAD_EXTENSION (M4's closing review), so its
+;; identity is the current release's and its options are the current ones
+;; with OMIT_LOAD_EXTENSION.
+
+(test-equal "the no-load copy is the current copy with OMIT_LOAD_EXTENSION, and the only difference"
+  '(returned #t)
+  (outcome (lambda () (equal? (car (dropped no-load-options "OMIT_LOAD_EXTENSION")) current-options))))
+
+(check-row "--no-load: the pinned release built without extension loading passes, with its 40 lines, in a tree with no floors file"
+  no-load-spec
+  (lambda (root prefix) (no-load-passes prefix)))
+
+(check-row "--no-load: it passes whatever floor the tree has: the floors file is not read"
+  (spec-with no-load-spec 'floors (floors-text "8.1.2"))
+  (lambda (root prefix) (no-load-passes prefix)))
+
+;; The current lane's own build, which loads extensions: refused, naming the
+;; one line it lacks.
+(options-row "--no-load: the current lane's build, its 39 options, is refused, naming OMIT_LOAD_EXTENSION"
+  no-load-spec
+  (lambda () (dropped no-load-options "OMIT_LOAD_EXTENSION"))
+  no-load-role)
+
+;; A no-load build of SQLite's defaults, without FTS5, as M4's closing review
+;; first measured one: refused, naming FTS5, which the current job's two
+;; builds both compile.
+(options-row "--no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5"
+  no-load-spec
+  (lambda () (dropped no-load-options "ENABLE_FTS5"))
+  no-load-role)
+
+(options-row "--current: the no-load build's 40 options are refused, naming OMIT_LOAD_EXTENSION"
+  current-spec
+  (lambda () (inserted current-options "SYSTEM_MALLOC" "OMIT_LOAD_EXTENSION"))
+  current-role)
+
+(check-row "--no-load: the floor's library and header are refused, at the header, which is checked first"
+  (spec-with no-load-spec 'lib floor-lib 'header floor-header)
+  (lambda (root prefix)
+    (header-refused prefix floor-header no-load-role current-identity)))
+
+(check-row "--no-load: the pinned release's header with a library one source id character off is refused, at the library"
+  (spec-with no-load-spec 'lib (with-lib no-load-lib 2 (last-changed current-source-id)))
+  (lambda (root prefix)
+    (library-refused prefix (identity current-version current-number (last-changed current-source-id))
+                     no-load-role current-identity)))
+
 ;; --- check-sqlite.sh: usage --------------------------------------------------------------
 
-(define check-usage (list 2 "" "usage: check-sqlite.sh PREFIX [--current]\n"))
+(define check-usage (list 2 "" "usage: check-sqlite.sh PREFIX [--current | --no-load]\n"))
 
 (check-row "no prefix is a usage error"
   (spec-with floor-spec 'args (lambda (root prefix) '()))
@@ -963,6 +1073,14 @@
 
 (check-row "three arguments are a usage error"
   (spec-with floor-spec 'args (lambda (root prefix) (list prefix "--current" "x")))
+  (lambda (root prefix) check-usage))
+
+(check-row "both flags, --current --no-load, are a usage error"
+  (spec-with no-load-spec 'args (lambda (root prefix) (list prefix "--current" "--no-load")))
+  (lambda (root prefix) check-usage))
+
+(check-row "--noload, a misspelling, is a usage error"
+  (spec-with no-load-spec 'args (lambda (root prefix) (list prefix "--noload")))
   (lambda (root prefix) check-usage))
 
 (check-row "a relative prefix is refused, naming it"
@@ -1160,6 +1278,11 @@
                                      (cons "sqlite3.c" current-source))))
           build-floor-spec))
 
+;; --no-load builds the current release, by the current release's pins.
+(define build-no-load-spec
+  (cons (cons 'args (lambda (root prefix) (list prefix "--no-load")))
+        build-current-spec))
+
 ;; build-env : String String (Listof String) -> (Listof String)
 ;; The row's environment: PATH and TMPDIR in the tree, CHEZ this suite's
 ;; Chez by its path, since PATH no longer finds a bare name, CC unset so cc
@@ -1305,10 +1428,12 @@
   (string-append "openssl dgst -sha3-256 -r WORK/" (archive-name number) "/sqlite3.c"))
 
 ;; One compile, by role (M1 slice 5's plan, §2c; ADR-0003, amended): the
-;; floor's is SQLite's defaults with THREADSAFE written, and the current
-;; release's adds FTS5; an unresolved symbol is an error.
+;; floor's is SQLite's defaults with THREADSAFE written, the current
+;; release's adds FTS5, and the no-load build's omits extension loading
+;; besides (M4's closing review); an unresolved symbol is an error.
 (define floor-flags "-DSQLITE_THREADSAFE=1")
 (define current-flags "-DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5")
+(define no-load-flags "-DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -DSQLITE_OMIT_LOAD_EXTENSION")
 
 (define (cc-call cc-name prefix number flags)
   (string-append cc-name " -shared -fPIC -O2 " flags " -Wl,-z,defs -o " (lib-path prefix)
@@ -1375,6 +1500,14 @@
 
 (build-row "--current reaches the pinned release with a floor of 8.1.2"
   (spec-with (without-served build-current-spec) 'floors (floors-text "8.1.2"))
+  (lambda (root prefix) (unreached current-unreached "2026" "3540100")))
+
+(build-row "--no-load reaches the pinned current release, 3540100 from 2026, with no floors file: its pins are the current release's"
+  (without-served build-no-load-spec)
+  (lambda (root prefix) (unreached current-unreached "2026" "3540100")))
+
+(build-row "--no-load reaches the pinned current release with a floor of 8.1.2"
+  (spec-with (without-served build-no-load-spec) 'floors (floors-text "8.1.2"))
   (lambda (root prefix) (unreached current-unreached "2026" "3540100")))
 
 (build-row "the env moves nothing: version, current_version, floor_year, year, number and url set, the floor's archive is still reached"
@@ -1488,6 +1621,26 @@
                         (tar-call "3540100") (source-digest-call "3540100"))
                   1 0 'no-prefix)))
 
+;; --no-load checks by the current release's pins, and names them so.
+(build-row "--no-load: the current archive with the floor's digest is refused, naming current_archive"
+  (spec-with build-no-load-spec 'digests (list (cons "sqlite-autoconf-3540100.tar.gz" floor-archive)
+                                               (cons "sqlite3.c" current-source)))
+  (lambda (root prefix)
+    (build-answer 1 "" (string-append (curl-says "2026" "3540100")
+                                      (archive-refused "3540100" floor-archive "current" current-archive))
+                  (list (curl-call "2026" "3540100") (archive-digest-call "3540100"))
+                  1 0 'no-prefix)))
+
+(build-row "--no-load: the current archive's pin with the floor's sqlite3.c digest is refused, naming current_source, before the compiler runs"
+  (spec-with build-no-load-spec 'digests (list (cons "sqlite-autoconf-3540100.tar.gz" current-archive)
+                                               (cons "sqlite3.c" floor-source)))
+  (lambda (root prefix)
+    (build-answer 1 "" (string-append (curl-says "2026" "3540100")
+                                      (source-refused "3540100" floor-source "current" current-source))
+                  (list (curl-call "2026" "3540100") (archive-digest-call "3540100")
+                        (tar-call "3540100") (source-digest-call "3540100"))
+                  1 0 'no-prefix)))
+
 ;; --- build-sqlite.sh: the build, and the check at its end -------------------------------------
 
 (define (no-library prefix)
@@ -1510,6 +1663,14 @@
   (lambda (root prefix)
     (build-answer 1 "" (string-append (curl-says "2026" "3540100") (no-library prefix))
                   (built-calls "2026" "3540100" (cc-call "cc" prefix "3540100" current-flags))
+                  1 0
+                  (list 'none (shim-file "3540100" "sqlite3.h") (shim-file "3540100" "sqlite3ext.h")))))
+
+(build-row "--no-load, both digests right, in a tree with no floors file: the pinned release compiled with FTS5 and without extension loading, then checked"
+  build-no-load-spec
+  (lambda (root prefix)
+    (build-answer 1 "" (string-append (curl-says "2026" "3540100") (no-library prefix))
+                  (built-calls "2026" "3540100" (cc-call "cc" prefix "3540100" no-load-flags))
                   1 0
                   (list 'none (shim-file "3540100" "sqlite3.h") (shim-file "3540100" "sqlite3ext.h")))))
 
@@ -1597,6 +1758,12 @@
   build-current-spec "2026" "3540100" current-version current-number current-source-id current-role
   current-lib current-header current-options current-flags)
 
+;; Its check is check-sqlite.sh --no-load: a check of any other role refuses
+;; the 40 options.
+(success-row "--no-load, both digests right and a library that is the no-load build's: built, checked with --no-load, and the last line printed, exit 0"
+  build-no-load-spec "2026" "3540100" current-version current-number current-source-id no-load-role
+  no-load-lib current-header no-load-options no-load-flags)
+
 ;; --- both scripts: the execute bit ------------------------------------------------------------
 ;;
 ;; CI runs both scripts by their names, and every row here runs them with sh,
@@ -1613,7 +1780,7 @@
 ;; --- build-sqlite.sh: usage --------------------------------------------------------------
 
 (define build-usage
-  (lambda (root prefix) (build-answer 2 "" "usage: build-sqlite.sh PREFIX [--current]\n" '() 0 0 'no-prefix)))
+  (lambda (root prefix) (build-answer 2 "" "usage: build-sqlite.sh PREFIX [--current | --no-load]\n" '() 0 0 'no-prefix)))
 
 (build-row "no prefix is a usage error" (spec-with build-floor-spec 'args (lambda (root prefix) '())) build-usage)
 
@@ -1625,6 +1792,12 @@
 
 (build-row "three arguments are a usage error"
   (spec-with build-floor-spec 'args (lambda (root prefix) (list prefix "--current" "x"))) build-usage)
+
+(build-row "both flags, --current --no-load, are a usage error"
+  (spec-with build-floor-spec 'args (lambda (root prefix) (list prefix "--current" "--no-load"))) build-usage)
+
+(build-row "--noload, a misspelling, is a usage error"
+  (spec-with build-floor-spec 'args (lambda (root prefix) (list prefix "--noload"))) build-usage)
 
 (build-row "a relative prefix is refused, naming it, before any download"
   (spec-with build-floor-spec 'args (lambda (root prefix) (list "prefix")))

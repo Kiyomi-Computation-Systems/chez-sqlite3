@@ -218,8 +218,9 @@
 (define if-wrong
   "if is on a step that neither runs scripts/ci/build-chez.sh nor uses actions/cache/save")
 
-(define (n-steps j run n)
-  (string-append "job " j " has " (number->string n) " steps that run \"" run "\", not one"))
+(define (n-steps-not j run n word)
+  (string-append "job " j " has " (number->string n) " steps that run \"" run "\", not " word))
+(define (n-steps j run n) (n-steps-not j run n "one"))
 (define (out-of-order j run before)
   (string-append "job " j " runs \"" run "\" before \"" before "\", and must run it after"))
 (define (step-has-if j run) (string-append "job " j "'s step that runs \"" run "\" has an if"))
@@ -493,6 +494,20 @@
 (define (h-suites j) (string-append "The suites against SQLite " (lane-where j)))
 (define (hdr-line h) (string-append "      - name: " h))
 
+;; The current job's second build, no-load (M4's closing review): its five
+;; steps, after the job's make test, the last of the file.
+(define h-nl-restore "Restore SQLite without extension loading")
+(define h-nl-build "Build SQLite without extension loading")
+(define h-nl-save "Save SQLite without extension loading")
+(define h-nl-chk "Check the SQLite without extension loading")
+(define h-nl-suites "The suites against SQLite without extension loading")
+
+;; to-end : String -> String
+;; The real file from the one START to its end.
+(define (to-end start)
+  (unless (= (count-sub real start) 1) (error 'to-end "the start must occur once" start))
+  (substring real (find-sub real start 0) (string-length real)))
+
 ;; lane-step : String String -> String
 ;; The text of one step of a job, its header line to its last line.
 (define (lane-step j h)
@@ -511,24 +526,42 @@
     (le j st (replace-first st old new))))
 
 ;; del-step : String String -> Edit
+;; The step and the blank line after it, or before it for the file's last.
 (define (del-step j h)
   (let ((st (lane-step j h)))
-    (if (and (string=? j "current") (string=? h (h-suites j)))
-        (le j (string-append "\n" st) "")
-        (le j (string-append st "\n") ""))))
+    (if (find-sub (job-text real j) (string-append st "\n") 0)
+        (le j (string-append st "\n") "")
+        (le j (string-append "\n" st) ""))))
 
 ;; A : String (U String #f) String -> Anchor
 (define (A j h text) (list 'in j h text))
 
 (define if-chez if-line)
 (define if-sql "if: steps.sqlite.outputs.cache-hit != 'true'")
-(define if-bad2 (string-append "if is not one of \"" if-chez "\" or \"" if-sql "\""))
+(define if-nl "if: steps.sqlite-no-load.outputs.cache-hit != 'true'")
+;; The ifs and the cache paths a lane may hold: floor's one build, and
+;; current's two, current and then no-load (M4's closing review).
+(define (if-bad2 j)
+  (if (lane-floor? j)
+      (string-append "if is not one of \"" if-chez "\" or \"" if-sql "\"")
+      (string-append "if is not one of \"" if-chez "\", \"" if-sql "\" or \"" if-nl "\"")))
 (define chez-if-wrong
   "the Chez cache's if is on a step that is neither the Chez build nor the Chez cache's save")
-(define sql-if-wrong
-  "the SQLite cache's if is on a step that is neither the SQLite build nor the SQLite cache's save")
+(define (sql-if-wrong* what)
+  (string-append "the " what " cache's if is on a step that is neither the " what " build nor the "
+                 what " cache's save"))
+(define sql-if-wrong (sql-if-wrong* "SQLite"))
 (define (path-msg j)
-  (string-append "the cache path in job " j " is not one of ${{ runner.temp }}/chez-threads or " (sql-sq j)))
+  (if (lane-floor? j)
+      (string-append "the cache path in job " j " is not one of ${{ runner.temp }}/chez-threads or " (sql-sq j))
+      (string-append "the cache path in job " j " is not one of ${{ runner.temp }}/chez-threads, " (sql-sq j)
+                     " or " (sql-sq "no-load"))))
+(define (restores-msg j what n)
+  (string-append "job " j " has " (number->string n) " restores of the " what " cache, not one"))
+(define (saves-msg j what n)
+  (string-append "job " j " has " (number->string n) " saves of the " what " cache, not one"))
+(define (restore-id-msg j what id)
+  (string-append "the " what " cache's restore in job " j " is not id: " id))
 (define (sql-key-msg j) (string-append "the cache key in job " j " is not exactly " (lane-key j)))
 (define (save-key-msg j id)
   (string-append "the cache key of the save in job " j " is not exactly ${{ steps." id ".outputs.cache-primary-key }}"))
@@ -550,8 +583,12 @@
   (string-append "job " j " saves the " what " cache before the " what " build, and must save it after"))
 (define (save-late j what)
   (string-append "job " j " saves the " what " cache after the " what " check, and must save it before"))
-(define (restore-cc j)
-  (string-append "job " j " restores the SQLite cache before the step that names the C compiler, and must restore it after"))
+(define (restore-cc* j what)
+  (string-append "job " j " restores the " what " cache before the step that names the C compiler, and must restore it after"))
+(define (restore-cc j) (restore-cc* j "SQLite"))
+(define (restore-before-test j what before)
+  (string-append "job " j " restores the " what " cache before the " before
+                 " build's make test, and must restore it after"))
 
 ;; The Chez cache's steps of one job, out of order. Each is one problem, at the
 ;; step that is out of its place.
@@ -572,16 +609,22 @@
                   (string-append (step h-save-chez) "\n" (step h-build-chez))))
         (list (list (A j #f (hdr-line h-save-chez)) (save-early j "Chez"))))))
 
-;; The problems of a lane's three env blocks, when the lane is not a job check-ci
-;; knows: every line that names one of the two names is refused.
+;; The problems of a lane's env blocks that name the two names, when the lane is
+;; not a job check-ci knows: every line that names one of them is refused. Each
+;; block is (header build): floor's three, and current's three and its no-load
+;; build's two.
 (define (lane-name-problems j)
   (apply append
-         (map (lambda (h)
-                (list (list (A j (hdr-line h) (string-append "          CHEZ_SQLITE3_LIBRARY: " (sql-lib j)))
-                            (names-msg "CHEZ_SQLITE3_LIBRARY"))
-                      (list (A j (hdr-line h) (string-append "          C_INCLUDE_PATH: " (sql-inc j)))
-                            (names-msg "C_INCLUDE_PATH"))))
-              (list h-chk (h-load j) (h-suites j)))))
+         (map (lambda (hb)
+                (let ((h (car hb)) (b (cadr hb)))
+                  (list (list (A j (hdr-line h) (string-append "          CHEZ_SQLITE3_LIBRARY: " (sql-lib b)))
+                              (names-msg "CHEZ_SQLITE3_LIBRARY"))
+                        (list (A j (hdr-line h) (string-append "          C_INCLUDE_PATH: " (sql-inc b)))
+                              (names-msg "C_INCLUDE_PATH")))))
+              (append (list (list h-chk j) (list (h-load j) j) (list (h-suites j) j))
+                      (if (lane-floor? j)
+                          '()
+                          (list (list h-nl-chk "no-load") (list h-nl-suites "no-load")))))))
 
 ;; The problems of a step whose run line is none of the three, but whose env
 ;; names the two keys.
@@ -617,6 +660,13 @@
               ", 'scripts/ci/check-sqlite.sh'")
         (list "'scripts/ci/build-sqlite.sh', " ", 'scripts/ci/check-sqlite.sh'")))
   (define (pfx s) (string-append j ": " s))
+  ;; The problem of a lane whose make test steps are N more or fewer than it
+  ;; must run: current runs make test twice, once for each build.
+  (define (n-tests n)
+    (if (lane-floor? j)
+        (n-steps j "make test" n)
+        (n-steps-not j "make test" (+ n 1) "two")))
+  (define (n-run run n) (if (string=? run "make test") (n-tests n) (n-steps j run n)))
   (define (restore-key-row name new-key msg-anchor-key)
     (row (pfx name)
          (list (se j (h-restore j) (key-line (lane-key j)) (key-line new-key)))
@@ -640,10 +690,10 @@
                    (list
                     (row (pfx (string-append "the step that runs " run " deleted"))
                          (list (del-step j h))
-                         (list (list (here) (n-steps j run 0))))
+                         (list (list (here) (n-run run 0))))
                     (row (pfx (string-append "the step that runs " run " written twice"))
                          (list (le j (step h) (string-append (step h) "\n" (step h))))
-                         (list (list (here) (n-steps j run 2)))))))
+                         (list (list (here) (n-run run 2)))))))
                req))
 
    (list
@@ -669,18 +719,18 @@
          (list (list (HA (h-build j)) (step-no-if j (lane-bld j)))))
     (row (pfx "an if with another value on the SQLite build")
          (list (se j (h-build j) if-sql "if: false"))
-         (list (list (A j (hdr-line (h-build j)) "        if: false") if-bad2)))
+         (list (list (A j (hdr-line (h-build j)) "        if: false") (if-bad2 j))))
     (row (pfx "an if: always() on the SQLite check")
          (list (insert-line h-chk "        if: always()"))
-         (list (list (A j (hdr-line h-chk) "        if: always()") if-bad2)
+         (list (list (A j (hdr-line h-chk) "        if: always()") (if-bad2 j))
                (list (A j (hdr-line h-chk) "        if: always()") (step-has-if j (lane-chk j)))))
     (row (pfx "an if: always() on make build")
          (list (insert-line (h-load j) "        if: always()"))
-         (list (list (A j (hdr-line (h-load j)) "        if: always()") if-bad2)
+         (list (list (A j (hdr-line (h-load j)) "        if: always()") (if-bad2 j))
                (list (A j (hdr-line (h-load j)) "        if: always()") (step-has-if j build-run))))
     (row (pfx "an if: always() on make test")
          (list (insert-line (h-suites j) "        if: always()"))
-         (list (list (A j (hdr-line (h-suites j)) "        if: always()") if-bad2)
+         (list (list (A j (hdr-line (h-suites j)) "        if: always()") (if-bad2 j))
                (list (A j (hdr-line (h-suites j)) "        if: always()") (step-has-if j "make test"))))
     (row (pfx "continue-on-error on make test")
          (list (insert-line (h-suites j) "        continue-on-error: true"))
@@ -688,10 +738,10 @@
                      (step-key "continue-on-error"))))
     (row (pfx "make test X")
          (list (se j (h-suites j) "        run: make test\n" "        run: make test X\n"))
-         (cons (list (here) (n-steps j "make test" 0)) (wrong-step-pair j (h-suites j))))
+         (cons (list (here) (n-tests 0)) (wrong-step-pair j (h-suites j))))
     (row (pfx "make test as a block scalar")
          (list (se j (h-suites j) "        run: make test\n" "        run: |\n          make test\n"))
-         (cons (list (here) (n-steps j "make test" 0)) (wrong-step-pair j (h-suites j))))
+         (cons (list (here) (n-tests 0)) (wrong-step-pair j (h-suites j))))
     (row (pfx "make build with an argument")
          (list (se j (h-load j) "        run: make build\n" "        run: make build X\n"))
          (cons (list (here) (n-steps j build-run 0)) (wrong-step-pair j (h-load j))))
@@ -701,9 +751,12 @@
     (row (pfx "the build with the other lane's flag")
          (list (se j (h-build j) (lane-bld j) (bld* j (if (lane-floor? j) " --current" ""))))
          (list (list (here) (n-steps j (lane-bld j) 0))))
+    ;; Its if then guards a build of no cache: a cache's build is the step that
+    ;; names its directory.
     (row (pfx "the build into another directory")
          (list (se j (h-build j) (lane-bld j) (string-append "scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-x\"" (lane-flag j))))
-         (list (list (here) (n-steps j (lane-bld j) 0))))
+         (list (list (A j (hdr-line (h-build j)) (string-append "        " if-sql)) sql-if-wrong)
+               (list (here) (n-steps j (lane-bld j) 0))))
     (row (pfx "the compiler step's line changed")
          (list (se j h-cc "head -n 1" "head -n 2"))
          (list (list (here) (n-steps j cc-line 0))))
@@ -756,13 +809,15 @@
                      (string-append (lane-key j) "-x") #f)
     (row (pfx "the SQLite restore's path is the other lane's")
          (list (se j (h-restore j) (path-line (sql-sq j)) (path-line (sql-sq (other-lane j)))))
-         (list (list (A j (hdr-line (h-restore j)) (path-line (sql-sq (other-lane j)))) (path-msg j))))
+         (list (list (A j (hdr-line (h-restore j)) (path-line (sql-sq (other-lane j)))) (path-msg j))
+               (list (here) (restores-msg j "SQLite" 0))))
     (row (pfx "the SQLite save's path is the other lane's")
          (list (se j (h-save j) (path-line (sql-sq j)) (path-line (sql-sq (other-lane j)))))
          ;; a save at the other lane's path is no save of this lane's cache, so
          ;; its if is held as well
          (list (list (A j (hdr-line (h-save j)) (string-append "        " if-sql)) sql-if-wrong)
-               (list (A j (hdr-line (h-save j)) (path-line (sql-sq (other-lane j)))) (path-msg j))))
+               (list (A j (hdr-line (h-save j)) (path-line (sql-sq (other-lane j)))) (path-msg j))
+               (list (here) (saves-msg j "SQLite" 0))))
     (row (pfx "the SQLite save is keyed by the Chez cache")
          (list (se j (h-save j) "steps.sqlite.outputs.cache-primary-key" "steps.chez.outputs.cache-primary-key"))
          (list (list (A j (hdr-line (h-save j)) (key-line "${{ steps.chez.outputs.cache-primary-key }}"))
@@ -774,6 +829,22 @@
     (row (pfx "the SQLite save is keyed as a restore is")
          (list (se j (h-save j) "${{ steps.sqlite.outputs.cache-primary-key }}" (lane-key j)))
          (list (list (A j (hdr-line (h-save j)) (key-line (lane-key j))) (save-key-msg j "sqlite"))))
+    ;; Each build's cache: one restore, with its id, and one save.
+    (row (pfx "the SQLite restore deleted")
+         (list (del-step j (h-restore j)))
+         (list (list (here) (restores-msg j "SQLite" 0))))
+    (row (pfx "the SQLite restore written twice")
+         (list (le j (step (h-restore j)) (string-append (step (h-restore j)) "\n" (step (h-restore j)))))
+         (list (list (here) (restores-msg j "SQLite" 2))))
+    (row (pfx "the SQLite save deleted")
+         (list (del-step j (h-save j)))
+         (list (list (here) (saves-msg j "SQLite" 0))))
+    (row (pfx "the SQLite restore without its id")
+         (list (se j (h-restore j) "        id: sqlite\n" ""))
+         (list (list (HA (h-restore j)) (restore-id-msg j "SQLite" "sqlite"))))
+    (row (pfx "the SQLite restore's id is another")
+         (list (se j (h-restore j) "        id: sqlite\n" "        id: sqlite-x\n"))
+         (list (list (A j (hdr-line (h-restore j)) "        id: sqlite-x") (restore-id-msg j "SQLite" "sqlite"))))
     (row (pfx "the Chez key drops a file")
          (list (se j h-restore-chez ", 'scripts/ci/check-chez.sh'" ""))
          (list (list (A j (hdr-line h-restore-chez)
@@ -781,10 +852,13 @@
                      (cache-key j "chez-threads-"))))
     (row (pfx "the Chez cache's path is the SQLite cache's")
          (list (se j h-restore-chez "/chez-threads\n" (string-append "/sqlite-" j "\n")))
-         ;; a restore of the SQLite path, before the compiler step
-         (list (list (A j (hdr-line h-restore-chez) chez-key-line)
+         ;; a second restore of the SQLite path, before the compiler step, with
+         ;; the Chez restore's id and key
+         (list (list (A j (hdr-line h-restore-chez) "        id: chez") (restore-id-msg j "SQLite" "sqlite"))
+               (list (A j (hdr-line h-restore-chez) chez-key-line)
                      (sql-key-msg j))
-               (list (HA h-restore-chez) (restore-cc j)))))
+               (list (HA h-restore-chez) (restore-cc j))
+               (list (here) (restores-msg j "SQLite" 2)))))
 
    ;; rule 7: the env keys
    (let ((chk-env (lambda (k v) (env-line k v))))
@@ -859,7 +933,8 @@
     (row (pfx "a with value names CHEZ_SQLITE3_LIBRARY")
          (list (se j (h-restore j) (path-line (sql-sq j)) (path-line "CHEZ_SQLITE3_LIBRARY")))
          (list (list (A j (hdr-line (h-restore j)) (path-line "CHEZ_SQLITE3_LIBRARY")) (names-msg "CHEZ_SQLITE3_LIBRARY"))
-               (list (A j (hdr-line (h-restore j)) (path-line "CHEZ_SQLITE3_LIBRARY")) (path-msg j))))
+               (list (A j (hdr-line (h-restore j)) (path-line "CHEZ_SQLITE3_LIBRARY")) (path-msg j))
+               (list (here) (restores-msg j "SQLite" 0))))
     (row (pfx "a run line names C_INCLUDE_PATH")
          (list (se j (h-load j) "        run: make build\n" "        run: make build C_INCLUDE_PATH=x\n"))
          (list (list (A j (hdr-line (h-load j)) "        run: make build C_INCLUDE_PATH=x") (names-msg "C_INCLUDE_PATH"))
@@ -887,7 +962,8 @@
                                    "uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0")
                     (key-line (lane-key j)) (key-line (string-append "sqlite-" j "-anything")))))
          (list (list (HA (h-restore j))
-                     (uses-msg j "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"))))
+                     (uses-msg j "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"))
+               (list (here) (restores-msg j "SQLite" 0))))
     (row (pfx "the SQLite restore moved below the check")
          (list (le j (string-append (step (h-restore j)) "\n" (step (h-build j)) "\n" (step (h-save j)) "\n" (step h-chk))
                    (string-append (step (h-build j)) "\n" (step (h-save j)) "\n" (step h-chk) "\n" (step (h-restore j)))))
@@ -1045,6 +1121,302 @@
 
 (define (env-ln k v) (string-append "          " k ": " v))
 
+;; --- the current job's second build: no-load ---------------------------------------
+;; After its make test, job current builds the pinned release again without
+;; extension loading, by build-sqlite.sh --no-load, into a cache of its own,
+;; id sqlite-no-load, checks it, and runs the whole make test again with that
+;; build's env (M4's closing review). Each row plants one fault in those five
+;; steps, or moves them, and names every problem it makes.
+
+(define nl-bld (bld* "no-load" " --no-load"))
+(define nl-chk (chk* "no-load" " --no-load"))
+(define nl-key
+  "sqlite-no-load-${{ hashFiles('scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh') }}-${{ steps.image.outputs.id }}-${{ steps.cc.outputs.id }}")
+(define nl-key-msg (string-append "the cache key in job current is not exactly " nl-key))
+(define nl "no-load SQLite")
+
+(define no-load-rows
+  (let ()
+    (define j "current")
+    (define (here) "  current:")
+    (define (HA h) (A j #f (hdr-line h)))
+    (define (step h) (lane-step j h))
+    (define (pfx x) (string-append "no-load: " x))
+    (define (insert-line h line)
+      (le j (string-append (hdr-line h) "\n") (string-append (hdr-line h) "\n" line "\n")))
+    (define (env-line k v) (string-append "          " k ": " v))
+    ;; se* : String String (Listof (Pairof String String)) -> Edit
+    ;; In one step, each old text, once there, becomes its new one.
+    (define (se* j h pairs)
+      (let ((st (lane-step j h)))
+        (le j st (fold-left (lambda (t pr)
+                              (unless (= (count-sub t (car pr)) 1) (error 'se* "not once in the step" h (car pr)))
+                              (replace-first t (car pr) (cdr pr)))
+                            st pairs))))
+    ;; The five steps, from the restore's header to the file's end.
+    (define (five) (to-end (hdr-line h-nl-restore)))
+    (define (without-five) (e (string-append "\n" (five)) ""))
+    (define (key-row name new-key)
+      (row (pfx name)
+           (list (se j h-nl-restore (key-line nl-key) (key-line new-key)))
+           (list (list (A j (hdr-line h-nl-restore) (key-line new-key)) nl-key-msg))))
+    (append
+     ;; the restore: there, once, with its id, path and key
+     (list
+      (row (pfx "the restore deleted")
+           (list (del-step j h-nl-restore))
+           (list (list (here) (restores-msg j nl 0))))
+      (row (pfx "the restore written twice")
+           (list (le j (step h-nl-restore) (string-append (step h-nl-restore) "\n" (step h-nl-restore))))
+           (list (list (here) (restores-msg j nl 2))))
+      (row (pfx "the restore without its id")
+           (list (se j h-nl-restore "        id: sqlite-no-load\n" ""))
+           (list (list (HA h-nl-restore) (restore-id-msg j nl "sqlite-no-load"))))
+      (row (pfx "the restore's id is the current build's, sqlite")
+           (list (se j h-nl-restore "        id: sqlite-no-load\n" "        id: sqlite\n"))
+           (list (list (A j (hdr-line h-nl-restore) "        id: sqlite") (restore-id-msg j nl "sqlite-no-load"))))
+      (row (pfx "the restore's path misspelt, sqlite-noload")
+           (list (se j h-nl-restore (path-line (sql-sq "no-load")) (path-line "${{ runner.temp }}/sqlite-noload")))
+           (list (list (A j (hdr-line h-nl-restore) (path-line "${{ runner.temp }}/sqlite-noload")) (path-msg j))
+                 (list (here) (restores-msg j nl 0)))))
+     (map (lambda (part)
+            (key-row (string-append "the restore's key drops " part) (replace-first nl-key part "")))
+          (list "'scripts/ci/build-sqlite.sh', " ", 'scripts/ci/check-sqlite.sh'"
+                "-${{ steps.image.outputs.id }}" "-${{ steps.cc.outputs.id }}"))
+     (list
+      (key-row "the restore's key hashes the floors file too"
+               (replace-first nl-key "hashFiles(" "hashFiles('packaging/floors.sexp', "))
+      (key-row "the restore's key takes the current build's prefix"
+               (replace-first nl-key "sqlite-no-load-" "sqlite-current-"))
+      (key-row "the restore's key is the current build's whole key" (lane-key "current"))
+      (key-row "the restore's key has a tail" (string-append nl-key "-x")))
+
+     ;; the build: its line, its own if
+     (list
+      (row (pfx "the build deleted")
+           (list (del-step j h-nl-build))
+           (list (list (here) (n-steps j nl-bld 0))))
+      (row (pfx "the build written twice")
+           (list (le j (step h-nl-build) (string-append (step h-nl-build) "\n" (step h-nl-build))))
+           (list (list (here) (n-steps j nl-bld 2))))
+      (row (pfx "the build with --current")
+           (list (se j h-nl-build nl-bld (bld* "no-load" " --current")))
+           (list (list (here) (n-steps j nl-bld 0))))
+      ;; Into the current build's directory: it is then a build of that cache,
+      ;; after the cache's save, and its if guards no build of its own.
+      (row (pfx "the build into the current build's directory")
+           (list (se j h-nl-build nl-bld (bld* "current" " --no-load")))
+           (list (list (A j (hdr-line h-nl-build) (string-append "        " if-nl)) (sql-if-wrong* nl))
+                 (list (here) (n-steps j nl-bld 0))
+                 (list (HA (h-save j)) (save-early j "SQLite"))))
+      ;; A directory below the cache's is another directory: the shell joins
+      ;; "$RUNNER_TEMP/sqlite-no-load"/x into one word.
+      (row (pfx "the build into a directory below its cache's, sqlite-no-load/x")
+           (list (se j h-nl-build nl-bld (string-append "scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-no-load\"/x --no-load")))
+           (list (list (A j (hdr-line h-nl-build) (string-append "        " if-nl)) (sql-if-wrong* nl))
+                 (list (here) (n-steps j nl-bld 0))))
+      (row (pfx "the build without its if")
+           (list (se j h-nl-build (string-append "        " if-nl "\n") ""))
+           (list (list (HA h-nl-build) (step-no-if j nl-bld))))
+      (row (pfx "the build without CHEZ")
+           (list (se j h-nl-build (string-append "        env:\n" (env-line "CHEZ" chez-t) "\n") ""))
+           (list (list (HA h-nl-build) (env-missing j nl-bld "CHEZ"))))
+      (row (pfx "the build's if names the current build's restore, steps.sqlite")
+           (list (se j h-nl-build "steps.sqlite-no-load." "steps.sqlite."))
+           (list (list (A j (hdr-line h-nl-build) (string-append "        " if-sql)) sql-if-wrong)))
+      (row (pfx "the current build's if names the no-load restore")
+           (list (se j (h-build j) "steps.sqlite." "steps.sqlite-no-load."))
+           (list (list (A j (hdr-line (h-build j)) (string-append "        " if-nl)) (sql-if-wrong* nl))))
+      (row (pfx "the build's if is the Chez cache's")
+           (list (se j h-nl-build "steps.sqlite-no-load." "steps.chez."))
+           (list (list (A j (hdr-line h-nl-build) (string-append "        " if-chez)) chez-if-wrong)))
+      (row (pfx "the build's env gains C_INCLUDE_PATH")
+           (list (se j h-nl-build (string-append (env-line "CHEZ" chez-t) "\n")
+                     (string-append (env-line "CHEZ" chez-t) "\n" (env-line "C_INCLUDE_PATH" (sql-inc "no-load")) "\n")))
+           (list (list (A j (hdr-line h-nl-build) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-wrong-step "C_INCLUDE_PATH")))))
+
+     ;; the save: there, once, keyed by its restore, between its build and check
+     (list
+      (row (pfx "the save deleted")
+           (list (del-step j h-nl-save))
+           (list (list (here) (saves-msg j nl 0))))
+      (row (pfx "the save keyed by the current build's restore")
+           (list (se j h-nl-save "steps.sqlite-no-load.outputs.cache-primary-key" "steps.sqlite.outputs.cache-primary-key"))
+           (list (list (A j (hdr-line h-nl-save) (key-line "${{ steps.sqlite.outputs.cache-primary-key }}"))
+                       (save-key-msg j "sqlite-no-load"))))
+      (row (pfx "the save keyed as its restore is")
+           (list (se j h-nl-save "${{ steps.sqlite-no-load.outputs.cache-primary-key }}" nl-key))
+           (list (list (A j (hdr-line h-nl-save) (key-line nl-key)) (save-key-msg j "sqlite-no-load"))))
+      (row (pfx "the save's path misspelt, sqlite-noload")
+           (list (se j h-nl-save (path-line (sql-sq "no-load")) (path-line "${{ runner.temp }}/sqlite-noload")))
+           (list (list (A j (hdr-line h-nl-save) (string-append "        " if-nl)) (sql-if-wrong* nl))
+                 (list (A j (hdr-line h-nl-save) (path-line "${{ runner.temp }}/sqlite-noload")) (path-msg j))
+                 (list (here) (saves-msg j nl 0))))
+      (row (pfx "the save before its build")
+           (list (le j (string-append (step h-nl-build) "\n" (step h-nl-save))
+                     (string-append (step h-nl-save) "\n" (step h-nl-build))))
+           (list (list (HA h-nl-save) (save-early j nl))))
+      (row (pfx "the save after its check")
+           (list (le j (string-append (step h-nl-save) "\n" (step h-nl-chk))
+                     (string-append (step h-nl-chk) "\n" (step h-nl-save))))
+           (list (list (HA h-nl-save) (save-late j nl)))))
+
+     ;; the restore's place: after the compiler step and current's make test
+     (list
+      (row (pfx "the restore before the current build's make test")
+           (list (del-step j h-nl-restore)
+                 (le j (step (h-suites j)) (string-append (step h-nl-restore) "\n" (step (h-suites j)))))
+           (list (list (HA h-nl-restore) (restore-before-test j nl "SQLite"))))
+      (row (pfx "the restore before the compiler step")
+           (list (del-step j h-nl-restore)
+                 (le j (step h-cc) (string-append (step h-nl-restore) "\n" (step h-cc))))
+           (list (list (HA h-nl-restore) (restore-cc* j nl))
+                 (list (HA h-nl-restore) (restore-before-test j nl "SQLite"))))
+      (row (pfx "the restore's env names the library")
+           (list (se j h-nl-restore "        with:\n"
+                     (string-append "        env:\n" (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")) "\n        with:\n")))
+           (list (list (A j (hdr-line h-nl-restore) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-wrong-step "CHEZ_SQLITE3_LIBRARY")))))
+
+     ;; the check: its line, with this build's env
+     (list
+      (row (pfx "the check deleted")
+           (list (del-step j h-nl-chk))
+           (list (list (here) (n-steps j nl-chk 0))))
+      (row (pfx "the check with --current")
+           (list (se j h-nl-chk nl-chk (chk* "no-load" " --current")))
+           (list (list (here) (n-steps j nl-chk 0))
+                 (list (A j (hdr-line h-nl-chk) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-wrong-step "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A j (hdr-line h-nl-chk) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-wrong-step "C_INCLUDE_PATH"))))
+      (row (pfx "the check's header directory is the current build's")
+           (list (se j h-nl-chk (env-line "C_INCLUDE_PATH" (sql-inc "no-load")) (env-line "C_INCLUDE_PATH" (sql-inc "current"))))
+           (list (list (A j (hdr-line h-nl-chk) (env-line "C_INCLUDE_PATH" (sql-inc "current")))
+                       (env-value j "C_INCLUDE_PATH" (sql-inc "no-load")))))
+      (row (pfx "the check without CHEZ")
+           (list (se j h-nl-chk (string-append (env-line "CHEZ" chez-t) "\n") ""))
+           (list (list (HA h-nl-chk) (env-missing j nl-chk "CHEZ")))))
+
+     ;; the second make test: there, with this build's env, and no if
+     (list
+      (row (pfx "the make test deleted")
+           (list (del-step j h-nl-suites))
+           (list (list (here) (n-steps-not j "make test" 1 "two"))))
+      (row (pfx "the make test without its env")
+           (list (se j h-nl-suites
+                     (string-append "        env:\n" (env-line "CHEZ" chez-t) "\n"
+                                    (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")) "\n"
+                                    (env-line "C_INCLUDE_PATH" (sql-inc "no-load")) "\n")
+                     ""))
+           (list (list (HA h-nl-suites) (env-missing j "make test" "CHEZ"))
+                 (list (HA h-nl-suites) (env-missing j "make test" "CHEZ_SQLITE3_LIBRARY"))
+                 (list (HA h-nl-suites) (env-missing j "make test" "C_INCLUDE_PATH"))))
+      (row (pfx "the make test with the current build's library")
+           (list (se j h-nl-suites (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current"))))
+           (list (list (A j (hdr-line h-nl-suites) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))))
+      (row (pfx "the current build's make test with the no-load library")
+           (list (se j (h-suites j) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load"))))
+           (list (list (A j (hdr-line (h-suites j)) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))))
+      (row (pfx "the two make tests' env blocks swapped")
+           (list (se* j h-nl-suites
+                      (list (cons (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                            (cons (env-line "C_INCLUDE_PATH" (sql-inc "no-load")) (env-line "C_INCLUDE_PATH" (sql-inc "current")))))
+                 (se* j (h-suites j)
+                      (list (cons (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                            (cons (env-line "C_INCLUDE_PATH" (sql-inc "current")) (env-line "C_INCLUDE_PATH" (sql-inc "no-load"))))))
+           (list (list (A j (hdr-line (h-suites j)) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                 (list (A j (hdr-line (h-suites j)) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-value j "C_INCLUDE_PATH" (sql-inc "current")))
+                 (list (A j (hdr-line h-nl-suites) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                 (list (A j (hdr-line h-nl-suites) (env-line "C_INCLUDE_PATH" (sql-inc "current")))
+                       (env-value j "C_INCLUDE_PATH" (sql-inc "no-load")))))
+      (row (pfx "an if: always() on the make test")
+           (list (insert-line h-nl-suites "        if: always()"))
+           (list (list (A j (hdr-line h-nl-suites) "        if: always()") (if-bad2 j))
+                 (list (A j (hdr-line h-nl-suites) "        if: always()") (step-has-if j "make test")))))
+
+     ;; the five steps moved
+     (list
+      ;; Before current's make test: that make test is then the second, and
+      ;; the no-load one the first, so each holds the other's env, and the
+      ;; build, the check and the restore come before the first.
+      (row (pfx "the five steps before the current build's make test")
+           (list (without-five)
+                 (le j (step (h-suites j)) (string-append (five) "\n" (step (h-suites j)))))
+           (list (list (A j (hdr-line h-nl-suites) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                 (list (A j (hdr-line h-nl-suites) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-value j "C_INCLUDE_PATH" (sql-inc "current")))
+                 (list (A j (hdr-line h-nl-build) (string-append "        run: " nl-bld))
+                       (out-of-order j nl-bld "make test"))
+                 (list (A j (hdr-line h-nl-chk) (string-append "        run: " nl-chk))
+                       (out-of-order j nl-chk "make test"))
+                 (list (A j (hdr-line (h-suites j)) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "current")))
+                       (env-value j "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                 (list (A j (hdr-line (h-suites j)) (env-line "C_INCLUDE_PATH" (sql-inc "current")))
+                       (env-value j "C_INCLUDE_PATH" (sql-inc "no-load")))
+                 (list (HA h-nl-restore) (restore-before-test j nl "SQLite"))))
+      ;; In job floor, after its make test: floor has one build, so none of
+      ;; the five is its own, and current lacks them.
+      (row (pfx "the five steps in job floor")
+           (list (without-five)
+                 (le "floor" (lane-step "floor" (h-suites "floor"))
+                     (string-append (lane-step "floor" (h-suites "floor")) "\n" (five))))
+           (list (list (A "floor" (hdr-line h-nl-restore) (path-line (sql-sq "no-load"))) (path-msg "floor"))
+                 (list (A "floor" (hdr-line h-nl-build) (string-append "        " if-nl)) (if-bad2 "floor"))
+                 (list (A "floor" (hdr-line h-nl-save) (string-append "        " if-nl)) (if-bad2 "floor"))
+                 (list (A "floor" (hdr-line h-nl-save) (path-line (sql-sq "no-load"))) (path-msg "floor"))
+                 (list "  floor:" (n-steps "floor" "make test" 2))
+                 (list (A "floor" (hdr-line h-nl-chk) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-wrong-step "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A "floor" (hdr-line h-nl-chk) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-wrong-step "C_INCLUDE_PATH"))
+                 (list (here) (n-steps-not j "make test" 1 "two"))
+                 (list (here) (n-steps j nl-bld 0))
+                 (list (here) (n-steps j nl-chk 0))
+                 (list (here) (restores-msg j nl 0))
+                 (list (here) (saves-msg j nl 0))))
+      ;; In job main, which tests discovery: the two names are refused there.
+      (row (pfx "the five steps in job main")
+           (list (without-five)
+                 (e (string-append "        run: " launcher "\n")
+                    (string-append "        run: " launcher "\n\n" (five))))
+           ;; main holds a cache key to the Chez cache's, and its one if to
+           ;; the Chez build and the saves.
+           (list (list (A "main" (hdr-line h-nl-restore) (key-line nl-key)) (cache-key "main" "chez-threads-"))
+                 (list (A "main" (hdr-line h-nl-build) (string-append "        " if-nl)) if-bad)
+                 (list (A "main" (hdr-line h-nl-build) (string-append "        " if-nl)) if-wrong)
+                 (list (A "main" (hdr-line h-nl-save) (key-line "${{ steps.sqlite-no-load.outputs.cache-primary-key }}"))
+                       (cache-key "main" "chez-threads-"))
+                 (list (A "main" (hdr-line h-nl-save) (string-append "        " if-nl)) if-bad)
+                 (list (A "main" (hdr-line h-nl-chk) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (names-msg "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A "main" (hdr-line h-nl-chk) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-key "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A "main" (hdr-line h-nl-chk) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (names-msg "C_INCLUDE_PATH"))
+                 (list (A "main" (hdr-line h-nl-chk) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-key "C_INCLUDE_PATH"))
+                 (list (A "main" (hdr-line h-nl-suites) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (names-msg "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A "main" (hdr-line h-nl-suites) (env-line "CHEZ_SQLITE3_LIBRARY" (sql-lib "no-load")))
+                       (env-key "CHEZ_SQLITE3_LIBRARY"))
+                 (list (A "main" (hdr-line h-nl-suites) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (names-msg "C_INCLUDE_PATH"))
+                 (list (A "main" (hdr-line h-nl-suites) (env-line "C_INCLUDE_PATH" (sql-inc "no-load")))
+                       (env-key "C_INCLUDE_PATH"))
+                 (list (here) (n-steps-not j "make test" 1 "two"))
+                 (list (here) (n-steps j nl-bld 0))
+                 (list (here) (n-steps j nl-chk 0))
+                 (list (here) (restores-msg j nl 0))
+                 (list (here) (saves-msg j nl 0))))))))
+
 ;; The rows that are not a lane's: the job list, and the two names in the jobs
 ;; that must stay refused them.
 (define lane-global-rows
@@ -1053,11 +1425,11 @@
         (list (e (string-append (span "  # SQLite at its floor" "run: make test\n") "\n") ""))
         (list (list "jobs:" (job-missing "floor"))))
    (row "the current job deleted"
-        (list (e (string-append "\n" (span "  # SQLite at the current release" "run: make test\n")) ""))
+        (list (e (to-end "\n  # SQLite at the current release") ""))
         (list (list "jobs:" (job-missing "current"))))
    (row "a seventh job"
-        (list (le "current" "        run: make test\n"
-                  (string-append "        run: make test\n\n"
+        (list (le "current" (lane-step "current" h-nl-suites)
+                  (string-append (lane-step "current" h-nl-suites) "\n"
                                  (lines "  extra:" "    name: x" "    runs-on: ubuntu-24.04"
                                         "    timeout-minutes: 5" "    steps:" "      - run: echo hi"))))
         (list (list "  extra:" (job-unknown "extra"))))
@@ -1635,6 +2007,7 @@
    (chez-order-rows "floor")
    (lane-rows "floor")
    (lane-rows "current")
+   no-load-rows
 
    ;; --- the directory and the arguments ---
    (list
@@ -1741,7 +2114,11 @@
    (list "build-sqlite.sh" "current" "      - name: Build SQLite at the current release"
          "        run: scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-current\" --current")
    (list "check-sqlite.sh" "current" "      - name: Check the SQLite this job runs"
-         "        run: scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-current\" --current")))
+         "        run: scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-current\" --current")
+   (list "build-sqlite.sh" "current" "      - name: Build SQLite without extension loading"
+         "        run: scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-no-load\" --no-load")
+   (list "check-sqlite.sh" "current" "      - name: Check the SQLite without extension loading"
+         "        run: scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-no-load\" --no-load")))
 
 (define (noexec-msg name)
   (string-append "runs scripts/ci/" name ", which is missing or not executable: "

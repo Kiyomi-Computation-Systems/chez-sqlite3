@@ -1,0 +1,91 @@
+# run-plants.sh's lines for every plant, on the final tree (test-load-extension's UNAVAILABLE lines left out).
+# scripts/guix-env sh -c 'sh .plans/research/m4-closing-review/code/run-plants.sh LIB SUITE NAME...'
+f2-before-only guix (3.53.1) test-connection: exit 1, pass 63, fail 7, 1 s
+    FAIL call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: e
+    FAIL call-with-open-handle's remainder finished on another thread once this one has closed the connection: refused with &sqlite-wrong-thread
+    FAIL call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: 
+    FAIL changes's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused
+    FAIL in-transaction?'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection:
+    FAIL step!'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused w
+    FAIL prepare-statement's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connectio
+f2-closed-first guix (3.53.1) test-connection: exit 1, pass 64, fail 6, 2 s
+    FAIL call-with-open-handle's remainder finished on another thread once this one has closed the connection: refused with &sqlite-wrong-thread
+    FAIL call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: 
+    FAIL changes's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused
+    FAIL in-transaction?'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection:
+    FAIL step!'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused w
+    FAIL prepare-statement's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connectio
+f2-caller-before guix (3.53.1) test-connection: exit 1, pass 63, fail 7, 2 s
+    FAIL call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: e
+    FAIL call-with-open-handle's remainder finished on another thread once this one has closed the connection: refused with &sqlite-wrong-thread
+    FAIL call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: 
+    FAIL changes's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused
+    FAIL in-transaction?'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection:
+    FAIL step!'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused w
+    FAIL prepare-statement's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connectio
+f2-who-lost guix (3.53.1) test-connection: exit 1, pass 63, fail 7, 2 s
+    FAIL call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: e
+    FAIL call-with-open-handle's remainder finished on another thread once this one has closed the connection: refused with &sqlite-wrong-thread
+    FAIL call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: 
+    FAIL changes's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused
+    FAIL in-transaction?'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection:
+    FAIL step!'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused w
+    FAIL prepare-statement's remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connectio
+f2-raise-inside guix (3.53.1) test-connection: exit 1, pass 69, fail 1, 2 s
+    FAIL call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: 
+f3-no-who guix (3.53.1) test-load-extension: exit 1, pass 45, fail 2, 4 s
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that did not opt in and finished on another: ref
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that opted in and finished on another: refused t
+f3-who-dropped guix (3.53.1) test-load-extension: exit 1, pass 44, fail 3, 4 s
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that did not opt in and finished on another: ref
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that opted in and finished on another: refused t
+    FAIL database-extension-loading? given a who: from another thread, &sqlite-wrong-thread from that who, the owner this thread and the caller 
+f3-who-unchecked guix (3.53.1) test-load-extension: exit 1, pass 46, fail 1, 3 s
+    FAIL database-extension-loading? given a who: from another thread, &sqlite-wrong-thread from that who, the owner this thread and the caller 
+f3-no-who m4-noload (3.54.1) test-load-extension: exit 1, pass 46, fail 1, 2 s
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that did not opt in and finished on another: ref
+f3-who-dropped m4-noload (3.54.1) test-load-extension: exit 1, pass 45, fail 2, 2 s
+    FAIL load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that did not opt in and finished on another: ref
+    FAIL database-extension-loading? given a who: from another thread, &sqlite-wrong-thread from that who, the owner this thread and the caller 
+f3-who-unchecked m4-noload (3.54.1) test-load-extension: exit 1, pass 46, fail 1, 2 s
+    FAIL database-extension-loading? given a who: from another thread, &sqlite-wrong-thread from that who, the owner this thread and the caller 
+m1-misuse-left guix (3.53.1) test-native: exit 1, pass 113, fail 4, 3 s
+    FAIL sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOA
+    FAIL native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and ch
+    FAIL every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-p
+    FAIL sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, it lets 
+    UNAVAILABLE sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION: this libsqlite3 answers 21, SQLITE_MISUSE, to the op, so its three calls ar
+m1-misuse-writes guix (3.53.1) test-native: exit 1, pass 112, fail 5, 3 s
+    FAIL sqlite3_db_config of ENABLE_LOAD_EXTENSION, on a library whose first read answers 21: a read with -1, a set to 1 and a read each answer
+    FAIL sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOA
+    FAIL native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and ch
+    FAIL every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-p
+    FAIL sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, it lets 
+    UNAVAILABLE sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION: this libsqlite3 answers 21, SQLITE_MISUSE, to the op, so its three calls ar
+m1-set-ignored guix (3.53.1) test-native: exit 1, pass 112, fail 5, 3 s
+    FAIL sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding, chosen by the op's own first answer, which is not 21: read wit
+    FAIL sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOA
+    FAIL native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and ch
+    FAIL every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-p
+    FAIL sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, it lets 
+m1-set-ignored m4-noload (3.54.1) test-native: exit 1, pass 114, fail 3, 2 s
+    FAIL sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION through the binding, chosen by the op's own first answer, which is not 21: read wit
+    FAIL native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and ch
+    FAIL every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-p
+    UNAVAILABLE sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENA
+    UNAVAILABLE sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, i
+m1-misuse-left m4-noload (3.54.1) test-native: exit 1, pass 115, fail 2, 2 s
+    FAIL native's load steps, in order: choose, load, the report's three bindings and the report, the floor, threadsafe's binding, answer and ch
+    FAIL every foreign-procedure form in native.sls binds eagerly: each is a top-level (define NAME (load-step (bind-required LIBRARY (foreign-p
+    UNAVAILABLE sqlite3_db_config round-trips ENABLE_LOAD_EXTENSION: this libsqlite3 answers 21, SQLITE_MISUSE, to the op, so its three calls ar
+    UNAVAILABLE sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENA
+    UNAVAILABLE sqlite3_load_extension is __collect_safe: on a connection whose ENABLE_LOAD_EXTENSION the binding set to 1, blocked on a FIFO, i
+# Round 2, the close's plants, on the round 2 tree:
+c-close-before-only guix (3.53.1) test-connection: exit 1, pass 70, fail 2, 3 s
+    FAIL close-database!'s remainder, a statement of the connection held at a row, taken at every fuel on the owner's thread and finished on ano
+    FAIL close-database!'s refusal of a remainder finished on another thread, a statement held at a row, is raised after every section: its with
+c-close-raise-inside guix (3.53.1) test-connection: exit 1, pass 71, fail 1, 3 s
+    FAIL close-database!'s refusal of a remainder finished on another thread, a statement held at a row, is raised after every section: its with
+c-close-who-lost guix (3.53.1) test-connection: exit 1, pass 70, fail 2, 3 s
+    FAIL close-database!'s remainder, a statement of the connection held at a row, taken at every fuel on the owner's thread and finished on ano
+    FAIL close-database!'s refusal of a remainder finished on another thread, a statement held at a row, is raised after every section: its with

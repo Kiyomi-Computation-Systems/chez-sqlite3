@@ -1,5 +1,5 @@
 /* tests/decoy-libsqlite3.c: a stand-in libsqlite3, for
- * tests/test-library-loading-decoys.sps, -real.sps and -missing.sps only,
+ * the tests/test-library-loading-*.sps suites only,
  * through tests/library-loading.sls. chez-sqlite3 itself compiles no C
  * (ADR-0001).
  *

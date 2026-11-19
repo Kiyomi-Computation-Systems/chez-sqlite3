@@ -1,40 +1,33 @@
 #!r6rs
-;;; One of the three suites that load libsqlite3 end to end, through (chez-sqlite3
-;;; private native), tests/refusal-probe.sps and a decoy (ADR-0002, ADR-0003,
-;;; ADR-0010, ADR-0013): this one holds the decoy's behaviours and its part of
-;;; the missing-api rows. tests/test-library-loading-real.sps holds the real
-;;; libsqlite3, the refusals no decoy reaches, discovery, make build's
-;;; preflight, and its own part; tests/test-library-loading-missing.sps holds
-;;; only missing-api rows, the largest part. They were one suite until it
-;;; passed 450 s under the memory gate on CI, three quarters of
-;;; MEMORY_TIMEOUT (ADR-0005, amended); (library-loading) holds what all
-;;; three use.
+;;; One of the nine suites that load libsqlite3 end to end, through
+;;; (chez-sqlite3 private native), tests/refusal-probe.sps and a decoy
+;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the decoy's
+;;; behaviours, one switch a row, on the control build.
+;;; tests/test-library-loading-combined.sps holds a lacking build under a
+;;; switch, and the kept refusal.
+;;;
+;;; The nine were one suite until it passed 450 s under the memory gate on
+;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
+;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
 ;;; this process, nor a second library tried in it. Every case therefore runs
-;;; tests/refusal-probe.sps in a fresh Chez, through `env`, and reads back
-;;; what it printed, as data, whole: exit status, every line, and stderr.
+;;; a probe in a fresh Chez, through `env`, and reads back what it printed,
+;;; as data, whole: exit status, every line, and stderr.
 ;;;
-;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc)
-;;;     once per build, each export of this suite's part left out one at a
-;;;     time, and run under one behaviour per row, chosen by
+;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc),
+;;;     the control alone, and run under one behaviour per row, chosen by
 ;;;     CHEZ_SQLITE3_DECOY. Each row asserts the refusal's reason and every
 ;;;     field (plan section 3.4), and the decoy's call log, whole. The log
 ;;;     holds the load's order by behaviour: the report's three, the floor,
 ;;;     threadsafe, initialize, then the rest, each refused before the next
-;;;     runs. A lacking build run under a behaviour that an earlier step
-;;;     refuses holds that step's place: the earlier refusal must win. A
-;;;     failed compile fails its row, never skips it (ADR-0001). The decoy's
-;;;     versions are the floor and the one below it, read from
+;;;     runs. A failed compile fails its row, never skips it (ADR-0001). The
+;;;     decoy's versions are the floor and the one below it, read from
 ;;;     packaging/floors.sexp (ADR-0008);
-;;;   - the load runs once: the probe references loaded-libsqlite3 three
-;;;     times, and the later two must answer what the first did, with no
-;;;     second load in the call log and no second library in the process;
-;;;   - the partition: each entry point's missing-api row runs in exactly one
-;;;     of the three suites, this one's part found by its file's name, and
-;;;     three rows, here and in each other suite, hold the parts, the pattern
-;;;     that deals them and the suites.
+;;;   - the entry lists: the required, then the optional, are the convention
+;;;     table's names; the missing suites deal the required ones.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
 ;;; requires them zero (ADR-0005, decision 4). Each runs through
@@ -129,7 +122,7 @@
 (define below-version (caddr floor-values))
 (define below-number (cadddr floor-values))
 
-;; --- the entries, and the partition ----------------------------------------------------
+;; --- the entries ----------------------------------------------------------------------
 
 ;; The lists are written out, and an entry dropped from them takes its
 ;; build and its missing-api row with it. The convention table holds the
@@ -140,65 +133,11 @@
   (map row-name conventions-table)
   (append every-entry optional-entries))
 
-;; Each part makes the missing-api rows of one suite. Merged in native's
-;; order, every-entry's, the parts are the required entry points exactly when
-;; each is in one part, once, and each part keeps the order; the other two
-;; suites hold the same row. The optional entry points, which a library may
-;; lack and still load, follow every-entry in the convention table, outside
-;; the partition (the M4 plan, section 4.6).
-(test-equal "the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
-  every-entry
-  (merge-halves every-entry (map cdr decoy-parts)))
-
-;; The partition is dealt: native's order, by position from 0, by a pattern of
-;; five that repeats (deal-pattern). The row above holds only that the parts
-;; partition the table, each in its order, so two entries swapped between
-;; parts, or one moved to another, passes it. Each part is exactly what the
-;; pattern deals its suite, and every name the pattern holds is a part.
-(test-equal "each suite's part is the entries the pattern deals it, by position in every-entry from 0, and the pattern names only parts"
-  (list decoy-parts 'all)
-  (list (map (lambda (part)
-               (cons (car part) (entries-dealt every-entry deal-pattern (car part))))
-             decoy-parts)
-        (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
-
-;; The pattern, written out, so that it and the parts changed together, which
-;; the rows above pass, still fail: three of every five entries to the missing
-;; suite, which holds only missing-api rows, and one each to the decoys' and
-;; the real suite, which hold about 20 children of their own (ADR-0005,
-;; amended 2026-11-16).
-(test-equal "the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite"
-  '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
-    "test-library-loading-missing.sps" "test-library-loading-real.sps"
-    "test-library-loading-missing.sps")
-  deal-pattern)
-
-;; this-part : (U (Pairof String (Listof String)) #f)
-;; This suite's part, by its own file's name. The row below writes the name
-;; out, so a suite copied from another, or a lookup that answers another
-;; part, fails it.
-(define this-part (suite-part (command-line)))
-
-(test-equal "this suite runs its own part of the partition, found by its file's name, and each suite the partition names is a file in tests/"
-  (list "test-library-loading-decoys.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
-  (list (if this-part (car this-part) (list 'unlisted (command-line)))
-        (map (lambda (part)
-               (cons (car part) (if (file-exists? (string-append "tests/" (car part))) 'present 'absent)))
-             decoy-parts)))
-
-(define this-entries (if this-part (cdr this-part) '()))
-
 ;; --- decoys --------------------------------------------------------------------------
 
 ;; builds : (Listof (Pairof String (Listof String)))
-;; The builds this suite's rows use: the behaviours' four, a lacking build for
-;; each entry of its part, and the three the order rows use, whatever part
-;; they are in.
-(define builds
-  (decoy-builds
-   (append '("control" "marked" "not-sqlite" "lacks-rest")
-           (map lacks-build
-                (append this-entries '("sqlite3_open_v2" "sqlite3_threadsafe" "sqlite3_initialize"))))))
+;; The builds this suite's rows use: the control, under each switch.
+(define builds (decoy-builds '("control")))
 
 (define (so-of build) (in-scratch (string-append build ".so")))
 
@@ -207,10 +146,6 @@
 (define compiled (compile-decoys so-of floor-values builds))
 
 (define (compiled-status build) (decoy-status compiled build))
-
-;; decoy-env : String (U String #f) -> (Listof String)
-(define (decoy-env build switch)
-  (cons (override (so-of build)) (switch-args switch)))
 
 ;; decoy-row : String (U String #f) (Listof String) String (String -> Expected) -> Void
 ;; (library-loading)'s decoy-row-in, on this suite's builds.
@@ -284,72 +219,6 @@
   (lambda (so) (loaded so 'override control-report 2
                        (append (list "decoy(?)") the-report-three
                                (list threadsafe-call initialize-call memory-used-call)))))
-
-;; This suite's part of the entry points, each left out, one at a time
-;; ((library-loading)'s missing-api-rows).
-(missing-api-rows decoy-row control-library this-entries)
-
-(decoy-row "lacks-rest" #f '()
-  "a library without any of the rest is refused naming the first in ADR-0002's order, sqlite3_compileoption_used"
-  (lambda (so) (refused 'missing-api so 'override "sqlite3_compileoption_used" '() (control-library so)
-                        (every-call "control"))))
-
-(decoy-row "not-sqlite" #f '()
-  "a library with no sqlite3_* function is missing-api, naming sqlite3_libversion_number, the first asked"
-  (lambda (so) (refused 'missing-api so 'override "sqlite3_libversion_number" '() #f (log-of "control"))))
-
-;; The load's order, by behaviour. Each row's library lacks an entry point that
-;; a later step binds, and answers wrongly at an earlier step: the earlier
-;; step's refusal must win, and the log must stop where it does.
-(decoy-row "lacks-sqlite3_open_v2" "below-floor" '()
-  "the floor comes before the rest: below-floor, not missing-api"
-  (lambda (so) (refused 'below-floor so 'override below-version '() (below-library so)
-                        (apply log-of "below-floor" the-report-three))))
-
-(decoy-row "lacks-sqlite3_open_v2" "not-threadsafe" '()
-  "threadsafe comes before the rest: not-threadsafe, not missing-api"
-  (lambda (so) (refused 'not-threadsafe so 'override 0 '() (control-library so)
-                        (append (apply log-of "not-threadsafe" the-report-three)
-                                (list threadsafe-call)))))
-
-(decoy-row "lacks-sqlite3_open_v2" "initialize-fails" '()
-  "sqlite3_initialize comes before the rest: load-failed with its code, not missing-api"
-  (lambda (so) (refused 'load-failed so 'override (code-of 'nomem) '() (control-library so)
-                        (every-call "initialize-fails"))))
-
-(decoy-row "lacks-sqlite3_threadsafe" "below-floor" '()
-  "the floor comes before threadsafe's binding: below-floor, not missing-api"
-  (lambda (so) (refused 'below-floor so 'override below-version '() (below-library so)
-                        (apply log-of "below-floor" the-report-three))))
-
-(decoy-row "lacks-sqlite3_initialize" "not-threadsafe" '()
-  "threadsafe's check comes before sqlite3_initialize's binding: not-threadsafe, not missing-api"
-  (lambda (so) (refused 'not-threadsafe so 'override 0 '() (control-library so)
-                        (append (apply log-of "not-threadsafe" the-report-three)
-                                (list threadsafe-call)))))
-
-;; A refusal is kept. Below the floor, then CHEZ_SQLITE3_LIBRARY names the
-;; marked build, and the probe references loaded-libsqlite3 twice more. Both
-;; raise the first refusal again: nothing is loaded or called a second time,
-;; and the second library never enters the process (ADR-0002).
-(let ((first (so-of "control")) (second (so-of "marked")))
-  (test-equal "a refusal is kept: CHEZ_SQLITE3_LIBRARY changed between references loads nothing new"
-    (list 0 0 1
-          (append (refused-lines 'below-floor first 'override below-version '() (below-library first)
-                                 (list first))
-                  (list (cons 'then-override second) once no-native-objects (cons 'marker 'absent)
-                        valgrind-line
-                        (cons 'calls (join (apply log-of "below-floor" the-report-three)))))
-          "")
-    (cons* (compiled-status "control") (compiled-status "marked")
-           (probe-with (decoy-env "control" "below-floor")
-                       (list "--then-override" second "--marker" "decoy_marker")))))
-
-;; The marker's control: loaded, the marked build's marker is seen.
-(decoy-row "marked" #f '("--marker" "decoy_marker")
-  "a build with DECOY_MARKER, once loaded, shows its marker to foreign-entry?"
-  (lambda (so) (outcome 0 (loaded-lines so 'override control-report 2) '()
-                        (list (cons 'marker 'present)) (loaded-calls "control"))))
 
 ;; --- this process ----------------------------------------------------------------------------
 

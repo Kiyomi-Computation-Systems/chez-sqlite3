@@ -245,7 +245,7 @@
   expected-names
   (map row-name table))
 
-;; (library-loading)'s every-entry is what the pattern of five deals and
+;; (library-loading)'s every-entry is what the pattern of four deals and
 ;; missing-api-rows makes a row for, the required entry points alone, and
 ;; optional-entries follows it (the M4 plan, section 4.6). Held whole and in
 ;; order, as merge-halves' row holds the parts: an optional entry point

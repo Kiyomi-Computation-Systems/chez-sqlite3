@@ -34,7 +34,14 @@
 ;;;   threads        the wrong thread on close-database! and on
 ;;;                  call-with-open-handle, from a forked thread, whatever it
 ;;;                  raises its answer, every wait bounded; the owner is the
-;;;                  thread that opened, not the main one
+;;;                  thread that opened, not the main one. An engine's
+;;;                  remainder of call-with-open-handle, and of changes,
+;;;                  in-transaction?, step! and prepare-statement, taken at
+;;;                  every fuel on the owner's thread and finished on
+;;;                  another, open or closed: refused there, from the
+;;;                  caller's who, never run there, nor refused as closed;
+;;;                  and of close-database!, a statement held: refused
+;;;                  there, the connection left open for the owner
 ;;;   call-with-database
 ;;;                  return, raise, escape and re-entry, and each with a close
 ;;;                  that fails, the procedure checked before anything opens
@@ -118,6 +125,12 @@
 (define close-database! (reach '(chez-sqlite3) 'close-database!))
 (define call-with-database (reach '(chez-sqlite3) 'call-with-database))
 (define database? (reach '(chez-sqlite3) 'database?))
+(define changes (reach '(chez-sqlite3) 'changes))
+(define in-transaction? (reach '(chez-sqlite3) 'in-transaction?))
+(define prepare-statement (reach '(chez-sqlite3) 'prepare-statement))
+(define step! (reach '(chez-sqlite3) 'step!))
+(define query (reach '(chez-sqlite3) 'query))
+(define execute-script! (reach '(chez-sqlite3) 'execute-script!))
 (define call-with-open-handle (reach '(chez-sqlite3 private connection) 'call-with-open-handle))
 (define failure-details (reach '(chez-sqlite3 private connection) 'failure-details))
 (define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
@@ -853,6 +866,248 @@
            (done (wait-until (lambda () (with-mutex m thread-answer)) 12000))
            (answer (if (eq? done 'satisfied) (car (with-mutex m thread-answer)) 'the-thread-hung)))
       (list (ids r main (with-mutex m thread-id)) counts answer (native-counts)))))
+
+;; --- a remainder resumed on another thread --------------------------------------------------------
+;; Chez resumes an engine's remainder on whichever thread calls it. So a call
+;; can pass its owner check on the owner's thread, expire, and go on on
+;; another: a check made before the critical section vouches for nothing
+;; there. call-with-open-handle makes it again inside its section, where no
+;; expiry falls, and raises &sqlite-wrong-thread after it, from the
+;; procedure the caller called (M4's closing review, F2). Each sweep runs a
+;; call at every fuel from 1 until it completes without expiring, with a
+;; fresh connection for every trial, opened on this thread. A remainder is
+;; finished on a forked thread, with fuel enough to end, whatever it raises
+;; its answer, the wait bounded by in-thread's.
+
+;; finished-elsewhere : Engine -> Any
+;; ENGINE run to its end on a forked thread, in slices of 10^8 ticks, at
+;; most 100 of them: in-thread's (answer VALUE THREAD-ID), VALUE the
+;; engine's answer or (unfinished 100); the-thread-hung past in-thread's
+;; bound.
+(define (finished-elsewhere engine)
+  (in-thread
+   (lambda ()
+     (let loop ((e engine) (n 0))
+       (if (>= n 100)
+           '(unfinished 100)
+           (e 100000000 (lambda (left . answers) (car answers)) (lambda (next) (loop next (+ n 1)))))))))
+
+;; elsewhere-sweep : (Database -> A) (A -> Any) (Database -> Any) -> (Listof Any)
+;; CALL swept. At each fuel from 1: a fresh :memory: connection opened on
+;; this thread, SETUP given it there, and CALL given SETUP's answer in an
+;; engine of FUEL ticks, what it raises its answer as what-raised shows it.
+;; An engine that completes ends the sweep: (FUEL completed ANSWER CLOSE).
+;; One that expires has BEFORE given the connection on this thread, then
+;; its remainder finished on a forked thread: (FUEL resumed ANSWER ID
+;; BEFORE CLOSE), ID that thread's, BEFORE what BEFORE answered or raised,
+;; or (FUEL resumed WHAT) when in-thread gave no answer. Each trial's
+;; connection is closed on this thread after
+;; it, CLOSE what that answered or raised. Past 3000 fuels,
+;; (unfinished-sweep 3000) ends it.
+(define (elsewhere-sweep setup call before)
+  (let loop ((fuel 1) (found '()))
+    (if (> fuel 3000)
+        (reverse (cons '(unfinished-sweep 3000) found))
+        (let* ((db (open-database ":memory:"))
+               (given (setup db))
+               (engine (make-engine (lambda () (attempt (lambda () (call given))))))
+               (run (engine fuel (lambda (left . answers) (list 'completed (car answers)))
+                            (lambda (next) (list 'expired next)))))
+          (if (eq? (car run) 'completed)
+              (let ((closed (attempt (lambda () (close-database! db) 'closed))))
+                (reverse (cons (list fuel 'completed (cadr run) closed) found)))
+              (let* ((done (attempt (lambda () (before db))))
+                     (a (finished-elsewhere (cadr run)))
+                     (closed (attempt (lambda () (close-database! db) 'closed))))
+                (loop (+ fuel 1)
+                      (cons (if (and (list? a) (= (length a) 3))
+                                (list fuel 'resumed (cadr a) (caddr a) done closed)
+                                (list fuel 'resumed a))
+                            found))))))))
+
+;; elsewhere-verdict : (Listof Any) (Integer Integer -> Any) (Listof Any)
+;;                     -> (List Any Symbol Symbol (Listof Any))
+;; A sweep's TRIALS judged, each by its own answer: the completion's answer
+;; and close; whether some resumed trial, its thread another one, was
+;; refused as (REFUSAL OWNER CALLER) gives it, OWNER this thread's id and
+;; CALLER that thread's, and whether some answered one of ANSWERS, each
+;; with its BEFORE done and its close made, so the sweep reached both sides
+;; of the call's sections; and every other trial, whole, with the ids
+;; written main and the-thread: a refusal of another kind, or a section run
+;; on the other thread.
+(define (elsewhere-verdict trials refusal answers)
+  (let ((main (get-thread-id)))
+    (let loop ((rest trials) (refused 0) (answered 0) (others '()) (completion 'never-completed))
+      (if (null? rest)
+          (list completion (yes-no (> refused 0)) (yes-no (> answered 0)) (reverse others))
+          (let* ((t (car rest))
+                 (resumed (and (= (length t) 6) (eq? (cadr t) 'resumed)
+                               (not (eqv? (cadddr t) main))
+                               (equal? (cddddr t) '(done closed)))))
+            (cond ((and (= (length t) 4) (eq? (cadr t) 'completed))
+                   (loop (cdr rest) refused answered others (cddr t)))
+                  ((and resumed (equal? (caddr t) (refusal main (cadddr t))))
+                   (loop (cdr rest) (+ refused 1) answered others completion))
+                  ((and resumed (member (caddr t) answers))
+                   (loop (cdr rest) refused (+ answered 1) others completion))
+                  (else
+                   (loop (cdr rest) refused answered
+                         (cons (if (= (length t) 6) (ids t main (cadddr t)) t) others)
+                         completion))))))))
+
+(define (yes-no x) (if x 'yes 'no))
+
+;; refused-from : Symbol -> (Integer Integer -> Any)
+;; The wrong thread's refusal from WHO, OWNER and CALLER its fields, as
+;; attempt shows it.
+(define (refused-from who)
+  (lambda (owner caller) (list 'raised (list 'wrong-thread who 'message owner caller))))
+
+;; leave-open, close-first : Database -> Symbol
+;; What a sweep does on this thread before the resume, answering done:
+;; nothing, or the connection closed.
+(define (leave-open db) 'done)
+(define (close-first db) (close-database! db) 'done)
+
+;; In 3 of 12 trials of a bare call-with-open-handle, when the owner check
+;; came before the section alone, the procedure ran on the other thread
+;; (M4's closing review).
+(test-equal "call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: each is refused with &sqlite-wrong-thread from its who, the owner this thread and the caller that one, or answers what its procedure gave on this thread before the expiry; the sweep reaches both, and every count is zero after"
+  (list (list 'ran-on-the-owner 'closed) 'yes 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (let* ((main (get-thread-id))
+            (trials (elsewhere-sweep (lambda (db) db)
+                                     (lambda (db)
+                                       (with-handle db
+                                         (lambda (h)
+                                           (if (eqv? (get-thread-id) main)
+                                               'ran-on-the-owner
+                                               (list 'ran-on (get-thread-id))))))
+                                     leave-open)))
+       (append (elsewhere-verdict trials (refused-from 'test-connection) '(ran-on-the-owner))
+               (list (native-counts)))))))
+
+(test-equal "call-with-open-handle's remainder finished on another thread once this one has closed the connection: refused with &sqlite-wrong-thread from its who, never &sqlite-closed, since the thread is checked before the connection is, inside the section too; or the answer its procedure gave before the expiry"
+  (list (list 'ran-before-the-close 'closed) 'yes 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (let ((trials (elsewhere-sweep (lambda (db) db)
+                                    (lambda (db) (with-handle db (lambda (h) 'ran-before-the-close)))
+                                    close-first)))
+       (append (elsewhere-verdict trials (refused-from 'test-connection) '(ran-before-the-close))
+               (list (native-counts)))))))
+
+;; The section's refusal is raised after the section, as the first check's
+;; is: a with-exception-handler handler of either runs at depth 1 on the
+;; other thread.
+(test-equal "call-with-open-handle's refusal of a remainder finished on another thread, the connection closed first, is raised after every section: its with-exception-handler handler runs at depth 1 there, at every fuel"
+  (list (list '(no-raise ran-before-the-close) 'closed) 'yes 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (let ((trials (elsewhere-sweep (lambda (db) db)
+                                    (lambda (db)
+                                      (handler-depth
+                                       (lambda () (with-handle db (lambda (h) 'ran-before-the-close)))))
+                                    close-first)))
+       (append (elsewhere-verdict trials
+                                  (lambda (owner caller)
+                                    (list 'raised-at-depth 'depth-1
+                                          (list 'wrong-thread 'test-connection 'message owner caller)))
+                                  '((no-raise ran-before-the-close)))
+               (list (native-counts)))))))
+
+;; Each verb reaches the handle through call-with-open-handle, outside any
+;; section of its own, and each refusal names the verb: a counter, a
+;; statement verb, and the prepare. The connection is closed on this thread
+;; before the remainder goes on, so a section that ran on the other thread
+;; would have found it closed, and said so.
+(for-each
+ (lambda (verb)
+   (let ((who (car verb)) (setup (cadr verb)) (call (caddr verb)) (answer (cadddr verb)))
+     (test-equal (string-append (symbol->string who) "'s remainder, taken at every fuel on the owner's thread and finished on another once this one has closed the connection: refused with &sqlite-wrong-thread from " (symbol->string who) ", the owner this thread and the caller that one, never &sqlite-closed; or its answer, when its section ran before the expiry; the sweep reaches both, and every count is zero after")
+       (list (list answer 'closed) 'yes 'yes '() zero-counts)
+       (attempt
+        (lambda ()
+          (let ((trials (elsewhere-sweep setup call close-first)))
+            (append (elsewhere-verdict trials (refused-from who) (list answer))
+                    (list (native-counts)))))))))
+ (list (list 'changes (lambda (db) db) (lambda (db) (list 'changed (changes db))) '(changed 0))
+       (list 'in-transaction? (lambda (db) db) (lambda (db) (if (in-transaction? db) 'in 'out)) 'out)
+       (list 'step! (lambda (db) (prepare-statement db "select 1")) step! #t)
+       (list 'prepare-statement (lambda (db) db)
+             (lambda (db) (and (prepare-statement db "select 1") 'prepared)) 'prepared)))
+
+;; close-database! reaches the handle through its own section, the latch's,
+;; where it finalizes and closes. A remainder of it finished on another
+;; thread is refused there, the connection left open for this thread to
+;; close. So the sweep's BEFORE reads, on this thread, whether the
+;; connection is still open: a close made on the other thread shows as a
+;; connection open before the resume and an answer after it. A statement
+;; held at a row gives the close a finalize to make. When the owner check
+;; came before the section alone, fuels 9 and 10 closed the connection on
+;; the other thread (M4's closing review, the M4 session's check).
+
+;; open-or-closed : Database -> Any
+;; Whether DB is open, read on this thread: open, closed, or what else the
+;; read raised.
+(define (open-or-closed db)
+  (let ((r (attempt (lambda () (with-handle db (lambda (h) 'open))))))
+    (if (equal? r '(raised (closed test-connection message))) 'closed r)))
+
+;; close-verdict : (Listof Any) (Integer Integer -> Any) Any
+;;                 -> (List Any Symbol Symbol (Listof Any))
+;; elsewhere-verdict's judgment of close-database!'s sweep: refused as
+;; (REFUSAL OWNER CALLER) gives it, the connection open before the resume;
+;; or ANSWER, the close's, the connection closed before the resume, on
+;; this thread; each closed by this thread's close after; and every other
+;; trial, whole.
+(define (close-verdict trials refusal answer)
+  (let ((main (get-thread-id)))
+    (let loop ((rest trials) (refused 0) (answered 0) (others '()) (completion 'never-completed))
+      (if (null? rest)
+          (list completion (yes-no (> refused 0)) (yes-no (> answered 0)) (reverse others))
+          (let* ((t (car rest))
+                 (resumed (and (= (length t) 6) (eq? (cadr t) 'resumed)
+                               (not (eqv? (cadddr t) main))
+                               (equal? (list-ref t 5) 'closed))))
+            (cond ((and (= (length t) 4) (eq? (cadr t) 'completed))
+                   (loop (cdr rest) refused answered others (cddr t)))
+                  ((and resumed (eq? (list-ref t 4) 'open)
+                        (equal? (caddr t) (refusal main (cadddr t))))
+                   (loop (cdr rest) (+ refused 1) answered others completion))
+                  ((and resumed (eq? (list-ref t 4) 'closed) (equal? (caddr t) answer))
+                   (loop (cdr rest) refused (+ answered 1) others completion))
+                  (else
+                   (loop (cdr rest) refused answered
+                         (cons (if (= (length t) 6) (ids t main (cadddr t)) t) others)
+                         completion))))))))
+
+;; The latch's section is the close's last, and at this trip no tick falls
+;; after it, so the row asks for no trial past it, and allows one.
+(test-equal "close-database!'s remainder, a statement of the connection held at a row, taken at every fuel on the owner's thread and finished on another: refused there with &sqlite-wrong-thread from close-database!, the owner this thread and the caller that one, the connection open before the resume and closed by this thread after, never a close made there; the call that completes closes; and every count is zero after"
+  (list (list 'closed-it 'closed) 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (let* ((trials (elsewhere-sweep (lambda (db) (let ((st (prepare-statement db "select 1"))) (step! st) db))
+                                     (lambda (db) (close-database! db) 'closed-it)
+                                     open-or-closed))
+            (v (close-verdict trials (refused-from 'close-database!) 'closed-it)))
+       (list (car v) (cadr v) (cadddr v) (native-counts))))))
+
+(test-equal "close-database!'s refusal of a remainder finished on another thread, a statement held at a row, is raised after every section: its with-exception-handler handler runs at depth 1 there, at every fuel"
+  (list (list '(no-raise closed-it) 'closed) 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (let* ((trials (elsewhere-sweep (lambda (db) (let ((st (prepare-statement db "select 1"))) (step! st) db))
+                                     (lambda (db) (handler-depth (lambda () (close-database! db) 'closed-it)))
+                                     open-or-closed))
+            (v (close-verdict trials
+                              (lambda (owner caller)
+                                (list 'raised-at-depth 'depth-1
+                                      (list 'wrong-thread 'close-database! 'message owner caller)))
+                              '(no-raise closed-it))))
+       (list (car v) (cadr v) (cadddr v) (native-counts))))))
 
 ;; --- call-with-database -------------------------------------------------------------------------
 

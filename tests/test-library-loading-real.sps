@@ -1,47 +1,31 @@
 #!r6rs
-;;; One of the three suites that load libsqlite3 end to end, through (chez-sqlite3
-;;; private native), tests/refusal-probe.sps and tests/preflight.sps
+;;; One of the nine suites that load libsqlite3 end to end, through
+;;; (chez-sqlite3 private native), tests/refusal-probe.sps and tests/preflight.sps
 ;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the real
-;;; libsqlite3, the refusals no decoy reaches, discovery, make build's
-;;; preflight, and its part of the decoy's missing-api rows.
-;;; tests/test-library-loading-decoys.sps holds the decoy's behaviours and its
-;;; own part; tests/test-library-loading-missing.sps holds only missing-api
-;;; rows, the largest part. They were one suite until it passed 450 s under
-;;; the memory gate on CI, three quarters of MEMORY_TIMEOUT (ADR-0005,
-;;; amended); (library-loading) holds what all three use.
+;;; libsqlite3, the refusals no decoy reaches, discovery, and make build's
+;;; preflight on the real libsqlite3. tests/test-library-loading-preflight.sps
+;;; holds preflight's other rows.
+;;;
+;;; The nine were one suite until it passed 450 s under the memory gate on
+;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
+;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
 ;;; this process, nor a second library tried in it. Every case therefore runs
-;;; tests/refusal-probe.sps in a fresh Chez, through `env`, and reads back
-;;; what it printed, as data, whole: exit status, every line, and stderr.
+;;; a probe in a fresh Chez, through `env`, and reads back what it printed,
+;;; as data, whole: exit status, every line, and stderr.
 ;;;
-;;;   - decoys: this suite's part of the missing-api rows, as the other suites
-;;;     build them, and the control build, for preflight. The partition's
-;;;     three rows are held here too, so that any one suite alone holds it;
-;;;   - the optional entry point, outside the pattern (the M4 plan, section
-;;;     4.6): a build without sqlite3_load_extension loads, with no
-;;;     missing-api, and native records it absent; the control records it
-;;;     there;
-;;;   - the opt-in's check (M4 slice 3; the M4 plan, section 4.3): on the build
-;;;     without it, an open that opts in is refused by the named condition,
-;;;     after the list's own rules, the open never tried; on the control it is
-;;;     tried, and so is (enable-load-extension . #f) on the lacking build;
-;;;   - load-extension! on the decoy (M4 slice 4): reached on the build
-;;;     without sqlite3_load_extension and on the control, it refuses what is
-;;;     no database at depth 1, and the log shows nothing of SQLite's called;
 ;;;   - the real libsqlite3: the one the probe loads in this environment,
-;;;     then through the override. What it reports must equal what
-;;;     tests/libsqlite3-oracle.c reads from the same file;
+;;;     then through the override, and preflight's report of it. What each
+;;;     reports must equal what tests/libsqlite3-oracle.c reads from the same
+;;;     file;
 ;;;   - the refusals no decoy reaches: invalid-override, load-failed, and
 ;;;     not-found, by world. In a Guix world, not-found is built end to end.
 ;;;     In an FHS world the standard directories cannot be emptied, so that
 ;;;     row asserts discovery's success there instead, and its name says
-;;;     which world ran;
-;;;   - make build's preflight: its exit status and its output, whole. Its
-;;;     remedy line is the refusal's own message, compared with what the
-;;;     probe read for the same refusal: never written here as text
-;;;     (ADR-0002, ADR-0013).
+;;;     which world ran.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
 ;;; requires them zero (ADR-0005, decision 4). Each runs through
@@ -49,10 +33,10 @@
 ;;; with a log of its own that the gate reads. Every child says whether it ran
 ;;; under Valgrind, and a row requires yes exactly when the gate asked: the
 ;;; probe, and the C oracle, print a line saying so (memcheck's preload in
-;;; /proc/self/maps); preflight prints none, so this suite reads the one new
-;;; log in the gate's directory for it, and requires that log's Command: line
-;;; to be preflight's own, whole. A child that escaped the gate fails its row
-;;; (ADR-0005, amended).
+;;; /proc/self/maps); preflight prints none, so (library-loading)'s
+;;; preflight reads the one new log in the gate's directory for it, and
+;;; requires that log's Command: line to be preflight's own, whole. A child
+;;; that escaped the gate fails its row (ADR-0005, amended).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
@@ -63,7 +47,6 @@
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
-        (foreign-conventions)
         (libsqlite3-oracle)
         (library-loading)
         (only (chezscheme) getenv putenv format format-condition? load-shared-object
@@ -99,11 +82,11 @@
 (unless (set? chez)
   (exit 1))
 
-;; --- the scratch directory and the floors ----------------------------------------------
+;; --- the scratch directory ------------------------------------------------------------
 
 ;; scratch : (U String #f)
-;; A fresh directory for the decoys, the fake profile, the text file and the
-;; empty HOME. This suite is flat top-level forms, so (chez-sqlite3-testing)
+;; A fresh directory for the fake profile, the text file and the empty
+;; HOME. This suite is flat top-level forms, so (chez-sqlite3-testing)
 ;; removes the directory when the process ends; the last forms remove it
 ;; earlier, and the tests below require that.
 (define scratch
@@ -129,249 +112,7 @@
       (lambda (p) (put-string p text)))
     'written))
 
-;; make-directory : String -> (U 'made (List 'not-made Any))
-;; mkdir -p PATH, or what went wrong; never a raise.
-(define (make-directory path)
-  (guard (e (#t (list 'not-made (describe e))))
-    (let ((answer (capture-command (list "mkdir" "-p" path))))
-      (if (and (eqv? (car answer) 0) (file-directory? path)) 'made (list 'not-made answer)))))
-
-(define floor-values (read-floor-values))
-
-(test-equal "packaging/floors.sexp gives the decoys their versions: the floor, and the one below it"
-  'read
-  (if (and (= (length floor-values) 4) (string? (car floor-values))) 'read floor-values))
-
-(unless (string? (car floor-values))
-  (exit 1))
-
-(define floor-version (car floor-values))
-(define floor-number (cadr floor-values))
-(define below-version (caddr floor-values))
-(define below-number (cadddr floor-values))
-
-;; --- the partition ----------------------------------------------------------------------
-
-;; Each part makes the missing-api rows of one suite. Merged in native's
-;; order, every-entry's, the parts are the required entry points exactly when
-;; each is in one part, once, and each part keeps the order; the other two
-;; suites hold the same row. The optional entry points, which a library may
-;; lack and still load, follow every-entry in the convention table, outside
-;; the partition (the M4 plan, section 4.6).
-(test-equal "the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
-  every-entry
-  (merge-halves every-entry (map cdr decoy-parts)))
-
-;; The partition is dealt: native's order, by position from 0, by a pattern of
-;; five that repeats (deal-pattern). The row above holds only that the parts
-;; partition the table, each in its order, so two entries swapped between
-;; parts, or one moved to another, passes it. Each part is exactly what the
-;; pattern deals its suite, and every name the pattern holds is a part.
-(test-equal "each suite's part is the entries the pattern deals it, by position in every-entry from 0, and the pattern names only parts"
-  (list decoy-parts 'all)
-  (list (map (lambda (part)
-               (cons (car part) (entries-dealt every-entry deal-pattern (car part))))
-             decoy-parts)
-        (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
-
-;; The pattern, written out, so that it and the parts changed together, which
-;; the rows above pass, still fail: three of every five entries to the missing
-;; suite, which holds only missing-api rows, and one each to the decoys' and
-;; the real suite, which hold about 20 children of their own (ADR-0005,
-;; amended 2026-11-16).
-(test-equal "the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite"
-  '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
-    "test-library-loading-missing.sps" "test-library-loading-real.sps"
-    "test-library-loading-missing.sps")
-  deal-pattern)
-
-;; this-part : (U (Pairof String (Listof String)) #f)
-;; This suite's part, by its own file's name. The row below writes the name
-;; out, so a suite copied from another, or a lookup that answers another
-;; part, fails it.
-(define this-part (suite-part (command-line)))
-
-(test-equal "this suite runs its own part of the partition, found by its file's name, and each suite the partition names is a file in tests/"
-  (list "test-library-loading-real.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
-  (list (if this-part (car this-part) (list 'unlisted (command-line)))
-        (map (lambda (part)
-               (cons (car part) (if (file-exists? (string-append "tests/" (car part))) 'present 'absent)))
-             decoy-parts)))
-
-(define this-entries (if this-part (cdr this-part) '()))
-
-;; --- decoys --------------------------------------------------------------------------
-
-;; builds : (Listof (Pairof String (Listof String)))
-;; The control, for preflight's rows and the optional entry point's, a
-;; lacking build for each entry of this suite's part, and one for each
-;; optional entry point.
-(define builds
-  (decoy-builds (cons "control" (map lacks-build (append this-entries optional-entries)))))
-
-(define (so-of build) (in-scratch (string-append build ".so")))
-
-;; compiled : (Listof (Pairof String Any))
-;; Every build, compiled once, in order.
-(define compiled (compile-decoys so-of floor-values builds))
-
-(define (compiled-status build) (decoy-status compiled build))
-
-;; decoy-env : String (U String #f) -> (Listof String)
-(define (decoy-env build switch)
-  (cons (override (so-of build)) (switch-args switch)))
-
-;; decoy-row : String (U String #f) (Listof String) String (String -> Expected) -> Void
-;; (library-loading)'s decoy-row-in, on this suite's builds.
-(define (decoy-row build switch args description expected)
-  (decoy-row-in so-of compiled-status build switch args description expected))
-
-(define control-report (report floor-version floor-number "decoy-sourceid"))
-(define (control-library so) (report-of so 'override control-report))
-
-;; This suite's part of the entry points, each left out, one at a time
-;; ((library-loading)'s missing-api-rows).
-(missing-api-rows decoy-row control-library this-entries)
-
-;; The optional entry point, outside the pattern (ADR-0002, amended
-;; 2026-11-17): a library without sqlite3_load_extension, as Apple's is,
-;; loads, never missing-api, and native records it absent, which an open that
-;; opts in reads (M4 slice 3). The control has it, and its record says so: the
-;; row above is the entry point's doing, not the probe's. Neither load calls
-;; it, so each log is a successful load's six calls.
-(decoy-row "lacks-sqlite3_load_extension" #f '("--extension-loading" "yes")
-  "a library without the optional sqlite3_load_extension loads, with no missing-api, and native records it absent, load-extension-available? #f"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #f)))
-                        '() '() (loaded-calls "control"))))
-
-(decoy-row "control" #f '("--extension-loading" "yes")
-  "the control, which has sqlite3_load_extension, loads, and native records it there, load-extension-available? #t"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #t)))
-                        '() '() (loaded-calls "control"))))
-
-;; --- the opt-in's check (M4 slice 3; the M4 plan, section 4.3) -------------------------
-;; An open whose settings opt in, (enable-load-extension . #t), on a library
-;; without sqlite3_load_extension raises &sqlite-extensions-unavailable from
-;; the verb, the fifth of the refusals, after the list's own rules: in the
-;; checks' critical section, caught there and raised after it, so a handler
-;; of it runs at depth 1, every count zero there. The decoy's open always
-;; fails, SQLITE_CANTOPEN, so its log can never show a db_config call: what a
-;; row sees is whether the open was tried, sqlite3_open_v2 in the log, and
-;; each row asserts the log whole. Each case runs through open-database,
-;; then call-with-database, whose procedure is never called.
-
-(define no-counts '((block . 0) (connection . 0) (statement . 0)))
-(define (opt-in-refused who) (list 'extensions-unavailable who 'library-condition 'depth-1 no-counts))
-(define (refused-as who irritants) (list 'assertion who irritants 'depth-1 no-counts))
-(define (cantopen-from who) (list 'sqlite-error who 'cantopen 'depth-1 no-counts))
-
-;; both : (Symbol -> Any) -> (List Any Any Symbol)
-;; A case's result as the probe prints it, the same refusal from each verb,
-;; the procedure never called.
-(define (both refusal) (list (refusal 'open-database) (refusal 'call-with-database) 'not-called))
-
-;; lacking-cases : (Listof (Pairof (Listof Any) (Symbol -> Any)))
-;; Each case's arguments, the filename first, and its refusal from a verb:
-;; the opt-in alone and among the other three, the fifth step; then the
-;; list's own rules, the split's and M2's, each with the opt-in in the list,
-;; which raise their own refusal first, wherever the opt-in stands.
-(define lacking-cases
-  (list
-   (cons '(":memory:" ((enable-load-extension . #t))) opt-in-refused)
-   (cons '(":memory:" ((defensive . #t) (enable-load-extension . #t) (dqs-dml . #f))) opt-in-refused)
-   (cons '(":memory:" ((enable-load-extension . #t) (nosuch . 1)))
-         (lambda (who) (refused-as who '(unknown-setting nosuch))))
-   (cons '(":memory:" ((nosuch . 1) (enable-load-extension . #t)))
-         (lambda (who) (refused-as who '(unknown-setting nosuch))))
-   (cons '(":memory:" ((enable-load-extension . #t) (defensive . 1)))
-         (lambda (who) (refused-as who '(setting-out-of-domain defensive 1))))
-   (cons '(":memory:" ((enable-load-extension . #t) (enable-load-extension . #t)))
-         (lambda (who) (refused-as who '(setting-given-twice enable-load-extension))))
-   (cons '(":memory:" ((enable-load-extension . #t) 5))
-         (lambda (who) (refused-as who '(not-an-association-list 5))))
-   (cons '(":memory:" ((enable-load-extension . #t)) ((dqs-ddl . #t)))
-         (lambda (who) (refused-as who '(second-settings-list))))
-   (cons '(":memory:" bogus ((enable-load-extension . #t)))
-         (lambda (who) (refused-as who '(unknown-option bogus))))
-   (cons '(42 ((enable-load-extension . #t))) (lambda (who) (refused-as who '(not-a-string 42))))
-   (cons '("file:x.db" ((enable-load-extension . #t)))
-         (lambda (who) (refused-as who '(file-uri-without-uri-option (kind string)))))))
-
-(decoy-row "lacks-sqlite3_load_extension" #f
-  (list "--extension-loading" "yes" "--opens" (opens-arg (map car lacking-cases)))
-  "an open that opts in, (enable-load-extension . #t), alone or among the other three, raises &sqlite-extensions-unavailable from open-database and from call-with-database, whose procedure is never called, a library condition, its handler at depth 1 and every count zero; each of the list's own rules, the split's and M2's, with the opt-in beside it, raises its own refusal first; and the log holds the load's entries alone, no sqlite3_open_v2"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #f)
-                                        (cons 'opens (map (lambda (c) (both (cdr c))) lacking-cases))))
-                        '() '() (loaded-calls "control"))))
-
-;; The control, which has sqlite3_load_extension: the same opt-in is tried,
-;; so the refusal above is the entry point's doing. And (enable-load-
-;; extension . #f) on the lacking build is the same as leaving it out (Q15):
-;; the open is tried. Each case opens twice, once by each verb, so the log
-;; holds the open's two entries twice.
-(decoy-row "control" #f
-  (list "--extension-loading" "yes" "--opens" (opens-arg '((":memory:" ((enable-load-extension . #t))))))
-  "the control, with the entry point: the same open that opts in is tried by each verb, sqlite3_open_v2 in the log, and answers &sqlite-error cantopen, the decoy's, its handler at depth 1, every count zero, the procedure never called"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #t)
-                                        (cons 'opens (list (both cantopen-from)))))
-                        '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
-
-(decoy-row "lacks-sqlite3_load_extension" #f
-  (list "--extension-loading" "yes" "--opens" (opens-arg '((":memory:" ((enable-load-extension . #f))))))
-  "(enable-load-extension . #f) on the lacking build is the same as leaving it out (Q15): the open is tried by each verb, sqlite3_open_v2 in the log, and answers &sqlite-error cantopen, the procedure never called"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #f)
-                                        (cons 'opens (list (both cantopen-from)))))
-                        '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
-
-;; --- load-extension! on the decoy (M4 slice 4) ---------------------------------------
-;; The decoy's open always fails, so no connection of it reaches a load:
-;; what a row sees is the verb itself, where the library lacks
-;; sqlite3_load_extension and where it has it. On both, load-extension! is
-;; reached, its library loading where native binds no load, and its first
-;; check refuses what is no database, whatever the arguments after it, an
-;; assertion violation from the verb, raised after its section, its handler
-;; at depth 1, every count zero; and the log holds the load's entries
-;; alone, so nothing of SQLite's is called, sqlite3_load_extension least of
-;; all where the build has it.
-
-(define load-cases
-  '((nope "/x/ext.so")
-    (nope "/x/ext.so" "chez_named_init")
-    (42 "ext.so")
-    (#f 42 42)))
-
-(define (load-refused db) (list 'assertion 'load-extension! (list 'not-a-database db) 'depth-1 no-counts))
-
-(decoy-row "lacks-sqlite3_load_extension" #f
-  (list "--extension-loading" "yes" "--loads" (loads-arg load-cases))
-  "load-extension! on a library without sqlite3_load_extension: reached, its library loading though native binds no load, it refuses what is no database, for each form, from load-extension!, its handler at depth 1 and every count zero; the log holds the load's entries alone"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #f)
-                                        (cons 'loads (map (lambda (c) (load-refused (car c))) load-cases))))
-                        '() '() (loaded-calls "control"))))
-
-(decoy-row "control" #f
-  (list "--extension-loading" "yes" "--loads" (loads-arg load-cases))
-  "load-extension! on the control, which has sqlite3_load_extension: the same refusals, and the log holds the load's entries alone, no sqlite3_load_extension"
-  (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
-                                  (list (cons 'load-extension-available? #t)
-                                        (cons 'loads (map (lambda (c) (load-refused (car c))) load-cases))))
-                        '() '() (loaded-calls "control"))))
-
 ;; --- the real libsqlite3 ---------------------------------------------------------------
-
-;; field : Any Symbol -> Pair
-;; The (KEY . VALUE) the probe printed for KEY, or (KEY . absent).
-(define (field answer key)
-  (or (and (pair? answer) (pair? (cdr answer)) (list? (cadr answer))
-           (for-all pair? (cadr answer))
-           (assq key (cadr answer)))
-      (cons key 'absent)))
 
 ;; The probe, in this process's own environment: the libsqlite3 a program here
 ;; would load, through the override when it is set, by discovery when not.
@@ -439,6 +180,14 @@
           (oracle-threadsafe real-oracle) #f)
   (probe (cons (override (or real-libsqlite3 "/the-probe-loaded-nothing")) (switch-args #f))))
 
+;; make build's preflight on the same file, through the override: what it
+;; tells a person installing chez-sqlite3, all of it, the C oracle's report
+;; (tests/test-library-loading-preflight.sps holds preflight's other rows).
+(test-equal "preflight, the real libsqlite3: exit 0, with the C oracle's report, then its counts"
+  (list 0 (accepted-text (or real-libsqlite3 "?") 'override (oracle-report real-oracle)) ""
+        valgrind-line)
+  (preflight (cons (override (or real-libsqlite3 "/the-probe-loaded-nothing")) (switch-args #f))))
+
 ;; call-with-tmpdir : String (-> Any) -> Any
 ;; THUNK with TMPDIR set to DIR. Afterwards TMPDIR is put back to its old
 ;; value, or to /tmp when it was unset: putenv cannot unset, and /tmp is
@@ -499,49 +248,15 @@
   (refused 'load-failed no-such-file 'override no-such-file-refusal '() #f #f)
   (probe (cons (override no-such-file) (switch-args #f))))
 
-;; --- a raise that is not a refusal --------------------------------------------------------
-;; tests/fixtures/raising/chez-sqlite3/private/native.sls shadows src/'s
-;; native: its loaded-libsqlite3 raises a plain error. That is a bug, not a
-;; refusal, and the probe must report it as a raise.
-
-(define raising-libdirs "tests/fixtures/raising:src")
-
-;; What the fixture raises, as the probe prints it: its &who, and the condition
-;; types it is, by name (rnrs's error: serious, error, who, message and
-;; irritants); never its text (ADR-0013, decision 9).
-(define fixture-raised '(loaded-libsqlite3 (serious error who message irritants)))
-
-(test-equal "a raise that is not a refusal: the probe prints its who and its types, each reference again, and exits 2"
-  (list 2 (list (cons 'raised fixture-raised)
-                (cons 'again (list (cons 'raised fixture-raised) (cons 'raised fixture-raised)))
-                no-native-objects valgrind-line)
-        "")
-  (as-data (spawn-in raising-libdirs (switch-args #f) "tests/refusal-probe.sps" '())))
-
 ;; --- discovery, with the override unset --------------------------------------------------
 ;; By platform first, then, on Linux, by world. Each child unsets the override
 ;; itself, and sets the Guix variables it wants.
 
 ;; platform : (U 'linux 'macos 'other)
-(define platform
-  (let ((name (symbol->string (machine-type))))
-    (cond ((string-suffix? "le" name) 'linux)
-          ((string-suffix? "osx" name) 'macos)
-          (else 'other))))
+(define platform (machine-platform))
 
-;; real-maps : (U String #f)
-;; This process's /proc/self/maps, as native reads it. A probe runs the same
-;; Chez, so it lives in the same world.
-(define real-maps
-  (guard (e (#t #f))
-    (call-with-port (open-file-input-port "/proc/self/maps" (file-options)
-                                          (buffer-mode block)
-                                          (make-transcoder (utf-8-codec)))
-      get-string-all)))
-
-(define world
-  (guard (e (#t (list 'raised (describe e))))
-    (libsqlite3-world (if (string? real-maps) real-maps #f))))
+;; world : (U 'guix 'fhs (List 'raised String))
+(define world (process-world))
 
 (test-equal "the world, guix or fhs, was determined"
   'determined
@@ -552,17 +267,10 @@
   'made
   (make-directory empty-home))
 
-(define unset-override (cons* "-u" "CHEZ_SQLITE3_LIBRARY" (switch-args #f)))
-
 ;; No profile to search: what not-found needs in a Guix world.
-(define no-profiles
-  (append unset-override
-          (list "-u" "GUIX_ENVIRONMENT" "-u" "GUIX_PROFILE" (string-append "HOME=" empty-home))))
+(define no-profiles (no-profiles-env empty-home))
 
-(define guix-not-found-candidates
-  (list (string-append empty-home "/.guix-home/profile/lib/libsqlite3.so.0")
-        (string-append empty-home "/.guix-profile/lib/libsqlite3.so.0")
-        "/run/current-system/profile/lib/libsqlite3.so.0"))
+(define guix-not-found-candidates (guix-candidates-in empty-home))
 
 ;; first-standard : (U String (List 'no-fhs-candidate-exists) (List 'raised String))
 ;; The first FHS candidate that exists here, as discovery would choose it.
@@ -638,208 +346,8 @@
      (refused 'not-found #f #f #f '() #f #f (list '()))
      (probe unset-override))))
 
-;; --- make build's preflight ----------------------------------------------------------------
-;; Its output is what make build tells a person installing chez-sqlite3, so
-;; these rows assert all of it. Its remedy line is the refusal's message,
-;; which no test writes as text (ADR-0002, ADR-0013): it must equal what the
-;; probe read for the same refusal, in a process of its own.
-
-;; The gate's directory of child logs, from the prefix make test-memory
-;; exports: the directory of its --log-file=DIR/%p.valgrind word; #f outside
-;; the gate.
-(define gate-log-dir
-  (let ((prefix (getenv "CHEZ_SQLITE3_GATE_CHILD")))
-    (and prefix
-         (let loop ((words (split-words prefix)))
-           (cond ((null? words) #f)
-                 ((and (string-prefix? "--log-file=" (car words))
-                       (string-suffix? "/%p.valgrind" (car words)))
-                  (let ((word (car words)))
-                    (substring word (string-length "--log-file=")
-                               (- (string-length word) (string-length "/%p.valgrind")))))
-                 (else (loop (cdr words))))))))
-
-;; gate-logs : -> (Listof String)
-;; The names in the gate's directory of child logs, sorted; none outside the
-;; gate.
-(define (gate-logs)
-  (if gate-log-dir
-      (guard (e (#t (list 'unreadable)))
-        (list-sort string<? (directory-list gate-log-dir)))
-      '()))
-
-;; command-of-log : String -> (U String (List 'no-command String))
-;; The program and arguments of the Command: line of the Valgrind log NAME in
-;; the gate's directory.
-(define (command-of-log name)
-  (guard (e (#t (list 'no-command (describe e))))
-    (let ((text (call-with-port
-                 (open-file-input-port (string-append gate-log-dir "/" name) (file-options)
-                                       (buffer-mode block) (make-transcoder (utf-8-codec)))
-                 get-string-all)))
-      (let loop ((lines (lines-of text)))
-        (cond ((null? lines) (list 'no-command name))
-              ((command-line-of (car lines)) => (lambda (command) command))
-              (else (loop (cdr lines))))))))
-
-;; lines-of : String -> (Listof String)
-(define (lines-of text)
-  (let loop ((i 0) (start 0) (found '()))
-    (cond ((= i (string-length text))
-           (reverse (if (> i start) (cons (substring text start i) found) found)))
-          ((char=? (string-ref text i) #\newline)
-           (loop (+ i 1) (+ i 1) (cons (substring text start i) found)))
-          (else (loop (+ i 1) start found)))))
-
-;; command-line-of : String -> (U String #f)
-;; What follows "==PID== Command: " on LINE, else #f.
-(define (command-line-of line)
-  (let ((marker "== Command: "))
-    (and (string-prefix? "==" line)
-         (let loop ((i 2))
-           (cond ((>= (+ i (string-length marker)) (string-length line)) #f)
-                 ((string=? (substring line i (+ i (string-length marker))) marker)
-                  (substring line (+ i (string-length marker)) (string-length line)))
-                 ((char-numeric? (string-ref line i)) (loop (+ i 1)))
-                 (else #f))))))
-
-;; preflight-in : String (Listof String) -> (List Integer String String Pair)
-;; tests/preflight.sps with LIBDIRS under ENV-ARGS: its exit status, stdout
-;; and stderr, then (valgrind . yes) when exactly one log is new in the gate's
-;; directory and its Command: line is the child's own, whole; (valgrind . no)
-;; when none is, as outside the gate; else what the new logs were. Preflight
-;; prints no such line itself: it is what make build runs.
-(define (preflight-in libdirs env-args)
-  (let* ((before (gate-logs))
-         (answer (spawn-in libdirs env-args "tests/preflight.sps" '()))
-         (after (gate-logs))
-         (new (filter (lambda (name) (not (member name before))) after))
-         (command (join (list chez "--libdirs" libdirs "--program" "tests/preflight.sps"))))
-    (append answer
-            (list (cons 'valgrind
-                        (cond ((null? new) 'no)
-                              ((and (null? (cdr new)) (equal? (command-of-log (car new)) command))
-                               'yes)
-                              (else (list 'logs new (map command-of-log new)))))))))
-
-;; preflight : (Listof String) -> (List Integer String String Pair)
-(define (preflight env-args) (preflight-in "src" env-args))
-
-;; message-runs : (Listof Pair)
-;; The valgrind line of every probe message-of ran: the last rows require each.
-(define message-runs '())
-
-;; message-of : (Listof String) -> (U String (List 'no-message Any))
-;; The message of the refusal the probe meets under ENV-ARGS.
-(define (message-of env-args)
-  (let* ((answer (probe-with env-args '("--message" "yes")))
-         (entry (field answer 'message)))
-    (set! message-runs (cons (field answer 'valgrind) message-runs))
-    (if (string? (cdr entry)) (cdr entry) (list 'no-message answer))))
-
-(define counts-line "  counts:     ((block . 0) (connection . 0) (statement . 0))\n")
-
-;; text : Any ... -> (U String (List 'unbuildable Any))
-;; PARTS displayed one after another, or a sentinel no output equals when a
-;; part is no string or number.
-(define (text . parts)
-  (if (for-all (lambda (p) (or (string? p) (number? p) (symbol? p))) parts)
-      (call-with-string-output-port
-       (lambda (port) (for-each (lambda (p) (display p port)) parts)))
-      (list 'unbuildable parts)))
-
-;; accepted-text : Any Symbol Report -> (U String (List 'unbuildable Any))
-(define (accepted-text path source report)
-  (text "chez-sqlite3: libsqlite3 loaded and accepted\n"
-        "  path:       " path " (" source ")\n"
-        "  version:    " (cdr (list-ref report 0)) " (" (cdr (list-ref report 1)) ")\n"
-        "  source id:  " (cdr (list-ref report 2)) "\n"
-        counts-line))
-
-(let ((so (so-of "control")))
-  (test-equal "preflight, the control decoy: exit 0, naming its path, version and source id, then its counts"
-    (list 0 (accepted-text so 'override control-report) "" valgrind-line)
-    (preflight (decoy-env "control" #f))))
-
-(test-equal "preflight, the real libsqlite3: exit 0, with the C oracle's report, then its counts"
-  (list 0 (accepted-text (or real-libsqlite3 "?") 'override (oracle-report real-oracle)) ""
-        valgrind-line)
-  (preflight (cons (override (or real-libsqlite3 "/the-probe-loaded-nothing")) (switch-args #f))))
-
-(let* ((so (so-of "control"))
-       (env-args (decoy-env "control" "below-floor")))
-  (test-equal "preflight, the control decoy below the floor: exit 1, the reason, the fields and the report it read, the refusal's own message as the remedy, then its counts"
-    (list 1 ""
-          (text "chez-sqlite3: libsqlite3 refused\n"
-                "(reason . below-floor)\n"
-                "  path:       " so "\n"
-                "  source:     override\n"
-                "  detail:     " below-version "\n"
-                "  version:    " below-version " (" below-number ")\n"
-                "  source id:  decoy-sourceid\n"
-                "  candidates: none\n"
-                "  remedy:     " (message-of env-args) "\n"
-                counts-line)
-          valgrind-line)
-    (preflight env-args)))
-
-(let ((env-args (cons (override "libsqlite3.so.0") (switch-args #f))))
-  (test-equal "preflight, a bare name: exit 1, invalid-override, the refusal's own message as the remedy, then its counts"
-    (list 1 ""
-          (text "chez-sqlite3: libsqlite3 refused\n"
-                "(reason . invalid-override)\n"
-                "  path:       none\n"
-                "  source:     override\n"
-                "  detail:     libsqlite3.so.0\n"
-                "  candidates: none\n"
-                "  remedy:     " (message-of env-args) "\n"
-                counts-line)
-          valgrind-line)
-    (preflight env-args)))
-
-;; reason-line? : String -> Boolean
-;; Whether some line of TEXT begins "(reason ", as a refusal's first datum does.
-(define (reason-line? text)
-  (exists (lambda (line) (string-prefix? "(reason " line)) (lines-of text)))
-
-;; A raise that is no refusal is Chez's default handler's to print, and what
-;; it prints is its own text, never asserted here (ADR-0013, decision 9): the
-;; row asserts the exit status, that nothing reached stdout, and that no
-;; refusal's reason line appeared.
-(test-equal "preflight, a raise that is not a refusal: Chez's default handler, exit 255, nothing on stdout, and no reason line"
-  (list 255 "" 'no-reason-line valgrind-line)
-  (let ((answer (preflight-in raising-libdirs (switch-args #f))))
-    (if (eq? (car answer) 'raised)
-        answer
-        (list (car answer) (cadr answer)
-              (if (reason-line? (caddr answer)) 'reason-line 'no-reason-line)
-              (cadddr answer)))))
-
-(when (and (eq? platform 'linux) (eq? world 'guix))
-  (test-equal "preflight, not-found (guix world), no profile to search: exit 1, every candidate on its own line, then its counts"
-    (list 1 ""
-          (text "chez-sqlite3: libsqlite3 refused\n"
-                "(reason . not-found)\n"
-                "  path:       none\n"
-                "  source:     none\n"
-                "  detail:     none\n"
-                "  candidates:\n"
-                "    " (car guix-not-found-candidates) "\n"
-                "    " (cadr guix-not-found-candidates) "\n"
-                "    " (caddr guix-not-found-candidates) "\n"
-                "  remedy:     " (message-of no-profiles) "\n"
-                counts-line)
-          valgrind-line)
-    (preflight no-profiles)))
-
-;; --- every child said whether it ran under Valgrind -----------------------------------------
-;; The probe's own rows assert the line in their whole answers, and preflight's
-;; rows theirs. These are the children whose answers carry it among other
-;; things: the message probes, and the C oracle's runs.
-
-(test-equal "every probe that read a refusal's message ran under Valgrind exactly when the gate asked, and there were at least two"
-  (cons #t (map (lambda (run) valgrind-line) message-runs))
-  (cons (>= (length message-runs) 2) message-runs))
+;; --- every C oracle run said whether it ran under Valgrind --------------------------
+;; The C oracle's answers carry the line among other things.
 
 (test-equal "every C oracle run ran under Valgrind exactly when the gate asked, and there were at least two"
   (cons #t (map (lambda (run) valgrind-line) oracle-runs))

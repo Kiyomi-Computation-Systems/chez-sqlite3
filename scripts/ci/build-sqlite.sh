@@ -1,14 +1,17 @@
 #!/bin/sh
-# scripts/ci/build-sqlite.sh PREFIX [--current]
+# scripts/ci/build-sqlite.sh PREFIX [--current | --no-load]
 #
 # Builds SQLite from sqlite.org's source and installs it into PREFIX, for
 # .github/workflows/ci.yml's floor and current lanes (ADR-0003, decision 3:
-# CI tests the floor against an amalgamation it compiles itself). Without
-# --current it builds the floor, the one packaging/floors.sexp holds
-# (ADR-0008), read by scripts/ci/floor.sh, which fails closed on a file that
-# does not give exactly one well-formed SQLite version. With --current it
-# builds the pinned current release below and reads no floors file. Nothing
-# a workflow says, an env key or a matrix value, can change which: the
+# CI tests the floor against an amalgamation it compiles itself). Without a
+# flag it builds the floor, the one packaging/floors.sexp holds (ADR-0008),
+# read by scripts/ci/floor.sh, which fails closed on a file that does not
+# give exactly one well-formed SQLite version. With --current it builds the
+# pinned current release below and reads no floors file. With --no-load it
+# builds the same release, by the same pins, as --current does, but without
+# extension loading: the current job's second build, a library that lacks
+# sqlite3_load_extension, as Apple's does (M4's closing review). Nothing a
+# workflow says, an env key or a matrix value, can change which: the
 # version, its year and its pins are set here, whatever the environment
 # holds.
 #
@@ -18,7 +21,8 @@
 # unpacks only sqlite3.c, sqlite3.h and sqlite3ext.h, and checks sqlite3.c's
 # SHA3-256 against the one sqlite.org's release log publishes. It compiles
 # the amalgamation once, with these flags; the floor's build is SQLite's
-# defaults, and the current release's adds one option:
+# defaults, the current release's adds one option, and the no-load build
+# one more:
 #
 #   -shared -fPIC           a shared object, PREFIX/lib/libsqlite3.so.0,
 #                           named as discovery would name it
@@ -26,10 +30,15 @@
 #   -DSQLITE_THREADSAFE=1   serialized, SQLite's default, written so the
 #                           build depends on no default: the load refuses 0
 #                           (ADR-0010)
-#   -DSQLITE_ENABLE_FTS5    --current only: FTS5, which SQLite's defaults
-#                           leave out, so the current lane runs the FTS5
-#                           suite's rows and the floor lane its refusal
+#   -DSQLITE_ENABLE_FTS5    --current and --no-load: FTS5, which SQLite's
+#                           defaults leave out, so the current lane runs the
+#                           FTS5 suite's rows and the floor lane its refusal
 #                           (ADR-0003, amended)
+#   -DSQLITE_OMIT_LOAD_EXTENSION
+#                           --no-load only: no sqlite3_load_extension, so
+#                           the suites run their unavailable branches on
+#                           CI, beside FTS5 as on Apple's library; the one
+#                           flag the current job's two builds differ by
 #   -Wl,-z,defs             an unresolved symbol fails the build, not a load
 #   -lpthread -lm           SQLite's documented link line
 #
@@ -48,8 +57,9 @@
 #
 # The pins are keyed by role, not by version: the floor's version is never
 # written in scripts/ci (make check-floors), so its pins are the floor's,
-# whatever version packaging/floors.sexp gives. Raising the floor, or
-# changing current_version, is a reviewed change of that role's pins:
+# whatever version packaging/floors.sexp gives; --no-load builds by the
+# current release's. Raising the floor, or changing current_version, is a
+# reviewed change of that role's pins:
 #   year      the directory of sqlite.org the archive is in;
 #   archive   the SHA3-256 of sqlite-autoconf-NNNNNNN.tar.gz, as fetched
 #             and read by two implementations, and as sqlite.org's download
@@ -61,7 +71,7 @@
 set -eu
 
 usage() {
-  echo "usage: build-sqlite.sh PREFIX [--current]" >&2
+  echo "usage: build-sqlite.sh PREFIX [--current | --no-load]" >&2
   exit 2
 }
 
@@ -69,8 +79,11 @@ usage() {
 prefix=$1
 role=floor
 if [ "$#" -eq 2 ]; then
-  [ "$2" = "--current" ] || usage
-  role=current
+  case $2 in
+    --current) role=current ;;
+    --no-load) role=no-load ;;
+    *) usage ;;
+  esac
 fi
 
 case $prefix in
@@ -85,12 +98,12 @@ fail() {
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
-# current_version: the current SQLite, built with --current: sqlite.org's
+# current_version: the current SQLite, built with --current and --no-load: sqlite.org's
 # newest release on 2026-11-14, chosen that day (the M1 plan, section 7). It
 # is no floor, so it is not in packaging/floors.sexp.
 current_version=3.54.1
 
-# The pins of each build, by role.
+# The pins of each build, by role: --no-load's are the current release's.
 floor_year=2024
 floor_archive=a54395aa2cf76b5b973fa420715b6108afedc4d8c0209c763fd2c1b517f8ad9f
 floor_source=0474604df9e1b69a5544295dd046aad954749279780d557da80f44b958100295
@@ -98,16 +111,19 @@ current_year=2026
 current_archive=b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4
 current_source=e2b869d3003b33c942b7dd7063604fbc53553e1b66609570df39b9b7b558ee81
 
-if [ "$role" = current ]; then
-  version=$current_version
-  year=$current_year
-  archive_pin=$current_archive
-  source_pin=$current_source
-else
+# pins: the role whose pins this build checks, and names when one fails.
+if [ "$role" = floor ]; then
+  pins=floor
   version=$(sh "$here/floor.sh" sqlite) || fail "no SQLite floor to build"
   year=$floor_year
   archive_pin=$floor_archive
   source_pin=$floor_source
+else
+  pins=current
+  version=$current_version
+  year=$current_year
+  archive_pin=$current_archive
+  source_pin=$current_source
 fi
 
 # floor.sh gives three naturals with no leading zero; so is current_version.
@@ -144,7 +160,7 @@ sha3_of() {
 
 archive=$work/$name.tar.gz
 if ! curl -fsSL --retry 3 -o "$archive" "$url"; then
-  if [ "$role" = current ]; then
+  if [ "$pins" = current ]; then
     fail "could not download $url: if current_version was changed, current_year, current_archive and current_source in this script may still be the old release's"
   fi
   fail "could not download $url: if the SQLite floor in packaging/floors.sexp was raised, floor_year, floor_archive and floor_source in this script may still be the old floor's"
@@ -152,33 +168,36 @@ fi
 
 got=$(sha3_of "$archive") || exit 1
 [ "$got" = "$archive_pin" ] ||
-  fail "$name.tar.gz has SHA3-256 $got, but ${role}_archive in this script pins $archive_pin"
+  fail "$name.tar.gz has SHA3-256 $got, but ${pins}_archive in this script pins $archive_pin"
 
 tar xzf "$archive" -C "$work" "$name/sqlite3.c" "$name/sqlite3.h" "$name/sqlite3ext.h"
 src=$work/$name
 
 got=$(sha3_of "$src/sqlite3.c") || exit 1
 [ "$got" = "$source_pin" ] ||
-  fail "$name/sqlite3.c has SHA3-256 $got, but ${role}_source in this script pins $source_pin, the digest sqlite.org's release log publishes"
+  fail "$name/sqlite3.c has SHA3-256 $got, but ${pins}_source in this script pins $source_pin, the digest sqlite.org's release log publishes"
 
 mkdir -p "$prefix/lib" "$prefix/include"
-if [ "$role" = current ]; then
-  "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -Wl,-z,defs \
-    -o "$prefix/lib/libsqlite3.so.0" "$src/sqlite3.c" -lpthread -lm
-else
-  "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -Wl,-z,defs -o "$prefix/lib/libsqlite3.so.0" \
-    "$src/sqlite3.c" -lpthread -lm
-fi
+case $role in
+  current)
+    "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -Wl,-z,defs \
+      -o "$prefix/lib/libsqlite3.so.0" "$src/sqlite3.c" -lpthread -lm ;;
+  no-load)
+    "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -DSQLITE_OMIT_LOAD_EXTENSION \
+      -Wl,-z,defs -o "$prefix/lib/libsqlite3.so.0" "$src/sqlite3.c" -lpthread -lm ;;
+  *)
+    "$cc" -shared -fPIC -O2 -DSQLITE_THREADSAFE=1 -Wl,-z,defs -o "$prefix/lib/libsqlite3.so.0" \
+      "$src/sqlite3.c" -lpthread -lm ;;
+esac
 cp "$src/sqlite3.h" "$src/sqlite3ext.h" "$prefix/include/"
 
-# Check what was built, with the lane's env for this call only.
-if [ "$role" = current ]; then
-  CHEZ_SQLITE3_LIBRARY=$prefix/lib/libsqlite3.so.0 \
-    C_INCLUDE_PATH=$prefix/include${C_INCLUDE_PATH:+:$C_INCLUDE_PATH} \
-    sh "$here/check-sqlite.sh" "$prefix" --current
-else
-  CHEZ_SQLITE3_LIBRARY=$prefix/lib/libsqlite3.so.0 \
-    C_INCLUDE_PATH=$prefix/include${C_INCLUDE_PATH:+:$C_INCLUDE_PATH} \
-    sh "$here/check-sqlite.sh" "$prefix"
-fi
+# Check what was built, by its own role, with the lane's env for this call
+# only.
+case $role in
+  floor) set -- "$prefix" ;;
+  *) set -- "$prefix" "--$role" ;;
+esac
+CHEZ_SQLITE3_LIBRARY=$prefix/lib/libsqlite3.so.0 \
+  C_INCLUDE_PATH=$prefix/include${C_INCLUDE_PATH:+:$C_INCLUDE_PATH} \
+  sh "$here/check-sqlite.sh" "$@"
 echo "build-sqlite.sh: SQLite $version built into $prefix"

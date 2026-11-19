@@ -34,21 +34,30 @@
 #     SQLite" (its run line, and its env CHEZ), in that order;
 #   - in jobs floor and current, which build SQLite and run the suites against
 #     it (ADR-0003, decision 3), and nowhere else: the checkout with
-#     submodules first; the steps that name the compiler (with id: cc), build
-#     SQLite (under its own if), check it, run make build and run make test,
-#     each as one step's whole run line, in order, after check-chez; the SQLite
-#     cache's path and key, held whole, and its save keyed by its own
-#     cache-primary-key; its if only on its build and its save, and the Chez
-#     cache's if only on the Chez build and save; and the env keys
-#     CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH, each with exactly its job's
-#     value, on the steps that run the check, make build and make test, each of
-#     which must carry both and CHEZ, and on no other step;
+#     submodules first; then, after check-chez, the step that names the
+#     compiler (with id: cc), and for each SQLite build the job makes, in
+#     turn, the steps that build it (under its own if), check it, run make
+#     build (for the job's first build alone) and run make test, each as one
+#     step's whole run line, in order. Job floor makes one build, floor; job
+#     current makes two, current and then no-load, built without extension
+#     loading (M4's closing review), so it runs make test twice, the first
+#     for current and the second for no-load. Each build's cache has one
+#     restore and one save, its path and key held whole, the restore's id
+#     held (sqlite, or sqlite-no-load), and the save keyed by that id's
+#     cache-primary-key; each build's if, which names that id, stands only on
+#     its build and its save, and the Chez cache's if only on the Chez build
+#     and save; and the env keys CHEZ_SQLITE3_LIBRARY and C_INCLUDE_PATH, each
+#     with exactly its build's value, stand on the steps that run a build's
+#     check, make build and make test, each of which must carry both and
+#     CHEZ, and on no other step;
 #   - in every job: a uses: step may only be actions/checkout@,
 #     actions/cache/restore@ or actions/cache/save@; each cache's restore comes
 #     before its build, and its save after the build and before the cache's
-#     check (a cache is told by its path, the Chez cache's or the SQLite
-#     cache's); and in the lanes the SQLite restore comes after the step that
-#     names the compiler;
+#     check (a cache is told by its path: the Chez cache's, or a SQLite
+#     build's, whose build and check in the lanes are the steps that name its
+#     directory); and in the lanes each SQLite restore comes after the step
+#     that names the compiler, and a later build's after the make test of the
+#     build before it;
 #   - every step whose whole run line begins scripts/ci/NAME: that file exists
 #     and is executable, under CHECK_CI_ROOT (the repository root if unset);
 #     floor.sh is run with sh by the others, so it needs no bit and is not held;
@@ -216,8 +225,12 @@ function gaterun(g, j) {
   return ""
 }
 
-# nreq(j): fills rq[1..n] with the run lines job j must run, in order.
-function nreq(j) {
+# nreq(j): fills rq[1..n] with the run lines job j must run, in order, and in
+# a lane rqk[i] and rqb[i] with what each one is (cc, bld, chk, build or
+# test) and the SQLite build it is for. A line may be required more than
+# once: a lane's make test, once for each build.
+function nreq(j,   n, k, b) {
+  split("", rqk); split("", rqb)
   if (j == "main") {
     rq[1] = CHKT; rq[2] = BUILDLINE; rq[3] = MAKELINE; rq[4] = LAUNCHER; return 4
   }
@@ -225,8 +238,16 @@ function nreq(j) {
     rq[1] = CHKT; rq[2] = "make check-memory-gate"; rq[3] = shardrun[j]; return 3
   }
   if (isl(j)) {
-    rq[1] = CHKT; rq[2] = CCLINE; rq[3] = lanebld[j]; rq[4] = lanechk[j]; rq[5] = BUILDLINE; rq[6] = TESTLINE
-    return 6
+    n = 1; rq[1] = CHKT
+    n++; rq[n] = CCLINE; rqk[n] = "cc"
+    for (k = 1; k <= nb[j]; k++) {
+      b = jb[j, k]
+      n++; rq[n] = lanebld[b]; rqk[n] = "bld"; rqb[n] = b
+      n++; rq[n] = lanechk[b]; rqk[n] = "chk"; rqb[n] = b
+      if (k == 1) { n++; rq[n] = BUILDLINE; rqk[n] = "build"; rqb[n] = b }
+      n++; rq[n] = TESTLINE; rqk[n] = "test"; rqb[n] = b
+    }
+    return n
   }
   rq[1] = BLDN; rq[2] = CHKN; rq[3] = "make check-nothreads"; return 3
 }
@@ -257,7 +278,7 @@ function stepkey(   u) {
   } else if (key == "uses") {
     u = val; sub(/ +#.*$/, "", u); S_uses[sn] = u
   } else if (key == "id") {
-    S_id[sn] = val
+    S_id[sn] = val; S_idln[sn] = ln
   }
 }
 
@@ -278,39 +299,66 @@ function subkey(   want) {
     } else if (key != "CHEZ") { prob(ln, "env key \"" key "\" is not CHEZ"); return }
     if (key in eseen) { prob(ln, "env key \"" key "\" is written twice in one step"); return }
     eseen[key] = 1; S_env[sn] = 1
-    S_ev[sn, key] = 1; S_evln[sn, key] = ln
+    S_ev[sn, key] = 1; S_evln[sn, key] = ln; S_evv[sn, key] = val
+    # CHEZ is held here. The two names are held at the job's end, by the
+    # build of the step that carries them, which a line can't tell.
     want = chezpath[job]
-    if (key == "CHEZ_SQLITE3_LIBRARY") want = lanelib[job]
-    if (key == "C_INCLUDE_PATH") want = laneinc[job]
-    if (val != want) prob(ln, "env " key " in job " job " is not " want)
+    if (key == "CHEZ" && val != want) prob(ln, "env " key " in job " job " is not " want)
   }
 }
 
+# pathbuild(p): the SQLite build of the lane job whose cache path is p, or "".
+function pathbuild(p,   k) {
+  for (k = 1; k <= nb[job]; k++) if (p == sqp[jb[job, k]]) return jb[job, k]
+  return ""
+}
+
+# ifbuild(v): the SQLite build of the lane job whose if is v, or "".
+function ifbuild(v,   k) {
+  for (k = 1; k <= nb[job]; k++) if (v == ifsql[jb[job, k]]) return jb[job, k]
+  return ""
+}
+
+# argof(s, script, b): whether step s runs scripts/ci/SCRIPT on build b's
+# directory, "$RUNNER_TEMP/sqlite-B", with or without more arguments: the
+# step that builds or checks that build's cache, whatever its flag.
+function argof(s, script, b,   w, t) {
+  w = "run: scripts/ci/" script " \"$RUNNER_TEMP/sqlite-" b "\""
+  if (substr(S_run[s], 1, length(w)) != w) return 0
+  t = substr(S_run[s], length(w) + 1)
+  return (t == "" || substr(t, 1, 1) == " ")
+}
+
 # lanestep(): a SQLite lane's if and cache rules, for the step just ended.
-function lanestep(   pth, want, id, savep) {
+function lanestep(   pth, want, id, savep, b) {
   savep = (S_uses[sn] ~ /^actions\/cache\/save@/)
   if (S_if[sn] != "") {
-    if (S_if[sn] != IFLINE && S_if[sn] != IFSQL)
-      prob(S_ifln[sn], "if is not one of \"" IFLINE "\" or \"" IFSQL "\"")
+    b = ifbuild(S_if[sn])
+    if (S_if[sn] != IFLINE && b == "")
+      prob(S_ifln[sn], "if is not one of " lanifs[job])
     else if (S_if[sn] == IFLINE && !(S_run[sn] ~ /^run: scripts\/ci\/build-chez\.sh( |$)/ || (savep && S_path[sn] == CHEZP)))
       prob(S_ifln[sn], "the Chez cache's if is on a step that is neither the Chez build nor the Chez cache's save")
-    else if (S_if[sn] == IFSQL && !(S_run[sn] ~ /^run: scripts\/ci\/build-sqlite\.sh( |$)/ || (savep && S_path[sn] == sqp[job])))
-      prob(S_ifln[sn], "the SQLite cache's if is on a step that is neither the SQLite build nor the SQLite cache's save")
+    else if (b != "" && !(argof(sn, "build-sqlite.sh", b) || (savep && S_path[sn] == sqp[b])))
+      prob(S_ifln[sn], "the " label[b] " cache's if is on a step that is neither the " label[b] " build nor the " label[b] " cache's save")
   }
   if (!(savep || S_uses[sn] ~ /^actions\/cache\/restore@/)) return
   pth = S_path[sn]
-  if (pth != CHEZP && pth != sqp[job]) {
-    prob(S_pathln[sn] ? S_pathln[sn] : S_ln[sn], "the cache path in job " job " is not one of " CHEZP " or " sqp[job])
+  b = pathbuild(pth)
+  if (pth != CHEZP && b == "") {
+    prob(S_pathln[sn] ? S_pathln[sn] : S_ln[sn], "the cache path in job " job " is not one of " lanpaths[job])
     return
   }
-  id = (pth == CHEZP) ? "chez" : "sqlite"
+  id = (pth == CHEZP) ? "chez" : sqid[b]
   if (savep) {
     want = "${{ steps." id ".outputs.cache-primary-key }}"
     if (S_key[sn] != want) prob(S_keyln[sn] ? S_keyln[sn] : S_ln[sn], "the cache key of the save in job " job " is not exactly " want)
   } else if (pth == CHEZP) {
     if (!cachekey_ok(S_key[sn])) prob(S_keyln[sn] ? S_keyln[sn] : S_ln[sn], "the cache key in job " job " does not begin with " prefix[job] "${{ hashFiles(" HASHLIST ") }}")
-  } else if (S_key[sn] != lanekey[job]) {
-    prob(S_keyln[sn] ? S_keyln[sn] : S_ln[sn], "the cache key in job " job " is not exactly " lanekey[job])
+  } else {
+    # The id names the restore's outputs, which the build's if and the save's
+    # key read.
+    if (S_id[sn] != id) prob(S_idln[sn] ? S_idln[sn] : S_ln[sn], "the " label[b] " cache's restore in job " job " is not id: " id)
+    if (S_key[sn] != lanekey[b]) prob(S_keyln[sn] ? S_keyln[sn] : S_ln[sn], "the cache key in job " job " is not exactly " lanekey[b])
   }
 }
 
@@ -372,13 +420,18 @@ function needenv(at, x, k) {
   if (!((at, k) in S_ev)) prob(S_ln[at], "job " job "'s step that runs \"" x "\" has no env " k)
 }
 
+# envval(at, k, want): env key k of step at, when it has one, holds want.
+function envval(at, k, want) {
+  if (((at, k) in S_ev) && S_evv[at, k] != want) prob(S_evln[at, k], "env " k " in job " job " is not " want)
+}
+
 # cachekind(s): "Chez" or "SQLite" for a cache restore or save step by its path,
 # else "".
 function cachekind(s,   pth) {
   if (!(S_uses[s] ~ /^actions\/cache\/(restore|save)@/)) return ""
   pth = S_path[s]
   if (pth ~ /\/chez-(threads|nothreads)$/) return "Chez"
-  if (pth ~ /\/sqlite-(floor|current)$/) return "SQLite"
+  if (pth ~ /\/sqlite-(floor|current|no-load)$/) return "SQLite"
   return ""
 }
 
@@ -388,35 +441,49 @@ function runs(s, what, prog) {
 }
 
 # cacheorder(first, last): each cache's restore before its build, its save after
-# the build and before its check, and in the lanes the SQLite restore after the
-# step that names the compiler.
-function cacheorder(first, last,   s, b, k, kk, cn, restore) {
+# the build and before its check, and in the lanes each SQLite restore after the
+# step that names the compiler, and a later build's after the make test of the
+# build before it. In a lane a SQLite cache is a build's, by its path, and its
+# build and check are the steps that name that build's directory.
+function cacheorder(first, last,   s, t, k, kk, sb, restore, isbld, ischk, pb) {
   for (s = first; s <= last; s++) {
     if (S_uses[s] != "" && !(S_uses[s] ~ /^actions\/(checkout|cache\/restore|cache\/save)@/))
       prob(S_ln[s], "job " job " has a step that uses \"" S_uses[s] "\", which is not actions/checkout@, actions/cache/restore@ or actions/cache/save@")
     k = cachekind(s)
     if (k == "") continue
-    kk = tolower(k)
+    kk = tolower(k); sb = ""
+    if (k == "SQLite" && isl(job)) {
+      sb = pathbuild(S_path[s])
+      if (sb == "") continue
+      k = label[sb]
+    }
     restore = (S_uses[s] ~ /^actions\/cache\/restore@/)
-    for (b = first; b <= last; b++) {
-      if (runs(b, "build", kk)) {
-        if (restore && s > b) prob(S_ln[s], "job " job " restores the " k " cache after the " k " build, and must restore it before")
-        if (!restore && s < b) prob(S_ln[s], "job " job " saves the " k " cache before the " k " build, and must save it after")
+    for (t = first; t <= last; t++) {
+      isbld = (sb != "") ? argof(t, "build-sqlite.sh", sb) : runs(t, "build", kk)
+      ischk = (sb != "") ? argof(t, "check-sqlite.sh", sb) : runs(t, "check", kk)
+      if (isbld) {
+        if (restore && s > t) prob(S_ln[s], "job " job " restores the " k " cache after the " k " build, and must restore it before")
+        if (!restore && s < t) prob(S_ln[s], "job " job " saves the " k " cache before the " k " build, and must save it after")
       }
-      if (!restore && runs(b, "check", kk) && s > b)
+      if (!restore && ischk && s > t)
         prob(S_ln[s], "job " job " saves the " k " cache after the " k " check, and must save it before")
     }
-    if (restore && k == "SQLite" && isl(job) && atrun[CCLINE] && s < atrun[CCLINE])
-      prob(S_ln[s], "job " job " restores the SQLite cache before the step that names the C compiler, and must restore it after")
+    if (restore && sb != "" && atrun[CCLINE] && s < atrun[CCLINE])
+      prob(S_ln[s], "job " job " restores the " k " cache before the step that names the C compiler, and must restore it after")
+    if (restore && sb != "" && bidx[sb] > 1) {
+      pb = jb[job, bidx[sb] - 1]
+      if (attest[pb] && s < attest[pb])
+        prob(S_ln[s], "job " job " restores the " k " cache before the " label[pb] " build's make test, and must restore it after")
+    }
   }
 }
 
-function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last, isb, okstep) {
+function endjob(   i, k, s, c, at, pos, lastp, m, x, lastx, first, last, isb, okstep, b, nr, ns) {
   if (job == "") return
   endstep()
   for (i = 1; i <= 4; i++)
     if (!jbad && !(jk2[i] in jkseen)) prob(jln, "job " job " has no key \"" jk2[i] "\"")
-  first = jfirst; last = sn; lastp = 0; before = "the start"
+  first = jfirst; last = sn; lastp = 0; lastx = "the start"
   if (job == "main" || isl(job)) {
     if (first > last || !(S_uses[first] ~ /^actions\/checkout@/ && S_sub[first] == "recursive" && S_run[first] == "" && S_if[first] == ""))
       prob((first <= last) ? S_ln[first] : jln, "job " job "'s first step is not uses: actions/checkout@ with submodules: recursive")
@@ -424,34 +491,63 @@ function endjob(   i, k, s, c, at, pos, lastp, m, x, before, first, last, isb, o
   if (job == "main") {
     if (first + 1 > last || S_run[first + 1] != "run: " PINRUN)
       prob((first + 1 <= last) ? S_ln[first + 1] : jln, "job main's second step is not run: " PINRUN)
-    lastp = 2; before = PINRUN
+    lastp = 2; lastx = PINRUN
   }
   m = nreq(job)
+  # A line required n times must be the run line of n steps, the kth time
+  # the kth of them; a problem names it once.
+  split("", rqn); split("", oc); split("", hn); split("", hit); split("", okrun); split("", attest)
+  for (i = 1; i <= m; i++) rqn[rq[i]]++
+  for (s = first; s <= last; s++) {
+    x = substr(S_run[s], 6)
+    if (substr(S_run[s], 1, 5) == "run: " && (x in rqn)) { hn[x]++; hit[x, hn[x]] = s }
+  }
   for (i = 1; i <= m; i++) {
-    x = rq[i]; c = 0; at = 0; atrun[x] = 0
-    for (s = first; s <= last; s++) if (S_run[s] == "run: " x) { c++; at = s }
-    if (c != 1) { prob(jln, "job " job " has " c " steps that run \"" x "\", not one"); before = x; continue }
-    atrun[x] = at
+    x = rq[i]; oc[x]++
+    if (oc[x] == 1) atrun[x] = 0
+    if (rqk[i] == "chk" || rqk[i] == "build" || rqk[i] == "test") okrun["run: " x] = 1
+    c = hn[x] + 0
+    if (c != rqn[x]) {
+      if (oc[x] == 1) prob(jln, "job " job " has " c " steps that run \"" x "\", not " cnt[rqn[x]])
+      continue
+    }
+    at = hit[x, oc[x]]
+    if (oc[x] == 1) atrun[x] = at
     pos = at - first + 1
-    if (pos <= lastp) prob(S_runln[at], "job " job " runs \"" x "\" before \"" before "\", and must run it after")
-    else lastp = pos
-    isb = ((job == "nothreads" && i == 1) || (isl(job) && i == 3))
+    if (pos <= lastp) prob(S_runln[at], "job " job " runs \"" x "\" before \"" lastx "\", and must run it after")
+    else { lastp = pos; lastx = x }
+    isb = ((job == "nothreads" && i == 1) || rqk[i] == "bld")
     if (isb) {
       if (S_if[at] == "") prob(S_ln[at], "job " job "'s step that runs \"" x "\" has no if")
     } else if (S_if[at] != "") prob(S_ifln[at], "job " job "'s step that runs \"" x "\" has an if")
     if (isl(job)) {
-      if (i == 2 && S_id[at] != "cc") prob(S_ln[at], "job " job "'s step that runs \"" x "\" has no id: cc")
-      if (i >= 3) needenv(at, x, "CHEZ")
-      if (i >= 4) { needenv(at, x, "CHEZ_SQLITE3_LIBRARY"); needenv(at, x, "C_INCLUDE_PATH") }
+      k = rqk[i]; b = rqb[i]
+      if (k == "cc" && S_id[at] != "cc") prob(S_ln[at], "job " job "'s step that runs \"" x "\" has no id: cc")
+      if (k == "bld" || k == "chk" || k == "build" || k == "test") needenv(at, x, "CHEZ")
+      if (k == "chk" || k == "build" || k == "test") {
+        needenv(at, x, "CHEZ_SQLITE3_LIBRARY"); needenv(at, x, "C_INCLUDE_PATH")
+        envval(at, "CHEZ_SQLITE3_LIBRARY", lanelib[b]); envval(at, "C_INCLUDE_PATH", laneinc[b])
+      }
+      if (k == "test") attest[b] = at
     }
-    before = x
   }
   cacheorder(first, last)
   if (isl(job)) {
-    # The two names are for the three steps that run the check, make build and
+    # Each build's cache: one restore and one save.
+    for (k = 1; k <= nb[job]; k++) {
+      b = jb[job, k]; nr = 0; ns = 0
+      for (s = first; s <= last; s++) {
+        if (S_path[s] != sqp[b]) continue
+        if (S_uses[s] ~ /^actions\/cache\/restore@/) nr++
+        if (S_uses[s] ~ /^actions\/cache\/save@/) ns++
+      }
+      if (nr != 1) prob(jln, "job " job " has " nr " restores of the " label[b] " cache, not one")
+      if (ns != 1) prob(jln, "job " job " has " ns " saves of the " label[b] " cache, not one")
+    }
+    # The two names are for the steps that run a build's check, make build and
     # make test, and for no other step of the lane.
     for (s = first; s <= last; s++) {
-      okstep = (S_run[s] == "run: " rq[4] || S_run[s] == "run: " rq[5] || S_run[s] == "run: " rq[6])
+      okstep = (S_run[s] in okrun)
       if (okstep) continue
       if ((s, "CHEZ_SQLITE3_LIBRARY") in S_ev)
         prob(S_evln[s, "CHEZ_SQLITE3_LIBRARY"], "env key \"CHEZ_SQLITE3_LIBRARY\" is only for the steps that run the SQLite check, make build and make test")
@@ -498,23 +594,44 @@ BEGIN {
   for (i = 1; i <= nbw; i++) banned[bw[i]] = 1
   HASHLIST = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-chez.sh', 'scripts/ci/check-chez.sh'"
   IFLINE = "if: steps.chez.outputs.cache-hit != 'true'"
-  IFSQL = "if: steps.sqlite.outputs.cache-hit != 'true'"
   TESTLINE = "make test"
   CHEZP = "${{ runner.temp }}/chez-threads"
   CCLINE = "echo \"id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')\" >> \"$GITHUB_OUTPUT\""
-  laneflag["floor"] = ""; laneflag["current"] = " --current"
+  # The SQLite builds, each by its name, and the lanes that make them, in
+  # order: floor makes floor, and current makes current, then no-load (M4's
+  # closing review). A build's tables are keyed by its name, never its job's.
+  laneflag["floor"] = ""; laneflag["current"] = " --current"; laneflag["no-load"] = " --no-load"
   lanehash["floor"] = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh'"
   lanehash["current"] = "'scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh'"
+  lanehash["no-load"] = lanehash["current"]
+  sqid["floor"] = "sqlite"; sqid["current"] = "sqlite"; sqid["no-load"] = "sqlite-no-load"
+  label["floor"] = "SQLite"; label["current"] = "SQLite"; label["no-load"] = "no-load SQLite"
+  nbl = split("floor current no-load", lj, " ")
+  for (i = 1; i <= nbl; i++) {
+    b = lj[i]
+    sqp[b] = "${{ runner.temp }}/sqlite-" b
+    lanelib[b] = sqp[b] "/lib/libsqlite3.so.0"
+    laneinc[b] = sqp[b] "/include"
+    lanebld[b] = "scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-" b "\"" laneflag[b]
+    lanechk[b] = "scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-" b "\"" laneflag[b]
+    lanekey[b] = "sqlite-" b "-${{ hashFiles(" lanehash[b] ") }}-${{ steps.image.outputs.id }}-${{ steps.cc.outputs.id }}"
+    ifsql[b] = "if: steps." sqid[b] ".outputs.cache-hit != 'true'"
+  }
+  nb["floor"] = 1; jb["floor", 1] = "floor"; bidx["floor"] = 1
+  nb["current"] = 2; jb["current", 1] = "current"; bidx["current"] = 1
+  jb["current", 2] = "no-load"; bidx["no-load"] = 2
+  # What a lane's problems list: the ifs it may hold, and the cache paths.
   split("floor current", lj, " ")
   for (i = 1; i <= 2; i++) {
     j = lj[i]
-    sqp[j] = "${{ runner.temp }}/sqlite-" j
-    lanelib[j] = sqp[j] "/lib/libsqlite3.so.0"
-    laneinc[j] = sqp[j] "/include"
-    lanebld[j] = "scripts/ci/build-sqlite.sh \"$RUNNER_TEMP/sqlite-" j "\"" laneflag[j]
-    lanechk[j] = "scripts/ci/check-sqlite.sh \"$RUNNER_TEMP/sqlite-" j "\"" laneflag[j]
-    lanekey[j] = "sqlite-" j "-${{ hashFiles(" lanehash[j] ") }}-${{ steps.image.outputs.id }}-${{ steps.cc.outputs.id }}"
+    lanifs[j] = "\"" IFLINE "\""; lanpaths[j] = CHEZP
+    for (k = 1; k <= nb[j]; k++) {
+      sep = (k == nb[j]) ? " or " : ", "
+      lanifs[j] = lanifs[j] sep "\"" ifsql[jb[j, k]] "\""
+      lanpaths[j] = lanpaths[j] sep sqp[jb[j, k]]
+    }
   }
+  cnt[1] = "one"; cnt[2] = "two"
   laneenv["CHEZ"] = 1; laneenv["CHEZ_SQLITE3_LIBRARY"] = 1; laneenv["C_INCLUDE_PATH"] = 1
   PINRUN = "scripts/ci/check-action-pins.sh .github/workflows"
   CHKT = "scripts/ci/check-chez.sh \"$RUNNER_TEMP/chez-threads\""
@@ -672,7 +789,7 @@ fileno == 1 {
     endstep(); sn++; instep = 1; subk = ""
     split("", sseen); split("", wseen); split("", eseen)
     S_ln[sn] = ln; S_run[sn] = ""; S_runln[sn] = 0; S_if[sn] = ""; S_ifln[sn] = 0; S_uses[sn] = ""; S_sub[sn] = ""
-    S_id[sn] = ""; S_path[sn] = ""; S_pathln[sn] = 0; S_key[sn] = ""; S_keyln[sn] = 0
+    S_id[sn] = ""; S_idln[sn] = 0; S_path[sn] = ""; S_pathln[sn] = 0; S_key[sn] = ""; S_keyln[sn] = 0
     if (!bad) stepkey()
     next
   }

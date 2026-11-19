@@ -45,7 +45,11 @@
 ;;;   the refusals     the wrong thread, &sqlite-wrong-thread before the
 ;;;                    argument checks and the opt-in, and with everything
 ;;;                    valid, nothing loaded; a closed connection, before the
-;;;                    argument checks; every wait bounded
+;;;                    argument checks; every wait bounded. An engine's
+;;;                    remainder taken at every fuel on the owner's thread
+;;;                    and finished on another: every refusal there from
+;;;                    load-extension!, the opt-in's read among them, and
+;;;                    nothing loaded
 ;;;   the memory       a load, a call and the close leave sqlite3_memory_used
 ;;;                    as it was; each failure's message is freed, the count
 ;;;                    as it was before the load. Under make test-memory the
@@ -72,7 +76,7 @@
         (only (chezscheme) foreign-ref foreign-procedure foreign-callable foreign-callable-entry-point
               lock-object unlock-object fork-thread make-mutex with-mutex sleep make-time
               get-thread-id disable-interrupts enable-interrupts mkdir current-directory directory-list
-              machine-type)
+              machine-type make-engine)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (extension-build)
@@ -129,6 +133,8 @@
 (define finalize-statement! (public 'finalize-statement!))
 (define load-extension/with (reach '(chez-sqlite3 private extension) 'load-extension/with))
 (define database-cache-count (reach '(chez-sqlite3 private connection) 'database-cache-count))
+(define database-extension-loading?
+  (reach '(chez-sqlite3 private connection) 'database-extension-loading?))
 (define call-with-open-handle (reach '(chez-sqlite3 private connection) 'call-with-open-handle))
 (define call-with-c-string (reach '(chez-sqlite3 private native) 'call-with-c-string))
 (define call-with-out-pointer (reach '(chez-sqlite3 private native) 'call-with-out-pointer))
@@ -1298,6 +1304,133 @@
           (list (loaded db ext) (loaded db 42) (loaded db "ext.so") (loaded db ext 42)
                 (loaded db ext-named "chez_named_init")))
         (list 'not-opened db))))
+
+;; --- a remainder finished on another thread ------------------------------------------------------
+;; Chez resumes an engine's remainder on whichever thread calls it, so the
+;; call's checks can pass on the owner's thread, and the call go on on
+;; another. Each check after the expiry refuses that thread, and every
+;; refusal names load-extension!, the opt-in's read among them (ADR-0013,
+;; decision 2). When the opt-in's read named itself, 99 of 109 refusals
+;; named database-extension-loading? (M4's closing review, F3). Each sweep
+;; runs the call at every fuel from 1 until it completes without expiring,
+;; a fresh connection for every trial, and finishes each remainder on a
+;; thread of its own, by in-thread, whose wait is bounded.
+
+;; load-answer : Database String -> Any
+;; load-extension! of PATH on DB, and the thread it ran on: (loaded ID), or
+;; what it raised and ID, a wrong thread's with its owner and caller.
+(define (load-answer db path)
+  (guard (e ((sqlite-wrong-thread? e)
+             (list (list 'wrong-thread (who-of e) (sqlite-wrong-thread-owner e)
+                         (sqlite-wrong-thread-caller e))
+                   (get-thread-id)))
+            (#t (list (list 'raised (what-raised e)) (get-thread-id))))
+    (load-extension! db path)
+    (list 'loaded (get-thread-id))))
+
+;; finished : Engine -> Any
+;; ENGINE run to its end, in slices of 10^8 ticks, at most 100 of them.
+(define (finished engine)
+  (let loop ((e engine) (n 0))
+    (if (>= n 100)
+        '(unfinished 100)
+        (e 100000000 (lambda (left . answers) (car answers)) (lambda (next) (loop next (+ n 1)))))))
+
+;; init-runs : Database -> Any
+;; How many times the extension's init has run on DB, by chez_inits(), the
+;; whole call's effect: none when it never loaded, chez_inits absent.
+(define (init-runs db)
+  (let ((n (inits db)))
+    (if (and (integer? n) (exact? n)) n 'none)))
+
+;; load-sweep : (-> Database) String -> (Listof Any)
+;; load-extension! of PATH swept: at each fuel from 1, a fresh connection
+;; made by OPEN on this thread, and the call in an engine of FUEL ticks.
+;; One that completes ends the sweep, (FUEL completed ANSWER RUNS). One that
+;; expires is finished on a thread of its own: (FUEL resumed ANSWER RUNS),
+;; ANSWER in-thread's. RUNS is init-runs, read on this thread after; the
+;; connection is closed then. Past 3000 fuels, (unfinished-sweep 3000).
+(define (load-sweep open path)
+  (let loop ((fuel 1) (found '()))
+    (if (> fuel 3000)
+        (reverse (cons '(unfinished-sweep 3000) found))
+        (let* ((db (open))
+               (engine (make-engine (lambda () (load-answer db path))))
+               (run (engine fuel (lambda (left . answers) (list 'completed (car answers)))
+                            (lambda (next) (list 'expired next)))))
+          (if (eq? (car run) 'completed)
+              (let ((runs (init-runs db)))
+                (close-answer db)
+                (reverse (cons (list fuel 'completed (cadr run) runs) found)))
+              (let* ((a (in-thread (lambda () (finished (cadr run)))))
+                     (runs (init-runs db)))
+                (close-answer db)
+                (loop (+ fuel 1) (cons (list fuel 'resumed a runs) found))))))))
+
+;; load-verdict : (Listof Any) Any Any -> (List Any Symbol Symbol (Listof Any))
+;; A sweep's TRIALS, each judged by its own answer and effect: the
+;; completion's answer, its thread this one, and its runs; whether some
+;; resumed trial was refused there, (wrong-thread load-extension! OWNER
+;; CALLER), OWNER this thread's id and CALLER the thread's own, with no run
+;; of the init; whether some answered PAST, the call's end, its runs
+;; PAST-RUNS: the answer the call had on this thread before the expiry;
+;; and every other trial, whole: a refusal naming another procedure, or a
+;; load made there.
+(define (load-verdict trials past past-runs)
+  (let ((main (get-thread-id)))
+    (let loop ((rest trials) (refused 0) (answered 0) (others '()) (completion 'never-completed))
+      (if (null? rest)
+          (list completion (if (> refused 0) 'yes 'no) (if (> answered 0) 'yes 'no) (reverse others))
+          (let* ((t (car rest))
+                 (a (and (= (length t) 4) (eq? (cadr t) 'resumed) (caddr t)))
+                 (v (and (list? a) (= (length a) 2) (eq? (car a) 'answered) (cadr a)))
+                 (id (and (list? v) (= (length v) 2) (cadr v))))
+            (cond ((and (= (length t) 4) (eq? (cadr t) 'completed))
+                   (let ((c (caddr t)))
+                     (loop (cdr rest) refused answered others
+                           (list (if (and (list? c) (= (length c) 2) (eqv? (cadr c) main)) (car c) c)
+                                 (cadddr t)))))
+                  ((and id (not (eqv? id main))
+                        (equal? (car v) (list 'wrong-thread 'load-extension! main id))
+                        (eq? (cadddr t) 'none))
+                   (loop (cdr rest) (+ refused 1) answered others completion))
+                  ((and id (not (eqv? id main)) (equal? (car v) past) (equal? (cadddr t) past-runs))
+                   (loop (cdr rest) refused (+ answered 1) others completion))
+                  (else (loop (cdr rest) refused answered (cons t others) completion))))))))
+
+(test-equal "load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that did not opt in and finished on another: refused there with &sqlite-wrong-thread from load-extension!, never from another procedure, the owner this thread and the caller that one; or the opt-in's refusal, raised on this thread before the expiry; the sweep reaches both, nothing loads, and every count is zero after"
+  (list (list (refused '(extension-loading-not-enabled)) 'none) 'yes 'yes '() zero-counts)
+  (attempt
+   (lambda ()
+     (append (load-verdict (load-sweep plain ext) (refused '(extension-loading-not-enabled)) 'none)
+             (list (native-counts))))))
+
+;; The load's section is the call's last, and at this trip no tick falls
+;; after it: every remainder this sweep takes is before it, so the row asks
+;; for no answer past it, and allows one, judged as the plain row judges it.
+(load-row "load-extension!'s remainder, taken at every fuel on the owner's thread of a connection that opted in and finished on another: refused there with &sqlite-wrong-thread from load-extension!, never from another procedure, the owner this thread and the caller that one, the init never run; the call that completes loads, its init run once; and every count is zero after"
+  (list (list 'loaded 1) 'yes '() zero-counts)
+  (lambda ()
+    (let ((v (load-verdict (load-sweep opted ext) 'loaded 1)))
+      (list (car v) (cadr v) (cadddr v) (native-counts)))))
+
+;; The reader load-extension! calls, given its who: from another thread its
+;; refusal names that who, and a who that is no symbol is refused first.
+(test-equal "database-extension-loading? given a who: from another thread, &sqlite-wrong-thread from that who, the owner this thread and the caller that one; on this one, the opt-in; a who that is no symbol is an assertion violation from database-extension-loading?, not-a-who, before the database is looked at"
+  (list (list '(wrong-thread some-verb) 'owner-and-caller) '(answered no) 'no
+        '(raised (assertion-violation database-extension-loading? (not-a-who 42)))
+        '(raised (assertion-violation database-extension-loading? (not-a-who (kind string))))
+        '(raised (assertion-violation some-verb (not-a-database x))))
+  (with-db plain
+    (lambda (db)
+      (let* ((other (thread-judged
+                     (in-thread (lambda () (yes-no (database-extension-loading? 'some-verb db))))))
+             (here (attempt (lambda () (list 'answered (yes-no (database-extension-loading? 'some-verb db))))))
+             (one (attempt (lambda () (yes-no (database-extension-loading? db)))))
+             (number (attempt (lambda () (database-extension-loading? 42 'x))))
+             (text (attempt (lambda () (database-extension-loading? "some-verb" 'x))))
+             (no-db (attempt (lambda () (database-extension-loading? 'some-verb 'x)))))
+        (list other here one number text no-db)))))
 
 ;; --- the memory ----------------------------------------------------------------------------------
 

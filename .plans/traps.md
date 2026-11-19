@@ -250,15 +250,49 @@ told in chez-curl's `.plans/traps.md`.
   equivalent change, let a third run answer, and the row failed correct code at fuel 76,
   `(new-where-the-control-made-none 2)`. Count each whole call from the stand-in's notes instead.
   Reproduce: plant `research/m4-slice-3/lead/trap-idle-turns.json` and judge `e-once` by its
-  runs' answers. (M4 slice 3, from the M4 session's check, chez-sqlite3)
+  runs' answers, as `0f9b92e`'s suite did; that commit is kept only by GitHub's
+  `refs/pull/44/head` (the entry on dropped commits, below). (M4 slice 3, from the M4 session's
+  check, chez-sqlite3)
 - **A collect request due inside a critical section costs an engine's ticks at the section's
   exit.** So an engine can expire just past a call's last section, though no procedure call
   follows it. A sweep that raises `collect-trip-bytes` above what its runs allocate never sees a
   remainder there. M4 slice 4's sweeps first read "both past the section in 0; R before it and R1
   past it in 0", and a plant that set the claim's flag after the section passed them all. With
-  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 186", and the
-  plant ran the init twice. Reproduce: `test-load-extension-engines`' two interleave rows print
-  both counts. (M4 slice 4, from its review, chez-sqlite3)
+  the trip at 256 bytes after a collect, the same interleave read "in 3" and "in 186" (the count
+  moves with each trial's allocations: 184, then 180, as the build grew), and the plant ran the init
+  twice. Reproduce: `test-load-extension-engines`' two interleave rows print both counts. (M4
+  slice 4, from its review, chez-sqlite3)
+- **`collect-trip-bytes` is read only when an allocation chunk runs out.** With the trip at 256
+  bytes, a critical section that allocated 1,000 bytes met a collect request at its exit 6 times
+  in 100; 8,000 and 16,000 bytes, 49 and 50; 32,000 bytes and more, every time. So a call that
+  allocates less than about 32 KiB meets a request at the same point at every fuel, and a low
+  pass reaches the exit it needs only by luck: M4's closing review found 0 of 3,706 trials
+  straddling a set's exit until the suite allocated 32 KiB inside that section itself. Reproduce:
+  `research/m4-closing-review/sweeps/chunk-probe.sps`, which printed the same counts twice. (M4's
+  closing review, chez-sqlite3)
+- **An engine's timer reads `#f` exactly when its run stops at a section's exit.** A collect request
+  due inside a critical section is handled at its exit, and when the handler spends the last
+  ticks, the engine expires there, and the timer, read through Chez's `$tc-field`, reads `#f` at the
+  handler's end. At a 256-byte trip, three fuels in every five stopped at the exit and read `#f`;
+  at 2^27 and at 256 KiB, none did. A suite proves a low pass reached an exit this way.
+  Reproduce: `research/m4-closing-review/sweeps/exit-probe.sps` and `timer-probe.sps`. (M4's
+  closing review, chez-sqlite3)
+- **An expiry's unwinding runs after thunks with the timer off, and they can meet requests too.**
+  An engine that expires inside `with-transaction` runs its after thunk, which steps a ROLLBACK
+  through a forced section; that section's request is handled while the slice's ticks read spent,
+  so a credit that reads only the timer at the handler counts an exit no run stopped at. In
+  `test-transaction-engine`, the first form's rule gave 5,115 credits to sections forced with the
+  timer off against 1,176 with it running, and every row still passed. Credit a section only where
+  its own callback saw the timer running. Reproduce:
+  `research/m4-closing-review/sweeps/offtimer-probe.py` on the host, then its copy run as its
+  header says. (M4's closing review, chez-sqlite3)
+- **A trial that judges only the state its runs leave can miss a wrong answer.** A claim advanced
+  just after `with-transaction`'s body section let R's second run answer `(not-allowed-in-state
+  done)` in 29 to 35 trials a run, where the rows' state checks saw a stray effect in 1 or 2, so
+  the row caught the plant in about half its runs. Judge each run's answer against all it may be.
+  Reproduce: `planted.sh P-conv-advance-after`, then `twenty.sh` with the plant's copy and
+  `test-transaction-engine`, in `research/m4-closing-review/sweeps/`. (M4's closing review,
+  chez-sqlite3)
 - **`call-with-open-handle` outside a critical section exposes its wind.** A remainder taken
   inside it and resumed a second time met the wind's own refusal, an assertion violation,
   `re-entered`, where the call's claim should have answered `&sqlite-closed`. M4 slice 4 makes its
@@ -267,6 +301,18 @@ told in chez-curl's `.plans/traps.md`.
   `research/m4-slice-4/scripts/`; `e-twice` reads
   `(second (raised (assertion-violation load-extension! (re-entered))) 0)` at fuels 15 to 17.
   (M4 slice 4, chez-sqlite3)
+- **An engine's remainder resumes on whichever thread calls it.** A remainder taken on the
+  owner's thread between `call-with-open-handle`'s owner check and its section made its C call on
+  another thread: in 3 of 12 trials the section ran on threads 8, 9 and 10, and in 3 of 13 on
+  threads 9 to 11 in another run. A check of the calling
+  thread vouches only for the section it is made in. Reproduce: sweep a bare
+  `call-with-open-handle` at every fuel and finish each remainder on a forked thread, as
+  `test-connection`'s owner rows do, against `34721b4`'s `connection.sls`, or run
+  `research/m4-closing-review/code/probes/handle-other-thread.sps`. (M4's closing review,
+  chez-sqlite3)
+- **Renaming thread ids across a whole value renames every 0 in it.** The main thread's
+  `get-thread-id` is 0, so a row that maps ids to names over a result read `changes`' 0 as `main`.
+  Compare ids raw, or rename only the fields that hold ids. (M4's closing review, chez-sqlite3)
 - **An engine row's fuels grow with the scratch path's length.** `load-extension!` copies and
   encodes its path inside the call, so a longer path costs more ticks. Under the container's
   `TMPDIR=/tmp` the load completed unexpired at fuel 60; with `TMPDIR` 6, 14, 25 and 50 characters
@@ -946,6 +992,16 @@ told in chez-curl's `.plans/traps.md`.
   chez-sqlite3)
 
 ## Editing the records
+
+- **A squash merge drops the commits a log cites.** Every PR here is squash-merged and its branch
+  deleted, so the commits a slice's log names, its red tree's, a plant's base, a round's head,
+  are reachable from no branch. Of the 53 such commits the records cited by M4's closing review,
+  GitHub kept 30 under a PR's `refs/pull/N/head` and served 18 more by hash from no ref; five are
+  gone: `f7ba038`, `3ae146d`, `00dbb28`, `635f5c5` and `edecfff`. No local ref keeps any of them,
+  so `git gc` prunes them here. Recover one with `git fetch origin refs/pull/N/head:refs/pr/N`, or
+  read it with `gh api repos/OWNER/REPO/commits/HASH`. Cite a branch's commit with its PR's
+  number, and base anything a reader must rerun on a commit a ref keeps, `main`'s or a PR's.
+  (M4's closing review, chez-sqlite3)
 
 - **A global replace also hits the sentence that defines what it replaces.** In M0 slice 0,
   `sed 's/ \*(provisional)\*//g'` over `global-constraints.md` removed every rule's marker. It also

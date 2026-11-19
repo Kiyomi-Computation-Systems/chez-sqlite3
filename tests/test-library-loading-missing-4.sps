@@ -1,20 +1,19 @@
 #!r6rs
-;;; The third of the three suites that load libsqlite3 end to end, through
+;;; One of the nine suites that load libsqlite3 end to end, through
 ;;; (chez-sqlite3 private native), tests/refusal-probe.sps and a decoy
-;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds only missing-api
-;;; rows, its part of the entry points, the largest of the three.
-;;; tests/test-library-loading-decoys.sps holds the decoy's behaviours and its
-;;; own part, and tests/test-library-loading-real.sps the real libsqlite3, the
-;;; refusals no decoy reaches, discovery, make build's preflight, and its own
-;;; part. They were one suite until it passed 450 s under the memory gate on
-;;; CI, three quarters of MEMORY_TIMEOUT (ADR-0005, amended); (library-loading)
-;;; holds what all three use.
+;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one, the fourth of four,
+;;; holds only missing-api rows, its part of the entry points.
+;;;
+;;; The nine were one suite until it passed 450 s under the memory gate on
+;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
+;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
-;;; this process. Every case therefore runs tests/refusal-probe.sps in a fresh
-;;; Chez, through `env`, and reads back what it printed, as data, whole: exit
-;;; status, every line, and stderr.
+;;; this process, nor a second library tried in it. Every case therefore runs
+;;; a probe in a fresh Chez, through `env`, and reads back what it printed,
+;;; as data, whole: exit status, every line, and stderr.
 ;;;
 ;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc)
 ;;;     once per build, each export of this suite's part left out one at a
@@ -23,17 +22,17 @@
 ;;;     its row, never skips it (ADR-0001). The decoy's versions are the floor
 ;;;     and the one below it, read from packaging/floors.sexp (ADR-0008);
 ;;;   - the partition: each entry point's missing-api row runs in exactly one
-;;;     of the three suites, this one's part found by its file's name, and
-;;;     three rows, here and in each other suite, hold the parts, the pattern
-;;;     that deals them and the suites.
+;;;     of the four missing suites, this one's part found by its file's name,
+;;;     and four rows, here and in each other missing suite, hold the parts,
+;;;     the pattern that deals them and the suites.
 ;;;
-;;; Each child prints its counts, and every row requires them zero (ADR-0005,
-;;; decision 4). Each runs through gated-command, so under make test-memory
-;;; the gate's own Valgrind runs it, with a log of its own that the gate reads.
-;;; Every child here is the probe, which says whether it ran under Valgrind
-;;; (memcheck's preload in /proc/self/maps), and a row requires yes exactly
-;;; when the gate asked. A child that escaped the gate fails its row
-;;; (ADR-0005, amended).
+;;; Each child that reaches native code prints its counts, and every row
+;;; requires them zero (ADR-0005, decision 4). Each runs through
+;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
+;;; with a log of its own that the gate reads. Every child here is the probe,
+;;; which says whether it ran under Valgrind (memcheck's preload in
+;;; /proc/self/maps), and a row requires yes exactly when the gate asked. A
+;;; child that escaped the gate fails its row (ADR-0005, amended).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
@@ -44,7 +43,6 @@
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
-        (foreign-conventions)
         (library-loading)
         (only (chezscheme) file-directory? foreign-entry?))
 
@@ -66,7 +64,7 @@
         (write (test-result-ref r 'actual-value))
         (newline)))))
 
-(test-begin "library-loading-missing")
+(test-begin "library-loading-missing-4")
 
 ;; The Makefile exports CHEZ, so this suite spawns the Chez that runs it.
 ;; Without it nothing below can run: fail, never skip.
@@ -114,16 +112,16 @@
 
 ;; Each part makes the missing-api rows of one suite. Merged in native's
 ;; order, every-entry's, the parts are the required entry points exactly when
-;; each is in one part, once, and each part keeps the order; the other two
-;; suites hold the same row. The optional entry points, which a library may
-;; lack and still load, follow every-entry in the convention table, outside
-;; the partition (the M4 plan, section 4.6).
-(test-equal "the three suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
+;; each is in one part, once, and each part keeps the order; the other three
+;; missing suites hold the same row. The optional entry points, which a
+;; library may lack and still load, follow every-entry in the convention
+;; table, outside the partition (the M4 plan, section 4.6).
+(test-equal "the four missing suites' entry lists partition the required entry points, every-entry: merged in its order, they are its names, each once"
   every-entry
   (merge-halves every-entry (map cdr decoy-parts)))
 
 ;; The partition is dealt: native's order, by position from 0, by a pattern of
-;; five that repeats (deal-pattern). The row above holds only that the parts
+;; four that repeats (deal-pattern). The row above holds only that the parts
 ;; partition the table, each in its order, so two entries swapped between
 ;; parts, or one moved to another, passes it. Each part is exactly what the
 ;; pattern deals its suite, and every name the pattern holds is a part.
@@ -135,14 +133,12 @@
         (if (for-all (lambda (name) (assoc name decoy-parts)) deal-pattern) 'all deal-pattern)))
 
 ;; The pattern, written out, so that it and the parts changed together, which
-;; the rows above pass, still fail: three of every five entries to the missing
-;; suite, which holds only missing-api rows, and one each to the decoys' and
-;; the real suite, which hold about 20 children of their own (ADR-0005,
-;; amended 2026-11-16).
-(test-equal "the pattern deals positions 0, 2 and 4 of every five to the missing suite, 1 to the decoys' suite and 3 to the real suite"
-  '("test-library-loading-missing.sps" "test-library-loading-decoys.sps"
-    "test-library-loading-missing.sps" "test-library-loading-real.sps"
-    "test-library-loading-missing.sps")
+;; the rows above pass, still fail: one of every four entries to each missing
+;; suite, which holds only missing-api rows, so that none runs more than 11
+;; children (ADR-0005, amended).
+(test-equal "the pattern deals positions 0, 1, 2 and 3 of every four to the missing suites 1, 2, 3 and 4"
+  '("test-library-loading-missing-1.sps" "test-library-loading-missing-2.sps"
+    "test-library-loading-missing-3.sps" "test-library-loading-missing-4.sps")
   deal-pattern)
 
 ;; this-part : (U (Pairof String (Listof String)) #f)
@@ -152,7 +148,7 @@
 (define this-part (suite-part (command-line)))
 
 (test-equal "this suite runs its own part of the partition, found by its file's name, and each suite the partition names is a file in tests/"
-  (list "test-library-loading-missing.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
+  (list "test-library-loading-missing-4.sps" (map (lambda (part) (cons (car part) 'present)) decoy-parts))
   (list (if this-part (car this-part) (list 'unlisted (command-line)))
         (map (lambda (part)
                (cons (car part) (if (file-exists? (string-append "tests/" (car part))) 'present 'absent)))
@@ -201,6 +197,6 @@
           'done)
         (if (file-directory? scratch) 'left 'removed)))
 
-(test-end "library-loading-missing")
+(test-end "library-loading-missing-4")
 
 (exit (suite-exit-status runner))

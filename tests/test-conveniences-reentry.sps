@@ -37,7 +37,16 @@
 ;;;                   extent, crossing no winder, so call-with-block's
 ;;;                   refusal never runs; the call's claim refuses the
 ;;;                   script's next prepare instead, and no statement runs
-;;;                   twice
+;;;                   twice. Then again under a collect trip of 256 bytes,
+;;;                   SQLite's trace and an authorizer allocating 32 KiB inside
+;;;                   each section that prepares or steps, so the timer's
+;;;                   handler runs at a section's exit too, where a claim set
+;;;                   just after the prepare's section let the jump prepare a
+;;;                   statement again (M4's closing review). It fails by name
+;;;                   unless collect requests fell in its trials, each such
+;;;                   section met its request before the next, which a trip
+;;;                   slipped to 256 KiB does not, and some capture was made at
+;;;                   such a section's exit, which the high pass never does
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
@@ -48,7 +57,9 @@
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
-        (only (chezscheme) set-timer timer-interrupt-handler)
+        (only (chezscheme) set-timer timer-interrupt-handler collect collect-trip-bytes
+              collect-request-handler foreign-procedure foreign-callable foreign-callable-entry-point
+              lock-object unlock-object scheme-environment)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
         (only (chez-sqlite3 private conditions) sqlite-invalid-text? sqlite-invalid-text-column
@@ -417,6 +428,322 @@
                                           0)))))))
        (list r calls (tier-run db "select count(*) from t"))))))
 
+;; --- the two passes ------------------------------------------------------------------------
+;; Pass = (U 'high 'low)
+;; The jumped-back row runs twice. Each trial begins with begun!: a
+;; collection, then PASS's trip, 2^27 in the high pass and 256 bytes in the
+;; low, until the trial ends. In the low pass a request falls due all
+;; through the trial, and one due inside a critical section is handled at
+;; the section's exit, where it costs ticks, so the timer's handler runs
+;; there too, before anything after it, and its continuation is taken
+;; there: a claim set just after the prepare's section, not inside it, let
+;; the jump prepare a statement again (M4's closing review, the M4
+;; session's check). A request fell only where the call's allocation crossed
+;; a chunk, so in the low pass each trial's connection also carries SQLite's
+;; trace and an authorizer, whose callbacks allocate 32 KiB: inside each
+;; section that prepares a statement, steps a row or finishes one. Both are
+;; __collect_safe, as sqlite3_prepare_v3 and sqlite3_step are; both answer
+;; 0 and raise nothing; both are locked from here to the suite's end. Every
+;; request goes through counted-request, which counts it.
+
+(define low-trip 256)
+
+;; default-request-handler : (-> Any)
+(define default-request-handler (collect-request-handler))
+
+;; requests : Natural
+;; The collect requests the trials of the pass under way met.
+(define requests 0)
+
+(define (counted-request)
+  (set! requests (+ requests 1))
+  (default-request-handler)
+  (exit-noted!))
+
+;; quieted! : -> Void
+;; A collection now, the trip at 2^27, far above what one trial allocates.
+(define (quieted!)
+  (collect-trip-bytes (expt 2 27))
+  (collect))
+
+;; --- where a remainder lies: at a forced section's exit ----------------------------------------
+;; SQLite's trace and authorizer call back inside the library's critical
+;; sections: each prepare, each step that answers a row, and the step that
+;; finishes a statement (the two passes, above). The jumped-back row's timer
+;; fires at every tick, so its ticks run out in every forced request's
+;; handler, and it fires at that section's exit.
+;; In the low pass force! allocates 32 KiB there, so a collect request falls
+;; due inside the section and is handled at its exit, the first event check
+;; once the section enables interrupts again. The handler's own work costs
+;; the engine ticks. Where they run out in it, the engine's timer reads #f
+;; at its end, and the engine expires as the handler returns: the remainder
+;; lies at that section's exit, before anything after it. A probe's marker,
+;; set inside a section and overwritten just after it, read the section's
+;; at exactly those fuels, three a section, at the low trip, and at none at
+;; the high trip or at 256 KiB (M4's closing review, builder D's
+;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a
+;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
+;; about one time in eight; and unless some first slice expired at a forced
+;; section's exit, which the high pass, forcing none, never does. Each first
+;; slice numbers the forced sections it passes, from 1, and the row shows
+;; whose exits were met. The timer is read through Chez's own $tc-field,
+;; reached through eval.
+
+;; tc-field, tc : (U Procedure #f)
+(define tc-field
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc-field")) (scheme-environment))))
+(define tc
+  (guard (e (#t #f))
+    (eval (list (string->symbol "$primitive") (string->symbol "$tc")) (scheme-environment))))
+
+;; ticks-now : -> (U Natural #f)
+;; The running engine's timer: its ticks left, #f once they are spent.
+(define (ticks-now) (and tc-field tc (tc-field 'timer-ticks (tc))))
+
+;; ticks-spent? : -> Boolean
+(define (ticks-spent?) (and tc-field tc (not (ticks-now)) #t))
+
+;; forcing : Boolean
+;; Whether force! allocates: in the low pass's trials alone.
+(define forcing #f)
+
+;; sink : Any
+;; Where force!'s allocation is kept, so no compiler drops it.
+(define sink #f)
+
+;; forced-pending : Boolean
+;; A forced section's allocation made inside a slice, its request not yet
+;; handled.
+(define forced-pending #f)
+
+;; forced, unmet : Natural
+;; The pass's forced sections inside an engine's slice, and those whose
+;; request was not handled before the next forced section or the slice's
+;; end. A forced callback whose timer reads as the last one's is in the same
+;; section: an engine spends no ticks inside one, and one section can fire
+;; two, as a close's finalizes do.
+(define forced 0)
+(define unmet 0)
+
+;; slicing, numbering : Boolean
+;; Whether an engine's slice runs now; whether a first slice does, numbering
+;; the forced sections it passes.
+(define slicing #f)
+(define numbering #f)
+
+;; forced-at : Any
+;; The timer as the last forced section read it.
+(define forced-at 'none)
+
+;; forced-k : Natural
+;; The forced sections the first slice under way has passed.
+(define forced-k 0)
+
+;; exit-k : (U Natural #f)
+;; The forced section at whose exit the first slice's ticks ran out.
+(define exit-k #f)
+
+;; pass-k, pass-exits : Natural (Listof Natural)
+;; The most forced sections a first slice of the pass passed, and the
+;; forced sections a first slice of it expired at the exit of.
+(define pass-k 0)
+(define pass-exits '())
+
+;; force! : -> Void
+;; In the low pass, 32 KiB allocated; inside a slice, a new section counted,
+;; and numbered inside a first slice, the last one counted unmet if its
+;; request is still due.
+(define (force!)
+  (when forcing
+    (when slicing
+      (let ((t (ticks-now)))
+        (unless (and forced-pending (eqv? t forced-at))
+          (when forced-pending (set! unmet (+ unmet 1)))
+          (set! forced (+ forced 1))
+          (when numbering (set! forced-k (+ forced-k 1)))
+          (set! forced-pending #t)
+          (set! forced-at t))))
+    (set! sink (make-bytevector 32768))))
+
+;; exit-noted! : -> Void
+;; In the request handler, once a request is handled: the forced section's
+;; request met; and, inside a first slice whose ticks it spent, where the
+;; section's callback found the engine's timer running, the section's
+;; number noted, the first so noted. An expiry's unwinding runs after
+;; thunks, a ROLLBACK's step among them, with the timer already off: a
+;; section forced there is no exit a remainder was taken at. The request
+;; handled is the forced section's own, at its exit: a 32 KiB allocation
+;; always met a request inside its section at a trip of 256 bytes, 100
+;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+(define (exit-noted!)
+  (when forced-pending
+    (set! forced-pending #f)
+    (when (and numbering (not exit-k) (number? forced-at) (ticks-spent?))
+      (set! exit-k forced-k))))
+
+;; slice-begun!, slice-ended! : -> Void
+;; Around each slice: at its end, a forced section's request still due
+;; counted unmet.
+(define (slice-begun!)
+  (set! forced-pending #f)
+  (set! forced-at 'none)
+  (set! slicing #t))
+(define (slice-ended!)
+  (set! slicing #f)
+  (when forced-pending
+    (set! unmet (+ unmet 1))
+    (set! forced-pending #f)))
+
+;; Tally = (List Natural Natural Natural Natural (Listof Natural))
+;; A pass's collect requests, its forced sections, those unmet, the most a
+;; first slice passed, and those a first slice expired at the exit of.
+
+;; pass-reset! : -> Void
+(define (pass-reset!)
+  (set! requests 0)
+  (set! forced 0)
+  (set! unmet 0)
+  (set! pass-k 0)
+  (set! pass-exits '())
+  (set! forced-pending #f))
+
+;; pass-tally : -> Tally
+(define (pass-tally) (list requests forced unmet pass-k (list-sort < pass-exits)))
+
+;; low-judged : Tally -> (Listof Any)
+;; low-checks' three, each failing by name.
+(define (low-judged tally)
+  (let ((met (car tally)) (forced (cadr tally)) (unmet (caddr tally)) (exits (list-ref tally 4)))
+    (list (if (> met 0) 'collect-requests-met (list 'no-collect-request-met met))
+          (if (and (> forced 0) (= unmet 0))
+              'every-forced-section-met-its-request
+              (list 'forced-sections forced 'unmet unmet))
+          (if (pair? exits) 'taken-at-a-forced-exit (list 'none-taken-at-a-forced-exit exits)))))
+
+;; low-checks : (Listof Symbol)
+(define low-checks '(collect-requests-met every-forced-section-met-its-request taken-at-a-forced-exit))
+
+;; tally-shown : Tally -> Void
+(define (tally-shown tally)
+  (display "; collect requests met ")
+  (write (car tally))
+  (display "; forced sections ")
+  (write (cadr tally))
+  (display ", unmet ")
+  (write (caddr tally))
+  (display "; a first slice's forced sections ")
+  (write (cadddr tally))
+  (display ", remainders at the exit of ")
+  (write (list-ref tally 4)))
+
+;; call-begun!, call-ended! : -> Void
+;; Around a re-entry row's call, its timer firing at every tick, in place of
+;; a first slice: its forced sections numbered, and once it is over, the
+;; count kept for the pass and a forced section's request still due counted
+;; unmet.
+(define (call-begun!)
+  (set! forced-k 0)
+  (set! exit-k #f)
+  (set! numbering #t)
+  (slice-begun!))
+(define (call-ended!)
+  (set! numbering #f)
+  (set! pass-k (max pass-k forced-k))
+  (slice-ended!))
+
+;; ticked! : -> (U Natural #f)
+;; At each fire of such a timer: the forced section at whose exit its ticks
+;; ran out, if they did, cleared for the next fire.
+(define (ticked!)
+  (let ((k exit-k))
+    (set! exit-k #f)
+    k))
+
+;; captured-at! : (U Natural #f) -> Void
+;; A capture made at forced section K's exit noted for the pass.
+(define (captured-at! k)
+  (when (and k (not (memv k pass-exits)))
+    (set! pass-exits (cons k pass-exits))))
+
+;; begun! : Pass -> Void
+(define (begun! pass)
+  (quieted!)
+  (collect-request-handler counted-request)
+  (set! forcing (eq? pass 'low))
+  (when (eq? pass 'low) (collect-trip-bytes low-trip)))
+
+;; ended! : -> Void
+(define (ended!)
+  (set! forcing #f)
+  (collect-trip-bytes (expt 2 27))
+  (collect-request-handler default-request-handler))
+
+;; counted-pass : (-> A) -> (Values A Tally)
+;; RUN's answer, a pass's sweep, and its tally, the trip and the handler
+;; put back however it leaves.
+(define (counted-pass run)
+  (pass-reset!)
+  (let ((r (dynamic-wind (lambda () #f) run ended!)))
+    (values r (pass-tally))))
+
+(define-syntax bound
+  (syntax-rules ()
+    ((_ name form)
+     (guard (e (#t (lambda args (error name "this suite could not bind it" (describe e)))))
+       form))))
+
+;; int (*xCallback)(unsigned, void *pCtx, void *P, void *X)
+(define profile
+  (foreign-callable __collect_safe
+    (lambda (mask ctx p x)
+      (force!)
+      0)
+    (unsigned-32 uptr uptr uptr) int))
+
+;; int (*xAuth)(void *pUserData, int action, const char *, const char *, const char *, const char *)
+(define authorizer
+  (foreign-callable __collect_safe
+    (lambda (data action a b c d)
+      (force!)
+      0)
+    (uptr int uptr uptr uptr uptr) int))
+
+;; callbacks-locked : Any
+(define callbacks-locked
+  (guard (e (#t (list 'raised (describe e))))
+    (lock-object profile)
+    (lock-object authorizer)
+    'locked))
+
+;; int sqlite3_trace_v2(sqlite3*, unsigned uMask, int(*xCallback)(...), void *pCtx)
+(define trace-v2
+  (bound 'sqlite3_trace_v2 (foreign-procedure "sqlite3_trace_v2" (uptr unsigned-32 uptr uptr) int)))
+
+;; int sqlite3_set_authorizer(sqlite3*, int (*xAuth)(...), void *pUserData)
+(define set-authorizer
+  (bound 'sqlite3_set_authorizer (foreign-procedure "sqlite3_set_authorizer" (uptr uptr uptr) int)))
+
+;; sqlite-trace-profile, sqlite-trace-row : Natural
+;; SQLITE_TRACE_PROFILE, as a statement finishes, and SQLITE_TRACE_ROW, as a
+;; step answers a row.
+(define sqlite-trace-profile 2)
+(define sqlite-trace-row 4)
+
+(define call-with-open-handle (reach connection-library 'call-with-open-handle))
+
+;; traced! : Database -> Void
+;; DB given the trace and the authorizer, each answer required 0.
+(define (traced! db)
+  (let ((rc (call-with-open-handle 'test-conveniences-reentry db
+              (lambda (h)
+                (let* ((t (trace-v2 h (+ sqlite-trace-profile sqlite-trace-row)
+                                    (foreign-callable-entry-point profile) 0))
+                       (a (set-authorizer h (foreign-callable-entry-point authorizer) 0)))
+                  (list t a))))))
+    (unless (equal? rc '(0 0)) (error 'traced! "sqlite3_trace_v2 or sqlite3_set_authorizer did not answer 0" rc))))
+
 ;; --- jumped back -----------------------------------------------------------------------------
 ;; A timer's handler is the caller's code, run between any two critical
 ;; sections, inside the script's block too. A continuation it captures there,
@@ -431,16 +758,18 @@
 
 (define jump-script "insert into j values (1); insert into j values (2)")
 
-;; jumped-at : Positive-Integer -> (U 'no-capture (List Any Any Natural Boolean))
-;; execute-script! of jump-script on a fresh :memory: connection holding j,
-;; empty, a timer's handler run at every tick. At the Ith tick at which some
+;; jumped-at : Pass Positive-Integer -> (U 'no-capture (List Any Any Natural Boolean))
+;; In PASS, execute-script! of jump-script on a fresh :memory: connection
+;; holding j, empty, a timer's handler run at every tick. At the Ith tick at which some
 ;; row of j stands it captures a continuation, noting the rows then, by the
 ;; connection's total-changes; at the first later tick at which more stand,
 ;; it calls it, once. Answers no-capture when the call returned before that
 ;; tick; else what the call answered, j's rows in the order inserted, how
 ;; many stood at the capture, and whether the jump came.
-(define (jumped-at i)
+(define (jumped-at pass i)
+  (begun! pass)
   (let ((db (open-database ":memory:")))
+    (when (eq? pass 'low) (traced! db))
     (tier-run db "create table j (x)")
     (let* ((base (total-changes db))
            (seen 0) (k #f) (at-capture #f) (jumped #f)
@@ -450,10 +779,12 @@
               (lambda ()
                 (timer-interrupt-handler
                  (lambda ()
-                   (let ((now (- (total-changes db) base)))
+                   (let ((now (- (total-changes db) base))
+                         (at-exit (ticked!)))
                      (cond ((and (not k) (> now 0))
                             (set! seen (+ seen 1))
                             (when (= seen i)
+                              (captured-at! at-exit)
                               (set! at-capture now)
                               (call/cc (lambda (c) (set! k c)))))
                            ((and k (not jumped) (> now at-capture))
@@ -462,16 +793,19 @@
                    (set-timer 1))))
               (lambda ()
                 (attempt (lambda ()
+                           (call-begun!)
                            (set-timer 1)
                            (let ((r (execute-script! db jump-script)))
                              (set-timer 0)
                              (if (eq? r (if #f #f)) 'no-value r)))))
               (lambda ()
                 (set-timer 0)
+                (call-ended!)
                 (timer-interrupt-handler old))))
            (rows (let loop ((rest (tier-run db "select x from j order by rowid")) (found '()))
                    (if (null? rest) (reverse found) (loop (cdr rest) (cons (vector-ref (car rest) 0) found))))))
       (close-database! db)
+      (ended!)
       (if k (list answer rows at-capture jumped) 'no-capture))))
 
 ;; jump-kind : (List Any Any Natural Boolean) -> (U Symbol (List 'deviation Any))
@@ -492,13 +826,17 @@
              'wind-refused)
             (else (list 'deviation r))))))
 
-(test-equal "execute-script! jumped back inside its own call, through a continuation a timer's handler captured at each tick from the first at which the script's first row stands until the call returns, and called at the first tick after another row stands: the jump never runs a statement again: the call answers with the script's rows once each, or is refused, with &sqlite-closed at the script's next prepare, or inside a statement's own extent by the statement tier's state or a section's own wind, the rows a prefix of the script's, none twice; at least a quarter of the captures are refused at a prepare; nothing is left counted"
-  (list '() 'a-quarter-refused-at-a-prepare zero-counts)
+;; jump-swept : Pass -> (List Any Any Counts)
+;; jumped-at in PASS at each I from 1 until the call returns before its Ith
+;; capture: the deviations; whether a quarter of the captures were refused
+;; at a prepare; and the counts at the end.
+(define (jump-swept pass)
   (let loop ((i 1) (kinds '()) (deviations '()))
-    (let ((r (guard (e (#t (list 'raised (what-raised e)))) (jumped-at i))))
+    (let ((r (guard (e (#t (list 'raised (what-raised e)))) (jumped-at pass i))))
       (if (or (eq? r 'no-capture) (>= i 20000))
           (begin
-            (display "  execute-script! jumped back: captures at ")
+            (display "  execute-script! jumped back")
+            (display (if (eq? pass 'low) ", low trip: captures at " ": captures at "))
             (write (- i 1))
             (display " ticks; kinds ")
             (write kinds)
@@ -516,6 +854,29 @@
                         (if p (cons (cons kind (+ (cdr p) 1)) (remq p kinds)) (cons (cons kind 1) kinds)))
                       kinds)
                   (if (symbol? kind) deviations (cons (cons i (cdr kind)) deviations))))))))
+
+(define jump-name
+  "execute-script! jumped back inside its own call, through a continuation a timer's handler captured at each tick from the first at which the script's first row stands until the call returns, and called at the first tick after another row stands: the jump never runs a statement again: the call answers with the script's rows once each, or is refused, with &sqlite-closed at the script's next prepare, or inside a statement's own extent by the statement tier's state or a section's own wind, the rows a prefix of the script's, none twice; at least a quarter of the captures are refused at a prepare; nothing is left counted")
+
+(test-equal jump-name
+  (list '() 'a-quarter-refused-at-a-prepare zero-counts)
+  (jump-swept 'high))
+
+(test-equal (string-append "the same, its trials under a collect trip of 256 bytes, each connection carrying SQLite's trace and an authorizer, which allocate 32 KiB inside each section that prepares, steps a row or finishes a statement, so a request falls due there and is handled at its exit, where the timer's handler runs: the same verdicts, and collect requests met in the trials, each forced section's request met before the next, and some capture made at a forced section's exit. " jump-name)
+  (append (list '() 'a-quarter-refused-at-a-prepare) low-checks (list zero-counts))
+  (let-values (((r tally) (counted-pass (lambda () (jump-swept 'low)))))
+    (display "  execute-script! jumped back, low trip")
+    (tally-shown tally)
+    (newline)
+    (append (list (car r) (cadr r)) (low-judged tally) (list (caddr r)))))
+
+(test-equal "the trace's and the authorizer's callbacks were locked at the load, and are unlocked once every connection is closed"
+  '(locked unlocked)
+  (list callbacks-locked
+        (guard (e (#t (list 'raised (describe e))))
+          (unlock-object authorizer)
+          (unlock-object profile)
+          'unlocked)))
 
 (test-equal "every count is zero at the end"
   zero-counts
