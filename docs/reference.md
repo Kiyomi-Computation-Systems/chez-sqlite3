@@ -435,12 +435,16 @@ A failure raises a condition that `sqlite-error?` holds, its code what
 SQLite answered: `error` for a file it can't load or set up, `nomem` when
 memory runs out. Its message is SQLite's own, and differs between Linux and
 a Mac. When the file can't be opened, it names the path tried last, the
-suffix appended. When the extension's setup fails, the message is SQLite's
-"error during initialization: ", then the setup's reason, the connection's
-own error, added only when the load changed that error. So when a setup
-fails the same way on two loads in turn, as beside a statement held at a
-row, the first message gives its reason, and the second SQLite's text
-alone.
+suffix appended.
+
+When the extension's setup fails, the message starts with SQLite's "error
+during initialization: ". A setup that says why in its own message is
+quoted there, every time. A setup that fails because one of its own calls
+failed leaves its reason on the connection instead, and that is added only
+when the failed call changed the connection's error code. So when the code
+was already that one before the load, after an earlier failure with the
+same code, such as a second load failing the same way beside a statement
+held at a row, the message is SQLite's text alone.
 
 What a load does to the connection:
 
@@ -1241,8 +1245,10 @@ catch it, call through `eval` inside the `guard`, which needs `(rnrs eval)`:
 One file is chosen, by the first rule that applies, and loaded:
 
 - **`CHEZ_SQLITE3_LIBRARY`**, when it is set, names the file by its
-  absolute path, with no search and nothing to fall back to. Any other
-  value, `""` among them, is refused as `invalid-override`.
+  absolute path. The library makes no search of its own and has nothing
+  to fall back to, though on a Mac the loader can still pick another file
+  (below). Any other value, `""` among them, is refused as
+  `invalid-override`.
 - **Otherwise the first file found** of a short list, by the system:
   - Linux, when the program runs Guix's C library: `lib/libsqlite3.so.0`
     in `$GUIX_ENVIRONMENT`, `$GUIX_PROFILE`, `~/.guix-home/profile`,
@@ -1262,12 +1268,12 @@ function the library needs.
 
 The library never reads `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` itself.
 On Linux, `LD_LIBRARY_PATH` doesn't change which file an absolute path
-loads. On a Mac, `DYLD_LIBRARY_PATH` does: the Mac's loader looks in its
+loads. On a Mac, `DYLD_LIBRARY_PATH` can: the Mac's loader can look in its
 folders first for a file of the same name, such as `libsqlite3.dylib`, and
-loads that one instead. Then `sqlite-version` and `sqlite-source-id`
-describe the file loaded, while `sqlite-library-path` still gives the path
-asked for. So on a Mac, set `DYLD_LIBRARY_PATH` only to folders you trust,
-or leave it unset.
+load that one instead, for Apple's path or an override's. Then
+`sqlite-version` and `sqlite-source-id` describe the file loaded, while
+`sqlite-library-path` still gives the path asked for. So on a Mac, set
+`DYLD_LIBRARY_PATH` only to folders you trust, or leave it unset.
 
 ### `sqlite-version`
 
