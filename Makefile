@@ -256,7 +256,8 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 # detail, the candidates checked and a remedy, and, when the refusal came
 # after the version was read, that library's own report. Its last line, on
 # either stream, is its counts, all zero (ADR-0005, decision 4);
-# tests/test-library-loading-real.sps holds the whole output. chez-sqlite3
+# tests/test-library-loading-real.sps and -preflight.sps hold the whole
+# output. chez-sqlite3
 # compiles nothing (ADR-0001), so this is the question an install asks. It
 # writes nothing: no build output, under src/ or anywhere. build is in
 # .PHONY: the build/ directory exists, and without it make would answer that

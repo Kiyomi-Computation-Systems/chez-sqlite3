@@ -170,7 +170,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **No suite passes three quarters of `MEMORY_TIMEOUT` under the gate,** 450 s of 600. `make
   test-memory` prints each suite's time, and fails one past it as `SLOW`, so a suite is split
   before CI's slower runners reach the timeout. `test-library-loading` was split in two in M2, at
-  562 s on a slow runner (ADR-0005, amended).
+  562 s on a slow runner, and into nine in M4's closing review, at most 11 children each, when
+  `-real` took 264 s on CI; a suite whose children run under the gate is split by its children,
+  about 11.5 s each on a slow runner (ADR-0005, amended).
 - **CI's memory gate runs in two jobs, `memory-1` and `memory-2`, each proving the gate on its own
   runner before its shard.** The Makefile lists each shard's suites, and every `tests/test-*.sps`
   stands in exactly one; `make check-memory-shards`, which `make test` runs, holds it, so a new

@@ -72,7 +72,7 @@
 ;;;
 ;;; The fifth check's order against the list's own rules needs a library
 ;;; without sqlite3_load_extension, so its rows are test-library-loading-
-;;; real's, on the decoy. The loading procedures are reached through eval,
+;;; extension's, on the decoy. The loading procedures are reached through eval,
 ;;; under a guard, as tests/test-statement.sps reaches them, so the suite runs
 ;;; against a library that lacks slice 3's names, failing by name.
 ;;;

@@ -88,7 +88,7 @@ newest first.
     four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
     4,** `load-extension!`, is done, as PR #45, `a795fa2`, below. **The maintainer's Mac run for
     slices 3 to 5** ran on 2026-11-18, below, and its one fault, a row of the suites, is fixed in
-    PR #47, `34721b4`. **M4's closing review** is PR CLOSING_PR, below.
+    PR #47, `34721b4`. **M4's closing review** is PR #48, below.
   - **M5's pre-work** is merged, by the M4 session, as PR #41, `2102131`: the release's facts and
     the maintainer's questions.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
@@ -166,27 +166,16 @@ newest first.
       arm64 ABI (`test-native`, 82 of 82), the busy-timeout waits, the two-engine sweeps, and NOMEM
       caused for real.
 - **Open:**
-  - **For M4's closing review: `DYLD_LIBRARY_PATH` redirects an absolute path on the Mac** (the
-    Mac run after slice 5, `run-dyld.sh`). It redirected the library ADR-0002 loads "as given",
-    with `sqlite-library-path` naming the path given and not the file loaded, and an extension's
-    absolute path, the environment choosing the file that Q16's reason says it can't. Both hold on
-    Linux. Whether to document, check or refuse it is the maintainer's choice.
-  - **For M4's closing review: no CI lane has a library without `sqlite3_load_extension`,** so
-    the suites' unavailable branches ran first on the Mac, after slice 4 merged, and one row
-    failed there. A SQLite built `-DSQLITE_OMIT_LOAD_EXTENSION` from the pinned release runs them on
-    Linux.
-  - **For M4's closing review: the loading suites' cost under the gate is climbing** (the M4
-    session's reading of CI). On `c92d397`'s run 44325663052, `test-library-loading-real` took
-    223 s, against 156 to 158 s on the three runs before; `-missing` 202 s, from 164 to 166 s; and
-    `-decoys` 190 s, after 132 to 239 s. 239 s is already over half the 450 s bound, with runners
-    differing about two to one, and slice 4 adds two rows to `-real`. AGENTS.md says to split long
-    before the limit.
-  - **For M4's closing review: the sweeps that raise `collect-trip-bytes`.** A collect request
-    due inside a critical section costs an engine's ticks at its exit, so a remainder can be taken
-    just past a call's last section, and a sweep that raises the trip never sees one (ADR-0016,
-    amended in M4 slice 4). M3's sweeps and slice 3's raise it. Check each for a claim that a
-    remainder past its last section could break, and give it slice 4's pass with collect requests
-    falling where one could.
+  - **M4's closing review settled its four open items** (below):
+    - the DYLD redirect, documented, the maintainer's "Document it";
+    - the no-load lane, in CI's `current` job;
+    - the loading suites, split into nine;
+    - the sweeps' low passes, with no control run.
+  - **Linux arm64** stays open from the M4 plan's §7: the variadic binding there is chez-curl's
+    measurement, not ours.
+  - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
+    suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
+    `memory-2` before calling it safe.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
@@ -196,6 +185,95 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-18 — M4's closing review and its fixes (PR #48)
+
+- **Reviewed** by two Opus reviewers, read-only, on `34721b4`, all of M4, on disjoint dimensions:
+  A the code and its seams, B the tests, the gate, CI and the records. No blocker. The lead
+  reproduced each finding before any fix was briefed (the four logs `m4-closing-review-*-log.md`).
+  - **The code (A):**
+    - `call-with-open-handle`'s owner check, M1's, ran outside its section, and Chez resumes an
+      engine's remainder on any thread: the C call's section ran on threads 8, 9 and 10 in 3 of
+      12 trials;
+    - `load-extension!`'s wrong-thread refusal named `database-extension-loading?`;
+    - a refused close inside `call-with-database` loses an engine, which has been documented since
+      M1's closing review; M4 adds an extension's leftover statement as a way to reach it;
+    - an init failing twice beside a held row loses its reason the second time;
+    - the records' and docs' sentences that macOS's `DYLD_LIBRARY_PATH` makes untrue;
+    - for every claim-holding call, M3's and M4's, the code after its last section is harmless.
+  - **The tests, the gate and the records (B):**
+    - three plants that advance a claim just after its section passed every sweep, and did real
+      harm with collect requests falling: settings applied twice, a row inserted twice;
+    - eight suites judged an interleave trial by a control run, which AGENTS.md forbids;
+    - `test-conveniences-resumed` bounded by `last-held`, across fuels;
+    - `test-library-loading-real` at 258 and 264 s on CI;
+    - the records' lags: the global constraints, the plan's §6 to §8, the ledger's hashes, and
+      about 50 commits squash merges dropped.
+- **Decided by the maintainer** (2026-11-18), each from a picker: "Plan it now"; DYLD, "Document
+  it"; the no-load lane, "In CI's current job" and "The whole make test"; the lost engine, "Keep
+  it, document M4's case"; the Mac recheck, "Accept the Linux reproduction"; the twice-failing init,
+  "Document it".
+- **Fixed here,** by four Opus builders in parallel, each in its own worktree, on disjoint files:
+  - **C, the code and the docs:** the owner compared inside `call-with-open-handle`'s section,
+    seven rows; the opt-in read with the caller's `who`, three rows; the reference's "Which
+    SQLite", the DYLD caveat, an extension's leftover statement and the twice-failing init;
+    `test-native`'s round trip chosen by the op's own answer;
+  - **D, the sweeps:** a low pass in every claim-holding sweep of M3's and slice 3's, a 32 KiB
+    allocation where a pass must reach an exit, bounds by the sweep's own clean trials, no control
+    run; five new suites for the pending fold's and script's low passes. No fault in `src/`;
+  - **E1, the no-load lane:** `build-sqlite.sh` and `check-sqlite.sh --no-load`, FTS5 kept, 40
+    options; five steps in `current`; `check-ci` keyed by build;
+  - **E2, the loading suites:** three into nine, at most 11 children each, every row kept;
+  - **the lead:** the merge; the old layout's comments outside the builders' files; the preflight
+    row's expected value under a guard, which E2's plant H7 had killed the suite through; the
+    records.
+- **Watched failing:** each builder's new or changed rows, against `34721b4` or a plant:
+  - C's 11 plants;
+  - D's: B's three, two of its own and six controls;
+  - E1's 50 plants;
+  - E2's 240, of which 67 are caught by both layouts, and none lost.
+
+  The lead's own: 3 of C's, B's two against D's suites, 3 on the workflow, 2 on the dealing, and H7
+  against the guard, all caught. `with-transaction`'s claim taken just after the BEGIN's section is
+  equivalent: the BEGIN's step reads the ended flag in its own section.
+- **Libraries:** on the merged tree, `make test` 92 of 92 on Guix's 3.53.1, the floor (3.45.1),
+  3.54.1, and 3.54.1 built without extension loading; `check-variadic` all 7 steps.
+- **Times** under the gate, Guix's library:
+  - the nine loading suites 52 to 85 s, against the old `-real`'s 195 to 248 s;
+  - `test-open-db-config-engines` 136 s, up from 57 s;
+  - the pending script's low passes about 92 s each.
+
+  Each memory job projects at about 30 suite-minutes a run, under its 60-minute timeout.
+- **The records,** proposed for the maintainer's acceptance:
+  - ADR-0002: DYLD;
+  - ADR-0005: the no-load lane, the split and the low passes' cost;
+  - ADR-0010: the owner in the section;
+  - ADR-0016: every claim-holding sweep's low pass, and no control run;
+  - ADR-0021: what the review corrected;
+  - the plan: §6 to §8 settled, and Q16's reason;
+  - AGENTS.md: three bullets, the low pass, the chunk and the owner's thread;
+  - the global constraints;
+  - `traps.md`: four entries, the dropped commits among them;
+  - this ledger.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Review A, the code, and its follow-up | Opus | 387k and 456k | 105 and 32 | 29 and 14 min |
+  | Review B, the tests and the records | Opus | 441k | 152 | 44 min |
+  | Review B's helper, the records | Opus | 322k | 114 | 20 min |
+  | Builder C, the code and docs | Opus | 398k | 185 | 47 min |
+  | Builder D, the sweeps | Opus | 886k | 265 | 146 min |
+  | Builder E1, the no-load lane | Opus | 451k | 125 | 55 min |
+  | Builder E2, the loading split | Opus | 501k | 261 | 74 min |
+
+- **Learned:**
+  - **A check of the calling thread vouches only for the section it is made in.** Engines make a
+    thread a property of a section, not of a call.
+  - **A low pass needs both a low trip and an allocation big enough to trip it.** The trip is read
+    a chunk at a time, so a small call meets its requests at the same point at every fuel.
+  - **A plant that reaches a branch but fails for an expected reason hides a crash there;** the
+    no-load lane runs each such branch green on every run.
 
 ### 2026-11-18 — M4 slice 4: `load-extension!` (PR #45)
 

@@ -154,6 +154,18 @@
 
 (define guix-not-found-candidates (guix-candidates-in empty-home))
 
+;; guix-not-found-lines : (U String Symbol)
+;; The candidates' lines preflight prints for not-found, each "    PATH\n",
+;; built under a guard, so a list of another shape makes the row fail by
+;; name instead of killing the suite: SRFI-64 doesn't catch a raise in an
+;; expected expression (AGENTS.md).
+(define guix-not-found-lines
+  (guard (e (#t 'candidates-unreadable))
+    (if (and (list? guix-not-found-candidates) (for-all string? guix-not-found-candidates))
+        (apply string-append
+               (map (lambda (c) (string-append "    " c "\n")) guix-not-found-candidates))
+        'candidates-not-strings)))
+
 ;; --- a raise that is not a refusal --------------------------------------------------------
 ;; tests/fixtures/raising/chez-sqlite3/private/native.sls shadows src/'s
 ;; native: its loaded-libsqlite3 raises a plain error. That is a bug, not a
@@ -255,9 +267,7 @@
                 "  source:     none\n"
                 "  detail:     none\n"
                 "  candidates:\n"
-                "    " (car guix-not-found-candidates) "\n"
-                "    " (cadr guix-not-found-candidates) "\n"
-                "    " (caddr guix-not-found-candidates) "\n"
+                guix-not-found-lines
                 "  remedy:     " (message-of no-profiles) "\n"
                 counts-line)
           valgrind-line)
