@@ -120,9 +120,14 @@ newest first.
   - **M5 slice 0 is done,** as PR #52, `c4e5622`, squash-merged with CI passing in every job.
   - **M5 slice 1 is done,** the memory jobs' `timeout-minutes: 120`, as PR #53, `d23cfc5`, by the
     M4 session, checked by the M3 session, squash-merged with CI passing in every job.
-  - **M5 slice 2 is PR #54 on `m5-slice-2`:** the site's generator and its dependency, by the M3
-    session, checked read-only by the M4 session. The maintainer accepted its plan amendment, the
-    generator as built (2026-11-20, "Accept").
+  - **M5 slice 2 is done,** the site's generator and its dependency, as PR #54, `8c18272`, by the
+    M3 session, checked by the M4 session, squash-merged with CI passing in every job. The
+    maintainer accepted its plan amendment, the generator as built (2026-11-20, "Accept").
+  - **M5 slice 4,** the docs, is building in the M4 session.
+  - **M5 slice 3 is PR #55 on `m5-slice-3`:** the site in CI, the `site` job and `pages.yml`, by
+    the M3 session, checked read-only by the M4 session. As it merges, the maintainer adds `site`
+    to branch protection and turns Pages on, built from GitHub Actions, its `github-pages`
+    environment taking `main` and `v*`.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -218,6 +223,9 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
+  - **`check-ci` requires a step's `env: CHEZ` only in `floor`, `current` and `site`;** elsewhere it
+    checks the value when one is there. A lost `CHEZ` fails on a runner with no `scheme`, but not
+    where Ubuntu's `chezscheme` answers to `scheme` ([traps](traps.md); M5 slice 3).
   - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53). The
     runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up to 47
     min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`,
@@ -232,6 +240,39 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5 slice 3: the site in CI (PR #55)
+
+- **What it built** ([the log](m5-slice-3-mutation-log.md)):
+  - the seventh job, `site`, on Ubuntu's Chez: its packages from
+    `packaging/debian-site-prereqs.txt`, then `make check-site-deps`, `make site-deps`,
+    `make check-site` and `make site`, each with `env: CHEZ: chezscheme`, no cache and no `if:`;
+  - `.github/workflows/pages.yml`, chez-curl's, its actions pinned by commit, `CHEZ` and
+    `SITE_REF` passed through `env:`, deploying on a `v*` tag's push;
+  - `check-ci` holding both files: the directory holds the two alone, `ci.yml` seven jobs and the
+    site job's checks in order, `pages.yml` its copy line for line, `SITE_REF` and
+    `CHEZ_CMARK_GFM_LIBS` banned in `ci.yml`, and the text rules on every line of both, comments
+    among them; `test-check-ci` 496 rows to 573;
+  - `packaging/debian-prereqs.txt`'s header: every job but `site` installs from it.
+- **Not chez-curl's:** chez-curl has no `check-ci`, so the rule holding `pages.yml` line for line
+  and the site's package list are this repository's own.
+- **Watched failing:** §4.10's `check-ci` plants, each a row; 22 mutants of `check-ci.sh`, each
+  killed by its row; the same plants under gawk and mawk, byte for byte alike.
+- **P5:** the site job's steps, and `pages.yml`'s build job with `SITE_REF=v0.1.0`, in a fresh
+  `ubuntu:24.04` as a sudo user: 9 steps, none failing. `make site-deps` used curl, so the
+  download branch ran for real. The builder's first P5 run had a driver bug that left every step
+  with no env, and all still passed: the trap below.
+- **One trap,** reproduced by the lead: Ubuntu's `chezscheme` answers to `scheme`, so a site step
+  that lost its `env: CHEZ` passes there.
+- **The lead's verification:** `make test` 93 of 93, `check-ci`, `check-test-fails` 18 cases and
+  the action pins' 28 lines passing; four plants of its own, each caught by name: a line of
+  `pages.yml` changed, a site step without `env: CHEZ`, `SITE_REF` in `ci.yml`, and a third file
+  in the directory.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Slice 3's builder | Opus | 431k | 144 | 37 min |
 
 ### 2026-11-20 — M5 slice 2: the site's generator and its dependency (PR #54)
 

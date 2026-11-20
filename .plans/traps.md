@@ -1008,6 +1008,12 @@ told in chez-curl's `.plans/traps.md`.
   neither curl nor wget, and a fetch script that hands every URL to one fails its offline test
   there; `scripts/fetch-akku-lock` copies a `file://` URL with `cp`. Reproduce:
   `scripts/guix-env sh -c 'command -v curl wget'` prints nothing (M5 slice 2). (chez-sqlite3)
+- **On ubuntu-24.04, `chezscheme` makes `scheme` an alternative for Ubuntu's Chez,** so the
+  Makefile's default `CHEZ` finds Chez 9.5.8 there, and a site step that lost its `env: CHEZ`
+  still passes; only `check-ci` sees the loss. Reproduce: `docker run --rm ubuntu:24.04 sh -c
+  'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq --no-install-recommends chezscheme
+  >/dev/null 2>&1; readlink -f "$(command -v scheme)"'` prints `/usr/bin/chezscheme` (M5 slice 3;
+  the lead's rerun agreed, `scheme --version` 9.5.8). (chez-sqlite3)
 
 ## Editing the records
 
