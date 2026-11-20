@@ -117,6 +117,12 @@ newest first.
   parallel slices, and chose the split in the M4 session's own session (2026-11-20): the M4 session
   builds slices 1 and 4, the M3 session slices 2, 3, 5 and 6 and the ledger, each checking the
   other's read-only.
+  - **M5 slice 0 is done,** as PR #52, `c4e5622`, squash-merged with CI passing in every job.
+  - **M5 slice 1 is done,** the memory jobs' `timeout-minutes: 120`, as PR #53, `d23cfc5`, by the
+    M4 session, checked by the M3 session, squash-merged with CI passing in every job.
+  - **M5 slice 2 is PR #54 on `m5-slice-2`:** the site's generator and its dependency, by the M3
+    session, checked read-only by the M4 session. Its plan amendment, the generator as built, waits
+    for the maintainer's acceptance.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -212,9 +218,10 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
-  - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
-    suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
-    `memory-2` before calling it safe.
+  - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53).
+    The runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up
+    to 47 min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`, has crept from
+    161 s to 221 s, under half the gate's 450 s `SLOW` line; read it again as suites are added.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
@@ -224,6 +231,50 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5 slice 2: the site's generator and its dependency (PR #54)
+
+- **What it built,** copied from chez-curl's and adapted ([the log](m5-slice-2-mutation-log.md)):
+  - `build-site.sps` and `site/`, the suites `site-unit`, `site-render-unit` and
+    `test-site-testing`, `(site-testing)`, and `check-site` with its seven invariants;
+  - the targets `site-deps`, `site`, `check-site` and `check-site-deps`, and
+    `scripts/fetch-akku-lock`, which copies a `file://` URL itself since the container has no
+    downloader;
+  - chez-cmark-gfm a second `depends/dev`, `Akku.lock` byte for byte chez-curl's, and
+    `test-manifest`'s rows 79 to 84;
+  - `.gitattributes`, `.plans` and `AGENTS.md` marked `export-ignore`;
+  - the container's cmark-gfm, tar and xz, and `CHEZ_CMARK_GFM_LIBS`, held by the self-test and the
+    launcher's test;
+  - check-suites' handling of `tests/site-*.sps`, `check-test-fails` at 18 cases, and
+    `test-site-testing` in `MEMORY_SUITES_2`, the lighter shard on three runs, at 6 s.
+- **Q11's home:** the first page of README.org's Documentation list is `index.html`, and the nav
+  holds it, three changed rules where the plan said two (the plan's amendment).
+- **Watched failing:** check-site's 36 plants, every invariant and Q11's two among them;
+  `test-manifest`'s 19; the self-test's 7 values of `CHEZ_CMARK_GFM_LIBS`; the launcher's 13 new
+  checks; one survivor, render-site never asking for neighbours, which slice 4's second page
+  catches.
+- **P4:** both anchor rules gave GitHub's anchor for all 81 headings of `docs/reference.md`.
+- **Two traps,** reproduced by the lead: `(load-shared-object "")` loads nothing and answers as
+  if it had, and the container has no downloader.
+- **The lead's verification:** `make test` 93 of 93 on Guix's library and on the floor;
+  `check-site`, `check-site-deps`, `check-test-fails` and `check-clean` passing; three plants of
+  its own, the home written as `Index.html`, `.gitattributes` without its `AGENTS.md` line and
+  chez-cmark-gfm at `^1.0.0`, each caught by name; and the lighter shard read on one run.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Slice 2's builder | Opus | 504k | 179 | 51 min |
+
+### 2026-11-20 — M5 slice 1: the memory jobs' timeout (PR #53)
+
+- **What it changed,** by the M4 session: `memory-1` and `memory-2` take `timeout-minutes: 120`,
+  the other four jobs 60; and the Makefile's `MEMORY_TIMEOUT` comment names the memory jobs'
+  120-minute limit.
+- **Watched failing:** `check-ci` refused `120.5` and `twohundred`, and, in the M3 session's
+  check, `-120`.
+- **Its CI run** (44747691652): `memory-1` took 47 min 22 s, its suites 2,414 s and the slowest,
+  `test-open-db-config-engines`, 221 s; `memory-2` 32 min 23 s, its suites 1,608 s.
 
 ### 2026-11-20 — M5 slice 0: the plan and the records (PR #52)
 
