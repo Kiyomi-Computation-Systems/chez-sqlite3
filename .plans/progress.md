@@ -294,6 +294,9 @@ newest first.
   its own against the hardened checker, each refused by name: a heredoc's code line, a heredoc's
   data line, a string in the decoy's `DECOY_LACKS_` branch, and a comment line in a Scheme
   heredoc; and two traps, the heredoc's `#` and `-fpreprocessed`'s backslash.
+- **Checked by the M4 session** (read-only, on `f68d602`): no blocker. Three comment slips and two
+  nits, fixed; one limit of the shell scanner, a quote inside `$( … )` in double quotes, which
+  the tree doesn't reach, recorded with bash's own parser as an oracle that agrees on every file.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |

@@ -59,8 +59,8 @@
 ;;;                  by a count-down! this suite makes first
 ;;;   engines        open-database under an engine, at every fuel from 1 to 60
 ;;;                  ticks a slice, past the 44 at which an open holding its
-;;;                  string outside a critical section expires inside it, and
-;;;                  its resume finds the string's block freed
+;;;                  string outside a critical section would expire inside it,
+;;;                  and its resume find the string's block freed
 ;;;
 ;;; close-database! does nothing on a closed connection (ADR-0012), so this
 ;;; suite reaches &sqlite-closed through the private call-with-open-handle,

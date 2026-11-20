@@ -236,8 +236,9 @@
   ;;                  into it as a character index: SQLite's error offset for
   ;;                  a prepare's failure, none for a step's; each #f when
   ;;                  there is none, and an open's failure has neither.
-  ;;                  execute-script!'s carries the whole script, and for a
-  ;;                  step's failure the failing statement's first token
+  ;;                  execute-script!'s carries the whole script, and its
+  ;;                  offset, for a step's failure, is the failing
+  ;;                  statement's first token.
   (define-condition-type &sqlite-error &chez-sqlite3-error
     unchecked-make-sqlite-error sqlite-error?
     (code unchecked-sqlite-error-code)

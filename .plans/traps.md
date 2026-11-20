@@ -1047,7 +1047,9 @@ told in chez-curl's `.plans/traps.md`.
   heredoc's reader takes `#` as a comment, named. Reproduce: the plants `heredoc` and `squote`
   of `research/m5-slice-5/` (the slice's log, round 2), refused by the hardened
   `sweep-check.sh` and passed by its first form (M5 slice 5's review; the lead's own plants
-  agreed). (chez-sqlite3)
+  agreed). Within double quotes, `$( … )` opens a context of its own, and that scanner doesn't
+  model it; bash's own reading, `__w() { <file> }; declare -f __w`, prints a file without its
+  comments, an oracle that does (M5 slice 5, the M4 session's check). (chez-sqlite3)
 - **`gcc -fpreprocessed -dD -E -P` strips comments but splices no backslash.** A `//` comment
   ending in `\` swallows the next line in a real build, yet the stripped text shows that line
   still there; and an object built for one set of `-D` values never sees a branch the others

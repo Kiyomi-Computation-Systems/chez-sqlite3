@@ -140,3 +140,30 @@ In the container, on Guix's library:
   compared;
 - `make test`: 93 of 93;
 - `check-test-fails`: all 18 cases.
+
+## Round 3: the M4 session's check
+
+The M4 session's read-only check of `f68d602` found no blocker. It found three comment slips, now
+fixed:
+- `test-open-db-config.sps`: a past result made false by the present tense, now "every start row
+  above";
+- `test-check-seam.sps`: an "amended" left after an ADR;
+- `conditions.sls`: a clause without its verb.
+
+Two nits are fixed too: `require-threaded.sls`'s measurement is chez-libuv's again, and
+`test-connection.sps`' expiry is a "would".
+
+**One limit of the checker, which the tree doesn't reach:** inside a double-quoted shell string,
+`$( … )` opens a quoting context of its own, and `lines.awk` doesn't model it. So
+`x="$(printf '%s' "a # b")`, then a line `# inner`, closes the outer string at the inner `"` and
+passes the next line as a comment, though bash reads it as the string's data. The check's plant
+passed with "ok", where a plain multi-line double-quoted string beside it was refused.
+
+As an oracle independent of the checker, the check read each of the nine `.sh` files through bash's
+own parser with the comments dropped (`__w() { <file> }; declare -f __w`). Eight read the same as
+the base, and `check-ci.sh` differs only in the two `#` lines of its quoted `AWKPROGRAM` heredoc,
+which are awk's comments and which the allowlist admits.
+
+After round 3, the checker reports "ok, 136 of 156 files changed, each in its comments alone
+(55 C builds compared)", and `make test` passes 93 of 93.
+

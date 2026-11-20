@@ -722,17 +722,17 @@
 ;; --- each set and each start, over moved starts --------------------------------------------
 ;; The start rows above hold each start where nothing moves it, so they cannot
 ;; see a set that writes the library's own start value: defensive set to 0 at
-;; every open and dqs-dml set to 1 pass every row on Guix's library, and so
-;; does defensive's #f skipped and answered as a match, since c-held's #f
-;; reads 0 either way. Here an entry point sqlite3_auto_extension runs at
-;; every open moves each of the four ops off this library's start, read by
-;; raw-starts first, through native's binding, so a value written unasked, or
-;; a set not made, shows on any library, whatever its starts: the moved value
-;; is 1 less the start's cell. open-database's sets run after the entry point,
-;; inside its open. The entry point is __collect_safe, as sqlite3_open_v2,
-;; which calls it, is, and raises nothing. Where the library refuses the
-;; registration, Apple's 21, each row is printed unavailable, and 21 is
-;; asserted in its place, as c-switch-on does. It is unregistered by
+;; every open and dqs-dml set to 1 pass every start row above on Guix's
+;; library, and so does defensive's #f skipped and answered as a match, since
+;; c-held's #f reads 0 either way. Here an entry point sqlite3_auto_extension
+;; runs at every open moves each of the four ops off this library's start,
+;; read by raw-starts first, through native's binding, so a value written
+;; unasked, or a set not made, shows on any library, whatever its starts: the
+;; moved value is 1 less the start's cell. open-database's sets run after the
+;; entry point, inside its open. The entry point is __collect_safe, as
+;; sqlite3_open_v2, which calls it, is, and raises nothing. Where the library
+;; refuses the registration, Apple's 21, each row is printed unavailable, and
+;; 21 is asserted in its place, as c-switch-on does. It is unregistered by
 ;; sqlite3_reset_auto_extension, and unlocked once.
 
 ;; start-cells : Any
