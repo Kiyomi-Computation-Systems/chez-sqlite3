@@ -124,13 +124,13 @@ newest first.
     M3 session, checked by the M4 session, squash-merged with CI passing in every job. The
     maintainer accepted its plan amendment, the generator as built (2026-11-20, "Accept").
   - **M5 slice 4,** the docs, is building in the M4 session.
-  - **M5 slice 3 is PR #55 on `m5-slice-3`:** the site in CI, the `site` job and `pages.yml`, by
-    the M3 session, reviewed (Opus) and checked read-only by the M4 session; with it, the fixes
-    from slice 2's review. Its plan amendment, the site in CI as built, and slice 2's amendment's
-    three additions wait for the maintainer's acceptance. As it merges, the maintainer adds
-    `site (the docs site, on Ubuntu's Chez)`, the job's name, to branch protection, and turns
-    Pages on, built from GitHub Actions, its `github-pages` environment taking `main` and the tag
-    rule `v*`.
+  - **M5 slice 3 is PR #55 on `m5-slice-3`:** the site in CI, the `site` job and `pages.yml`, by the
+    M3 session, reviewed (Opus) and checked read-only by the M4 session; with it, the fixes from
+    slice 2's review. The maintainer accepted its plan amendment, the site in CI as built, and slice
+    2's amendment's three additions (2026-11-20, "Accept both"). As it merges, the maintainer adds
+    `site (the docs site, on Ubuntu's Chez)`, the job's name, to branch protection, and turns Pages
+    on, built from GitHub Actions, its `github-pages` environment taking `main` and the tag rule
+    `v*`.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
