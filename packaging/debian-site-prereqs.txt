@@ -1,0 +1,47 @@
+# Debian/Ubuntu packages to build and check the docs site, on ubuntu-24.04
+# (ADR-0022, decision 4).
+#
+# Two workflows install from this file: the site job of
+# .github/workflows/ci.yml, and the build job of .github/workflows/pages.yml,
+# whose install step `make check-ci` holds, in both, to one text, line for
+# line. It reads every uncommented line with the same step as the other jobs'
+# (packaging/debian-prereqs.txt), installs them together with
+# `apt-get install -y --no-install-recommends`, and fails when the file
+# yields no package. A package the site needs and this file lacks fails both:
+# add it here.
+#
+# A list of its own, because the site runs on another toolchain: Ubuntu's
+# Chez, below chez-sqlite3's floor, which packaging/debian-prereqs.txt leaves
+# out, since every job that installs from it builds a Chez of its own.
+# Nothing the site runs imports a library under src/, where (chez-sqlite3
+# private require-threaded) refuses such a Chez.
+#
+# Lines starting with # and blank lines are ignored, so the section headers
+# below are labels only: every uncommented line is installed together. Keep
+# each package alone on its line, because a trailing comment would be
+# installed as a package.
+#
+# Not listed: git, which nothing here runs; and tar, gzip, coreutils
+# (sha256sum), diffutils, sed and grep, which are Essential Debian packages.
+
+# --- Chez Scheme ----------------------------------------------------------------
+# Ubuntu's chezscheme, run as CHEZ=chezscheme: the generator, its suites and
+# tests/check-site.sps import (rnrs), Chez's own bindings, (site ...),
+# (cmark gfm) and SRFI-64, and nothing of chez-sqlite3's.
+chezscheme
+
+# --- Markdown -------------------------------------------------------------------
+# The cmark-gfm command's package pulls in the two shared libraries,
+# libcmark-gfm and libcmark-gfm-extensions, which chez-cmark-gfm finds and
+# loads.
+cmark-gfm
+
+# --- make site-deps and make check-site-deps ------------------------------------
+# scripts/fetch-akku-lock downloads chez-cmark-gfm's archive, which Akku.lock
+# pins, with curl (or wget), checks its sha256, and unpacks it with tar,
+# which needs xz to read it. The runner image has curl and make already;
+# each is listed so that this file is the whole truth about a bare machine.
+ca-certificates
+curl
+make
+xz-utils

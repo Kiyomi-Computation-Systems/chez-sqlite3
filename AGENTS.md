@@ -14,8 +14,9 @@
   (`.plans/decisions/0004-windows-not-supported.md`)
 * **DO NOT** setup macos CI runners: linux only!
 * `make check-ci`, which `make test` runs, holds `.github/workflows/ci.yml` to
-  one shape. A change to the workflow changes `tests/check-ci.sh` and its
-  suite with it (ADR-0005, amended).
+  one shape, and `pages.yml` to its copy, line for line but for comments and
+  blank lines outside a run block. A change to either workflow changes
+  `tests/check-ci.sh` and its suite with it (ADR-0005, amended).
 * Exported functions should have a comment with a Typed Racket style type signature
 * The public library is `(chez-sqlite3)`. Internals live under
   `(chez-sqlite3 private …)` and never escape it (ADR-0009).

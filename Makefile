@@ -411,15 +411,17 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 
 # Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
 # (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its
-# six jobs and every key in them, each check as a step's whole run line, no
+# seven jobs and every key in them, each check as a step's whole run line, no
 # if: but the cache's own, no variable that steers a check, and no key
-# spelled so that a text check would miss it. make test runs it, so every
-# make test, the container's self-test and CI's main job among them, holds
-# the workflow. tests/test-check-ci.sps plants each fault in a copy of the
-# real file. It reads text with sh and awk, and needs no deps. The recipe
-# sets CHECK_CI_ROOT empty, which check-ci reads as unset, so a host's own
-# value never points the execute-bit rule at another tree.
-check-ci: ## Fail unless .github/workflows/ci.yml has the one shape tests/check-ci.sh reads
+# spelled so that a text check would miss it; and pages.yml, the one other
+# file the directory may hold, to the copy check-ci holds, line for line.
+# make test runs it, so every make test, the container's self-test and CI's
+# main job among them, holds the workflows. tests/test-check-ci.sps plants
+# each fault in a copy of the real files. It reads text with sh and awk, and
+# needs no deps. The recipe sets CHECK_CI_ROOT empty, which check-ci reads as
+# unset, so a host's own value never points the execute-bit rule at another
+# tree.
+check-ci: ## Fail unless .github/workflows holds ci.yml and pages.yml alone: ci.yml in the one shape tests/check-ci.sh reads, pages.yml its copy, line for line
 	@CHECK_CI_ROOT= sh tests/check-ci.sh .github/workflows
 
 # Holds the memory gate's two shards, MEMORY_SUITES_1 and MEMORY_SUITES_2,

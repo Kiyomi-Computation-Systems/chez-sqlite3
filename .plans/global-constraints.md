@@ -400,7 +400,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Counts of blocks, connections and statements must be zero when a suite exits.** There is no
   reset, and a count below zero raises (ADR-0005).
 - **CI's workflow has one shape, which `make check-ci` holds and `make test` runs:** its triggers,
-  six jobs and their keys; each check as a step's whole run line; only the checkout and cache
+  seven jobs and their keys; each check as a step's whole run line; only the checkout and cache
   actions, each cache restored before its build and saved before its check; every script a step
   runs by its path there and executable, and no other line naming `scripts/`, a comment or a
   cache key's `hashFiles(` list apart, so no spelling runs a script the rule hasn't read
@@ -415,9 +415,14 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `floor`'s three, and `current`'s five, its `--no-load` build's check and `make test` among them;
   `main`, the job that tests discovery, refuses both (M1 slices 3 and 5; ADR-0005, amended in M4's
   closing review).
-  From M5 slice 3, `ci.yml` has seven jobs, `site` the seventh, on Ubuntu's Chez, and
-  `.github/workflows` holds a second workflow, `pages.yml`, whose every line but a comment or a
-  blank one `check-ci` holds to its own copy (ADR-0005, amended).
+  Since M5 slice 3, `site` is the seventh job, on Ubuntu's Chez, held at six steps: its checkout,
+  its install step, held line for line to the text `pages.yml`'s install step is held to, and its
+  four checks, each with `env: CHEZ: chezscheme`. `.github/workflows`, read by a glob, holds a
+  second workflow, `pages.yml`, which `check-ci` holds to its own copy line for line, but for
+  comments and blank lines outside a run block: a block's lines are script, held whole. In
+  `ci.yml`, a block's line that begins with `#` keeps every content rule; the banned names gain
+  `SITE_REF` and `CHEZ_CMARK_GFM_LIBS` there; and the text rules, a tab or a character beyond
+  ASCII, hold every line of both files (ADR-0005, amended; the M5 plan, amended in slice 3).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own

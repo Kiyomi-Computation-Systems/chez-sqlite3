@@ -1008,6 +1008,38 @@ told in chez-curl's `.plans/traps.md`.
   neither curl nor wget, and a fetch script that hands every URL to one fails its offline test
   there; `scripts/fetch-akku-lock` copies a `file://` URL with `cp`. Reproduce:
   `scripts/guix-env sh -c 'command -v curl wget'` prints nothing (M5 slice 2). (chez-sqlite3)
+- **On ubuntu-24.04, `chezscheme` makes `scheme` an alternative for Ubuntu's Chez,** so the
+  Makefile's default `CHEZ` finds Chez 9.5.8 there, and a site step that lost its `env: CHEZ`
+  still passes; only `check-ci` sees the loss. Reproduce: `docker run --rm ubuntu:24.04 sh -c
+  'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq --no-install-recommends chezscheme
+  >/dev/null 2>&1; readlink -f "$(command -v scheme)"'` prints `/usr/bin/chezscheme` (M5 slice 3;
+  the lead's rerun agreed, `scheme --version` 9.5.8). (chez-sqlite3)
+- **Outside the container, a distro's compiler can't run a program against Guix's SQLite.** On a
+  host whose glibc is older than the Guix profile's, a program the distro's gcc builds against
+  `~/.guix-home/profile`'s `libsqlite3` fails at start, "version `GLIBC_2.36' not found", since
+  that library pulls in Guix's glibc 2.41; so the suites' C oracle fails there, in
+  `test-library-loading-real` and `test-native`. Run builds and tests through `scripts/guix-env`.
+  Reproduce on Ubuntu 22.04 (glibc 2.35): build a `printf("%s", sqlite3_libversion())` program
+  with `gcc -I$P/include -L$P/lib -lsqlite3 -Wl,-rpath,$P/lib`, `P` the profile, and run it (M5
+  slice 4's walk, on the M4 session's host; the lead's rerun agreed). (chez-sqlite3)
+- **A line of a YAML block scalar that begins with `#` is script text, not a comment.** A text
+  check that skips comment-like lines skips it inside a `run: |` block too: in `pages.yml`, `# a
+  note` at column 0 there passed `check-ci` at `3f68b33`, and PyYAML 5.4.1 refused the file. Its
+  `${{ }}` is filled in before the shell starts, which GitHub documents and no run here tried, so
+  a string holding a newline would put a command on a line of its own. Reproduce: the slice 3
+  plant `x-main-expr-in-block` (`research/m5-slice-3/review-plants-run.sh`) passes `3f68b33`'s
+  `check-ci` and fails the fixed one (M5 slice 3's review; the lead's rerun agreed).
+  (chez-sqlite3)
+- **A block held to a copy only while the copy's block runs frees the lines after it that YAML
+  still reads as the block's.** A line indented as content after the copy's last block line is
+  part of the script, so a check must hold it by the file's own indentation too. The review's
+  first fix passed `x-pg-expr-after-block`, an expression after the install block's last line; the
+  fixed `check-ci` refuses it (M5 slice 3, round 2; the lead's rerun agreed). (chez-sqlite3)
+- **A directory read by the lines of `ls` takes a name holding a newline as two names.** A file
+  named `pages.yml`, a newline, `ci.yml`, lists as the two names the rule allows. Read a directory
+  by a glob. Reproduce: `touch "d/pages.yml$(printf '\nci.yml')"` beside `d/ci.yml` and
+  `d/pages.yml`, then `ls -A d` prints four lines for three files (M5 slice 3's review; the lead's
+  rerun agreed). (chez-sqlite3)
 
 ## Editing the records
 

@@ -199,29 +199,27 @@
   "<!-- raw HTML omitted -->" (sxml->html '(*COMMENT* " raw HTML omitted ")))
 
 ;; --- transform -------------------------------------------------------
-(let-values (((body toc)
-              (transform-body '(*TOP* (h2 "Node shape") (p "x") (h2 "Node shape")))))
-  (test-equal "headings gain a caret id from their slug"
-    '(*TOP* (h2 (^ (id "node-shape")) "Node shape") (p "x")
-            (h2 (^ (id "node-shape-1")) "Node shape"))
-    body)
-  (test-equal "the toc lists (level text slug) in document order"
-    '((2 "Node shape" "node-shape") (2 "Node shape" "node-shape-1"))
-    toc))
-(let-values (((body toc)
-              (transform-body '(*TOP* (h1 "Title") (h3 "Detail")))))
-  (test-equal "the toc reads each heading's level from its tag"
-    '(1 3) (map car toc)))
-(let-values (((body toc)
-              (transform-body '(*TOP* (blockquote (p "⚠️ Answer quickly."))))))
-  (test-equal "a warning-sign blockquote is rewrapped as a warning callout div"
-    '(*TOP* (div (^ (class "callout warning")) (blockquote (p "⚠️ Answer quickly."))))
-    body))
-(let-values (((body toc)
-              (transform-body '(*TOP* (blockquote (p "A plain note."))))))
-  (test-equal "a blockquote without the warning sign is left as it is"
-    '(*TOP* (blockquote (p "A plain note.")))
-    body))
+;; transformed : SXML -> (List SXML Toc)
+;; transform-body's two answers for DOC as a list, called inside a row's
+;; actual expression, so a raise fails that row by name.
+(define (transformed doc)
+  (let-values (((body toc) (transform-body doc))) (list body toc)))
+
+(test-equal "headings gain a caret id from their slug"
+  '(*TOP* (h2 (^ (id "node-shape")) "Node shape") (p "x")
+          (h2 (^ (id "node-shape-1")) "Node shape"))
+  (car (transformed '(*TOP* (h2 "Node shape") (p "x") (h2 "Node shape")))))
+(test-equal "the toc lists (level text slug) in document order"
+  '((2 "Node shape" "node-shape") (2 "Node shape" "node-shape-1"))
+  (cadr (transformed '(*TOP* (h2 "Node shape") (p "x") (h2 "Node shape")))))
+(test-equal "the toc reads each heading's level from its tag"
+  '(1 3) (map car (cadr (transformed '(*TOP* (h1 "Title") (h3 "Detail"))))))
+(test-equal "a warning-sign blockquote is rewrapped as a warning callout div"
+  '(*TOP* (div (^ (class "callout warning")) (blockquote (p "⚠️ Answer quickly."))))
+  (car (transformed '(*TOP* (blockquote (p "⚠️ Answer quickly."))))))
+(test-equal "a blockquote without the warning sign is left as it is"
+  '(*TOP* (blockquote (p "A plain note.")))
+  (car (transformed '(*TOP* (blockquote (p "A plain note."))))))
 
 ;; --- links -----------------------------------------------------------
 (test-equal "doc .md link (with anchor) becomes .html, anchor kept"
@@ -297,6 +295,22 @@
   "handlers.html" (page-file-name "handlers.md"))
 (test-equal "README.md, which is no page, is written as README.html"
   "README.html" (page-file-name "README.md"))
+
+;; file-names-by-rule : (Listof String) -> (Listof String)
+;; The file each of NAMES is written to, by the rule written out here and
+;; not by page-file-name: the first index.html, each other its base name and
+;; .html. A page-file-name that sent two pages to one file would pass every
+;; link and every check that asks it for the name.
+(define (file-names-by-rule names)
+  (if (null? names)
+      '()
+      (cons "index.html"
+            (map (lambda (n) (string-append (substring n 0 (- (string-length n) 3)) ".html"))
+                 (cdr names)))))
+(test-equal "every page of pages is written to a file of its own: the first index.html, each other its base name and .html"
+  (guard (e (#t (list 'raised (if (message-condition? e) (condition-message e) e))))
+    (file-names-by-rule (map car pages)))
+  (map page-file-name (map car pages)))
 
 ;; --- template --------------------------------------------------------
 (test-eq "the document is rooted at html" 'html

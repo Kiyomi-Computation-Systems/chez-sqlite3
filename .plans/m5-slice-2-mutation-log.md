@@ -268,3 +268,36 @@ new pages.
 - **traps.md:** the two findings above, each with its command.
 - **The plan:** invariant 7's reading while README.org has no Documentation section, and
   slice 4's file list without `tests/check-site.sps`.
+
+## Round 2: the review's findings
+
+The slice's read-only Opus review ran on `8c18272`, after the merge: the plan's §5 owes every slice
+one, and this slice had had only the M4 session's check. It found one major, two minors and two
+nits, none blocking the one-page site. The fixes are in PR #55, with slice 3.
+
+- **Major: the file names were checked against themselves.** Every link, the nav, the footer and
+  invariant 5's set of written files take a page's file from `page-file-name`, the procedure under
+  test, so a `page-file-name` that sent two pages to one file passed everything. The review's
+  plant, on a three-page tree, wrote every page after the home as `pages.html`: the site suites and
+  `check-site` were green, and `build-site` printed `site: wrote 3 pages` over two files. A copy of
+  chez-curl's generator failed the same plant at invariant 5. Reproduced by the lead.
+  - **Fix:** `site-unit`'s row "every page of pages is written to a file of its own", which holds
+    `(map page-file-name (map car pages))` to `file-names-by-rule`, a rule written in the suite.
+  - **Watched failing,** in copies built by the review's tree builders: on three pages, the
+    `pages.html` plant fails that row; on two, every non-home page as `.htm` fails it; the
+    three-page control passes.
+- **Minor: one page hides five more plants,** each passing here and caught once a page is added:
+  the nav reversed, the neighbours of a reversed nav, the nav the home alone, the home the last
+  page, and every page written as `index.html`. The M4 session ran them on slice 4's four pages:
+  the first four fail `site-render-unit`'s footer or home rows, and the `pages.html` plant passes
+  there until the row above lands.
+- **Minor: top-level computations raised outside a guard.** `site-unit`'s four `transform-body`
+  calls ran at top level, and `site-render-unit`'s footer row built its input outside `rendered`'s
+  guard: a raise killed the suite at exit 255, naming no row.
+  - **Fix:** `transformed` calls `transform-body` inside each row's actual expression, and the
+    footer row's input is built under a guard.
+  - **Watched failing:** `transform-body` planted to raise now fails 5 rows of `site-unit` by name,
+    exit 1; a label that is no string fails 7 rows of `site-render-unit` by name, exit 1.
+- **Nits:** the ledger's Now, which #55 already moves on; and §5's slice 4 file list, which now
+  names `tests/check-site.sps`.
+

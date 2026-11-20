@@ -155,7 +155,8 @@
 
 ;; Every page of the nav rendered, each its h1 alone: each page's footer is
 ;; the one its place in the nav calls for.
-(let ((site (rendered (map (lambda (p) (cons (car p) (string-append "# " (cdr p) "\n"))) pages))))
+(let ((site (guard (e (#t (list 'raised (if (message-condition? e) (condition-message e) e))))
+              (rendered (map (lambda (p) (cons (car p) (string-append "# " (cdr p) "\n"))) pages)))))
   (test-equal "each page's footer links its neighbours in the nav, or is absent with none"
     (map (lambda (p) (guard (e (#t (list 'raised (car p)))) (expected-pagenav (car p)))) pages)
     (map (lambda (p) (pagenav-of (html-of site (car p)))) pages)))

@@ -1,17 +1,19 @@
 #!r6rs
 ;;; The suite for tests/check-ci.sh, the check behind `make check-ci`: it holds
 ;;; .github/workflows/ci.yml to the one shape it reads, and fails closed on any
-;;; spelling that a text reader cannot see. Without this suite, loosening a rule
-;;; would leave `make test` green: nothing else plants a fault in the workflow.
+;;; spelling that a text reader cannot see, and holds pages.yml, the one other
+;;; workflow, to a copy of its own. Without this suite, loosening a rule would
+;;; leave `make test` green: nothing else plants a fault in the workflows.
 ;;;
-;;; Every row copies the real workflow into a directory of its own, under one
-;;; temporary directory of this process (never at a fixed path, so two runs at
-;;; once share no file), applies one edit, and runs the script on it. An edit is
-;;; old text and new text, and the old text must occur exactly once in the real
-;;; file, or the row fails and says which. A row asserts the exit status, the
-;;; whole of stdout and the whole of stderr. Each expected problem is written by
-;;; hand here: the line it names is the one holding an anchor text in the edited
-;;; file, never a number read back from the script.
+;;; Every row copies the two real workflows into a directory of its own, under
+;;; one temporary directory of this process (never at a fixed path, so two runs
+;;; at once share no file), applies its edits to one or the other, and runs the
+;;; script on it. An edit is old text and new text, and the old text must occur
+;;; exactly once in the real file, or the row fails and says which. A row
+;;; asserts the exit status, the whole of stdout and the whole of stderr. Each
+;;; expected problem is written by hand here: the line it names is the one
+;;; holding an anchor text in the edited file, never a number read back from
+;;; the script.
 ;;;
 ;;; make test runs every suite from the repository root. Without CHEZ nothing
 ;;; below runs: that fails here, by name, and never skips.
@@ -40,6 +42,7 @@
 
 (define script "tests/check-ci.sh")
 (define real-path ".github/workflows/ci.yml")
+(define pages-path ".github/workflows/pages.yml")
 
 ;; --- files and text ---------------------------------------------------------------
 
@@ -86,6 +89,7 @@
           (else (loop (cdr chars) (cons (car chars) cur) acc)))))
 
 (define real (guard (e (#t "")) (read-text real-path)))
+(define preal (guard (e (#t "")) (read-text pages-path)))
 
 ;; lines : String ... -> String
 ;; Each argument as a line, newline-ended.
@@ -117,7 +121,7 @@
 
 ;; The jobs, in the file's order. A job's text runs from its header line to the
 ;; next job's, so a lane's text can be told from the other lanes' copies of it.
-(define job-order '("main" "memory-1" "memory-2" "nothreads" "floor" "current"))
+(define job-order '("main" "memory-1" "memory-2" "nothreads" "floor" "current" "site"))
 
 ;; job-bounds : String String -> (Pair Natural Natural)
 (define (job-bounds text job)
@@ -159,6 +163,28 @@
 (define (apply-edits edits)
   (fold-left apply-edit real edits))
 
+;; apply-pedit : String (Pair String String) -> String
+;; An edit of pages.yml: its old text must occur once in the real pages.yml,
+;; and once in the text so far.
+(define (apply-pedit text edit)
+  (let ((old (car edit)))
+    (unless (and (= (count-sub preal old) 1) (= (count-sub text old) 1))
+      (error 'apply-pedit "the old text does not occur exactly once in pages.yml" old))
+    (replace-first text old (cdr edit))))
+
+(define (apply-pedits edits)
+  (fold-left apply-pedit preal edits))
+
+;; between : String String -> String
+;; The real file from the one START up to, not including, the one END after it.
+(define (between start end)
+  (unless (and (= (count-sub real start) 1) (= (count-sub real end) 1))
+    (error 'between "each marker must occur once" start end))
+  (let* ((s (find-sub real start 0))
+         (e (find-sub real end s)))
+    (unless e (error 'between "the end is not after the start" start end))
+    (substring real s e)))
+
 ;; --- the words the problems are made of, written by hand --------------------------
 
 (define tab-msg "holds a tab, which YAML may read as white space beside a key")
@@ -189,7 +215,7 @@
 (define (block-extra k got)
   (string-append "the \"" k "\" block has a line it must not: \"" got "\""))
 
-(define jobs "main, memory-1, memory-2, nothreads, floor, current")
+(define jobs "main, memory-1, memory-2, nothreads, floor, current, site")
 (define (job-unknown j) (string-append "job \"" j "\" is not one of " jobs))
 (define (job-missing j) (string-append "job \"" j "\" is missing"))
 (define (job-key j k)
@@ -282,18 +308,26 @@
 
 ;; --- rows ---------------------------------------------------------------------------
 
-;; A row is (name edits-thunk problems-thunk setup-thunk): the edits to the real
-;; file, the problems expected, in order, each (anchor message), and what to do
-;; to the directory before the run (or #f). The thunks keep a fault in a row's
-;; own construction from killing the suite: it fails that row, by name.
+;; A row is (name edits-thunk problems-thunk setup-thunk pages-edits-thunk): the
+;; edits to the real ci.yml, the problems expected, in order, each (anchor
+;; message), what to do to the directory before the run (or #f), and the edits
+;; to the real pages.yml. The thunks keep a fault in a row's own construction
+;; from killing the suite: it fails that row, by name.
 (define-syntax row
   (syntax-rules ()
-    ((_ name edits problems) (list name (lambda () edits) (lambda () problems) #f))))
+    ((_ name edits problems)
+     (list name (lambda () edits) (lambda () problems) #f (lambda () '())))))
 
 (define-syntax row/setup
   (syntax-rules ()
     ((_ name setup edits problems)
-     (list name (lambda () edits) (lambda () problems) setup))))
+     (list name (lambda () edits) (lambda () problems) setup (lambda () '())))))
+
+;; A row of pages.yml: ci.yml is copied as it is, and the edits are pages.yml's.
+(define-syntax prow
+  (syntax-rules ()
+    ((_ name pedits problems)
+     (list name (lambda () '()) (lambda () problems) #f (lambda () pedits)))))
 
 ;; An anchor: a string, the one line of the edited file that is exactly it; a
 ;; list (string n), the nth such line; (after HEADER string), the first line
@@ -305,6 +339,9 @@
 ;; exactly HEADER below the job's own header line "  JOB:" (or the job's header
 ;; itself, with #f), then the first line that is exactly string below that. A
 ;; step's lines are named by the step, never by their number among the lanes'.
+
+;; (p ANCHOR), any of the above but 'dir, in pages.yml: (P a) makes one.
+(define (P a) (list 'p a))
 
 ;; line-number : (Listof String) Anchor -> Natural
 (define (line-number ls anchor)
@@ -349,27 +386,35 @@
           ((= (length hits) 1) (car hits))
           (else (error 'anchor "the line is not there exactly once" anchor)))))
 
-;; problem-line : String String (Listof String) (List Anchor String) -> String
-(define (problem-line dir file ls problem)
-  (let ((anchor (car problem)) (msg (cadr problem)))
+;; problem-line : String String (Listof String) String (Listof String)
+;;                (List Anchor String) -> String
+;; FILE and LS are ci.yml's path and lines, PFILE and PLS pages.yml's.
+(define (problem-line dir file ls pfile pls problem)
+  (let* ((anchor (car problem)) (msg (cadr problem))
+         (pages? (and (pair? anchor) (eq? (car anchor) 'p)))
+         (f (if pages? pfile file))
+         (l (if pages? pls ls))
+         (a (if pages? (cadr anchor) anchor)))
     (string-append
      "check-ci: "
-     (cond ((eq? anchor 'dir) (string-append dir ": "))
-           ((eq? anchor 'file) (string-append file ": "))
-           ((eq? anchor 'eof) (string-append file ":" (number->string (length ls)) ": "))
-           (else (string-append file ":" (number->string (line-number ls anchor)) ": ")))
+     (cond ((eq? a 'dir) (string-append dir ": "))
+           ((eq? a 'file) (string-append f ": "))
+           ((eq? a 'eof) (string-append f ":" (number->string (length l)) ": "))
+           (else (string-append f ":" (number->string (line-number l a)) ": ")))
      msg "\n")))
 
 (define pass-line (lambda (dir) (string-append "check-ci: " dir "/ci.yml has the one shape check-ci reads\n")))
 
-;; expected : String String (Listof (List Anchor String)) -> (List Integer String String)
-(define (expected dir text problems)
-  (let ((file (string-append dir "/ci.yml")) (ls (split-lines text)))
+;; expected : String String String (Listof (List Anchor String))
+;;          -> (List Integer String String)
+(define (expected dir text ptext problems)
+  (let ((file (string-append dir "/ci.yml")) (ls (split-lines text))
+        (pfile (string-append dir "/pages.yml")) (pls (split-lines ptext)))
     (if (null? problems)
         (list 0 (pass-line dir) "")
         (list 1 ""
               (string-append
-               (apply string-append (map (lambda (p) (problem-line dir file ls p)) problems))
+               (apply string-append (map (lambda (p) (problem-line dir file ls pfile pls p)) problems))
                "check-ci: FAILED (problems: " (number->string (length problems)) ")\n")))))
 
 ;; Without a temporary directory no row can run, so the suite says why and exits
@@ -392,8 +437,10 @@
     (guard (c (#t (list (list 'raised (string-append (car r) ": " (describe c))) '(not run))))
       (mkdir dir)
       (let* ((text (apply-edits ((cadr r))))
-             (want (expected dir text ((caddr r)))))
+             (ptext (apply-pedits ((list-ref r 4))))
+             (want (expected dir text ptext ((caddr r)))))
         (write-text (string-append dir "/ci.yml") text)
+        (write-text (string-append dir "/pages.yml") ptext)
         (when (cadddr r) ((cadddr r) dir))
         (list want (capture-command (list "sh" script dir)))))))
 
@@ -402,6 +449,17 @@
 ;; setup procedures
 (define (add-file name)
   (lambda (dir) (write-text (string-append dir "/" name) "on: push\n")))
+
+;; in-dir : String -> (String -> Void)
+;; A setup that runs the shell command CMD in the row's directory.
+(define (in-dir cmd)
+  (lambda (dir)
+    (let ((r (capture-command (list "sh" "-c" (string-append "cd \"$1\" && " cmd) "sh" dir))))
+      (unless (= (car r) 0) (error 'setup "the setup command failed" cmd r)))))
+
+(define not-regular "is not a regular file: a link, a directory or nothing there")
+(define (stray-entry name)
+  (string-append name " is neither ci.yml nor pages.yml: the directory must hold those two alone"))
 
 (define (insert-after old new-lines) (e old (string-append old new-lines)))
 
@@ -431,7 +489,9 @@
     "CHEZ_SQLITE3_LIBRARY" "CHEZ_SQLITE3_DECOY" "CHEZ_SQLITE3_GATE_CHILD"
     "CC" "C_INCLUDE_PATH" "CPATH" "LD_LIBRARY_PATH" "LD_PRELOAD" "CHECK_CI_ROOT"
     ;; the shard and its lists, and the pattern that holds them, MEMORY_*
-    "MEMORY_SHARD" "MEMORY_SUITES_1" "MEMORY_SUITES_2" "MEMORY_LOGS"))
+    "MEMORY_SHARD" "MEMORY_SUITES_1" "MEMORY_SUITES_2" "MEMORY_LOGS"
+    ;; the site's: the ref its links name, and the cmark-gfm libraries it loads
+    "SITE_REF" "CHEZ_CMARK_GFM_LIBS"))
 
 (define make-words
   '("check-help" "check-suites" "check-pins" "check-floors" "check-ci" "test"
@@ -1153,8 +1213,8 @@
                               (unless (= (count-sub t (car pr)) 1) (error 'se* "not once in the step" h (car pr)))
                               (replace-first t (car pr) (cdr pr)))
                             st pairs))))
-    ;; The five steps, from the restore's header to the file's end.
-    (define (five) (to-end (hdr-line h-nl-restore)))
+    ;; The five steps, from the restore's header to the job's last run line.
+    (define (five) (span (hdr-line h-nl-restore) "        run: make test\n"))
     (define (without-five) (e (string-append "\n" (five)) ""))
     (define (key-row name new-key)
       (row (pfx name)
@@ -1425,9 +1485,9 @@
         (list (e (string-append (span "  # SQLite at its floor" "run: make test\n") "\n") ""))
         (list (list "jobs:" (job-missing "floor"))))
    (row "the current job deleted"
-        (list (e (to-end "\n  # SQLite at the current release") ""))
+        (list (e (between "\n  # SQLite at the current release" "\n  # The docs site") ""))
         (list (list "jobs:" (job-missing "current"))))
-   (row "a seventh job"
+   (row "a job beside the seven"
         (list (le "current" (lane-step "current" h-nl-suites)
                   (string-append (lane-step "current" h-nl-suites) "\n"
                                  (lines "  extra:" "    name: x" "    runs-on: ubuntu-24.04"
@@ -1521,6 +1581,378 @@
    (stray-row "a stray scripts/ line: scripts//ci/NAME, which holds no scripts/ci/"
               "        run: scripts//ci/extra.sh")))
 
+;; --- the site job: the docs site, on Ubuntu's Chez ----------------------------------
+;; Its six steps: its checkout with submodules first; its install step, held
+;; line for line to the copy pages.yml's is held to; its four checks, each a
+;; step's whole run line, in order, each with CHEZ chezscheme. No cache step,
+;; and no if:.
+
+(define site-chez "chezscheme")
+;; Each check: its step's name, its run line, and another CHEZ a row gives it.
+(define site-steps
+  (list (list "Test the archive fetcher offline" "make check-site-deps" chez-t)
+        (list "Get chez-cmark-gfm as Akku.lock pins it" "make site-deps" "scheme")
+        (list "Gate the site" "make check-site" "/usr/bin/chezscheme")
+        (list "Build the site" "make site" "chezscheme9.5")))
+(define h-site-install "Install the packages in packaging/debian-site-prereqs.txt")
+(define site-if-msg "job site takes no if: it has no cache")
+(define (site-uses-msg u)
+  (string-append "job site has a step that uses \"" u "\", which is not actions/checkout@: it has no cache"))
+(define site-first-msg
+  "job site's first step is not uses: actions/checkout@ with submodules: recursive")
+(define cache-sha "55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
+(define upload-line
+  "      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0")
+(define (site-count n)
+  (string-append "job site has " (number->string n)
+                 " steps, not six: its checkout, its install step and its four checks"))
+(define (idiffers want got)
+  (string-append "job site's install step differs from the copy check-ci holds: expected \""
+                 want "\", found \"" got "\""))
+;; The install step's lines, as ci.yml and pages.yml each hold them.
+(define i-run "        run: |")
+(define i-pkgs
+  "          pkgs=$(grep -v -e '^#' -e '^$' packaging/debian-site-prereqs.txt | tr '\\n' ' ')")
+(define i-update "          sudo apt-get update -qq")
+(define i-shell "          # shellcheck disable=SC2086")
+(define i-apt "          sudo apt-get install -y --no-install-recommends $pkgs")
+;; A comment line whose expression GitHub expands before the shell runs the
+;; block: the string holds a newline, and a command after it.
+(define inj-body "# ${{ fromJSON('\"\\necho MAKEFLAGS=-n >> \\\"$GITHUB_ENV\\\"\"') }}")
+(define inj-line (string-append "          " inj-body))
+
+(define site-rows
+  (let ()
+    (define j "site")
+    (define (here) "  site:")
+    (define (step h) (lane-step j h))
+    (define (pfx x) (string-append "site: " x))
+    (define (HA h) (A j #f (hdr-line h)))
+    (define (insert-line h line)
+      (le j (string-append (hdr-line h) "\n") (string-append (hdr-line h) "\n" line "\n")))
+    (define (chez-line v) (string-append "          CHEZ: " v))
+    (define (run-line x) (string-append "        run: " x))
+    (define (hd k) (car (list-ref site-steps k)))
+    (define (rn k) (cadr (list-ref site-steps k)))
+    (define (swap k1 k2)
+      (le j (string-append (step (hd k1)) "\n" (step (hd k2)))
+          (string-append (step (hd k2)) "\n" (step (hd k1)))))
+    ;; after-last : (Listof String) -> Edit
+    ;; LINES as a step after the job's last.
+    (define (after-last ls)
+      (le j (step (hd 3)) (string-append (step (hd 3)) "\n" (apply lines ls))))
+    (define (env-gains k line)
+      (se j (hd k) (string-append (chez-line site-chez) "\n")
+          (string-append (chez-line site-chez) "\n" line "\n")))
+    (append
+     (list
+      (row (pfx "the job deleted")
+           (list (e (to-end "\n  # The docs site") ""))
+           (list (list "jobs:" (job-missing j))))
+      (row (pfx "the job renamed docs")
+           (list (le j "\n  site:\n" "\n  docs:\n"))
+           (list (list "  docs:" (job-unknown "docs"))
+                 (list "jobs:" (job-missing j)))))
+
+     ;; each check: deleted, written twice, without CHEZ, with another, under an if
+     (apply append
+            (map (lambda (sc)
+                   (let ((h (car sc)) (run (cadr sc)) (other (caddr sc)))
+                     (list
+                      (row (pfx (string-append "the step that runs " run " deleted"))
+                           (list (del-step j h))
+                           (list (list (here) (site-count 5)) (list (here) (n-steps j run 0))))
+                      (row (pfx (string-append "the step that runs " run " written twice"))
+                           (list (le j (step h) (string-append (step h) "\n" (step h))))
+                           (list (list (here) (site-count 7)) (list (here) (n-steps j run 2))))
+                      (row (pfx (string-append "the step that runs " run " without CHEZ"))
+                           (list (se j h (string-append "        env:\n" (chez-line site-chez) "\n") ""))
+                           (list (list (HA h) (env-missing j run "CHEZ"))))
+                      (row (pfx (string-append "the step that runs " run " with CHEZ " other))
+                           (list (se j h (chez-line site-chez) (chez-line other)))
+                           (list (list (A j (hdr-line h) (chez-line other)) (env-chez j site-chez))))
+                      (row (pfx (string-append "an if: always() on the step that runs " run))
+                           (list (insert-line h "        if: always()"))
+                           (let ((at (A j (hdr-line h) "        if: always()")))
+                             (list (list at site-if-msg) (list at (step-has-if j run))))))))
+                 site-steps))
+
+     ;; the checks out of order
+     (list
+      (row (pfx "make site-deps before make check-site-deps")
+           (list (swap 0 1))
+           (list (list (A j (hdr-line (hd 1)) (run-line (rn 1))) (out-of-order j (rn 1) (rn 0)))))
+      (row (pfx "make check-site before make site-deps")
+           (list (swap 1 2))
+           (list (list (A j (hdr-line (hd 2)) (run-line (rn 2))) (out-of-order j (rn 2) (rn 1)))))
+      (row (pfx "make site before make check-site")
+           (list (swap 2 3))
+           (list (list (A j (hdr-line (hd 3)) (run-line (rn 3))) (out-of-order j (rn 3) (rn 2)))))
+      (row (pfx "make site first, before the fetcher's test")
+           (list (del-step j (hd 3))
+                 (le j (step (hd 0)) (string-append (step (hd 3)) "\n" (step (hd 0)))))
+           (list (list (A j (hdr-line (hd 3)) (run-line (rn 3))) (out-of-order j (rn 3) (rn 2))))))
+
+     ;; the checkout, the install step, and no cache
+     (list
+      (row (pfx "the checkout without submodules")
+           (list (le j "        with:\n          submodules: recursive\n" ""))
+           (list (list (A j #f checkout-line) site-first-msg)))
+      (row (pfx "an if on the install step")
+           (list (insert-line h-site-install "        if: always()"))
+           (let ((at (A j (hdr-line h-site-install) "        if: always()")))
+             (list (list at site-if-msg) (list at (idiffers i-run "        if: always()")))))
+      (row (pfx "a Chez cache restored before the install step")
+           (list (le j (string-append (hdr-line h-site-install) "\n")
+                     (string-append (lines "      - name: Restore Chez" "        id: chez"
+                                           (string-append "        uses: actions/cache/restore@" cache-sha " # v6.1.0")
+                                           "        with:" "          path: ${{ runner.temp }}/chez-threads"
+                                           chez-key-line)
+                                    "\n" (hdr-line h-site-install) "\n")))
+           (list (list (here) (site-count 7))
+                 (list (A j #f "      - name: Restore Chez")
+                       (idiffers (hdr-line h-site-install) "      - name: Restore Chez"))
+                 (list (A j #f "      - name: Restore Chez")
+                       (site-uses-msg (string-append "actions/cache/restore@" cache-sha)))))
+      (row (pfx "the site saved to a cache, under the cache's if")
+           (list (after-last (list "      - name: Save the site" (string-append "        " if-line)
+                                   (string-append "        uses: actions/cache/save@" cache-sha " # v6.1.0")
+                                   "        with:" "          path: build/site" "          key: site")))
+           (list (list (A j "      - name: Save the site" (string-append "        " if-line)) site-if-msg)
+                 (list (here) (site-count 7))
+                 (list (A j #f "      - name: Save the site")
+                       (site-uses-msg (string-append "actions/cache/save@" cache-sha)))))
+      (row (pfx "a step uses pages.yml's upload action")
+           (list (after-last (list upload-line "        with:" "          path: build/site")))
+           (list (list (here) (site-count 7))
+                 (list upload-line
+                       (site-uses-msg "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9")))))
+
+     ;; the install step, held line for line; and the job held at six steps
+     (let ((at (lambda (text) (A j (hdr-line h-site-install) text))))
+       (list
+        (row (pfx "the install line gains a package")
+             (list (se j h-site-install i-apt (string-append i-apt " pandoc")))
+             (list (list (at (string-append i-apt " pandoc")) (idiffers i-apt (string-append i-apt " pandoc")))))
+        (row (pfx "the install step reads the other jobs' list")
+             (list (se j h-site-install "packaging/debian-site-prereqs.txt | tr" "packaging/debian-prereqs.txt | tr"))
+             (let ((got (replace-first i-pkgs "debian-site-prereqs" "debian-prereqs")))
+               (list (list (at got) (idiffers i-pkgs got)))))
+        (row (pfx "a line of the install block dropped")
+             (list (se j h-site-install (string-append i-update "\n") ""))
+             (list (list (at i-shell) (idiffers i-update i-shell))))
+        (row (pfx "the install step renamed")
+             (list (se j h-site-install (hdr-line h-site-install) "      - name: Install the site's packages"))
+             (list (list (A j #f "      - name: Install the site's packages")
+                         (idiffers (hdr-line h-site-install) "      - name: Install the site's packages"))))
+        (row (pfx "the install step gains env CHEZ")
+             (list (se j h-site-install (string-append i-run "\n")
+                       (string-append "        env:\n          CHEZ: chezscheme\n" i-run "\n")))
+             (list (list (at "        env:") (idiffers i-run "        env:"))))
+        (row (pfx "an expression in a comment line of the install block")
+             (list (se j h-site-install (string-append i-update "\n") (string-append i-update "\n" inj-line "\n")))
+             (list (list (at inj-line) (names-msg "GITHUB_ENV"))
+                   (list (at inj-line) (names-msg "MAKEFLAGS"))
+                   (list (at inj-line) (idiffers i-shell inj-line))))
+        (row (pfx "the install step after the checks")
+             (list (le j (string-append (step h-site-install) "\n") "")
+                   (after-last (split-lines (step h-site-install))))
+             (list (list (A j #f (hdr-line (hd 0))) (idiffers (hdr-line h-site-install) (hdr-line (hd 0))))))
+        (row (pfx "a seventh step links /bin/true over chezscheme")
+             (list (le j (string-append (hdr-line (hd 0)) "\n")
+                       (string-append "      - name: Link\n        run: sudo ln -sf /bin/true /usr/bin/chezscheme\n\n"
+                                      (hdr-line (hd 0)) "\n")))
+             (list (list (here) (site-count 7))))
+        (row (pfx "a second checkout")
+             (list (le j (string-append (hdr-line (hd 2)) "\n")
+                       (string-append checkout-line
+                                      "\n        with:\n          path: docs\n\n" (hdr-line (hd 2)) "\n")))
+             (list (list (here) (site-count 7))))))
+
+     ;; the names that would steer the site's checks
+     (list
+      (row (pfx "make site with SITE_REF on its run line")
+           (list (se j (hd 3) (run-line (rn 3)) (run-line "make site SITE_REF=v0.1.0")))
+           (list (list (A j (hdr-line (hd 3)) (run-line "make site SITE_REF=v0.1.0")) (names-msg "SITE_REF"))
+                 (list (here) (n-steps j (rn 3) 0))))
+      (row (pfx "make check-site with SITE_REF in its env")
+           (list (env-gains 2 "          SITE_REF: v0.1.0"))
+           (list (list (A j (hdr-line (hd 2)) "          SITE_REF: v0.1.0") (names-msg "SITE_REF"))
+                 (list (A j (hdr-line (hd 2)) "          SITE_REF: v0.1.0") (env-key "SITE_REF"))))
+      (row (pfx "make check-site with CHEZ_CMARK_GFM_LIBS in its env")
+           (list (env-gains 2 "          CHEZ_CMARK_GFM_LIBS: /x:/y"))
+           (list (list (A j (hdr-line (hd 2)) "          CHEZ_CMARK_GFM_LIBS: /x:/y") (names-msg "CHEZ_CMARK_GFM_LIBS"))
+                 (list (A j (hdr-line (hd 2)) "          CHEZ_CMARK_GFM_LIBS: /x:/y") (env-key "CHEZ_CMARK_GFM_LIBS")))))
+
+     ;; the job's keys
+     (list
+      (row (pfx "the job has no timeout-minutes")
+           (list (le j "    timeout-minutes: 10\n" ""))
+           (list (list (here) (job-no-key j "timeout-minutes"))))
+      (row (pfx "runs-on is ubuntu-latest")
+           (list (le j "    runs-on: ubuntu-24.04\n" "    runs-on: ubuntu-latest\n"))
+           (list (list (A j #f "    runs-on: ubuntu-latest") (job-runs-on j)))))
+     (map (lambda (k)
+            (row (pfx (string-append "a job key " k))
+                 (list (le j "    runs-on: ubuntu-24.04\n" (string-append "    runs-on: ubuntu-24.04\n    " k ": x\n")))
+                 (list (list (A j #f (string-append "    " k ": x")) (job-key j k)))))
+          job-keys))))
+
+;; --- pages.yml: every line but a comment or a blank one, held to check-ci's copy -----
+;; Each row edits pages.yml alone. A held line changed, dropped, added or
+;; moved is named at the first line that differs, and once; a comment or a
+;; blank line is no held line, but inside the run block, where it is the
+;; script's text; the text rules hold on every line.
+
+(define (pdiffers want got)
+  (string-append "pages.yml differs from the copy check-ci holds: expected \"" want "\", found \"" got "\""))
+(define (pextra got)
+  (string-append "pages.yml has a line the copy check-ci holds does not: \"" got "\""))
+(define (pearly want)
+  (string-append "pages.yml ends early: expected \"" want "\""))
+
+(define p-deploy
+  "        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1")
+(define p-queue "# One deployment at a time. A second tag pushed while one runs queues rather")
+(define p-next "      - name: Get chez-cmark-gfm as Akku.lock pins it")
+
+;; pstep : String -> String
+;; The text of pages.yml's step named NAME, its header line to its last line.
+(define (pstep name)
+  (let* ((hl (string-append "      - name: " name "\n"))
+         (s (find-sub preal hl 0)))
+    (unless (and s (= (count-sub preal hl) 1)) (error 'pstep "no such step, or twice" name))
+    (let ((end (find-sub preal "\n\n" s)))
+      (unless end (error 'pstep "the step is the file's last" name))
+      (substring preal s (+ end 1)))))
+
+(define pages-rows
+  (list
+   ;; what is not held
+   (prow "pages.yml: a comment added, changed and dropped, and blank lines added, pass"
+         (list (e "# Renders docs/ into build/site/" "# A comment added.\n#\n# Renders docs/ into build/site/")
+               (e "# One deployment at a time." "# One deploy at a time.")
+               (e "# from, as actions/deploy-pages's README grants them.\n" "")
+               (e "\n  deploy:\n" "\n\n  \n  deploy:\n"))
+         '())
+   (prow "pages.yml: a comment before a step, at the step's indent, passes"
+         (list (e (string-append p-next "\n") (string-append "      # x\n" p-next "\n")))
+         '())
+   (prow "pages.yml: blank lines between the run block and the next step pass"
+         (list (e (string-append i-apt "\n") (string-append i-apt "\n          \n\n")))
+         '())
+
+   ;; the run block: every line of it held, a comment's and a blank one's
+   (prow "pages.yml: a comment line inside the run block"
+         (list (e (string-append i-update "\n") (string-append "          # x\n" i-update "\n")))
+         (list (list (P "          # x") (pdiffers i-update "          # x"))))
+   (prow "pages.yml: a comment at column 0 inside the run block"
+         (list (e (string-append i-update "\n") (string-append "# a note\n" i-update "\n")))
+         (list (list (P "# a note") (pdiffers i-update "# a note"))))
+   (prow "pages.yml: a comment at the step's indent inside the run block"
+         (list (e (string-append i-update "\n") (string-append "        # a note\n" i-update "\n")))
+         (list (list (P "        # a note") (pdiffers i-update "        # a note"))))
+   (prow "pages.yml: a comment 14 spaces deep, the run block's first line"
+         (list (e (string-append i-run "\n") (string-append i-run "\n              # a note\n")))
+         (list (list (P "              # a note") (pdiffers i-pkgs "              # a note"))))
+   (prow "pages.yml: a blank line deeper than the run block, its first line"
+         (list (e (string-append i-run "\n") (string-append i-run "\n                \n")))
+         (list (list (P "                ") (pdiffers i-pkgs "                "))))
+   (prow "pages.yml: a blank line inside the run block"
+         (list (e (string-append i-update "\n") (string-append "\n" i-update "\n")))
+         (list (list (P (list 'after "          fi" "")) (pdiffers i-update ""))))
+   (prow "pages.yml: an expression in a comment line after the run block's last line"
+         (list (e (string-append i-apt "\n") (string-append i-apt "\n" inj-line "\n")))
+         (list (list (P inj-line) (pdiffers p-next inj-line))))
+   (prow "pages.yml: a blank line, then a comment line, after the run block's last line"
+         (list (e (string-append i-apt "\n") (string-append i-apt "\n\n          # x\n")))
+         (list (list (P (list 'after i-apt "")) (pdiffers p-next ""))))
+   (prow "pages.yml: the run block's comment line dropped"
+         (list (e (string-append i-shell "\n") ""))
+         (list (list (P i-apt) (pdiffers i-shell i-apt))))
+   (prow "pages.yml: a line of the run block changed, exit 1 to true"
+         (list (e "            exit 1\n" "            true\n"))
+         (list (list (P "            true") (pdiffers "            exit 1" "            true"))))
+   (prow "pages.yml: a held line's indent changed"
+         (list (e "  contents: read\n" "   contents: read\n"))
+         (list (list (P "   contents: read") (pdiffers "  contents: read" "   contents: read"))))
+
+   ;; a held line changed
+   (prow "pages.yml: a line changed, the trigger widened to every tag"
+         (list (e "    tags: [\"v*\"]\n" "    tags: [\"*\"]\n"))
+         (list (list (P "    tags: [\"*\"]") (pdiffers "    tags: [\"v*\"]" "    tags: [\"*\"]"))))
+   (prow "pages.yml: a line changed, the permissions widened"
+         (list (e "  contents: read\n" "  contents: write\n"))
+         (list (list (P "  contents: write") (pdiffers "  contents: read" "  contents: write"))))
+   (prow "pages.yml: a line changed, the deploy action unpinned"
+         (list (e p-deploy "        uses: actions/deploy-pages@v5"))
+         (list (list (P "        uses: actions/deploy-pages@v5")
+                     (pdiffers p-deploy "        uses: actions/deploy-pages@v5"))))
+   (prow "pages.yml: a line changed, the site built for main"
+         (list (e (string-append "      - name: Build the site\n        env:\n          CHEZ: chezscheme\n"
+                                 "          SITE_REF: ${{ github.ref_name }}\n")
+                  "      - name: Build the site\n        env:\n          CHEZ: chezscheme\n          SITE_REF: main\n"))
+         (list (list (P "          SITE_REF: main")
+                     (pdiffers "          SITE_REF: ${{ github.ref_name }}" "          SITE_REF: main"))))
+   (prow "pages.yml: a line changed by white space at its end"
+         (list (e "    needs: build\n" "    needs: build \n"))
+         (list (list (P "    needs: build ") (pdiffers "    needs: build" "    needs: build "))))
+
+   ;; a held line dropped
+   (prow "pages.yml: a line dropped, the deploy job's needs"
+         (list (e "    needs: build\n" ""))
+         (list (list (P (list 'after "  deploy:" "    runs-on: ubuntu-24.04"))
+                     (pdiffers "    needs: build" "    runs-on: ubuntu-24.04"))))
+   (prow "pages.yml: a line dropped, the checkout's persist-credentials"
+         (list (e "          persist-credentials: false\n" ""))
+         (list (list (P "          submodules: recursive")
+                     (pdiffers "          persist-credentials: false" "          submodules: recursive"))))
+   (prow "pages.yml: the last line dropped"
+         (list (e (string-append p-deploy "\n") ""))
+         (list (list (P 'eof) (pearly p-deploy))))
+   (prow "pages.yml: every line dropped"
+         (list (e preal ""))
+         (list (list (P 'file) (pearly "name: Pages"))))
+
+   ;; a held line added
+   (prow "pages.yml: a line added, a step of its own"
+         (list (e (string-append upload-line "\n")
+                  (string-append "      - name: Extra\n        run: echo hi\n\n" upload-line "\n")))
+         (list (list (P "      - name: Extra") (pdiffers upload-line "      - name: Extra"))))
+   (prow "pages.yml: a line added, the deploy job's permissions widened"
+         (list (e "      id-token: write\n" "      id-token: write\n      contents: write\n"))
+         (list (list (P "      contents: write") (pdiffers "    environment:" "      contents: write"))))
+   (prow "pages.yml: a line added at the end"
+         (list (e (string-append p-deploy "\n") (string-append p-deploy "\n      - run: echo hi\n")))
+         (list (list (P "      - run: echo hi") (pextra "      - run: echo hi"))))
+
+   ;; a held line moved
+   (prow "pages.yml: a line moved, the deploy job's two permissions swapped"
+         (list (e "      pages: write\n      id-token: write\n" "      id-token: write\n      pages: write\n"))
+         (list (list (P "      id-token: write") (pdiffers "      pages: write" "      id-token: write"))))
+   (prow "pages.yml: a step moved, the site built before it is gated"
+         (list (e (string-append (pstep "Gate the site") "\n" (pstep "Build the site"))
+                  (string-append (pstep "Build the site") "\n" (pstep "Gate the site"))))
+         (list (list (P "      - name: Build the site")
+                     (pdiffers "      - name: Gate the site" "      - name: Build the site"))))
+
+   ;; the text rules, a comment's line among them
+   (prow "pages.yml: a tab in a comment"
+         (list (e "# One deployment at a time." "#\tOne deployment at a time."))
+         (list (list (P (string-append "#\t" (substring p-queue 2 (string-length p-queue)))) tab-msg)))
+   (prow "pages.yml: a line separator, U+2028, in a comment"
+         (list (e "# One deployment at a time." "# One deployment\x2028;at a time."))
+         (list (list (P "# One deployment\x2028;at a time. A second tag pushed while one runs queues rather")
+                     odd-msg)))
+   (prow "pages.yml: a tab in a held line"
+         (list (e "    needs: build\n" "    needs:\tbuild\n"))
+         (list (list (P "    needs:\tbuild") tab-msg)
+               (list (P "    needs:\tbuild") (pdiffers "    needs: build" "    needs:\tbuild"))))
+   (prow "pages.yml: a character beyond ASCII in a held line"
+         (list (e "  group: pages\n" "  group: pag\xe9;s\n"))
+         (list (list (P "  group: pag\xe9;s") odd-msg)
+               (list (P "  group: pag\xe9;s") (pdiffers "  group: pages" "  group: pag\xe9;s"))))))
+
 (define rows
   (append
    stray-rows
@@ -1594,6 +2026,39 @@
     (row "a character beyond ASCII in a block scalar's content"
          (list (in-id-block (lambda (old) (replace-first old "id=$" "id=\xe9;$"))))
          (list (list "          echo \"id=\xe9;${ID}-${VERSION_ID}-${RUNNER_ARCH}\" >> \"$GITHUB_OUTPUT\"" odd-msg)))
+    (row "a tab in a comment"
+         (list (e "# One workflow, Linux only" "#\tOne workflow, Linux only"))
+         (list (list "#\tOne workflow, Linux only, on a pinned runner image (harness plan, section 5)." tab-msg)))
+    (row "a tab in an indented comment"
+         (list (e "      # The one package list." "      #\tThe one package list."))
+         (list (list "      #\tThe one package list. A failed grep must not become an empty install." tab-msg)))
+    (row "a line separator, U+2028, in a comment"
+         (list (e "# What is deliberately not here:" "# What is deliberately not here:\x2028;"))
+         (list (list "# What is deliberately not here:\x2028;" odd-msg)))
+    ;; A line of a block scalar that begins with # is the script's text, not a
+    ;; comment: GitHub expands its expressions, and the shell may run it.
+    (row "a character beyond ASCII, U+0085, in a comment line of a run block"
+         (list (after-id "# note\x85;"))
+         (list (list "          # note\x85;" odd-msg)))
+    (row "a line separator, U+2028, in a comment line of a run block"
+         (list (after-id "# note\x2028;        if: false"))
+         (list (list "          # note\x2028;        if: false" odd-msg)))
+    (row "an expression in a comment line of a run block names GITHUB_ENV and MAKEFLAGS"
+         (list (after-id inj-body))
+         (list (list inj-line (names-msg "GITHUB_ENV"))
+               (list inj-line (names-msg "MAKEFLAGS"))))
+    (row "a comment line of a run block names a gate"
+         (list (after-id "# make check-memory-gate"))
+         (list (list "          # make check-memory-gate" (gate-msg "check-memory-gate"))))
+    (row "a comment line of a run block names scripts/"
+         (list (after-id "# scripts/ci/extra.sh"))
+         (list (list "          # scripts/ci/extra.sh" stray-msg)))
+    (row "a comment line of a run block that names nothing passes"
+         (list (after-id "# a note"))
+         '())
+    (row "a comment that names GITHUB_ENV and MAKEFLAGS passes"
+         (list (e "# One workflow, Linux only" "# One workflow, GITHUB_ENV and MAKEFLAGS, Linux only"))
+         '())
     (row "key-looking lines inside a block scalar are content, and pass"
          (list (after-id "if: false" "? x" "\"q\": 1" "*a" "foo: {x}" "&b c: d" ))
          '())
@@ -2009,31 +2474,47 @@
    (lane-rows "current")
    no-load-rows
 
+   ;; --- the site job, and pages.yml ---
+   site-rows
+   pages-rows
+
    ;; --- the directory and the arguments ---
    (list
-    (row/setup "a second workflow in the directory" (add-file "other.yml") '()
-               (list (list 'dir "other.yml is not ci.yml: the directory must hold ci.yml alone")))
+    (row/setup "a third workflow in the directory" (add-file "other.yml") '()
+               (list (list 'dir (stray-entry "other.yml"))))
     (row/setup "a hidden file in the directory" (add-file ".hidden") '()
-               (list (list 'dir ".hidden is not ci.yml: the directory must hold ci.yml alone")))
+               (list (list 'dir (stray-entry ".hidden"))))
     (row/setup "a subdirectory in the directory"
                (lambda (dir) (mkdir (string-append dir "/sub"))) '()
-               (list (list 'dir "sub is not ci.yml: the directory must hold ci.yml alone")))
+               (list (list 'dir (stray-entry "sub"))))
     (row/setup "ci.yml is a link"
-               (lambda (dir)
-                 (let ((r (capture-command
-                           (list "sh" "-c"
-                                 (string-append "cd \"$1\" && mv ci.yml real.yml.tmp && ln -s real.yml.tmp ci.yml")
-                                 "sh" dir))))
-                   (unless (= (car r) 0) (error 'setup "the link was not made" r))))
+               (in-dir "mv ci.yml real.yml.tmp && ln -s real.yml.tmp ci.yml")
                '()
-               (list (list 'file "is not a regular file: a link, a directory or nothing there")
-                     (list 'dir "real.yml.tmp is not ci.yml: the directory must hold ci.yml alone"))))))
+               (list (list 'file not-regular)
+                     (list 'dir (stray-entry "real.yml.tmp"))))
+    (row/setup "pages.yml is a link"
+               (in-dir "mv pages.yml real-pages.yml.tmp && ln -s real-pages.yml.tmp pages.yml")
+               '()
+               (list (list (P 'file) not-regular)
+                     (list 'dir (stray-entry "real-pages.yml.tmp"))))
+    (row/setup "pages.yml is missing" (in-dir "rm pages.yml") '()
+               (list (list (P 'file) not-regular)))
+    (row/setup "pages.yml is a directory" (in-dir "rm pages.yml && mkdir pages.yml") '()
+               (list (list (P 'file) not-regular)))
+    (row/setup "a third file named pages.yml, a newline, ci.yml" (add-file "pages.yml\nci.yml") '()
+               (list (list 'dir (stray-entry "pages.yml?ci.yml"))))
+    (row/setup "a third file named ci.yml, a newline, pages.yml" (add-file "ci.yml\npages.yml") '()
+               (list (list 'dir (stray-entry "ci.yml?pages.yml"))))
+    (row/setup "pages.yml is named pages.yaml" (in-dir "mv pages.yml pages.yaml") '()
+               (list (list (P 'file) not-regular)
+                     (list 'dir (stray-entry "pages.yaml")))))))
 
 ;; --- the run ------------------------------------------------------------------------
 
 (test-begin "check-ci")
 
 (test-assert "the real workflow is there to be copied" (> (string-length real) 1000))
+(test-assert "the real pages workflow is there to be copied" (> (string-length preal) 1000))
 
 (let loop ((rs rows))
   (unless (null? rs)
@@ -2061,10 +2542,11 @@
 
 (let ((empty (string-append base "/empty")))
   (guard (c (#t #f)) (mkdir empty))
-  (test-equal "a directory with no ci.yml"
+  (test-equal "a directory with neither workflow"
               (list 1 ""
-                    (string-append "check-ci: " empty "/ci.yml: is not a regular file: a link, a directory or nothing there\n"
-                                   "check-ci: FAILED (problems: 1)\n"))
+                    (string-append "check-ci: " empty "/ci.yml: " not-regular "\n"
+                                   "check-ci: " empty "/pages.yml: " not-regular "\n"
+                                   "check-ci: FAILED (problems: 2)\n"))
               (run-bare (list empty))))
 
 ;; --- the execute bits ------------------------------------------------------------------
@@ -2158,7 +2640,8 @@
             (must-run (list "cp" "-R" "scripts/ci" (string-append root "/scripts/ci")))
             (action (string-append root "/scripts/ci"))
             (write-text (string-append dir "/ci.yml") real)
-            (list (expected dir real problems)
+            (write-text (string-append dir "/pages.yml") preal)
+            (list (expected dir real preal problems)
                   (capture-command (list "env" (string-append "CHECK_CI_ROOT=" root)
                                          "sh" script dir))))))
     (test-equal name (car result) (cadr result))))

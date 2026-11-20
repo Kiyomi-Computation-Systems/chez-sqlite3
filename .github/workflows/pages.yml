@@ -1,0 +1,99 @@
+name: Pages
+
+# Renders docs/ into build/site/ (make site, gated by make check-site) and
+# deploys it to GitHub Pages on a v* tag, or by hand (ADR-0022, decision 4).
+# It commits nothing: build/site/ is made fresh here and handed to
+# actions/deploy-pages as an artifact. ci.yml's site job runs the same build
+# on every pull request, for main.
+#
+# The site needs Chez and the system cmark-gfm library, not libsqlite3:
+# nothing it runs imports a library under src/, where (chez-sqlite3 private
+# require-threaded) refuses a Chez below chez-sqlite3's floor, so Ubuntu's
+# Chez is fine here. Its packages are packaging/debian-site-prereqs.txt's,
+# installed by the same step as ci.yml's site job. chez-cmark-gfm comes from
+# the archive Akku.lock pins (make site-deps), unpacked by tar with xz. The
+# submodules are check-site's: make deps links SRFI-64 for the generator's
+# suites.
+#
+# Every action is pinned to a full commit SHA, with its tag in a comment, as in
+# ci.yml. `make check-ci` (tests/check-ci.sh) holds every line of this file to
+# a copy of its own, line for line and in order, but its comments and blank
+# lines outside the run block, where every line is the script's: a change to
+# this file changes tests/check-ci.sh with it.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# The build job reads the repository alone. The deploy job alone may write to
+# Pages, and ask for the OIDC token that proves where the deployment came
+# from, as actions/deploy-pages's README grants them.
+permissions:
+  contents: read
+
+# One deployment at a time. A second tag pushed while one runs queues rather
+# than tearing a deployment out from under a reader.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      # The site's own package list. A failed grep must not become an empty
+      # install.
+      - name: Install the packages in packaging/debian-site-prereqs.txt
+        run: |
+          pkgs=$(grep -v -e '^#' -e '^$' packaging/debian-site-prereqs.txt | tr '\n' ' ')
+          if [ -z "$pkgs" ]; then
+            echo "::error::packaging/debian-site-prereqs.txt yielded no packages: a broken step, not an empty list"
+            exit 1
+          fi
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086
+          sudo apt-get install -y --no-install-recommends $pkgs
+
+      - name: Get chez-cmark-gfm as Akku.lock pins it
+        env:
+          CHEZ: chezscheme
+        run: make site-deps
+
+      # SITE_REF is the pushed tag (or the ref picked for a run by hand), so
+      # links out of the site to repository files pin to this release.
+      - name: Gate the site
+        env:
+          CHEZ: chezscheme
+          SITE_REF: ${{ github.ref_name }}
+        run: make check-site
+
+      - name: Build the site
+        env:
+          CHEZ: chezscheme
+          SITE_REF: ${{ github.ref_name }}
+        run: make site
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: build/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
