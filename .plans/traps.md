@@ -998,6 +998,16 @@ told in chez-curl's `.plans/traps.md`.
   plant in the working tree changes what that flag archives, and never what a tag's archive
   holds (M5's plan, P1, git 2.54.0; the lead's rerun agreed, the working tree's file emptied).
   (chez-sqlite3)
+- **`(load-shared-object "")` loads nothing and answers as if it had loaded.** glibc's `dlopen`
+  takes the empty name as the program itself, so a check that loads each part of a variable such
+  as `CHEZ_CMARK_GFM_LIBS` passes with the variable unset or empty. Check that each part names a
+  file before loading it. Reproduce: `scripts/guix-env sh -c 'echo "(display (guard (e (#t
+  (quote raised))) (load-shared-object \"\") (quote loaded)))" | $CHEZ -q'` prints `loaded`, where
+  a path no file stands at prints `raised` (M5 slice 2; the lead's rerun agreed). (chez-sqlite3)
+- **The container has no downloader, so a `file://` lock needs a copy path of its own.** It has
+  neither curl nor wget, and a fetch script that hands every URL to one fails its offline test
+  there; `scripts/fetch-akku-lock` copies a `file://` URL with `cp`. Reproduce:
+  `scripts/guix-env sh -c 'command -v curl wget'` prints nothing (M5 slice 2). (chez-sqlite3)
 
 ## Editing the records
 

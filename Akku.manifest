@@ -6,7 +6,11 @@
 ;; depends: the libraries bind libsqlite3 directly, with no C shim
 ;; (ADR-0001), and find it on the host when they load (ADR-0002). They need
 ;; no Scheme library at runtime. chez-srfi is the test suites' (SRFI-64), not
-;; a consumer's, so it stays in depends/dev (ADR-0007).
+;; a consumer's, so it stays in depends/dev (ADR-0007), and so does
+;; chez-cmark-gfm, which renders docs/ into the docs site (`make site`,
+;; ADR-0022). Akku.lock locks both: chez-srfi's version names the commit
+;; vendor/chez-srfi pins, and `make site-deps` fetches chez-cmark-gfm's
+;; archive and checks its sha256.
 ;;
 ;; scripts: Akku's script mechanism would run a build, but it prompts for
 ;; approval on every install until the package is vetted in the index, and
@@ -21,4 +25,4 @@
   (authors "Kiyomi Computation Systems LLC")
   (homepage "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3")
   (license "BSD-3-Clause")
-  (depends/dev ("chez-srfi" "^0.0.0-akku.181.7879b52")))
+  (depends/dev ("chez-srfi" "^0.0.0-akku.181.7879b52") ("chez-cmark-gfm" "^2.0.0")))

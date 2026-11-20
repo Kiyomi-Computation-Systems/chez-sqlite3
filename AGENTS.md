@@ -30,6 +30,9 @@
   Scheme, threaded (ADR-0001), each at or above its floor in
   `packaging/floors.sexp`, the one place the floors are written (ADR-0008)
 * chez-srfi, vendored as a git submodule, for SRFI-64 in the tests only
+* chez-cmark-gfm and the system cmark-gfm library, for the docs site alone:
+  `make site-deps` fetches chez-cmark-gfm's locked archive on the host
+  (ADR-0007, ADR-0006, amended in M5's plan)
 
 ### Guix development container
 
@@ -41,14 +44,16 @@
   agents or tokens, and no network but loopback (ADR-0006).
 * Verify it with `make check-guix`, run on the host.
 * The container exports `CHEZ` (the real `scheme` binary), `CC` (gcc; the
-  toolchain has no `cc`) and `CHEZ_SQLITE3_LIBRARY` (the profile's
-  `libsqlite3.so.0`, ADR-0002). It sets no `LD_LIBRARY_PATH`.
+  toolchain has no `cc`), `CHEZ_SQLITE3_LIBRARY` (the profile's
+  `libsqlite3.so.0`, ADR-0002) and `CHEZ_CMARK_GFM_LIBS` (the profile's two
+  cmark-gfm libraries, ADR-0006). It sets no `LD_LIBRARY_PATH`.
 * A floor run sets `C_INCLUDE_PATH` to the floor's headers as well as
   `CHEZ_SQLITE3_LIBRARY` to its library, as CI's `floor` lane does: the
   suites' C compiles against whichever `sqlite3.h` comes first, and no check
   compares it with the library loaded (`.plans/traps.md`).
 * Anything that needs the network or git runs on the host: fetches, pushes,
-  downloads, `make check-pins`, and `git submodule update --init --recursive`,
+  downloads, `make check-pins`, `make site-deps`, and
+  `git submodule update --init --recursive`,
   which a fresh clone needs once before `make deps`. The container has no git.
 
 ### Layout, process & libraries

@@ -1,6 +1,7 @@
 #!r6rs
-;;; The suite for Akku.manifest, Akku.lock and CHANGELOG.md, which no tool
-;;; checks for us. It reads them as data and compares whole values:
+;;; The suite for Akku.manifest, Akku.lock, CHANGELOG.md and .gitattributes,
+;;; which no tool checks for us. It reads them as data and compares whole
+;;; values:
 ;;;
 ;;;   - the package is chez-sqlite3, one akku-package form, licensed
 ;;;     BSD-3-Clause;
@@ -10,11 +11,19 @@
 ;;;   - it has no scripts clause: Akku's script mechanism prompts on every
 ;;;     install, and nothing here builds (see Akku.manifest);
 ;;;   - its depends/dev is exactly chez-srfi, in the range that names the
-;;;     pinned version;
-;;;   - Akku.lock holds one project, chez-srfi, whose url holds that version
-;;;     and which carries a sha256;
+;;;     pinned version, and chez-cmark-gfm, which renders the docs site
+;;;     alone (ADR-0007);
+;;;   - Akku.lock holds two projects, chez-cmark-gfm then chez-srfi, each
+;;;     url holding the version Akku.manifest asks for, and each carrying a
+;;;     sha256: chez-cmark-gfm's the archive `make site-deps` fetches and
+;;;     checks;
 ;;;   - the package's version is CHANGELOG.md's latest release, or 0.0.0
-;;;     while there is none, so a release that bumps one alone fails.
+;;;     while there is none, so a release that bumps one alone fails;
+;;;   - .gitattributes, its comments and blank lines aside, is exactly
+;;;     /.plans export-ignore and /AGENTS.md export-ignore, in that order, so
+;;;     a release archive leaves out the design records and the agents'
+;;;     instructions (ADR-0022). git archive reads the file of the tree it
+;;;     archives, so a tag's archive follows the tag's file.
 ;;;
 ;;; There is no check of git clone lines in README.org or docs/ yet: there
 ;;; are no install instructions. They come with the first release. Until a
@@ -31,7 +40,7 @@
 ;;; an older one. Lines inside a fenced block are not headings. A yanked
 ;;; release's `[YANKED]` is refused too: the first release yanked amends this.
 ;;;
-;;; make test runs every suite from the repository root, where all three files
+;;; make test runs every suite from the repository root, where all four files
 ;;; are.
 ;;;
 ;;; Each expected value is one the code under test cannot produce by failing.
@@ -92,11 +101,11 @@
   (filter (lambda (clause) (and (pair? clause) (eq? (car clause) name)))
           (cddr (the-form 'akku-package "Akku.manifest"))))
 
-;; manifest-version : -> String
-;; The version Akku.manifest asks chez-srfi for: the range in its depends/dev,
-;; without the ^.
-(define (manifest-version)
-  (let ((range (cadr (cadr (car (package-clauses 'depends/dev))))))
+;; dev-version : String -> String
+;; The version Akku.manifest asks the project NAME for: the range of its
+;; entry in depends/dev, without the ^.
+(define (dev-version name)
+  (let ((range (cadr (assoc name (cdr (car (package-clauses 'depends/dev)))))))
     (substring range 1 (string-length range))))
 
 ;; package-version : -> String
@@ -344,6 +353,23 @@
                         (else (loop (cdr lines) (+ n 1) found)))))
               (cons "README.org" (files-under root "docs")))))
 
+;; attribute-lines : (Listof String) -> (Listof (Listof String))
+;; The words of each line of a .gitattributes, its blanks and tabs the
+;; separators: a pattern and its attributes. A line blank but for spaces and
+;; tabs, and one whose first character past them is #, is no line, as git
+;; reads them.
+(define (attribute-lines lines)
+  (let loop ((lines lines) (found '()))
+    (if (null? lines)
+        (reverse found)
+        (let ((words (filter (lambda (w) (not (string=? w "")))
+                             (apply append
+                                    (map (lambda (piece) (cut-at piece #\tab))
+                                         (cut-at (car lines) #\space))))))
+          (if (or (null? words) (char=? (string-ref (car words) 0) #\#))
+              (loop (cdr lines) found)
+              (loop (cdr lines) (cons words found)))))))
+
 ;; files-under : String String -> (Listof String)
 ;; Every file under ROOT/REL, as a path from ROOT, depth first, each directory
 ;; sorted; none when it is not a directory.
@@ -384,26 +410,49 @@
   '()
   (answer (lambda () (package-clauses 'scripts))))
 
-(test-equal "Akku.manifest's depends/dev is exactly chez-srfi, in the range that names the pinned version"
-  '((depends/dev ("chez-srfi" "^0.0.0-akku.181.7879b52")))
+(test-equal "Akku.manifest's depends/dev is exactly chez-srfi, in the range that names the pinned version, and chez-cmark-gfm at ^2.0.0"
+  '((depends/dev ("chez-srfi" "^0.0.0-akku.181.7879b52") ("chez-cmark-gfm" "^2.0.0")))
   (answer (lambda () (package-clauses 'depends/dev))))
 
-(test-equal "Akku.lock holds exactly one project, chez-srfi"
-  '(((name "chez-srfi")))
+;; Whole projects, in the order akku lock writes them, by name.
+(test-equal "Akku.lock holds exactly two projects, chez-cmark-gfm then chez-srfi"
+  '(((name "chez-cmark-gfm")) ((name "chez-srfi")))
   (answer (lambda () (map (lambda (project) (list (assq 'name project))) (lock-projects)))))
 
-;; One url, and it holds the version. The expected value is the version the
-;; pin names, so a lock and a manifest that drift together still fail.
+;; One url each, and it holds the version. The expected value is the version
+;; the pin names, so a lock and a manifest that drift together still fail.
 (test-equal "Akku.lock's chez-srfi url holds the version Akku.manifest asks for, and the pinned one"
   '((#t #t))
   (answer
    (lambda ()
      (map (lambda (url)
-            (list (contains? url (manifest-version)) (contains? url "akku.181.7879b52")))
+            (list (contains? url (dev-version "chez-srfi")) (contains? url "akku.181.7879b52")))
           (lock-urls "chez-srfi")))))
 
-(test-equal "Akku.lock's chez-srfi carries a sha256 of 64 hex digits"
-  '(#t)
+(test-equal "Akku.lock's chez-cmark-gfm url holds the version Akku.manifest asks for, and the pinned one"
+  '((#t #t))
+  (answer
+   (lambda ()
+     (map (lambda (url)
+            (list (contains? url (string-append "_" (dev-version "chez-cmark-gfm") "_"))
+                  (contains? url "chez-cmark-gfm_2.0.0_repack")))
+          (lock-urls "chez-cmark-gfm")))))
+
+;; The project whole: the archive make site-deps downloads, and the sha256 it
+;; checks that archive against.
+(test-equal "Akku.lock's chez-cmark-gfm project is the archive make site-deps fetches, and its sha256"
+  '(((name "chez-cmark-gfm")
+     (location
+      (url "https://archive.akkuscm.org/archive/pkg/c/chez-cmark-gfm_2.0.0_repack.tar.xz"))
+     (content
+      (sha256 "bb647e07c03f103600ceb29d5545787bf0ba54563b1bbd98f3be7ac778305159"))))
+  (answer
+   (lambda ()
+     (filter (lambda (project) (equal? (assq 'name project) '(name "chez-cmark-gfm")))
+             (lock-projects)))))
+
+(test-equal "Akku.lock's every project carries a sha256 of 64 hex digits"
+  '(#t #t)
   (answer
    (lambda ()
      (map (lambda (project)
@@ -576,6 +625,23 @@
 (test-equal "README.org and docs/ hold no git clone line: no clone-line check exists yet, so none may be written"
   '()
   (answer (lambda () (clone-lines "."))))
+
+;; --- .gitattributes ----------------------------------------------------------
+;; attribute-lines is held on the suite's own text first, so that a reader
+;; which drops every line cannot pass the real file by finding nothing.
+
+(test-equal "attribute-lines: a comment, a blank line and an indented comment are no line; blanks and tabs split words"
+  '(("/.plans" "export-ignore") ("/AGENTS.md" "export-ignore" "-diff"))
+  (attribute-lines '("# a comment" "" "   " "  # an indented comment" "/.plans     export-ignore"
+                     "\t/AGENTS.md\texport-ignore  -diff ")))
+
+(test-equal "attribute-lines: a pattern alone is a line, and so is a # past a pattern"
+  '(("/x") ("/y" "#z"))
+  (attribute-lines '("/x" "/y #z")))
+
+(test-equal ".gitattributes marks /.plans and /AGENTS.md export-ignore, in that order, and nothing else"
+  '(("/.plans" "export-ignore") ("/AGENTS.md" "export-ignore"))
+  (answer (lambda () (attribute-lines (file-lines ".gitattributes")))))
 
 (test-end "manifest")
 
