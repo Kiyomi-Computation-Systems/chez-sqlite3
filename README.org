@@ -1,15 +1,91 @@
 * chez-sqlite3
 
-A Chez Scheme library that binds SQLite through its C interface.
+[[https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/actions/workflows/ci.yml][https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/actions/workflows/ci.yml/badge.svg]]
 
-It is in development. You can open a database with its settings, run SQL and
-read its rows, run a transaction, and stop a long statement from another
-thread. You can also prepare and step statements yourself, bind values and
-read columns.
+[[https://sqlite.org/][SQLite]] for Chez Scheme, through SQLite's own C library.
 
-The [[file:docs/reference.md][API reference]] lists every name the library exports.
+#+begin_quote
+✨ *AI Disclosure:* LLMs are used extensively in the planning and development of this project.
+#+end_quote
+
+chez-sqlite3 binds SQLite's C library, =libsqlite3=, through Chez's
+foreign interface, and loads it when your program runs: there is nothing to
+compile. You open a database with its settings, run SQL and read its rows,
+run a transaction, and stop a long query from another thread. You can also
+prepare and step statements yourself, bind values, read columns, and load
+SQLite extensions.
+
+*A connection belongs to the thread that opened it.* Any other thread that
+uses it gets a wrong-thread condition, except to interrupt it.
+
+** Status
+
+chez-sqlite3's suites run on:
+
+- Linux on x86_64, on Ubuntu 24.04's SQLite; on SQLite built from its own
+  source, at the oldest version Requirements names, and at 3.54.1, built a
+  second time without extension loading; and on Guix's 3.53.1;
+- macOS 26 on arm64, on Apple's 3.51.0 and on Homebrew's 3.54.1.
+
+Linux on arm64, macOS on amd64, and macOS 14 and 15 have not run them.
+Windows is not supported. [[file:docs/libraries.md][What varies by library]] lists each behaviour
+in which these SQLites differ.
+
+The API may change in any release before 1.0. [[file:CHANGELOG.md][CHANGELOG.md]] lists what each
+release changes.
 
 ** Requirements
 
 - Chez Scheme 10.4.0 or later, built with threads
 - SQLite 3.45.1 or later
+
+The tests need more: a C compiler, with SQLite's headers =sqlite3.h= and
+=sqlite3ext.h=; GNU =timeout=, which Homebrew installs on a Mac as
+=gtimeout=; and Valgrind, for =make test-memory=. A program using
+chez-sqlite3 needs none of them.
+
+** Installing
+
+Clone it, and put its =src= directory on Chez's library path. There is
+nothing to build: SQLite's library is loaded when your program runs.
+
+#+begin_src sh
+git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+scheme --libdirs chez-sqlite3/src --program app.sps
+#+end_src
+
+chez-sqlite3 finds the system's SQLite; =CHEZ_SQLITE3_LIBRARY= names
+another, by its absolute path. Homebrew installs Chez as =chez=. The
+[[file:docs/quickstart.md][quick start]] says more.
+
+** A taste
+
+A program's body, which follows its =(import (rnrs) (chez-sqlite3))=. It
+makes a table in memory, adds two rows, and reads them back; its last line
+shows what it gives:
+
+#+begin_src scheme
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table pets (name text, legs integer)")
+    (execute! db "insert into pets values (?, ?)" "cat" 4)
+    (execute! db "insert into pets values (?, ?)" "bird" 2)
+    (query db "select name, legs from pets order by legs")))
+;; => (#("bird" 2) #("cat" 4))
+#+end_src
+
+The [[file:docs/quickstart.md][quick start]] shows the whole program, and how to run it.
+
+** Documentation
+
+- [[file:docs/quickstart.md][Quick start]]: from a clone to a first query.
+- [[file:docs/finding-sqlite.md][Finding SQLite]]: which library is loaded, and how to name another.
+- [[file:docs/libraries.md][What varies by library]]: what differs between the SQLites the suites ran on.
+- [[file:docs/reference.md][API reference]]: every name the library exports.
+
+The pages are also on the [[https://kiyomi-computation-systems.github.io/chez-sqlite3/][docs site]].
+
+** License
+
+© [[https://kiyomicomputation.systems/][Kiyomi Computation Systems LLC]]. Licensed under BSD-3-Clause — see
+[[file:LICENSE][LICENSE]].

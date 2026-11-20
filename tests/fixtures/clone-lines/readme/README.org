@@ -1,3 +1,0 @@
-* A title
-
-  $ git clone https://example.invalid/x.git

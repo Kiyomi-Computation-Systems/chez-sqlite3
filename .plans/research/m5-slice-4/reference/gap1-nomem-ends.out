@@ -1,0 +1,15 @@
+library: "3.53.1"
+step "select randomblob(100000) from src limit 1"
+    => ((raised nomem) then ended (finalize no-value) then ended marker-rows 0)
+step "select randomblob(100000)"
+    => ((raised nomem) then in-transaction (finalize no-value) then in-transaction marker-rows 1)
+step "insert into b select randomblob(100000) from src limit 3"
+    => ((raised nomem) then ended (finalize no-value) then ended marker-rows 0)
+step "insert into b values (randomblob(100000))"
+    => ((raised nomem) then ended (finalize no-value) then ended marker-rows 0)
+read "select ?1 from src limit 1"
+    => ((raised nomem) then in-transaction (reset no-value finalize no-value) then ended marker-rows 0)
+read "select ?1"
+    => ((raised nomem) then in-transaction (reset no-value finalize no-value) then in-transaction marker-rows 1)
+limits after: (0 0)
+counts at the end: ((block . 0) (connection . 0) (statement . 0))

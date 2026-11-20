@@ -1,0 +1,19 @@
+twin-off: test-docs rc=1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+twin-plain: test-docs rc=1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+clone-branch: test-manifest rc=1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+clone-second: test-manifest rc=1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+floor-page: check-floors rc=2
+check-floors: docs/libraries.md: line 100 contains the SQLite floor 3.45.1, which no page may write: a page links to README.org's Requirements, which state it from packaging/floors.sexp
+check-floors: FAILED (problems: 1)
+floor-number: check-floors rc=2
+check-floors: docs/finding-sqlite.md: line 95 contains 3045001, the version-number form of the SQLite floor 3.45.1, which no page may write: a page links to README.org's Requirements, which state it from packaging/floors.sexp
+check-floors: FAILED (problems: 1)
+floor-status: check-floors rc=2
+check-floors: README.org: line 28 contains the Chez floor 10.4.0, which only the list lines under "** Requirements" may write: they state it from packaging/floors.sexp
+check-floors: FAILED (problems: 1)
+nodoc: check-site rc=2
+check-site: README.org has no "** Documentation" section, the list of the pages the nav is held to

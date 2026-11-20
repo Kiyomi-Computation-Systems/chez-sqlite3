@@ -27,6 +27,9 @@
   ([amendment](#amendment-2026-11-18-a-sweep-with-collect-requests-falling-m4-slice-4)).
   Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): every claim-holding sweep's low pass, and no
   control run ([amendment](#amendment-2026-11-18-every-claim-holding-sweeps-low-pass-and-no-control-run-m4s-closing-review)).
+  Amended 2026-11-20 in M5 slice 4, and accepted by the maintainer that day ("Accept both"): an
+  expiry past the fold's last step
+  ([amendment](#amendment-2026-11-20-an-expiry-past-the-folds-last-step-m5-slice-4)).
 - **Date:** 2026-11-15
 - **Scope:** chez-sqlite3 v1: `execute!`, `execute-script!`, `query`, `query-row`, `query-fold`,
   `changes`, `total-changes`, `last-insert-rowid`, `in-transaction?`
@@ -611,3 +614,22 @@ sweeps need the pass, and now have it.
 - **`test-conveniences-reentry`'s jump back and the claim's re-entry through a timer** gain low
   passes. The script's claim taken after its prepare is caught by the four script low suites, not
   by the jump back, which abandons its later run, so no second run is ever pending there.
+
+## Amendment, 2026-11-20: an expiry past the fold's last step (M5 slice 4)
+
+Proposed in M5 slice 4 ([the M5 plan](../2026-11-20-m5-plan.md), its amendment "the docs as
+built"; [the slice's log](../m5-slice-4-mutation-log.md)). Accepted by the maintainer on
+2026-11-20 ("Accept both").
+
+- **The 2026-11-16 amendment's "What it doesn't cover" is half right about the fold.** An expiry
+  past the fold's last step, before its return, finishes the statement: it finalizes it, or gives
+  it back to the cache once the fold's body has answered; and the resume answers the fold. Swept at
+  every fuel to the fold's completion, cold and warm, a fresh connection each, the statement was
+  finalized at two fuels and back in the cache at two more, and each resume answered the fold's
+  sum; an expiry before the last step raised closed
+  ([gap2-fold-expiry](../research/m5-slice-4/reference/gap2-fold-expiry.out)).
+- **`docs/reference.md` says so,** at `query-fold`: run out before the last step and the resumed
+  fold raises a closed condition; after it, the resumed fold gives its answer.
+- **Not held by a suite where the statement is finalized:** `test-conveniences-engines`' sweep
+  takes the sum or closed at every fuel, and `test-conveniences-resumed` asks the sum only when the
+  statement went back to the cache. An Open item for M5's closing review.

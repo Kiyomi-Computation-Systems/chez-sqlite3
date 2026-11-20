@@ -1,6 +1,6 @@
 #!r6rs
 ;;; (floors): chez-sqlite3's version floors, and the check that holds the
-;;; README to them (ADR-0008).
+;;; README, the workflows, the CI scripts and the docs to them (ADR-0008).
 ;;;
 ;;; packaging/floors.sexp is the one file that writes the Chez and SQLite
 ;;; floors: one datum, ((chez "M.m.p") (sqlite "M.m.p")), the keys exactly
@@ -10,13 +10,17 @@
 ;;; tests/test-require-threaded.sps, which reads the floors from here. CI
 ;;; states no floor either: scripts/ci/build-chez.sh and floor.sh read them
 ;;; from the file, and `make check-floors` holds every file in CI's workflow
-;;; directory to it (below).
+;;; directory to it (below). Nor does a page: `make check-floors` holds every
+;;; file under docs/, and every line of README.org but its Requirements' list
+;;; lines, to it too.
 ;;;
 ;;;   floors-problems   what is wrong with the floors file's text
 ;;;   check-floors      what is wrong with the floors file, the README or the
 ;;;                     workflows
 ;;;   workflows-problems what is wrong with the workflow directory's files
 ;;;   ci-workflow       the workflow, by name, that the directory must hold
+;;;   scripts-problems  what is wrong with the CI scripts directory's files
+;;;   docs-problems     what is wrong with the docs directory's files
 ;;;   parse-floors      the floors file's text as a Floors, or a raise
 ;;;   read-floors       the checked-in floors file as a Floors
 ;;;   floor-text        a floor by name, as text
@@ -48,6 +52,11 @@
 ;;; indented, "* ". Prose and blank lines between them are not compared.
 ;;; Lists under other headings are not compared either. The comparison is
 ;;; exact, a space at a line's end included: each line is named as written.
+;;; And no other line of the README, the Requirements' prose lines and every
+;;; line of its other sections among them, may hold a floor, by the rule a
+;;; page is held to (below): a page names the floors by a link to the
+;;; Requirements. A README with no Requirements section, or several, has that
+;;; named alone.
 ;;;
 ;;; What the workflows must be. CI states no floor: scripts/ci/build-chez.sh
 ;;; takes no version and reads its own from the floors file, and a step that
@@ -87,6 +96,16 @@
 ;;; and the keys of the workflow's shape. tests/check-ci.sh holds both, and
 ;;; carries those rules (M0 slice 4's review found them first left out).
 ;;;
+;;; What the docs must be. A page names a floor by a link to README.org's
+;;; Requirements, so a floor moves in one place. Every file under the docs
+;;; directory is held, in subdirectories too, a code block's lines as any
+;;; other, and its path below the directory as a line: no line may hold either
+;;; floor's version text, nor the SQLite floor's numeric forms as whole runs of
+;;; digits, by the workflows' boundary. The directory must hold a file. The
+;;; rules about double quotes are YAML's, and do not apply, and a page's lines
+;;; are read as written: a backslash at a line's end joins nothing. CHANGELOG.md
+;;; is no page: an entry records what its release needed.
+;;;
 ;;; The text is searched, not parsed as YAML, so a version inside a longer
 ;;; number is also the floor's text; the numeric forms are the exception, found
 ;;; as whole runs of digits only. A value that is no floor's text, as a
@@ -95,7 +114,8 @@
 ;;; nothing would read that either, since build-chez.sh takes no version.
 (library (floors)
   (export floors-path check-floors floors-problems parse-floors read-floors file-text
-          floor-text floor-numbers requirement-lines workflows-problems ci-workflow scripts-problems)
+          floor-text floor-numbers requirement-lines workflows-problems ci-workflow scripts-problems
+          docs-problems)
   (import (rnrs)
           (only (chezscheme) display-condition parameterize print-graph))
 
@@ -437,11 +457,39 @@
                               ", which " fpath " gives"))
              (multiset-minus expected found))))))
 
+  ;; readme-who : String
+  ;; What the messages about a README line that holds a floor say may write
+  ;; it, and where it is read from.
+  (define readme-who
+    (string-append "only the list lines under " (written section-heading)
+                   " may write: they state it from"))
+
+  ;; readme-line-problems : String (Listof String) String
+  ;;                        (Listof (List String String (Listof (List String String)))) -> (Listof String)
+  ;; The floor complaints (floor-complaints) about each of LINES, the README
+  ;; at RPATH's, in line order, but the list lines of its section-heading
+  ;; section, which list-problems compares. ROWS are the floors, as floor-rows
+  ;; gives them, from the floors file at FPATH.
+  (define (readme-line-problems rpath lines fpath rows)
+    (let loop ((rest lines) (n 1) (in? #f) (found '()))
+      (if (null? rest)
+          (apply append (reverse found))
+          (let* ((line (car rest))
+                 (complaints (floor-complaints rpath (string-append "line " (number->string n)) line
+                                               fpath rows readme-who)))
+            (cond ((string=? line section-heading) (loop (cdr rest) (+ n 1) #t (cons complaints found)))
+                  ((heading? line) (loop (cdr rest) (+ n 1) #f (cons complaints found)))
+                  ((and in? (list-line? line)) (loop (cdr rest) (+ n 1) #t found))
+                  (else (loop (cdr rest) (+ n 1) in? (cons complaints found))))))))
+
   ;; readme-problems : String String String Floors -> (Listof String)
   ;; What is wrong with RTEXT, the text of the README at RPATH, against FLOORS,
-  ;; from the floors file at FPATH.
+  ;; from the floors file at FPATH: its section, then, when it has one, its
+  ;; list lines there (list-problems), then each other line that holds a floor
+  ;; (readme-line-problems). With no section, or several, that is named alone.
   (define (readme-problems rpath rtext fpath floors)
-    (let ((found (sections (split rtext #\newline))))
+    (let* ((lines (split rtext #\newline))
+           (found (sections lines)))
       (cond
         ((null? found)
          (list (string-append rpath ": it has no " (written section-heading) " section")))
@@ -449,8 +497,9 @@
          (list (string-append rpath ": it has " (number->string (length found)) " "
                               (written section-heading) " sections, but must have one")))
         (else
-         (list-problems rpath fpath (filter list-line? (car found))
-                        (requirement-lines floors))))))
+         (append (list-problems rpath fpath (filter list-line? (car found))
+                                (requirement-lines floors))
+                 (readme-line-problems rpath lines fpath (floor-rows floors)))))))
 
   ;; --- the workflows --------------------------------------------------------
 
@@ -716,6 +765,41 @@
                                        (loop (cdr rest) (cdr joined) (+ n 1))))))
                               '())))
                        sorted))))))
+
+  ;; docs-who : String
+  ;; What the messages about a page that holds a floor say may write it, and
+  ;; where it is read from.
+  (define docs-who
+    "no page may write: a page links to README.org's Requirements, which state it from")
+
+  ;; docs-problems : String String (Listof (List String (U String #f))) Floors -> (Listof String)
+  ;; What is wrong with PAGES, every file under the docs directory DDIR, each
+  ;; as its path and its text, against FLOORS, from the floors file at FPATH.
+  ;; A text that is #f is a file the caller could not read, which it names:
+  ;; its lines are not compared, its name is. In order: a directory with no
+  ;; file, named alone; then, file by file in the order of their paths,
+  ;; whatever order they come in, the floor complaints (floor-complaints)
+  ;; about its name, then about each of its lines, as written: a code block's
+  ;; lines are lines like any other, and no line is joined to the next. The
+  ;; rules about backslashes and double quotes are YAML's: they do not apply.
+  (define (docs-problems fpath ddir pages floors)
+    (let ((rows (floor-rows floors))
+          (sorted (list-sort (lambda (a b) (string<? (car a) (car b))) pages)))
+      (if (null? pages)
+          (list (string-append ddir ": it holds no file, but must hold the docs' pages"))
+          (apply append
+                 (map (lambda (entry)
+                        (append
+                         (name-problems ddir (car entry) fpath rows docs-who)
+                         (if (cadr entry)
+                             (let loop ((rest (split (cadr entry) #\newline)) (n 1))
+                               (if (null? rest)
+                                   '()
+                                   (append (floor-complaints (car entry) (string-append "line " (number->string n))
+                                                             (car rest) fpath rows docs-who)
+                                           (loop (cdr rest) (+ n 1)))))
+                             '())))
+                      sorted)))))
 
   ;; check-floors : String String String (U String #f) String
   ;;                (U (Listof (List String (U String #f))) #f) -> (Listof String)

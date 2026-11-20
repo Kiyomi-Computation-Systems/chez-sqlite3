@@ -6,11 +6,15 @@
 
   ;; pages : (Listof (Pairof String String))
   ;; The nav's single source of order and labels: each docs/ file and its
-  ;; label, README.org's list of the pages, in its order and under its
-  ;; labels. The first is the home page. tests/check-site.sps asserts the
-  ;; file set here equals docs/*.md, and the whole list equals README.org's.
+  ;; label, README.org's list of the pages under its ** Documentation
+  ;; heading, in its order and under its labels. The first, the quick
+  ;; start, is the home page. tests/check-site.sps asserts the file set here
+  ;; equals docs/*.md, and the whole list equals README.org's.
   (define pages
-    '(("reference.md" . "API reference")))
+    '(("quickstart.md" . "Quick start")
+      ("finding-sqlite.md" . "Finding SQLite")
+      ("libraries.md" . "What varies by library")
+      ("reference.md" . "API reference")))
 
   ;; page-file-name : String -> String
   ;; The file a page is written to: the home page, the first of `pages`, as

@@ -1,23 +1,27 @@
 #!r6rs
-;;; make check-floors: reads the floors file, the README, every file under the
-;;; workflow directory and every file under the CI scripts directory named on
-;;; the command line (make passes packaging/floors.sexp, README.org,
-;;; .github/workflows and scripts/ci) and fails, naming each problem, unless README.org's Requirements section states the floors in
+;;; make check-floors: reads the floors file, the README, and every file under
+;;; the workflow directory, the CI scripts directory and the docs directory
+;;; named on the command line (make passes packaging/floors.sexp, README.org,
+;;; .github/workflows, scripts/ci and docs), and fails, naming each problem,
+;;; unless README.org's Requirements section states the floors in
 ;;; packaging/floors.sexp (the lines (floors)'s requirement-lines writes from
-;;; the file, whole, as one list), and no line of any file in the workflow
-;;; directory contains either floor's version text, contains the SQLite
-;;; floor's version number or amalgamation number as a whole run of digits
-;;; (3045001, 3450100 for 3.45.1), holds a backslash after a double quote, or
-;;; holds an odd number of double quotes, a double-quoted string left open at
-;;; the line's end: CI states no floor, and scripts/ci/floor.sh reads them from
-;;; the file. And no line of any file in the scripts directory contains either
-;;; floor's version text or the SQLite floor's numeric forms as whole runs of
-;;; digits; the two rules about double quotes are YAML's, and a script is shell,
-;;; so they do not apply there. The rules are in (floors); this program reads
-;;; the files, prints, and exits. tests/test-check-floors.sps holds each rule on texts and runs
-;;; this program on fixture directories.
+;;; the file, whole, as one list) and no other line of README.org states
+;;; either; no line of any file in the workflow directory contains either
+;;; floor's version text, contains the SQLite floor's version number or
+;;; amalgamation number as a whole run of digits (3045001, 3450100 for
+;;; 3.45.1), holds a backslash after a double quote, or holds an odd number of
+;;; double quotes, a double-quoted string left open at the line's end: CI
+;;; states no floor, and scripts/ci/floor.sh reads them from the file; and no
+;;; line of any file in the scripts directory or the docs directory contains
+;;; either floor's version text or the SQLite floor's numeric forms as whole
+;;; runs of digits: a page names the floors by a link to README.org's
+;;; Requirements. The two rules about double quotes are YAML's, and a script
+;;; is shell, a page prose, so they do not apply there. The rules are in
+;;; (floors); this program reads the files, prints, and exits.
+;;; tests/test-check-floors.sps holds each rule on texts and runs this program
+;;; on fixture directories.
 ;;;
-;;; The workflow directory and the scripts directory are each read whole: every
+;;; The workflow, scripts and docs directories are each read whole: every
 ;;; file in it and in its subdirectories, whatever its name, in the order of
 ;;; their paths. The directory must be a directory, not a symbolic link to one;
 ;;; a symbolic link to a directory inside it is not followed: it is read as a
@@ -27,15 +31,16 @@
 ;;; names, and exits 1 on, a file or directory it cannot read, a floors file
 ;;; with a problem, a README with no "** Requirements" section or the wrong list
 ;;; in it, a workflow directory that holds no file or no ci.yml, a scripts
-;;; directory that holds no file or no floor.sh, and a floor, a numeric form of
-;;; the SQLite floor, or, in a workflow only, a backslash after a double quote
-;;; or an odd number of double quotes, written anywhere in them. A file it
-;;; cannot read does not stop it comparing the others.
+;;; directory that holds no file or no floor.sh, a docs directory that holds no
+;;; file, and a floor, a numeric form of the SQLite floor, or, in a workflow
+;;; only, a backslash after a double quote or an odd number of double quotes,
+;;; written anywhere in them, or in README.org outside its Requirements' list
+;;; lines. A file it cannot read does not stop it comparing the others.
 ;;;
 ;;; It prints one line on a pass, to stdout, naming the files it read under the
-;;; workflow directory, then those under the scripts directory, and the floors
-;;; it found, or each problem and then a
-;;; count of them on a failure, to stderr. It exits 0 or 1, never a count.
+;;; workflow directory, then those under the scripts directory, then those
+;;; under the docs directory, and the floors it found, or each problem and then
+;;; a count of them on a failure, to stderr. It exits 0 or 1, never a count.
 (import (rnrs)
         (floors)
         (only (chezscheme) directory-list display-condition file-directory?
@@ -75,9 +80,10 @@
 ;; read-directory : String
 ;;   -> (U (List 'files (Listof (List String (U (List 'text String) (List 'unreadable String)))))
 ;;         (List 'unreadable String))
-;; Every file under the directory DIR, the workflows or the scripts, in the
-;; order of its path, with its text or the problem with reading it, or the
-;; problem with listing the directory. DIR itself must not be a symbolic link.
+;; Every file under the directory DIR, the workflows, the scripts or the
+;; docs, in the order of its path, with its text or the problem with reading
+;; it, or the problem with listing the directory. DIR itself must not be a
+;; symbolic link.
 (define (read-directory wdir)
   (guard (e (#t (list 'unreadable (string-append wdir ": it cannot be read: " (describe e)))))
     (when (file-symbolic-link? wdir)
@@ -107,29 +113,36 @@
                   (cadr w)))
       (list (cadr w))))
 
-;; problems : String String String String Read Read Directory Directory -> (Listof String)
+;; problems : String String String String String Read Read Directory Directory Directory
+;;   -> (Listof String)
 ;; What is wrong with the floors file at FPATH, the README at RPATH, the files
-;; under the workflow directory WDIR and those under the scripts directory
-;; SDIR, given F, R, W and S, what reading them found: a Read is what
-;; read-text answers, and a Directory what read-directory answers. A file or
-;; directory that cannot be read is a problem of its own, named after the
-;; others', the floors file's first, then the README's, then the workflow
-;; directory's or its files', in path order, then the scripts'. The README,
-;; the workflows and the scripts are each held to the floors file whenever it
-;; and they can be read.
-(define (problems fpath rpath wdir sdir f r w s)
+;; under the workflow directory WDIR, those under the scripts directory SDIR
+;; and those under the docs directory DDIR, given F, R, W, S and D, what
+;; reading them found: a Read is what read-text answers, and a Directory what
+;; read-directory answers. A file or directory that cannot be read is a
+;; problem of its own, named after the others', the floors file's first, then
+;; the README's, then the workflow directory's or its files', in path order,
+;; then the scripts', then the docs'. The README, the workflows, the scripts
+;; and the docs are each held to the floors file whenever it and they can be
+;; read.
+(define (problems fpath rpath wdir sdir ddir f r w s d)
   (let ((files (and (eq? (car w) 'files) (cadr w)))
-        (scripts (and (eq? (car s) 'files) (cadr s))))
+        (scripts (and (eq? (car s) 'files) (cadr s)))
+        (pages (and (eq? (car d) 'files) (cadr d))))
     (append (if (eq? (car f) 'text)
                 (append
                  (check-floors fpath (cadr f) rpath (text-or-false r) wdir (texts files))
                  (if (and scripts (null? (floors-problems fpath (cadr f))))
                      (scripts-problems fpath sdir (texts scripts) (parse-floors (cadr f)))
+                     '())
+                 (if (and pages (null? (floors-problems fpath (cadr f))))
+                     (docs-problems fpath ddir (texts pages) (parse-floors (cadr f)))
                      '()))
                 (list (cadr f)))
             (if (eq? (car r) 'text) '() (list (cadr r)))
             (unreadable w)
-            (unreadable s))))
+            (unreadable s)
+            (unreadable d))))
 
 ;; read-names : String Directory -> (Listof String)
 ;; The paths of the files W found under WDIR, relative to it, in order.
@@ -159,25 +172,28 @@
 
 ;; main : (Listof String) -> Unit
 (define (main args)
-  (if (not (= (length args) 4))
+  (if (not (= (length args) 5))
       (begin
         (say (current-error-port)
-             "usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS")
+             "usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS DOCS")
         (exit 1))
       (let* ((fpath (car args))
              (rpath (cadr args))
              (wdir (caddr args))
              (sdir (cadddr args))
+             (ddir (car (cddddr args)))
              (f (read-text fpath))
              (r (read-text rpath))
              (w (read-directory wdir))
              (s (read-directory sdir))
-             (found (problems fpath rpath wdir sdir f r w s)))
+             (d (read-directory ddir))
+             (found (problems fpath rpath wdir sdir ddir f r w s d)))
         (cond
           ((null? found)
            (say (current-output-port)
                 (string-append rpath ", " wdir " (" (joined (read-names wdir w)) ")"
-                               " and " sdir " (" (joined (read-names sdir s)) ")"
+                               ", " sdir " (" (joined (read-names sdir s)) ")"
+                               " and " ddir " (" (joined (read-names ddir d)) ")"
                                " hold the floors in " fpath " (" (summary (cadr f)) ")"))
            (exit 0))
           (else

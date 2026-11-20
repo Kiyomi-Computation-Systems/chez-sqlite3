@@ -1,0 +1,185 @@
+=== control: test-docs exit 0, check-site exit 0, # of expected passes 161
+=== p01: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the reasons table's first column is the library's refusal reasons, in its order, each cell one code span
+=== p28: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the reasons table's first column is the library's refusal reasons, in its order, each cell one code span
+=== p02: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+=== p08: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== p25: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== p03: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every word of a page that holds CHEZ_, in a block or not, is CHEZ_SQLITE3_LIBRARY: the others, by page and line
+=== p24: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every word of a page that holds CHEZ_, in a block or not, is CHEZ_SQLITE3_LIBRARY: the others, by page and line
+=== p32: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every CHEZ_SQLITE3_LIBRARY= of a page that sets it, at a line's start or after a blank, in a block or not, gives it a value that begins with /: the others, by page and line
+=== p19b: test-docs exit 0, check-site exit 2, # of expected passes 161
+  site: check-site: a page's H1 is not its nav label, in docs/libraries.md: wanted "# What varies by library" as its first line, found "# What differs by library"
+=== p04: test-docs exit 1, check-site exit 0, # of expected passes 158
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused
+=== p06: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== p07: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== p17: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused
+=== p29: test-docs exit 1, check-site exit 0, # of expected passes 158
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused
+=== x01: test-docs exit 1, check-site exit 0, # of expected passes 155
+  docs: FAIL finding-sqlite.md: the discovery table has a row for each of discovery's worlds, and no other
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 4, for any other system, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names its world in its first cell, which holds Mac
+  docs: FAIL finding-sqlite.md: the discovery table's row 4, for any other system, names its world in its first cell, which begins Any other
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+=== x02: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL finding-sqlite.md: its prose names the source an override gets, in the one code span before " for `CHEZ_SQLITE3_LIBRARY`"
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+=== x03: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the reasons table's first column is the library's refusal reasons, in its order, each cell one code span
+=== x04: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== x05: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, exits 0 with nothing on stderr
+=== x06: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL finding-sqlite.md: the discovery table's row 4, for any other system, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+=== x07: test-docs exit 0, check-site exit 2, # of expected passes 161
+  site: check-site: a page's H1 is not its nav label, in docs/libraries.md: wanted "# What changes by library" as its first line, found "# What varies by library"
+=== x08: test-docs exit 1, check-site exit 2, # of expected passes 147
+  docs: FAIL every relative link resolves to a file or directory of the checkout, its anchor to a heading, none into .plans/, by page and target
+  docs: FAIL README.org links every page of docs/: the pages it leaves out
+  docs: FAIL finding-sqlite.md: the reasons table's first column is the library's refusal reasons, in its order, each cell one code span
+  docs: FAIL finding-sqlite.md: the discovery table has a row for each of discovery's worlds, and no other
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 4, for any other system, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names its world in its first cell, which holds Guix
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names its world in its first cell, which begins Other Linux
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names its world in its first cell, which holds Mac
+  docs: FAIL finding-sqlite.md: the discovery table's row 4, for any other system, names its world in its first cell, which begins Any other
+  docs: FAIL finding-sqlite.md: its prose names the source an override gets, in the one code span before " for `CHEZ_SQLITE3_LIBRARY`"
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+  site: check-site: nav completeness FAILED. missing-from-site/pages.sls=(finding-sqlite-moved.md) extra-in-site/pages.sls=(finding-sqlite.md)
+=== m01: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL whole-program?: a Markdown fragment whose first datum, as read reads it, is a list headed import: past blanks, a #!r6rs, a line comment, a block comment and a datum comment, in brackets, with a datum after; not one whose import comes later, a quoted import, an imports, unreadable text, a runnable block, an Org block, another language, or an empty block
+=== m02: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL whole-program?: a Markdown fragment whose first datum, as read reads it, is a list headed import: past blanks, a #!r6rs, a line comment, a block comment and a datum comment, in brackets, with a datum after; not one whose import comes later, a quoted import, an imports, unreadable text, a runnable block, an Org block, another language, or an empty block
+=== m03: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL text-after: the first text block's lines after it, right after, with prose between, past an sh block or two, the first of two; none when a Scheme block comes first, a runnable one or a fragment, or none follows
+=== m03b: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL text-after: the first text block's lines after it, right after, with prose between, past an sh block or two, the first of two; none when a Scheme block comes first, a runnable one or a fragment, or none follows
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, prints the text block after it, line for line
+=== m04: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL guards-unavailable?: a guard clause (sqlite-library-unavailable? V) on its own variable, at any depth, among other clauses; not one on another variable, another predicate, or the name outside a guard
+=== m05: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL refusal-shape: one written datum and a newline, a list whose first element is refused; no newline, a line before, two data, another first element, a bare symbol, another spacing, or unreadable text is its own text
+=== m06: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL tables: each run of | lines whose second is a delimiter row, by its first line, its header and its rows; a run with no delimiter row is none, and four spaces end one
+  docs: FAIL pipe-cells: no outer |s, outer |s, a lone |, an escaped | at the end, and an empty cell
+=== m07: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL delimiter-row?: -, :-, -:, :-: cells; not an empty cell, a :, text, or no cell
+=== m08: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL tables: each run of | lines whose second is a delimiter row, by its first line, its header and its rows; a run with no delimiter row is none, and four spaces end one
+=== m09: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL cell-span: a cell that is one code span, whole, single or double backticks; text beside it, two spans, none, and an empty cell are not
+=== m10: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL looks-in: a file in each directory, in order; an alternative (`ALT` on M) in its span's place on M, first, between or last, and nothing elsewhere; one for another machine ignored; one path alone; none; and more spans not written FILE in DIR
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== m11: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL looks-in: a file in each directory, in order; an alternative (`ALT` on M) in its span's place on M, first, between or last, and nothing elsewhere; one for another machine ignored; one path alone; none; and more spans not written FILE in DIR
+=== m12: test-docs exit 1, check-site exit 0, # of expected passes 158
+  docs: FAIL spans-before: each code span that the text follows, across a line's end; not one another text follows
+  docs: FAIL finding-sqlite.md: its prose names the source an override gets, in the one code span before " for `CHEZ_SQLITE3_LIBRARY`"
+  docs: FAIL finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once
+=== m13: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL distinct: each once, at its first place
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== m14: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL as-written: a stand-in's directory as $NAME, HOME's as ~, alone or before more; any other path unchanged
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64
+=== m15: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL chez-words: each word that holds CHEZ_, at the text's start and end, after $, = or a backtick, before =, ' or a backtick, a letter before it or after; not CHEZ alone, CHEZSCHEME, or chez_
+=== m16: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL assignment-values: each value up to a blank, after export, indented, an empty one, two on a line, at the line's start before a command, past blanks or a tab, after env; none after =, as Org's verbatim is, a backtick, a $, a letter or a quote, nor without its =
+  docs: FAIL assignment-values: one after a blank, set at each place in a text, is found there alone; one after =, at each place, is not
+=== m17: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL tables: each run of | lines whose second is a delimiter row, by its first line, its header and its rows; a run with no delimiter row is none, and four spaces end one
+=== m18: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL the pages name CHEZ_SQLITE3_LIBRARY, and set it: the rules below hold words that are there
+=== m19: test-docs exit 1, check-site exit 0, # of expected passes 154
+  docs: FAIL the docs hold whole programs, and one of them guards sqlite-library-unavailable?
+  docs: FAIL a whole program of the docs has a text block after it that holds what it prints
+=== m20: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL chez-words: each word that holds CHEZ_, at the text's start and end, after $, = or a backtick, before =, ' or a backtick, a letter before it or after; not CHEZ alone, CHEZSCHEME, or chez_
+  docs: FAIL chez-words: a word that holds CHEZ_, set at each place in a text, is found there alone
+=== n01: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== n02: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== n03: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== n04: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/quickstart.md:36: the whole program, run as written, prints the text block after it, line for line
+=== n05: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+=== n06: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every CHEZ_SQLITE3_LIBRARY= of a page that sets it, at a line's start or after a blank, in a block or not, gives it a value that begins with /: the others, by page and line
+=== n07: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names its world in its first cell, which holds Guix
+  docs: FAIL finding-sqlite.md: the discovery table's row 2, for other Linux, names its world in its first cell, which begins Other Linux
+=== n08: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every page of docs/ has one level-1 heading, and it is the page's first line: the others, by page and the lines of their level-1 headings
+=== n09: test-docs exit 1, check-site exit 2, # of expected passes 160
+  docs: FAIL every page of docs/ has one level-1 heading, and it is the page's first line: the others, by page and the lines of their level-1 headings
+  site: check-site: a page's H1 is not its nav label, in docs/libraries.md: wanted "# What varies by library" as its first line, found ""
+=== n10: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL a whole program of the docs has a text block after it that holds what it prints
+=== n11: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL every CHEZ_SQLITE3_LIBRARY= of a page that sets it, at a line's start or after a blank, in a block or not, gives it a value that begins with /: the others, by page and line
+=== n12: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names its world in its first cell, which holds Mac
+=== m21: test-docs exit 1, check-site exit 0, # of expected passes 158
+  docs: FAIL assignment-values: each value up to a blank, after export, indented, an empty one, two on a line, at the line's start before a command, past blanks or a tab, after env; none after =, as Org's verbatim is, a backtick, a $, a letter or a quote, nor without its =
+  docs: FAIL assignment-values: one after a blank, set at each place in a text, is found there alone; one after =, at each place, is not
+  docs: FAIL every CHEZ_SQLITE3_LIBRARY= of a page that sets it, at a line's start or after a blank, in a block or not, gives it a value that begins with /: the others, by page and line
+=== m22: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL assignment-values: each value up to a blank, after export, indented, an empty one, two on a line, at the line's start before a command, past blanks or a tab, after env; none after =, as Org's verbatim is, a backtick, a $, a letter or a quote, nor without its =
+=== m23: test-docs exit 1, check-site exit 0, # of expected passes 158
+  docs: FAIL label-names?: holds finds its word at the cell's start, middle and end, and the whole cell; begins only at the start; neither in another case, nor in an empty cell
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names its world in its first cell, which holds Guix
+  docs: FAIL finding-sqlite.md: the discovery table's row 3, for macOS, names its world in its first cell, which holds Mac
+=== m24: test-docs exit 1, check-site exit 0, # of expected passes 159
+  docs: FAIL h1-lines: each level-1 heading's line, a bare # and one indented three spaces among them; not one in a block, a level-2, a #word, one indented four, or seven #s
+  docs: FAIL every page of docs/ has one level-1 heading, and it is the page's first line: the others, by page and the lines of their level-1 headings
+=== m25: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL whole-program?: a Markdown fragment whose first datum, as read reads it, is a list headed import: past blanks, a #!r6rs, a line comment, a block comment and a datum comment, in brackets, with a datum after; not one whose import comes later, a quoted import, an imports, unreadable text, a runnable block, an Org block, another language, or an empty block
+  docs: FAIL docs/reference.md:88: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:115: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:200: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:200: the whole program, run as written, prints the text block after it, line for line
+  docs: FAIL docs/reference.md:350: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:388: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:433: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:433: the whole program, run as written, prints the text block after it, line for line
+  docs: FAIL docs/reference.md:1253: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:1253: the whole program, run as written, prints the text block after it, line for line
+  docs: FAIL docs/reference.md:1253: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+  docs: FAIL docs/reference.md:1253: the whole program, run as written, with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused
+  docs: FAIL docs/reference.md:1362: the whole program, run as written, exits 0 with nothing on stderr
+  docs: FAIL docs/reference.md:1362: the whole program, run as written, prints the text block after it, line for line
+=== m26: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+=== m27: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL finding-sqlite.md: the discovery table's row 1, for Guix, names its world in its first cell, which begins Guix
+=== m28: test-docs exit 1, check-site exit 0, # of expected passes 160
+  docs: FAIL docs/quickstart.md:94: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline

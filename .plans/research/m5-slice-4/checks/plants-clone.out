@@ -1,0 +1,121 @@
+=== cm-never-fires: exit 1
+FAIL clone-problems: the same tree at 0.1.0, where each line must name the tag: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: the same tree at 0.0.0, where no line may name a branch: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:5: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: the same tree at 0.2.0, whose tag the lines do not name: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:5: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: a quick start whose line names another version than the README's: it alone is named
+  expected: ("docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: a line cloning the repository without .git, and one cloning another host's: both named
+  expected: ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.1.0 https://gitlab.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: a second line in README.org and in the quick start, and lines in other pages, git clone at a line's start, middle and end, the right line among them: each named
+  expected: ("README.org: it holds 2 git clone lines, at lines 3, 5, but must hold one" "docs/a/b.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:2: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:3: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/quickstart.md: it holds 2 git clone lines, at lines 3, 4, but must hold one")
+  actual:   ()
+FAIL clone-problems: a README.org and a quick start with no clone line: both named
+  expected: ("README.org: it holds no git clone line, but must hold one" "docs/quickstart.md: it holds no git clone line, but must hold one")
+  actual:   ()
+FAIL clone-problems: a docs/ with no quick start, and a tree with no docs/: the quick start named, missing
+  expected: (("docs/quickstart.md: there is no such file, but it must hold one git clone line") ("docs/quickstart.md: there is no such file, but it must hold one git clone line"))
+  actual:   (() ())
+FAIL clone-problems: a line with a space at its end, and one indented with a tab, which is no leading space: both named
+  expected: ("README.org:3: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git \", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:3: past its leading spaces it is \"\\tgit clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: with no README.org it raises, and does not pass for want of a file
+  expected: ("failed for ~a: ~(~a~)" ("tests/fixtures/clone-lines/no-readme/README.org" "No such file or directory"))
+  actual:   (no-raise ())
+=== cm-no-count: exit 1
+FAIL clone-problems: a second line in README.org and in the quick start, and lines in other pages, git clone at a line's start, middle and end, the right line among them: each named
+  expected: ("README.org: it holds 2 git clone lines, at lines 3, 5, but must hold one" "docs/a/b.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:2: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:3: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/quickstart.md: it holds 2 git clone lines, at lines 3, 4, but must hold one")
+  actual:   ("docs/a/b.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:2: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:3: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line")
+FAIL clone-problems: a README.org and a quick start with no clone line: both named
+  expected: ("README.org: it holds no git clone line, but must hold one" "docs/quickstart.md: it holds no git clone line, but must hold one")
+  actual:   ()
+=== cm-contains-not-equal: exit 1
+FAIL clone-problems: a line with a space at its end, and one indented with a tab, which is no leading space: both named
+  expected: ("README.org:3: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git \", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:3: past its leading spaces it is \"\\tgit clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+=== cm-every-page-a-home: exit 1
+FAIL clone-problems: a tree with no release, its README's line in a block, the quick start's at the line's start, a page that mentions git and a clone: nothing at 0.0.0
+  expected: ()
+  actual:   ("docs/guide/notes.md: it holds no git clone line, but must hold one")
+FAIL clone-problems: the same tree at 0.1.0, where each line must name the tag: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ("README.org:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/guide/notes.md: it holds no git clone line, but must hold one" "docs/quickstart.md:4: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+FAIL clone-problems: a second line in README.org and in the quick start, and lines in other pages, git clone at a line's start, middle and end, the right line among them: each named
+  expected: ("README.org: it holds 2 git clone lines, at lines 3, 5, but must hold one" "docs/a/b.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:1: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:2: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/finding.md:3: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line" "docs/quickstart.md: it holds 2 git clone lines, at lines 3, 4, but must hold one")
+  actual:   ("README.org: it holds 2 git clone lines, at lines 3, 5, but must hold one" "docs/finding.md: it holds 3 git clone lines, at lines 1, 2, 3, but must hold one" "docs/finding.md:1: past its leading spaces it is \"git clone first, at the start of a line\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/finding.md:2: past its leading spaces it is \"in the middle, git clone, of a line\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/finding.md:3: past its leading spaces it is \"at the end of a line, git clone\", but version 0.0.0 calls for \"git clone http
+FAIL clone-problems: a docs/ with no quick start, and a tree with no docs/: the quick start named, missing
+  expected: (("docs/quickstart.md: there is no such file, but it must hold one git clone line") ("docs/quickstart.md: there is no such file, but it must hold one git clone line"))
+  actual:   (("docs/other.md: it holds no git clone line, but must hold one" "docs/quickstart.md: there is no such file, but it must hold one git clone line") ("docs/quickstart.md: there is no such file, but it must hold one git clone line"))
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/reference.md: it holds no git clone line, but must hold one")
+=== cm-version-ignored: exit 1
+FAIL clone-problems: the same tree at 0.1.0, where each line must name the tag: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ()
+FAIL clone-problems: a tree whose lines name v0.1.0, the quick start's in an indented block: nothing at 0.1.0
+  expected: ()
+  actual:   ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:5: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+FAIL clone-problems: the same tree at 0.2.0, whose tag the lines do not name: both lines named
+  expected: ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:5: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:5: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.2.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+FAIL clone-problems: a quick start whose line names another version than the README's: it alone is named
+  expected: ("docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+FAIL clone-problems: a line cloning the repository without .git, and one cloning another host's: both named
+  expected: ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.1.0 https://gitlab.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+  actual:   ("README.org:6: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:4: past its leading spaces it is \"git clone --branch v0.1.0 https://gitlab.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== cm-quickstart-may-be-missing: exit 1
+FAIL clone-problems: a docs/ with no quick start, and a tree with no docs/: the quick start named, missing
+  expected: (("docs/quickstart.md: there is no such file, but it must hold one git clone line") ("docs/quickstart.md: there is no such file, but it must hold one git clone line"))
+  actual:   (() ())
+=== p-another-version: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("README.org:17: past its leading spaces it is \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== p-another-url: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("README.org:17: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== p-branch-at-0.0.0: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/quickstart.md:6: past its leading spaces it is \"git clone --branch v0.0.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== p-second-line-in-the-quick-start: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/quickstart.md: it holds 2 git clone lines, at lines 6, 7, but must hold one")
+=== p-a-line-in-another-page: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/plant.md:4: it holds git clone, but only README.org and docs/quickstart.md may hold a clone line")
+=== p-none-in-the-quick-start: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/quickstart.md: it holds no git clone line, but must hold one")
+=== c-release-whole-passes: exit 0
+=== p-none-at-0.1.0: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("README.org:17: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== p-another-version-at-0.1.0: exit 1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("docs/quickstart.md:6: past its leading spaces it is \"git clone --branch v0.2.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== p-manifest-bumped-alone: exit 1
+FAIL Akku.manifest's version is CHANGELOG.md's latest release, or 0.0.0 with none
+  expected: "0.0.0"
+  actual:   "0.1.0"
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("README.org:17: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:6: past its leading spaces it is \"git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.0 calls for \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+=== restored: exit 0
+%%%% Starting test manifest
+# of expected passes      93

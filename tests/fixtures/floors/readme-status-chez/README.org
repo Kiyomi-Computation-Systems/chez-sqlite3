@@ -1,0 +1,14 @@
+* A title
+
+** Status
+
+It runs on Chez Scheme 10.9.1, built with threads.
+
+** Requirements
+
+- Chez Scheme 10.9.1 or later, built with threads
+- SQLite 8.1.2 or later
+
+** License
+
+- MIT

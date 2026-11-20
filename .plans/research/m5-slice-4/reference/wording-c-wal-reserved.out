@@ -1,0 +1,9 @@
+library: "3.53.1"
+grain: (milliseconds ((raised busy busy "begin immediate") 251))
+(none (opened "wal") 0 at-once file-mode-after "wal")
+(reading (raised busy busy "PRAGMA journal_mode = wal") 1502 waited-once file-mode-after "delete")
+(immediate (raised busy busy "PRAGMA journal_mode = wal") 0 at-once file-mode-after "delete")
+(immediate-written (raised busy busy "PRAGMA journal_mode = wal") 0 at-once file-mode-after "delete")
+(deferred-written (raised busy busy "PRAGMA journal_mode = wal") 0 at-once file-mode-after "delete")
+(exclusive (raised busy busy "PRAGMA journal_mode = wal") 1503 waited-once file-mode-after "delete")
+counts at the end: ((block . 0) (connection . 0) (statement . 0))

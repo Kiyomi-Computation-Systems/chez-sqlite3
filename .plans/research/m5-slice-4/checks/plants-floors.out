@@ -1,0 +1,147 @@
+=== fm-docs-never-fires: exit 1, 31 FAIL
+FAIL docs: 8.1.2 in a page's prose, at the start, the middle and the end of a line: each line named
+  expected: (returned ("D/page.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 4 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 5 contains the SQLite floor 8.1.2, which no page may write: a pa
+  actual:   (returned ())
+FAIL docs: 8.1.2 in a page's fenced code block, at each place: each line named
+  expected: (returned ("D/page.md: line 4 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 5 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 6 contains the SQLite floor 8.1.2, which no page may write: a pa
+  actual:   (returned ())
+FAIL docs: 8.1.2 in an indented code block of a page in a subdirectory: named by its path and line
+  expected: (returned ("D/guide/deep.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ())
+FAIL docs: a file named for 8.1.2, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8.1.2/page.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8.1.2.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ())
+=== fm-readme-other-lines-unheld: exit 1, 24 FAIL
+FAIL README: 8.1.2 in the Status section, at the start, the middle and the end of a line: each line named
+  expected: (returned ("R.org: line 3 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 4 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 5 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" m
+  actual:   (returned ())
+FAIL README: 8.1.2 before the first heading, in a section after Requirements, and in a src block there: each line named
+  expected: (returned ("R.org: line 1 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 6 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 8 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" m
+  actual:   (returned ())
+FAIL README: 8.1.2 in a prose line of the Requirements section: named, where its list lines are not
+  expected: (returned ("R.org: line 8 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+FAIL README: 8001002 in the Status section, at the start, the middle and the end of a line: each line named
+  expected: (returned ("R.org: line 3 contains 8001002, the version-number form of the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 4 contains 8001002, the version-number form of the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp" "R.org: line 5 contains 80010
+  actual:   (returned ())
+=== fm-requirements-prose-exempt: exit 1, 4 FAIL
+FAIL README: 8.1.2 in a prose line of the Requirements section: named, where its list lines are not
+  expected: (returned ("R.org: line 8 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+FAIL README: 8001002 in a prose line of the Requirements section: named, where its list lines are not
+  expected: (returned ("R.org: line 8 contains 8001002, the version-number form of the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+FAIL README: 8010200 in a prose line of the Requirements section: named, where its list lines are not
+  expected: (returned ("R.org: line 8 contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+FAIL README: 10.9.1 in a prose line of the Requirements section: named, where its list lines are not
+  expected: (returned ("R.org: line 8 contains the Chez floor 10.9.1, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+=== fm-list-lines-exempt-anywhere: exit 1, 2 FAIL
+FAIL README: the Chez floor in the Status section, as a list line there: named, for only the Requirements' list lines may say it
+  expected: (returned ("R.org: line 3 contains the Chez floor 10.9.1, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+FAIL README: a deeper heading ends the Requirements' list lines: a list line under it is held
+  expected: (returned ("R.org: line 10 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+=== fm-a-heading-keeps-the-section: exit 1, 1 FAIL
+FAIL README: a deeper heading ends the Requirements' list lines: a list line under it is held
+  expected: (returned ("R.org: line 10 contains the SQLite floor 8.1.2, which only the list lines under \"** Requirements\" may write: they state it from f.sexp"))
+  actual:   (returned ())
+=== fm-docs-names-unheld: exit 1, 5 FAIL
+FAIL docs: a file named for 8.1.2, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8.1.2/page.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8.1.2.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ())
+FAIL docs: a file named for 8001002, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8001002/page.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8001002.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it fro
+  actual:   (returned ())
+FAIL docs: a file named for 8010200, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8010200/page.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8010200.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.
+  actual:   (returned ())
+FAIL docs: a file named for 10.9.1, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/10.9.1/page.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-10.9.1.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ())
+=== fm-docs-unsorted: exit 1, 5 FAIL
+FAIL docs: a file named for 8.1.2, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8.1.2/page.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8.1.2.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ("D/pin-8.1.2.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/8.1.2/page.md: its name contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+FAIL docs: a file named for 8001002, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8001002/page.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8001002.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it fro
+  actual:   (returned ("D/pin-8001002.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/8001002/page.md: its name contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it fro
+FAIL docs: a file named for 8010200, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/8010200/page.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-8010200.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.
+  actual:   (returned ("D/pin-8010200.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/8010200/page.md: its name contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.
+FAIL docs: a file named for 10.9.1, and a file in a directory named for it: named by their paths, not their lines
+  expected: (returned ("D/10.9.1/page.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/pin-10.9.1.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ("D/pin-10.9.1.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/10.9.1/page.md: its name contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+=== fm-docs-empty-passes: exit 1, 1 FAIL
+FAIL docs: no file at all: the directory is named, once
+  expected: (returned ("D: it holds no file, but must hold the docs' pages"))
+  actual:   (returned ())
+=== fm-docs-lines-joined: exit 1, 1 FAIL
+FAIL docs: a line ending in a backslash joins nothing in a page: a floor split there is no floor
+  expected: (returned ())
+  actual:   (returned ("D/page.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 5 contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+=== fm-docs-yaml-rules: exit 1, 20 FAIL
+FAIL docs: 8.1.2 in a page's prose, at the start, the middle and the end of a line: each line named
+  expected: (returned ("D/page.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 4 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 5 contains the SQLite floor 8.1.2, which no page may write: a pa
+  actual:   (returned ("D/page.md: line 1 contains the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read it from f.sexp" "D/page.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 1 contains the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read i
+FAIL docs: 8.1.2 in a page's fenced code block, at each place: each line named
+  expected: (returned ("D/page.md: line 4 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 5 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 6 contains the SQLite floor 8.1.2, which no page may write: a pa
+  actual:   (returned ("D/page.md: line 1 contains the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read it from f.sexp" "D/page.md: line 4 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 1 contains the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read i
+FAIL docs: 8.1.2 in an indented code block of a page in a subdirectory: named by its path and line
+  expected: (returned ("D/guide/deep.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+  actual:   (returned ("D/guide/deep.md: line 1 contains the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read it from f.sexp" "D/guide/deep.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp"))
+FAIL docs: 8001002 in a page's prose, at the start, the middle and the end of a line: each line named
+  expected: (returned ("D/page.md: line 3 contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 4 contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.m
+  actual:   (returned ("D/page.md: line 1 contains 8001002, the version-number form of the SQLite floor 8.1.2, which no workflow line may write: the CI scripts read it from f.sexp" "D/page.md: line 3 contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from f.sexp" "D/page.md: line 1 contains 8001002
+=== pm-docs-unheld: exit 1, 7 FAIL
+FAIL program: docs-sqlite-literal: a page names the SQLite floor at the start of a line, in its middle and at its end
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-sqlite-literal/docs/page.md: line 3 contains the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from tests/fixtures/floors/legal/floors.sexp\ncheck-floors: tests/fixtures/floors/docs-sqlite-literal/docs/page.md: line 4 contains the SQLite floor 8.1.2, which no page may writ
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and tests/fixtures/floors/docs-sqlite-literal/docs (page.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+FAIL program: docs-sqlite-number: a page names the SQLite floor's version number, 8001002, at the start of a line, in its middle beside a parenthesis, and at its end
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-sqlite-number/docs/page.md: line 3 contains 8001002, the version-number form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from tests/fixtures/floors/legal/floors.sexp\ncheck-floors: tests/fixtures/floors/docs-sqlite-number/docs/page.md: line 4 contains 8001002, the
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and tests/fixtures/floors/docs-sqlite-number/docs (page.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+FAIL program: docs-sqlite-amalgamation: a page names the SQLite floor's amalgamation number, 8010200, at the start of a line, in a file name, and at its end
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-sqlite-amalgamation/docs/page.md: line 3 contains 8010200, the amalgamation form of the SQLite floor 8.1.2, which no page may write: a page links to README.org's Requirements, which state it from tests/fixtures/floors/legal/floors.sexp\ncheck-floors: tests/fixtures/floors/docs-sqlite-amalgamation/docs/page.md: line 4 contains 80
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and tests/fixtures/floors/docs-sqlite-amalgamation/docs (page.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+FAIL program: docs-code-block: a fenced code block of a page names the Chez floor
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-code-block/docs/page.md: line 6 contains the Chez floor 10.9.1, which no page may write: a page links to README.org's Requirements, which state it from tests/fixtures/floors/legal/floors.sexp\ncheck-floors: FAILED (problems: 1)\n"))
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and tests/fixtures/floors/docs-code-block/docs (page.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+=== pm-docs-unreadable-unnamed: exit 1, 6 FAIL
+FAIL program: docs-dir-link: a symbolic link to a directory among the pages is not followed: it is a file that cannot be read
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-dir-link/docs/linked: it cannot be read: Exception in get-string-all: failed on #<binary input port tests/fixtures/floors/docs-dir-link/docs/linked>: is a directory\ncheck-floors: FAILED (problems: 1)\n"))
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and tests/fixtures/floors/docs-dir-link/docs (linked, page.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+FAIL program: docs-self-link: the docs directory is itself a symbolic link to a directory of clean pages: refused, not followed
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/docs-self-link/docs: it cannot be read: Exception: it is a symbolic link, not a directory\ncheck-floors: FAILED (problems: 1)\n"))
+  actual:   (returned (255 "" "Exception in map: \"tests/fixtures/floors/docs-self-link/docs: it cannot be read: Exception: it is a symbolic link, not a directory\" is not a proper list\n"))
+FAIL program: no file exists: all five named, the floors first, then the README, then the workflow directory, then the scripts directory, then the docs directory
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/legal/none.sexp: it cannot be read: Exception in open-file-input-port: failed for tests/fixtures/floors/legal/none.sexp: no such file or directory\ncheck-floors: tests/fixtures/floors/legal/none.org: it cannot be read: Exception in open-file-input-port: failed for tests/fixtures/floors/legal/none.org: no such file or directory\ncheck
+  actual:   (returned (1 "" "check-floors: tests/fixtures/floors/legal/none.sexp: it cannot be read: Exception in open-file-input-port: failed for tests/fixtures/floors/legal/none.sexp: no such file or directory\ncheck-floors: tests/fixtures/floors/legal/none.org: it cannot be read: Exception in open-file-input-port: failed for tests/fixtures/floors/legal/none.org: no such file or directory\ncheck
+FAIL program: a bad floors file, no README, no workflow, scripts or docs directory: the floors problems, then the README, then the directories
+  expected: (returned (1 "" "check-floors: tests/fixtures/floors/floors-invalid/floors.sexp: the key python is extra: the keys are chez, sqlite\ncheck-floors: tests/fixtures/floors/floors-invalid/floors.sexp: chez: the version \"10.9\" is not three dot-separated naturals, major.minor.patch\ncheck-floors: tests/fixtures/floors/floors-invalid/none.org: it cannot be read: Exception in open-file-input
+  actual:   (returned (1 "" "check-floors: tests/fixtures/floors/floors-invalid/floors.sexp: the key python is extra: the keys are chez, sqlite\ncheck-floors: tests/fixtures/floors/floors-invalid/floors.sexp: chez: the version \"10.9\" is not three dot-separated naturals, major.minor.patch\ncheck-floors: tests/fixtures/floors/floors-invalid/none.org: it cannot be read: Exception in open-file-input
+=== pm-four-arguments: exit 1, 1 FAIL
+FAIL program: four arguments, as before the docs were held: the usage line, exit 1
+  expected: (returned (1 "" "check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS DOCS\n"))
+  actual:   (returned (0 "check-floors: tests/fixtures/floors/legal/README.org, tests/fixtures/floors/legal/workflows (ci.yml), tests/fixtures/floors/legal/scripts (floor.sh) and docs (quickstart.md, reference.md) hold the floors in tests/fixtures/floors/legal/floors.sexp (chez 10.9.1, sqlite 8.1.2)\n" ""))
+=== p-makefile-no-docs: make check-floors exit 2
+check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS DOCS
+make: *** [Makefile:398: check-floors] Error 1
+=== p-page-sqlite-floor: make check-floors exit 2
+    its check-floors lines are exactly the 17 expected (lines 12 and 13: the dotted text only, beside letters and digits)
+check-floors: docs/plant.md: line 3 contains the SQLite floor 3.45.1, which no page may write: a page links to README.org's Requirements, which state it from packaging/floors.sexp
+check-floors: docs/plant.md: line 4 contains the SQLite floor 3.45.1, which no page may write: a page links to README.org's Requirements, which state it from packaging/floors.sexp
+check-floors: FAILED (problems: 17)
+=== p-readme-status-chez: make check-floors exit 2
+check-floors: README.org: line 7 contains the Chez floor 10.4.0, which only the list lines under "** Requirements" may write: they state it from packaging/floors.sexp
+check-floors: FAILED (problems: 1)
+make: *** [Makefile:398: check-floors] Error 1
+=== p-page-code-block: make check-floors exit 2
+check-floors: docs/quickstart.md: line 7 contains the SQLite floor 3.45.1, which no page may write: a page links to README.org's Requirements, which state it from packaging/floors.sexp
+check-floors: FAILED (problems: 1)
+make: *** [Makefile:398: check-floors] Error 1
+check-floors: README.org, .github/workflows (ci.yml), scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) and docs (quickstart.md, reference.md) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+=== restored: make check-floors exit 0
+=== restored: exit 0, 0 FAIL
+# of expected passes      541
