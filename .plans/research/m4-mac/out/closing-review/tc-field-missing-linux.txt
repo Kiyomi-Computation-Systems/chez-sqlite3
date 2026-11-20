@@ -1,0 +1,20 @@
+tc-field-missing.sh's copy, each suite run against src/ on Guix's 3.53.1 and Chez 10.4.0, 2026-11-19, at main 79fa1ac:
+suite, exit code, FAIL lines; then the FAIL lines, those of low rows, and those naming no exit taken
+test-conveniences-pending-execute rc=1 fail=1
+test-conveniences-pending-fold-low rc=1 fail=1
+test-conveniences-pending-fold rc=0 fail=0
+test-conveniences-pending-query rc=1 fail=2
+test-conveniences-pending-query-row rc=1 fail=1
+test-conveniences-pending-script-even rc=0 fail=0
+test-conveniences-pending-script-low-0 rc=1 fail=1
+test-conveniences-pending-script-low-1 rc=1 fail=1
+test-conveniences-pending-script-low-2 rc=1 fail=1
+test-conveniences-pending-script-low-3 rc=1 fail=1
+test-conveniences-pending-script-odd rc=0 fail=0
+test-conveniences-reentry rc=1 fail=1
+test-conveniences-resumed rc=1 fail=6
+test-open-db-config-engines rc=1 fail=4
+test-open-engines rc=1 fail=2
+test-open-interleave rc=1 fail=4
+test-transaction-engine rc=1 fail=3
+FAIL 29, low 29, none-taken 29

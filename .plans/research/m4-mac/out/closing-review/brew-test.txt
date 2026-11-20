@@ -1,0 +1,602 @@
+deps: vendor/chez-srfi linked into build/scheme-libs/srfi
+check-suites: every suite ends with (exit (suite-exit-status runner)) (92 checked)
+check-seam: the seam holds (30 libraries in 30 files checked)
+check-floors: README.org, .github/workflows (ci.yml) and scripts/ci (build-chez.sh, build-sqlite.sh, check-action-pins.sh, check-chez.sh, check-sqlite.sh, floor.sh, report-sqlite.sh) hold the floors in packaging/floors.sexp (chez 10.4.0, sqlite 3.45.1)
+check-ci: .github/workflows/ci.yml has the one shape check-ci reads
+check-memory-shards: MEMORY_SUITES_1 and MEMORY_SUITES_2 run each of the 92 suites once between them
+=== tests/test-blocks.sps
+%%%% Starting test blocks
+# of expected passes      11
+test: pass tests/test-blocks.sps
+=== tests/test-change-counters.sps
+%%%% Starting test change-counters
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-change-counters.sps
+=== tests/test-check-ci.sps
+%%%% Starting test check-ci
+# of expected passes      496
+test: pass tests/test-check-ci.sps
+=== tests/test-check-floors.sps
+%%%% Starting test check-floors
+# of expected passes      461
+test: pass tests/test-check-floors.sps
+=== tests/test-check-memory-shards.sps
+%%%% Starting test check-memory-shards
+# of expected passes      28
+test: pass tests/test-check-memory-shards.sps
+=== tests/test-check-nothreads.sps
+%%%% Starting test check-nothreads
+# of expected passes      18
+test: pass tests/test-check-nothreads.sps
+=== tests/test-check-seam.sps
+%%%% Starting test check-seam
+# of expected passes      68
+test: pass tests/test-check-seam.sps
+=== tests/test-check-variadic.sps
+%%%% Starting test check-variadic
+# of expected passes      39
+test: pass tests/test-check-variadic.sps
+=== tests/test-chez-sqlite3-testing.sps
+%%%% Starting test chez-sqlite3-testing
+# of expected passes      76
+test: pass tests/test-chez-sqlite3-testing.sps
+=== tests/test-ci-sqlite.sps
+%%%% Starting test ci-sqlite
+# of expected passes      99
+test: pass tests/test-ci-sqlite.sps
+=== tests/test-conditions.sps
+%%%% Starting test conditions
+# of expected passes      93
+test: pass tests/test-conditions.sps
+=== tests/test-connection-cache.sps
+%%%% Starting test connection-cache
+  the race completed without expiring at fuel 102
+# of expected passes      21
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-connection-cache.sps
+=== tests/test-connection-close.sps
+%%%% Starting test connection-close
+  fts5: available, its rows run
+  fts4: available, its rows run
+  rtree: available, its rows run
+# of expected passes      22
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-connection-close.sps
+=== tests/test-connection.sps
+%%%% Starting test connection
+# of expected passes      72
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-connection.sps
+=== tests/test-constants.sps
+%%%% Starting test constants
+test-constants: completeness checked against a subset only: header 3054001 is newer than the floor 3045001
+# of expected passes      54
+test: pass tests/test-constants.sps
+=== tests/test-contention.sps
+%%%% Starting test contention
+    the grain: milliseconds, a wait too long from 3000 ms
+    timed: BEGIN IMMEDIATE, waited out: 1583 ms
+    timed: with-transaction, waited out: 1583 ms
+    timed: BEGIN IMMEDIATE, ended mid-wait: 573 ms
+    timed: BEGIN IMMEDIATE, from the other's commit to its return: 68 ms
+    timed: the deferred upgrade, after the other's commit: 0 ms
+    timed: the writer's autocommit insert, beside the read: 0 ms
+    timed: the writer's BEGIN IMMEDIATE and insert, beside the read: 0 ms
+    timed: the writer's COMMIT, beside the read: 1 ms
+    timed: with-transaction, immediate: the second's call to its first read: 579 ms
+    timed: with-transaction, deferred: the second's call to its first read: 0 ms
+    timed: BEGIN IMMEDIATE, a 250 ms timeout waited out: 284 ms
+    P4: SQLite 3.54.1 sleeps in milliseconds: a 250 ms busy timeout answered busy after 284 ms
+# of expected passes      11
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-contention.sps
+=== tests/test-conveniences-counters.sps
+%%%% Starting test conveniences-counters
+# of expected passes      21
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-counters.sps
+=== tests/test-conveniences-engines.sps
+%%%% Starting test conveniences-engines
+  execute! completed without expiring at fuel 41
+  query completed without expiring at fuel 80
+  query-row completed without expiring at fuel 45
+  an abandoned query-fold completed without expiring at fuel 116
+  an abandoned query completed in one slice at fuel 58
+  query-fold completed without expiring at fuel 116
+  execute-script! completed without expiring at fuel 638
+  the two engines completed without expiring at fuel 124
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-engines.sps
+=== tests/test-conveniences-pending-execute.sps
+%%%% Starting test conveniences-pending-execute
+  execute!: completed without expiring at fuel 42; trials with R1 820; past the first section 715; both past it 325; fuels seeing a refusal 33; R before the give-back and R1 past it in 0; whole new calls 300, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  execute!, low trip: completed without expiring at fuel 48; trials with R1 1098; past the first section 993; both past it 500; fuels seeing a refusal 39; R before the give-back and R1 past it in 17; whole new calls 357, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 3; collect requests met 28684; forced sections 2908, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  execute!, a timer handler raising: completed before it ran at tick 36; raised at 35 ticks
+# of expected passes      10
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-execute.sps
+=== tests/test-conveniences-pending-fold-low.sps
+%%%% Starting test conveniences-pending-fold-low
+  query-fold, low trip: completed without expiring at fuel 181; trials with R1 14609; past the first section 12524; both past it 5126; fuels seeing a refusal 173; R before the give-back and R1 past it in 7398; whole new calls 1359, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 10; collect requests met 260987; forced sections 51333, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-fold-low.sps
+=== tests/test-conveniences-pending-fold.sps
+%%%% Starting test conveniences-pending-fold
+  query-fold: completed without expiring at fuel 160; trials with R1 12479; past the first section 10405; both past it 4295; fuels seeing a refusal 155; R before the give-back and R1 past it in 6110; whole new calls 1244, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query-fold, a timer handler raising: completed before it ran at tick 154; raised at 153 ticks
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-fold.sps
+=== tests/test-conveniences-pending-query-row.sps
+%%%% Starting test conveniences-pending-query-row
+  query-row: completed without expiring at fuel 46; trials with R1 990; past the first section 885; both past it 435; fuels seeing a refusal 37; R before the give-back and R1 past it in 0; whole new calls 240, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query-row, low trip: completed without expiring at fuel 55; trials with R1 1442; past the first section 1337; both past it 748; fuels seeing a refusal 45; R before the give-back and R1 past it in 138; whole new calls 293, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 3; collect requests met 31173; forced sections 5601, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+  query-row, a timer handler raising: completed before it ran at tick 40; raised at 39 ticks
+# of expected passes      13
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-query-row.sps
+=== tests/test-conveniences-pending-query.sps
+%%%% Starting test conveniences-pending-query
+  query: completed without expiring at fuel 72; trials with R1 2485; past the first section 2380; both past it 1540; fuels seeing a refusal 63; R before the give-back and R1 past it in 0; whole new calls 448, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query, low trip: completed without expiring at fuel 96; trials with R1 4699; past the first section 4594; both past it 3362; fuels seeing a refusal 87; R before the give-back and R1 past it in 73; whole new calls 641, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 4; collect requests met 135056; forced sections 27596, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+  query-failing: completed without expiring at fuel 84; trials with R1 3403; past the first section 3298; both past it 2278; fuels seeing a refusal 41; R before the give-back and R1 past it in 1666; whole new calls 636, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query-failing, low trip: completed without expiring at fuel 99; trials with R1 5006; past the first section 4901; both past it 3620; fuels seeing a refusal 56; R before the give-back and R1 past it in 2381; whole new calls 773, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 3; collect requests met 96184; forced sections 17643, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+  query, a timer handler raising: completed before it ran at tick 66; raised at 65 ticks
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-query.sps
+=== tests/test-conveniences-pending-script-even.sps
+%%%% Starting test conveniences-pending-script-even
+  execute-script!: completed without expiring at fuel 431; trials with R1 25460; past the first section 8449; both past it 0; fuels seeing a refusal 426; R before the give-back and R1 past it in 3905; whole new calls 1036, the last at fuel 8, below the first refusal before the call's first section, at fuel 10; left out, a collect request in the first slice, 0; R before the first section, R1 at the first prepare's exit and R's second run refused in 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-even.sps
+=== tests/test-conveniences-pending-script-low-0.sps
+%%%% Starting test conveniences-pending-script-low-0
+  execute-script!, low trip: completed without expiring at fuel 449; trials with R1 13266; past the first section 4804; both past it 0; fuels seeing a refusal 442; R before the give-back and R1 past it in 2248; whole new calls 554, the last at fuel 8, below the first refusal before the call's first section, at fuel 12; left out, a collect request in the first slice, 2; R before the first section, R1 at the first prepare's exit and R's second run refused in 97; collect requests met 292757; forced sections 48757, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-low-0.sps
+=== tests/test-conveniences-pending-script-low-1.sps
+%%%% Starting test conveniences-pending-script-low-1
+  execute-script!, low trip: completed without expiring at fuel 449; trials with R1 13680; past the first section 4939; both past it 0; fuels seeing a refusal 442; R before the give-back and R1 past it in 2313; whole new calls 562, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; R before the first section, R1 at the first prepare's exit and R's second run refused in 92; collect requests met 300039; forced sections 49581, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-low-1.sps
+=== tests/test-conveniences-pending-script-low-2.sps
+%%%% Starting test conveniences-pending-script-low-2
+  execute-script!, low trip: completed without expiring at fuel 449; trials with R1 13638; past the first section 4935; both past it 0; fuels seeing a refusal 442; R before the give-back and R1 past it in 2310; whole new calls 561, the last at fuel 8, below the first refusal before the call's first section, at fuel 10; left out, a collect request in the first slice, 0; R before the first section, R1 at the first prepare's exit and R's second run refused in 95; collect requests met 298883; forced sections 49403, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-low-2.sps
+=== tests/test-conveniences-pending-script-low-3.sps
+%%%% Starting test conveniences-pending-script-low-3
+  execute-script!, low trip: completed without expiring at fuel 449; trials with R1 13602; past the first section 4938; both past it 0; fuels seeing a refusal 442; R before the give-back and R1 past it in 2306; whole new calls 557, the last at fuel 8, below the first refusal before the call's first section, at fuel 11; left out, a collect request in the first slice, 1; R before the first section, R1 at the first prepare's exit and R's second run refused in 96; collect requests met 298038; forced sections 49231, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+# of expected passes      7
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-low-3.sps
+=== tests/test-conveniences-pending-script-odd.sps
+%%%% Starting test conveniences-pending-script-odd
+  execute-script!: completed without expiring at fuel 431; trials with R1 25817; past the first section 8568; both past it 0; fuels seeing a refusal 426; R before the give-back and R1 past it in 3960; whole new calls 1040, the last at fuel 8, below the first refusal before the call's first section, at fuel 9; left out, a collect request in the first slice, 0; R before the first section, R1 at the first prepare's exit and R's second run refused in 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  execute-script!, a timer handler raising: completed before it ran at tick 425; raised at 424 ticks
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-pending-script-odd.sps
+=== tests/test-conveniences-reentry.sps
+%%%% Starting test conveniences-reentry
+  execute-script! jumped back: captures at 96 ticks; kinds ((answered . 32) (wind-refused . 9) (state-refused . 20) (refused . 35))
+  execute-script! jumped back, low trip: captures at 112 ticks; kinds ((answered . 38) (state-refused . 24) (wind-refused . 13) (refused . 37))
+  execute-script! jumped back, low trip; collect requests met 29746; forced sections 452, unmet 0; a first slice's forced sections 4, remainders at the exit of (2 4)
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-reentry.sps
+=== tests/test-conveniences-resumed.sps
+%%%% Starting test conveniences-resumed
+  query, warm, another engine holding its statement at a row: completed without expiring at fuel 72; second resumes ((new . 8) (refused . 63)); held at 56 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query, cold, alone: completed without expiring at fuel 72; second resumes ((new . 8) (refused . 63)); held at 56 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query, warm, another engine holding its statement at a row, low trip: completed without expiring at fuel 110; second resumes ((new . 8) (refused . 99) (again . 2)); held at 92 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 5249; forced sections 799, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  query, cold, alone, low trip: completed without expiring at fuel 102; second resumes ((new . 8) (refused . 92) (again . 1)); held at 85 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 2497; forced sections 440, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  query-row, warm, another engine holding its statement at a row: completed without expiring at fuel 46; second resumes ((new . 8) (refused . 37)); held at 30 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query-row, cold, alone: completed without expiring at fuel 46; second resumes ((new . 8) (refused . 37)); held at 30 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  query-row, warm, another engine holding its statement at a row, low trip: completed without expiring at fuel 58; second resumes ((new . 8) (refused . 47) (again . 2)); held at 40 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 1308; forced sections 189, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  query-row, cold, alone, low trip: completed without expiring at fuel 58; second resumes ((new . 8) (refused . 46) (again . 3)); held at 39 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 1167; forced sections 132, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  execute!, warm, another engine holding its statement at a row: completed without expiring at fuel 51; second resumes ((new . 8) (refused . 42)); held at 35 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  execute!, cold, alone: completed without expiring at fuel 51; second resumes ((new . 8) (refused . 42)); held at 35 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  execute!, warm, another engine holding its statement at a row, low trip: completed without expiring at fuel 72; second resumes ((new . 8) (refused . 63)); held at 56 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 2202; forced sections 533, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  execute!, cold, alone, low trip: completed without expiring at fuel 69; second resumes ((new . 8) (refused . 57) (again . 3)); held at 50 fuels; refused before the check-out first at fuel 9; whole new calls past it, a collect request in the first slice, 0; collect requests met 1556; forced sections 308, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  query-row, its return failing, resumed twice completed without expiring at fuel 78
+  query-row, its return failing, resumed twice, low trip; collect requests met 1617; forced sections 182, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  query-row, its return failing, resumed twice, low trip completed without expiring at fuel 84
+  query-fold, resumed twice completed without expiring at fuel 150
+  query-fold, resumed twice, low trip; collect requests met 5851; forced sections 506, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  query-fold, resumed twice, low trip completed without expiring at fuel 185
+  continuations captured: 150
+  execute-script!, resumed twice, completed without expiring at fuel 638; whole new calls at fuels (1 2 3 4 5 6 7); refused with &sqlite-closed first at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  execute-script!, resumed twice, low trip, completed without expiring at fuel 648; whole new calls at fuels (1 2 3 4 5 6 7); refused with &sqlite-closed first at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 13671; forced sections 956, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+# of expected passes      19
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-resumed.sps
+=== tests/test-conveniences-who.sps
+%%%% Starting test conveniences-who
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences-who.sps
+=== tests/test-conveniences.sps
+%%%% Starting test conveniences
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-conveniences.sps
+=== tests/test-conventions.sps
+%%%% Starting test conventions
+# of expected passes      64
+test: pass tests/test-conventions.sps
+=== tests/test-counters.sps
+%%%% Starting test counters
+# of expected passes      17
+test: pass tests/test-counters.sps
+=== tests/test-discovery.sps
+%%%% Starting test discovery
+# of expected passes      66
+test: pass tests/test-discovery.sps
+=== tests/test-docs.sps
+%%%% Starting test docs
+# of expected passes      107
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-docs.sps
+=== tests/test-execute-script.sps
+%%%% Starting test execute-script
+# of expected passes      18
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-execute-script.sps
+=== tests/test-fts5.sps
+%%%% Starting test fts5
+# of expected passes      19
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-fts5.sps
+=== tests/test-interrupt-close.sps
+%%%% Starting test interrupt-close
+    the race: 2248 interrupts, 1771 on a closed connection, over 20 opens and closes
+# of expected passes      8
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-interrupt-close.sps
+=== tests/test-interrupt-database.sps
+%%%% Starting test interrupt-database
+  interrupt-database/with: stopped at fuel 13, completed, after 12 trials resumed after a close
+  interrupt-database!: stopped at fuel 13, completed, after 12 trials resumed after a close
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-interrupt-database.sps
+=== tests/test-interrupt-reach.sps
+%%%% Starting test interrupt-reach
+    the grain: milliseconds, a wait too long from 3000 ms
+    timed: the busy wait, interrupted: 1569 ms
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-interrupt-reach.sps
+=== tests/test-interrupt.sps
+%%%% Starting test interrupt
+# of expected passes      27
+test: pass tests/test-interrupt.sps
+=== tests/test-json.sps
+%%%% Starting test json
+# of expected passes      16
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-json.sps
+=== tests/test-library-loading-combined.sps
+%%%% Starting test library-loading-combined
+# of expected passes      14
+test: pass tests/test-library-loading-combined.sps
+=== tests/test-library-loading-decoys.sps
+%%%% Starting test library-loading-decoys
+# of expected passes      18
+test: pass tests/test-library-loading-decoys.sps
+=== tests/test-library-loading-extension.sps
+%%%% Starting test library-loading-extension
+# of expected passes      12
+test: pass tests/test-library-loading-extension.sps
+=== tests/test-library-loading-missing-1.sps
+%%%% Starting test library-loading-missing-1
+# of expected passes      20
+test: pass tests/test-library-loading-missing-1.sps
+=== tests/test-library-loading-missing-2.sps
+%%%% Starting test library-loading-missing-2
+# of expected passes      20
+test: pass tests/test-library-loading-missing-2.sps
+=== tests/test-library-loading-missing-3.sps
+%%%% Starting test library-loading-missing-3
+# of expected passes      20
+test: pass tests/test-library-loading-missing-3.sps
+=== tests/test-library-loading-missing-4.sps
+%%%% Starting test library-loading-missing-4
+# of expected passes      19
+test: pass tests/test-library-loading-missing-4.sps
+=== tests/test-library-loading-preflight.sps
+%%%% Starting test library-loading-preflight
+# of expected passes      13
+test: pass tests/test-library-loading-preflight.sps
+=== tests/test-library-loading-real.sps
+%%%% Starting test library-loading-real
+# of expected passes      22
+test: pass tests/test-library-loading-real.sps
+=== tests/test-libsqlite3-info.sps
+%%%% Starting test libsqlite3-info
+# of expected passes      9
+test: pass tests/test-libsqlite3-info.sps
+=== tests/test-load-extension-engines.sps
+%%%% Starting test load-extension-engines
+  load-extension!, resumed at its fuel: completed without expiring at fuel 119
+  load-extension! resumed twice: completed without expiring at fuel 119; second resumes ((new . 8) (refused-before . 110)); refused before the section first at fuel 9
+  load-extension! resumed twice, low trip: completed without expiring at fuel 125; second resumes ((new . 8) (refused-before . 113) (again . 3)); refused before the section first at fuel 9
+  load-extension!, interleaved: completed without expiring at fuel 119; trials 6932; trials running an init 6932; fuels seeing a refusal 110; both past the section in 0; R before it and R1 past it in 0; whole new calls 916, the last at fuel 8, below the first refusal before the section, at fuel 9
+  load-extension!, interleaved, low trip: completed without expiring at fuel 125; trials 7661; trials running an init 7661; fuels seeing a refusal 113; both past the section in 3; R before it and R1 past it in 363; whole new calls 964, the last at fuel 8, below the first refusal before the section, at fuel 9
+  load-extension! re-entered: the call ended before tick 100; re-entries ((new . 7) (refused . 92)); refused before the section first at tick 8
+  load-extension! re-entered, low trip: the call ended before tick 106; re-entries ((new . 7) (refused . 95) (again . 3)); refused before the section first at tick 8
+  the caller's path changed: completed without expiring at fuel 121; loaded at 98 fuels, refused at 22
+  the caller's entry point changed: completed without expiring at fuel 148; loaded at 18 fuels, refused at 129
+# of expected passes      14
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-load-extension-engines.sps
+=== tests/test-load-extension.sps
+%%%% Starting test load-extension
+# of expected passes      47
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-load-extension.sps
+=== tests/test-load-state.sps
+%%%% Starting test load-state
+# of expected passes      16
+test: pass tests/test-load-state.sps
+=== tests/test-manifest.sps
+%%%% Starting test manifest
+# of expected passes      79
+test: pass tests/test-manifest.sps
+=== tests/test-memory-check.sps
+%%%% Starting test memory-check
+# of expected passes      15
+test: pass tests/test-memory-check.sps
+=== tests/test-native.sps
+%%%% Starting test native
+# of expected passes      117
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-native.sps
+=== tests/test-never-loads.sps
+%%%% Starting test never-loads
+# of expected passes      5
+test: pass tests/test-never-loads.sps
+=== tests/test-open-db-config-engines.sps
+%%%% Starting test open-db-config-engines
+  open-database with the ops, resumed at its fuel: completed without expiring at fuel 289; a statement held at the expiry at 40 fuels
+  open-database with the ops resumed twice: completed without expiring at fuel 289; second resumes ((refused . 258) (same . 21) (new . 9)); refused before the open first at fuel 10; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  open-database with the ops resumed twice, low trip: completed without expiring at fuel 325; second resumes ((refused . 295) (same . 20) (new . 9)); refused before the open first at fuel 10; whole new calls past it, a collect request in the first slice, 0; collect requests met 12757; forced sections 668, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  call-with-database with the ops re-entered: its procedure started at tick 301; re-entries ((refused . 270) (again . 22) (new . 8)); refused before the open first at tick 9; whole new calls past it, a collect request before the capture, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  call-with-database with the ops re-entered, low trip: its procedure started at tick 340; re-entries ((refused . 310) (again . 21) (new . 8)); refused before the open first at tick 9; whole new calls past it, a collect request before the capture, 0; collect requests met 8177; forced sections 1035, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2)
+  call-with-database with the ops, resumed: completed without expiring at fuel 564; kinds ((as-asked . 56) (closed . 249) (closed-in-proc . 259))
+  open-database with the ops, interleaved: completed without expiring at fuel 119; trials 7022; trials answering 7022; fuels seeing a refusal 109; both remainders past the first section in 5050; R before it and R1 past it in 1717; R before the last set and R1 past it in 0; whole new calls 1026, the last at fuel 9, below the first refusal before the first section, at fuel 10; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  open-database with the ops, interleaved, low trip: completed without expiring at fuel 134; trials 8963; trials answering 8963; fuels seeing a refusal 124; both remainders past the first section in 6717; R before it and R1 past it in 1975; R before the last set and R1 past it in 0; whole new calls 1159, the last at fuel 9, below the first refusal before the first section, at fuel 10; whole new calls left out, a collect request in the first slice, 4; collect requests met 114437; forced sections 10126, unmet 0; a first slice's forced sections 1, remainders at the exit of (1)
+  applied-settings/with, counted, interleaved: completed without expiring at fuel 76; trials 2851; trials answering 2851; fuels seeing a refusal 66; both remainders past the first section in 1653; R before it and R1 past it in 986; R before the last set and R1 past it in 0; whole new calls 639, the last at fuel 9, below the first refusal before the first section, at fuel 10; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  applied-settings/with, counted, interleaved, low trip: completed without expiring at fuel 92; trials 4373; trials answering 4373; fuels seeing a refusal 81; both remainders past the first section in 2866; R before it and R1 past it in 1279; R before the last set and R1 past it in 253; whole new calls 792, the last at fuel 9, below the first refusal before the first section, at fuel 10; whole new calls left out, a collect request in the first slice, 2; collect requests met 64417; forced sections 20668, unmet 0; a first slice's forced sections 4, remainders at the exit of (1 2 3 4)
+  applied-settings/with, failing, resumed twice: completed without expiring at fuel 67; second resumes ((refused . 17) (refused-past-a-set . 9) (again . 40))
+# of expected passes      18
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-db-config-engines.sps
+=== tests/test-open-db-config.sps
+%%%% Starting test open-db-config
+    extension loading: #t
+    the library's starts, enable-load-extension, defensive, dqs-dml, dqs-ddl: ((0 0) (0 0) (0 1) (0 1))
+    moved to, enable-load-extension, defensive, dqs-dml, dqs-ddl: ((0 1) (0 1) (0 0) (0 0))
+# of expected passes      33
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-db-config.sps
+=== tests/test-open-engines.sps
+%%%% Starting test open-engines
+  open-database with settings, resumed at its fuel completed without expiring at fuel 257; a statement held at the expiry at 39 fuels
+  open-database resumed twice: completed without expiring at fuel 257; second resumes ((refused . 226) (same . 21) (new . 9)); refused before the open first at fuel 10; whole new calls past it, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  open-database resumed twice, low trip: completed without expiring at fuel 295; second resumes ((refused . 264) (same . 20) (new . 10)); refused before the open first at fuel 10; whole new calls past it, a collect request in the first slice, 1; collect requests met 10204; forced sections 610, unmet 0; a first slice's forced sections 2, remainders at the exit of (1 2)
+  call-with-database re-entered: its procedure started at tick 269; re-entries ((refused . 238) (again . 22) (new . 8)); refused before the open first at tick 9; whole new calls past it, a collect request before the capture, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  call-with-database re-entered, low trip: its procedure started at tick 309; re-entries ((refused . 277) (again . 23) (new . 8)); refused before the open first at tick 9; whole new calls past it, a collect request before the capture, 0; collect requests met 6761; forced sections 942, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2)
+  call-with-database with settings, resumed: completed without expiring at fuel 482; kinds ((as-asked . 48) (closed-in-proc . 217) (closed . 217))
+  call-with-database re-entered with its close refused: its procedure started at tick 269
+# of expected passes      12
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-engines.sps
+=== tests/test-open-interleave.sps
+%%%% Starting test open-interleave
+  open-database: completed without expiring at fuel 85; trials 3571; trials answering 3571; fuels seeing a refusal 60; R before the last section and R1 past it in 1139; whole new calls 567, the last at fuel 7, below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  open-database, low trip: completed without expiring at fuel 100; trials 4990; trials answering 4990; fuels seeing a refusal 78; R before the last section and R1 past it in 1383; whole new calls 671, the last at fuel 7, below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 2; collect requests met 45745; forced sections 28315, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+  call-with-database: completed without expiring at fuel 109; trials 6644; trials answering 1114; fuels seeing a refusal 79; R before the last section and R1 past it in 189; whole new calls 735, the last at fuel 7, below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  call-with-database, low trip: completed without expiring at fuel 127; trials 8215; trials answering 1328; fuels seeing a refusal 102; R before the last section and R1 past it in 200; whole new calls 859, the last at fuel 7, below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 2; collect requests met 63138; forced sections 32862, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+  open-database, failing, resumed twice: completed without expiring at fuel 145; second resumes ((new . 7) (refused . 95) (again . 42)); whole new calls at (1 2 3 4 5 6 7), below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  open-database, failing, resumed twice, low trip: completed without expiring at fuel 160; second resumes ((new . 7) (refused . 110) (again . 42)); whole new calls at (1 2 3 4 5 6 7), below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 902; forced sections 835, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+  call-with-database, failing, resumed twice: completed without expiring at fuel 167; second resumes ((new . 7) (refused . 107) (again . 52)); whole new calls at (1 2 3 4 5 6 7), below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 0; forced sections 0, unmet 0; a first slice's forced sections 0, remainders at the exit of ()
+  call-with-database, failing, resumed twice, low trip: completed without expiring at fuel 185; second resumes ((new . 7) (refused . 125) (again . 52)); whole new calls at (1 2 3 4 5 6 7), below the first refusal before the open, at fuel 8; whole new calls left out, a collect request in the first slice, 0; collect requests met 1196; forced sections 809, unmet 0; a first slice's forced sections 5, remainders at the exit of (1 2 3 4 5)
+# of expected passes      17
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-interleave.sps
+=== tests/test-open-locks.sps
+%%%% Starting test open-locks
+    the grain: milliseconds, a wait too long from 3000 ms
+    timed: exclusive, journal-mode wal: 1593 ms
+    timed: exclusive, journal-mode delete: 1576 ms
+    timed: read, journal-mode wal: 1562 ms
+    timed: exclusive, journal-mode then synchronous: 1 ms
+    timed: exclusive, synchronous then journal-mode: 0 ms
+    timed: exclusive, journal-mode then synchronous, call-with-database: 0 ms
+    timed: exclusive, synchronous then journal-mode, call-with-database: 1 ms
+    timed: exclusive, foreign-keys: 0 ms
+    timed: exclusive, temp-store: 0 ms
+    timed: exclusive, trusted-schema: 0 ms
+    timed: exclusive, busy-timeout alone: 0 ms
+    timed: read, all but journal-mode wal: 0 ms
+    timed: reserved, all but journal-mode wal: 0 ms
+    timed: reserved, journal-mode wal: 0 ms
+    timed: WAL, idle, journal-mode delete: 1 ms
+    timed: WAL, idle, journal-mode truncate: 0 ms
+    timed: WAL, unused, journal-mode delete: 1 ms
+    timed: exclusive, let go mid-wait: 578 ms
+    timed: read, let go mid-wait: 571 ms
+    timed: WAL on WAL, idle: 1 ms
+    timed: WAL on WAL, read: 0 ms
+    timed: WAL on WAL, reserved: 0 ms
+    timed: WAL on WAL, exclusive: 1 ms
+# of expected passes      10
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-locks.sps
+=== tests/test-open-options.sps
+%%%% Starting test open-options
+# of expected passes      23
+test: pass tests/test-open-options.sps
+=== tests/test-open-settings.sps
+%%%% Starting test open-settings
+    the grain: milliseconds, a wait too long from 3000 ms
+# of expected passes      25
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-open-settings.sps
+=== tests/test-public.sps
+%%%% Starting test public
+# of expected passes      23
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-public.sps
+=== tests/test-reference.sps
+%%%% Starting test reference
+# of expected passes      22
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-reference.sps
+=== tests/test-require-threaded.sps
+%%%% Starting test require-threaded
+# of expected passes      78
+test: pass tests/test-require-threaded.sps
+=== tests/test-script.sps
+%%%% Starting test script
+# of expected passes      22
+test: pass tests/test-script.sps
+=== tests/test-settings.sps
+%%%% Starting test settings
+# of expected passes      86
+test: pass tests/test-settings.sps
+=== tests/test-sql-tail.sps
+%%%% Starting test sql-tail
+# of expected passes      33
+test: pass tests/test-sql-tail.sps
+=== tests/test-statement-block.sps
+%%%% Starting test statement-block
+# of expected passes      6
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-block.sps
+=== tests/test-statement-cache.sps
+%%%% Starting test statement-cache
+# of expected passes      32
+test: pass tests/test-statement-cache.sps
+=== tests/test-statement-sections.sps
+%%%% Starting test statement-sections
+# of expected passes      4
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-sections.sps
+=== tests/test-statement-state.sps
+%%%% Starting test statement-state
+# of expected passes      23
+test: pass tests/test-statement-state.sps
+=== tests/test-statement-tail.sps
+%%%% Starting test statement-tail
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-tail.sps
+=== tests/test-statement-values-nomem.sps
+%%%% Starting test statement-values-nomem
+# of expected passes      15
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-values-nomem.sps
+=== tests/test-statement-values-sections.sps
+%%%% Starting test statement-values-sections
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-values-sections.sps
+=== tests/test-statement-values.sps
+%%%% Starting test statement-values
+# of expected passes      47
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-values.sps
+=== tests/test-statement-who.sps
+%%%% Starting test statement-who
+  bind-each!/who completed without expiring at fuel 151
+# of expected passes      29
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement-who.sps
+=== tests/test-statement.sps
+%%%% Starting test statement
+# of expected passes      76
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-statement.sps
+=== tests/test-transaction-engine.sps
+%%%% Starting test transaction-engine
+  the outer sweep: completed without expiring at fuel 64; each outcome from the fuel ((1 ended-after-a-later-write) (52 rolled-back) (62 committed))
+  the nested sweep: completed without expiring at fuel 64; each outcome from the fuel ((1 ended-after-a-later-write) (52 rolled-back) (62 committed))
+  the outer level: first slices that expired before begun: 18
+  nested: first slices that expired before begun: 18
+  the outer level: fuels 1 to 29; first slices that began the level: 10; remainders resumed twice: 303; their second answers: (42 (raised (transaction-ended with-transaction)) (raised (assertion-violation with-transaction (re-entered)))); that touched a statement: 0
+  nested: fuels 1 to 29; first slices that began the level: 10; remainders resumed twice: 303; their second answers: (42 (raised (transaction-ended with-transaction)) (raised (assertion-violation with-transaction (re-entered)))); that touched a statement: 0
+  the outer level: every first remainder, fuels 1 to 28, resumed twice; 10 of them taken past the BEGIN; resumes that tracked other SQL or left a code: 0
+  nested: every first remainder, fuels 1 to 28, resumed twice; 10 of them taken past the BEGIN; resumes that tracked other SQL or left a code: 0
+  O7 nested under an engine: completed without expiring at fuel 185; each outcome from the fuel ((1 ended) (122 lost) (135 busy))
+  O7 nested, nothing left behind: completed without expiring at fuel 185; each outcome from the fuel ((1 not-lost) (122 lost) (135 not-lost))
+  the re-entries: the handler fired at 59 of 63 ticks
+  the failed begins: cases that failed the nested begin: 850; refused beside the row: 0
+  the refusal beside a tracked row: cases that failed the nested begin: 0; refused beside the row: 17
+  pending, the outer level: 2133 trials, the call completed unexpired at fuel 51; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in 0
+  pending, nested: 2133 trials, the call completed unexpired at fuel 51; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in 0
+  pending, the outer level, low trip: 2759 trials, the call completed unexpired at fuel 60; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in 34
+  pending, nested, low trip: 2658 trials, the call completed unexpired at fuel 60; R holding the body's statement ready, R1 at its step's exit and R's second run refused by the body's claim in 34
+  pending, low trip; collect requests met 102843; forced sections 19847, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+  the claim's refusal, read by a handler: second resumes refused at depth 1: 10
+  the claim, the outer level: completed unexpired at fuel 64; the thunk's count first made at fuel 7; whole new calls at (1 2 3 4 5 6 7 8); refused by the claim at (9 10 11 12 13 14 15 16 17 18); past the BEGIN at 45 fuels
+  the claim, nested: completed unexpired at fuel 64; the thunk's count first made at fuel 7; whole new calls at (1 2 3 4 5 6 7 8); refused by the claim at (9 10 11 12 13 14 15 16 17 18); past the BEGIN at 45 fuels
+  the claim, the outer level, low trip: completed unexpired at fuel 73; the thunk's count first made at fuel 7; whole new calls at (1 2 3 4 5 6 7 8); refused by the claim at (9 10 11 12 13 14 15 16 17 18); past the BEGIN at 54 fuels
+  the claim, nested, low trip: completed unexpired at fuel 73; the thunk's count first made at fuel 7; whole new calls at (1 2 3 4 5 6 7 8); refused by the claim at (9 10 11 12 13 14 15 16 17 18); past the BEGIN at 54 fuels
+  the claim, low trip; collect requests met 2517; forced sections 496, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+  the claim re-entered, the outer level: 18 of 53 ticks re-entered the call from its body
+  the claim re-entered, nested: 18 of 53 ticks re-entered the call from its body
+  the claim re-entered, the outer level, low trip: 21 of 62 ticks re-entered the call from its body
+  the claim re-entered, nested, low trip: 21 of 62 ticks re-entered the call from its body
+  the claim re-entered, low trip; collect requests met 996; forced sections 380, unmet 0; a first slice's forced sections 3, remainders at the exit of (1 2 3)
+  the stale plan: A completed in its first slice at fuel 29; A's resumes that began a savepoint inside B's transaction and answered 42: 18
+  the siblings: A's first slice expired at fuels 1 to 50, and completed at fuel 51
+# of expected passes      24
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-transaction-engine.sps
+=== tests/test-transaction-interrupt.sps
+%%%% Starting test transaction-interrupt
+# of expected passes      9
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-transaction-interrupt.sps
+=== tests/test-transaction-nomem.sps
+%%%% Starting test transaction-nomem
+    S3, outer: the NOMEM left the transaction open
+    S3, nested: the NOMEM left the transaction open
+# of expected passes      26
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-transaction-nomem.sps
+=== tests/test-transaction-plan.sps
+%%%% Starting test transaction-plan
+# of expected passes      37
+test: pass tests/test-transaction-plan.sps
+=== tests/test-transaction.sps
+%%%% Starting test transaction
+# of expected passes      50
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
+test: pass tests/test-transaction.sps
+=== tests/test-utf8.sps
+%%%% Starting test utf8
+# of expected passes      43
+test: pass tests/test-utf8.sps
+=== tests/test-values.sps
+%%%% Starting test values
+# of expected passes      42
+test: pass tests/test-values.sps
+=== tests/test-verify.sps
+%%%% Starting test verify
+# of expected passes      20
+test: pass tests/test-verify.sps
+test: ran 92, passed 92, failed 0, hung 0

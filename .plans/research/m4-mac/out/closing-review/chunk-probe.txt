@@ -1,0 +1,6 @@
+1000 bytes: requests at the exit in 6 of 100
+8000 bytes: requests at the exit in 49 of 100
+16000 bytes: requests at the exit in 50 of 100
+32000 bytes: requests at the exit in 100 of 100
+40000 bytes: requests at the exit in 100 of 100
+70000 bytes: requests at the exit in 100 of 100

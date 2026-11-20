@@ -14,12 +14,16 @@ Mac before slice 4 is written, where the plan left them to the hand run after sl
 | [mac.md](mac.md) | The maintainer's steps on the Mac, for zsh |
 | [slice-2.md](slice-2.md) | Slice 2's own Mac step, `make test` and `make check-variadic` with both libraries, once PR #37 has merged |
 | [slices-3-5.md](slices-3-5.md) | The plan's Mac run after slice 5: `make test` with both libraries, and the redirect probe, once PR #45 has merged |
+| [closing-review.md](closing-review.md) | The Mac run after M4's closing review: the timer's three probes, then `make test` with both libraries, once PR #48 has merged |
+| [tell-refused.py](tell-refused.py) | Apple's refusal of `sqlite3_auto_extension` stood in on Linux, in a copy of the tests, for the closing review's run |
+| [tc-field-missing.sh](tc-field-missing.sh) | A Chez without `$tc-field` stood in on Linux, in a copy of the tests: every low row must fail by name |
 | [run-mac.sh](run-mac.sh) | Builds the plan's extensions with the Mac's flags, and runs `l1-load-extension.c`, `x1-ffi-load.sps` and `fifo.c` against one library |
 | [fifo.c](fifo.c) | `dlopen` and the load on a FIFO, each in a child process and bounded, with no writer and with one; and `dlopen`'s own reasons for a directory and an empty file. Added after run 1 |
 | [run-dyld.sh](run-dyld.sh), [dyld.sps](dyld.sps) | Whether `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` redirects an absolute path: the library chez-sqlite3 loads, and an extension `load-extension!` loads, each case in a Chez of its own; `LD_LIBRARY_PATH` on Linux as the control |
 | [out/run-1/](out/run-1/), [out/run-2/](out/run-2/) | Each run's files, as `run-mac.sh` wrote them |
 | [out/slice-2/](out/slice-2/) | Slice 2's Mac step: `make test` and `make check-variadic`, with each library, as `tee` wrote them |
 | [out/slices-3-5/](out/slices-3-5/) | The Mac run after slice 5: `make test` with each library, and `run-dyld.sh`'s `dyld.txt` |
+| [out/closing-review/](out/closing-review/) | The closing review's run: the probes and `make test` with each library, as `tee` wrote them, and the two stand-ins on Linux |
 
 The probes are the plan's own, [l1-load-extension.c](../m4-plan/l1-load-extension.c) and
 [x1-ffi-load.sps](../m4-plan/x1-ffi-load.sps), with [ext.c](../m4-plan/ext.c) and
@@ -204,6 +208,44 @@ The maintainer's Mac, macOS 26.7.1 (25G241), arm64, on `main` at `ec48a9d`, the 
     found: the message is the suffixed retry's, `ext.dylib.dylib`, cut at SQLite's limit. The
     fallback didn't find `b`'s file here.
   - On Linux, `LD_LIBRARY_PATH` reached Chez and redirected neither (the control run, PR #46).
+
+### The closing review's Mac run, 2026-11-19
+
+The maintainer's Mac, arm64, Chez 10.4.1, on `main` at `79fa1ac`, the closing review's merge
+(PR #48), by [closing-review.md](closing-review.md). The files are
+[out/closing-review/](out/closing-review/). Everything passed, and every figure the steps
+predicted held.
+
+- **The timer's probes printed what Guix's Chez 10.4.0 printed,** fuel for fuel:
+  - `chunk-probe`: 6, 49 and 50 of 100 at 1000, 8000 and 16000 bytes, and 100 of 100 from
+    32000;
+  - `timer-probe`: every `EXIT` fuel's last reading `#f`, every later fuel's a number;
+  - `exit-probe`: at a trip of 256 bytes, exits at fuels 3 to 5, 8 to 10, and so on to 30; none
+    at 2^27 or at 256 KiB.
+
+  So `$tc-field` reads the same on 10.4.1 as on the floor.
+- **Homebrew's 3.54.1 passed 92 of 92,** with no UNAVAILABLE line: all 32 low-trip tallies
+  read `unmet 0` and a list of exits, in the same 14 suites and the same counts as on Linux.
+- **Apple's 3.51.0 passed 92 of 92:**
+  - 57 lines named the refused `sqlite3_auto_extension`, against the Linux stand-in's 58. Every
+    suite matched but `test-load-extension`, whose one tell row, "the opt-in judged with the C
+    switch on", is a load row: Apple's library has no `sqlite3_load_extension`, so the row was
+    named unavailable for that first;
+  - 19 low-trip tallies read `unmet 0` and a list of exits, as predicted: `test-open-engines`
+    2 and `test-open-db-config-engines` 4, through the forcing VFS, and
+    `test-conveniences-resumed` 9, `test-conveniences-reentry` 1 and `test-transaction-engine`
+    3, through the trace and the connection's authorizer. `test-open-interleave`'s two read
+    `forced sections 0` and an empty list, their forcing unavailable;
+  - so Apple's library takes the forcing VFS: both open suites passed, their VFS rows among
+    them. Their one UNAVAILABLE line is `test-open-db-config-engines` leaving the extension
+    opt-in out of its lists, which Apple's library has no `sqlite3_load_extension` for.
+- **On both,** the nine `test-library-loading-*` suites and `test-connection` passed, the
+  owner compared inside the section among its rows.
+- **A missing `$tc-field` fails by name,** reproduced on Linux by
+  [tc-field-missing.sh](tc-field-missing.sh), the M4 session's method: with the field renamed
+  in the seven files that define it, 29 rows failed, every one a low row, each
+  `(none-taken-at-a-forced-exit ())`, and the three pending suites without a low row passed
+  ([out/closing-review/tc-field-missing-linux.txt](out/closing-review/tc-field-missing-linux.txt)).
 
 ### What it means for the slices
 

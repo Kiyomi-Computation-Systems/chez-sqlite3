@@ -74,7 +74,7 @@ newest first.
     again about Q14 and Q15 together, from a user's side, the answer was "Yes, as shown".
   - **The records:** the maintainer accepted ADR-0021 and the plan's amendments the same day
     ("Accept all").
-- **Now: M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
+- **M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
   2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
   of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
   - **M4 slice 1 is done:** the pure core of the four `db_config` settings and
@@ -88,7 +88,10 @@ newest first.
     four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
     4,** `load-extension!`, is done, as PR #45, `a795fa2`, below. **The maintainer's Mac run for
     slices 3 to 5** ran on 2026-11-18, below, and its one fault, a row of the suites, is fixed in
-    PR #47, `34721b4`. **M4's closing review** is PR #48, below.
+    PR #47, `34721b4`. **M4's closing review is done,** the last of M4's done conditions
+    ([the M4 plan](2026-11-17-m4-plan.md), §6), as PR #48, `79fa1ac`, by the M3 session,
+    squash-merged with CI passing in every job, and the Mac run after it passed, PR #49, below.
+    **M4 is done.**
   - **M5's pre-work** is merged, by the M4 session, as PR #41, `2102131`: the release's facts and
     the maintainer's questions.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
@@ -97,6 +100,9 @@ newest first.
     before slice 5, then "Document it, with a row" and "Vouch only for ours" (2026-11-17), and
     accepted its amendments to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept
     all").
+- **Now: M5,** the release. Its pre-work is merged, as PR #41, `2102131`, by the M4 session
+  ([research/m5-prework/](research/m5-prework/README.md)): its eight questions, Q1 to Q8, wait on
+  the maintainer before the M5 plan is written.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
@@ -122,6 +128,15 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run after M4's closing review** (arm64, Chez 10.4.1, 2026-11-19), on
+  `main` at `79fa1ac` by [research/m4-mac/closing-review.md](research/m4-mac/closing-review.md),
+  the maintainer's "Write it up now": `make test` passed 92 of 92 with Apple's 3.51.0 and with
+  Homebrew's 3.54.1.
+  - The timer's probes printed what Chez 10.4.0 printed, so `$tc-field` reads the same there.
+  - Homebrew's run read all 32 low-trip tallies, as Linux does. Apple's read the 19 that need no
+    `sqlite3_auto_extension`, through the forcing VFS and the trace, and named the rest
+    unavailable, matching a Linux stand-in for its refusal suite by suite but one, explained.
+  - A missing `$tc-field`, stood in on Linux, failed exactly the 29 low rows by name.
 - **The maintainer's Mac run for M4's slices 3 to 5** (macOS 26.7.1, arm64, 2026-11-18), on
   `main` at `ec48a9d`, by the M4 session's
   [research/m4-mac/slices-3-5.md](research/m4-mac/slices-3-5.md)
@@ -178,9 +193,6 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
-  - **The next Mac run** is the first on Chez 10.4.1 for the low passes' timer, read through
-    `$tc-field`, and for the forcing VFS on Apple's and Homebrew's libraries. A missing timer fails
-    every low row by name (ADR-0016, amended in M4's closing review).
   - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
     suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
     `memory-2` before calling it safe.
