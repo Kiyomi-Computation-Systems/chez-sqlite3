@@ -1,7 +1,6 @@
 #!r6rs
 ;;; interrupt-database! after a close that left the connection open, and
-;;; against opens and closes on another thread (ADR-0019, decision 2 and its
-;;; consequences; the M3 plan, section 4.4 and probe P5).
+;;; against opens and closes on another thread (ADR-0019).
 ;;;
 ;;;   left open   a close refused for an untracked statement, and one that
 ;;;               sqlite3_close itself refuses, busy beside an unfinished
@@ -25,30 +24,28 @@
 ;;; The race's interrupter makes its calls in bursts of ten, and sleeps 1
 ;;; microsecond after each burst, a system call that lets the owner run under
 ;;; Valgrind, which runs one thread at a time; the owner's opens and closes
-;;; of a file make system calls of their own.
-;;; Probe P5 (.plans/m3-slice-6-mutation-log.md, part A). P5's plant, M08,
-;;; calls sqlite3_interrupt whatever the flag says. It fails the race row by
-;;; name: the close clears the record's handle, so the plant's call on a
-;;; closed connection is refused on #f before it reaches C, and Valgrind saw
-;;; no error against it over 1, 20 and 200 rounds. P5b reads the handle
-;;; before the latch and calls whenever it is not #f, ignoring the flag: the
-;;; race passed it over 200 rounds under the gate, with no error, though
-;;; Valgrind reports sqlite3_interrupt on a freed connection when a stale
-;;; handle reaches C. So the race row sees no missing exclusion.
-;;; tests/test-interrupt-database.sps fails both plants on one thread, with
+;;; of a file make system calls of their own. A mutant that calls
+;;; sqlite3_interrupt whatever the flag says fails the race row by name: the
+;;; close clears the record's handle, so the mutant's call on a closed
+;;; connection is refused on #f before it reaches C, and Valgrind saw no
+;;; error against it over 1, 20 and 200 rounds. A second mutant reads the
+;;; handle before the latch and calls whenever it is not #f, ignoring the
+;;; flag: the race passed it over 200 rounds under the gate, with no error,
+;;; though Valgrind reports sqlite3_interrupt on a freed connection when a
+;;; stale handle reaches C. So the race row sees no missing exclusion.
+;;; tests/test-interrupt-database.sps fails both mutants on one thread, with
 ;;; no timing: its rows inside the close, and its engine row through a
-;;; stand-in, whose call comes after the close, on #f for M08 and on the live
-;;; handle for P5b. Its engine row through the verb raises on M08's #f, and
-;;; under make test-memory Valgrind reports P5b's call on the freed
-;;; connection there. Its two-thread row fails P5b, and slice 1's
-;;; tests/test-interrupt.sps fails a latch without its mutex (the log's
-;;; part A, follow-up 2).
+;;; stand-in, whose call comes after the close, on #f for the first and on
+;;; the live handle for the second. Its engine row through the verb raises on
+;;; the first's #f, and under make test-memory Valgrind reports the second's
+;;; call on the freed connection there. Its two-thread row fails the second,
+;;; and tests/test-interrupt.sps fails a latch without its mutex.
 ;;;
 ;;; A thread this suite forks answers whatever it raises, and every wait for
-;;; it is bounded (AGENTS.md). The loading procedures are reached through
-;;; eval, under a guard. Every computation that can raise runs under a guard
-;;; with a sentinel of its own; no expected value is #f. Effects run in
-;;; order, through let* and named lets, never map.
+;;; it is bounded. The loading procedures are reached through eval, under a
+;;; guard. Every computation that can raise runs under a guard with a
+;;; sentinel of its own; no expected value is #f. Effects run in order,
+;;; through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -211,17 +208,17 @@
 ;; memory mutex, sleeps 1 ms holding it, calls interrupt-database!, lets the
 ;; mutex go, and sleeps 1 ms, the first round the handshake; THUNK starts
 ;; once that holds the mutex and has interrupted. Answers what THUNK
-;; answered, or (raised WHAT);
-;; interrupts-sent or no-interrupt-sent; and the watchdog's end:
-;; the-watchdog-ended, the-watchdog-did-not-end, or (the-watchdog-raised
-;; WHAT ... END), the first three of its raises, which are its answer,
-;; never its end. A raise anywhere in a round, from mutex-enter, sleep or
-;; the bookkeeping as much as from the verb, is noted so: the round's
-;; handler lets SQLite's mutex go if the round took it, counts the watchdog
-;; started, sleeps 1 ms, and the next round follows, until THUNK is done or
-;; the deadline has passed (AGENTS.md). A thread that died holding the mutex
-;; would leave THUNK blocked inside SQLite for good. The one raise the
-;; device can't answer is a mutex-leave that raises every time.
+;; answered, or (raised WHAT); interrupts-sent or no-interrupt-sent; and the
+;; watchdog's end: the-watchdog-ended, the-watchdog-did-not-end, or
+;; (the-watchdog-raised WHAT ... END), the first three of its raises, which
+;; are its answer, never its end. A raise anywhere in a round, from
+;; mutex-enter, sleep or the bookkeeping as much as from the verb, is noted
+;; so: the round's handler lets SQLite's mutex go if the round took it,
+;; counts the watchdog started, sleeps 1 ms, and the next round follows,
+;; until THUNK is done or the deadline has passed. A thread that died
+;; holding the mutex would leave THUNK blocked inside SQLite for good. The
+;; one raise the device can't answer is a mutex-leave that raises every
+;; time.
 (define (watched db thunk)
   (let* ((handle (with-handle db (lambda (h) h)))
          (m (make-mutex))
@@ -417,9 +414,9 @@
 ;; --- the race --------------------------------------------------------------------------------
 
 ;; race-rounds : Positive-Integer
-;; The owner's opens and closes. P5's plant fails the row from 1, by the
-;; closed connection its last call is made certain to land on; Valgrind saw
-;; nothing at 1, 20 or 200 (.plans/m3-slice-6-mutation-log.md, P5).
+;; The owner's opens and closes. The first mutant fails the row from 1, by
+;; the closed connection its last call is made certain to land on; Valgrind
+;; saw nothing at 1, 20 or 200.
 (define race-rounds 20)
 
 ;; raced : String Positive-Integer -> (List Any Any Any Any Any Any)
@@ -456,7 +453,7 @@
                (let ((next
                       ;; A raise in a call's turn, the bookkeeping's or the
                       ;; sleep's as much as the verb's, is an answer among
-                      ;; the others, and the next turn follows (AGENTS.md).
+                      ;; the others, and the next turn follows.
                       (guard (e (#t (guard (x (#t #f))
                                       (with-mutex m
                                         (when (< (length others) 3)

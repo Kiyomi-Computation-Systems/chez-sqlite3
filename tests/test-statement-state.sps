@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private statement-state): the state table of
-;;; ADR-0014, decision 5, as pure functions. It loads no libsqlite3.
+;;; ADR-0014, as pure functions. It loads no libsqlite3.
 ;;;
 ;;;   the lists            the five states and the twelve verbs, in order
 ;;;   statement-verb-check the whole matrix, every verb against every state,

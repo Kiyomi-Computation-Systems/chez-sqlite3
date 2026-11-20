@@ -8,7 +8,7 @@
 ;;;
 ;;; The nine were one suite until it passed 450 s under the memory gate on
 ;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; there, over half of it (ADR-0005); now each runs at most 11
 ;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
@@ -28,7 +28,7 @@
 ;;;     which world ran.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005, decision 4). Each runs through
+;;; requires them zero (ADR-0005). Each runs through
 ;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
 ;;; with a log of its own that the gate reads. Every child says whether it ran
 ;;; under Valgrind, and a row requires yes exactly when the gate asked: the
@@ -36,14 +36,14 @@
 ;;; /proc/self/maps); preflight prints none, so (library-loading)'s
 ;;; preflight reads the one new log in the gate's directory for it, and
 ;;; requires that log's Command: line to be preflight's own, whole. A child
-;;; that escaped the gate fails its row (ADR-0005, amended).
+;;; that escaped the gate fails its row (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
 ;;; failing, and none is #f: SRFI-64 makes #f of a raise in the actual
 ;;; expression. Anything that can raise is computed under a guard with a
 ;;; sentinel. Effects run in order, through let*, named lets and for-each,
-;;; never map (AGENTS.md).
+;;; never map.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private open-options): the pure core of
-;;; open-database's options, and of its file: refusal (ADR-0012, decision 3).
+;;; open-database's options, and of its file: refusal (ADR-0012).
 ;;; It loads no libsqlite3: the library is pure, and the shell that turns
 ;;; its answers into flags passed to SQLite and into assertion violations is
 ;;; tests/test-connection.sps's.

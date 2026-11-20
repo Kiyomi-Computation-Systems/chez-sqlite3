@@ -1,6 +1,6 @@
 #!r6rs
-;;; with-transaction beside a real NOMEM (ADR-0017; the M3 plan, section 5
-;;; item 4), in a process of its own: the heap limit is process-wide.
+;;; with-transaction beside a real NOMEM (ADR-0017), in a process of its own: the heap limit is
+;;; process-wide.
 ;;;
 ;;; The suite binds sqlite3_hard_heap_limit64 and sqlite3_soft_heap_limit64
 ;;; itself, after the load, and sets the hard limit to sqlite3_memory_used
@@ -11,7 +11,7 @@
 ;;; method measured. Then it lifts both limits, the hard then the soft,
 ;;; however the call ends: the hard limit's lift alone leaves SQLite's memory
 ;;; pressure on for the process, and a second connection's read beside a
-;;; later write transaction answered BUSY (M3 slice 4's groundwork). Both
+;;; later write transaction answered BUSY. Both
 ;;; limits read 0 after every row, and at the end, but that check can't tell
 ;;; the hard lift alone: sqlite3_hard_heap_limit64(0) zeroes the soft limit
 ;;; too. Only the peer row holds the soft lift.
@@ -21,7 +21,7 @@
 ;;;              the build's: its NOMEM ended the transaction at the floor,
 ;;;              with Guix's 3.53.1 and CI's 3.54.1, and left it open in a
 ;;;              build with -DSQLITE_ENABLE_MEMORY_MANAGEMENT, Homebrew's among
-;;;              them (.plans/research/m3-mac/). So S3 takes the case its
+;;;              them. So S3 takes the case its
 ;;;              body's autocommit shows, and holds with-transaction's exit to
 ;;;              that case, whole
 ;;;   R1 to R4   a column-value of 100,000 bound bytes, by a SELECT reading a
@@ -43,7 +43,7 @@
 ;;; enforced, so each row prints UNAVAILABLE and is skipped, never passed.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. Effects run in order, through let* and named lets (AGENTS.md).
+;;; own. Effects run in order, through let* and named lets.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -291,7 +291,7 @@
 ;; control-kept : Any
 ;; What the memory check's own control says of this library: the check
 ;; native registered with the counters at the load, run here, whose
-;; :memory: open and close is its positive control (ADR-0005, amended).
+;; :memory: open and close is its positive control (ADR-0005).
 ;; kept when the count rose while that connection was open, its verdict
 ;; pass or fail; not-kept when it did not, unavailable; else what it
 ;; answered, or raised. memory-kept decides which rows run, so it answers

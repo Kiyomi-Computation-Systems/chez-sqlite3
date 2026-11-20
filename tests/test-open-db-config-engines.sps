@@ -1,7 +1,6 @@
 #!r6rs
 ;;; The suite for db_config's four settings at open under engines (ADR-0018,
-;;; amended in M3 slice 5, in M3's closing review and for M4; ADR-0021,
-;;; decision 3; the M4 plan, section 4.1, and section 5, item 3), in
+;;; ADR-0021), in
 ;;; (chez-sqlite3 private open). Each set is one more critical section of the
 ;;; call, at the next position of its claim, claimed inside it: a run the call
 ;;; has passed is refused there, touching nothing.
@@ -51,7 +50,7 @@
 ;;;                  there, so a remainder or a continuation is taken at a
 ;;;                  set's exit too, before anything after it: a claim
 ;;;                  advanced just after its section, not inside it, set an op
-;;;                  twice there (M4's closing review, reviewer B's B1). A
+;;;                  twice there. A
 ;;;                  forcing VFS, SQLite's default with xAccess and
 ;;;                  xFullPathname wrapped, allocates 32 KiB inside the open's
 ;;;                  section and each setting's that begins a read, so a
@@ -77,25 +76,24 @@
 ;;;
 ;;; Where the library lacks sqlite3_load_extension, as Apple's does, the
 ;;; opt-in would refuse every open, so its list leaves the opt-in out, and a
-;;; line names it unavailable (ADR-0005, amended); the rest run. An engine
+;;; line names it unavailable (ADR-0005); the rest run. An engine
 ;;; spends no ticks inside a critical section, so the fuels measure the Scheme
-;;; work between the call's sections (.plans/traps.md). Each trial begins with
+;;; work between the call's sections. Each trial begins with
 ;;; a collection, so its first slice runs as every trial's at that fuel
 ;;; does, unless a collect request falls in it (below), whichever pass; in
 ;;; the high pass collect-trip-bytes is then raised
-;;; far above what its runs allocate, so no collect request falls in them
-;;; (.plans/research/m3-slice-5/, gc-ticks.sps). Each trial is judged by what
+;;; far above what its runs allocate, so no collect request falls in them.
+;;; Each trial is judged by what
 ;;; it saw itself, and each bound on a whole new call is a refusal the sweep
 ;;; saw itself, R taken before the call's first section: never a refused
-;;; call's fuel, a control run on the code under test, or a caller's count
-;;; (AGENTS.md). Until M4's closing review the interleaved rows judged a
-;;; trial by a control run at its fuel, which a low trip moved from the trial
-;;; (reviewer B's B2).
+;;; call's fuel, a control run on the code under test, or a caller's count.
+;;; The interleaved rows judge a trial by what it saw itself: a control run
+;;; at its fuel would be moved from the trial by a low trip.
 
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -491,7 +489,7 @@
 ;; call allocates, until the trial ends: a request then falls due all
 ;; through it, and one due inside a critical section is handled at the
 ;; section's exit, where it costs the engine ticks, so an expiry or a timer's
-;; tick can fall at a set's exit, before anything after it (.plans/traps.md).
+;; tick can fall at a set's exit, before anything after it.
 ;; Every request the trials meet goes through counted-request, which counts
 ;; it, and the low rows judge where they fell (where a remainder lies,
 ;; below).
@@ -509,7 +507,7 @@
 ;; the engine ticks there, so that run's remainder lies earlier in the call
 ;; than its fuel or tick says: a whole new call came at a fuel at or past
 ;; one a trial was refused at, R before the call's first section, where a
-;; request fell (M4's closing review, builder D). So each trial notes
+;; request fell. So each trial notes
 ;; whether a request fell before its remainder was taken, and the sweep's
 ;; bound on a whole new call reads only the trials where none did; a whole
 ;; new call where one did is counted and printed, and judged by its other
@@ -536,8 +534,7 @@
 ;; lies at that section's exit, before anything after it. A probe's marker,
 ;; set inside a section and overwritten just after it, read the section's
 ;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB (M4's closing review, builder D's
-;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
 ;; its request before the next forced section or its slice's end, which a
 ;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
 ;; about one time in eight; and unless some first slice expired at a forced
@@ -632,7 +629,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -1347,9 +1344,9 @@
 
 ;; mem-settings : Settings
 ;; A PRAGMA, busy-timeout listed last so it runs first, and the three ops,
-;; with the opt-in where the library has it. Until M4's closing review they
-;; were opened on :memory:, which no VFS method sees; on a file, the open's
-;; section calls xFullPathname, so the forcing VFS forces it.
+;; with the opt-in where the library has it. They are opened on a file, not on :memory:, which
+;; no VFS method sees: on a file, the open's section calls xFullPathname, so
+;; the forcing VFS forces it.
 (define mem-settings
   (append '((defensive . #t) (foreign-keys . #t))
           (if (eq? available #t) '((enable-load-extension . #t)) '())

@@ -298,7 +298,7 @@ run_require -- test
 check "R6 no tools: exit 2" [ "$status" -eq 2 ]
 check "R6 no tools: usage" [ "$(err_lines)" = "usage: require-tools GOAL TOOL...|" ]
 
-# M1: `make check-guix` without guix stops at require-tools, naming the
+# `make check-guix` without guix stops at require-tools, naming the
 # goal the user typed, before any test or container runs. The recipe's
 # next line runs `sh tests/guix-env-launcher.sh`, which would find the
 # stub sh.
@@ -311,7 +311,7 @@ check "M1 make check-guix without guix: names the goal" \
   grep -Fxq "make check-guix: guix not found." "$tmp/err"
 check "M1 make check-guix without guix: runs no test" [ ! -s "$started" ]
 
-# M2: `make test` with no Chez stops at its prerequisite check-suites, whose
+# `make test` with no Chez stops at its prerequisite check-suites, whose
 # require-tools hint names `test`, the goal the user typed, not
 # `check-suites`: GOAL's $(MAKECMDGOALS) branch, reached through a
 # prerequisite. It runs in a copy of the tree, with the real PATH, so deps and
@@ -338,7 +338,7 @@ check "M2 make test without Chez: names no suite's outcome" lacks "test: "
 
 # T11: make test's per-suite bound. GNU timeout reads 0 as no limit, so make
 # test refuses any TEST_TIMEOUT but a positive whole number, before any suite
-# runs, and the default is one. Each refusal runs in M2's copy.
+# runs, and the default is one. Each refusal runs in a copy of the tree.
 print_test_timeout() {
   env -i PATH="$PATH" "$make_bin" --no-print-directory -C "$root" \
     --eval 'print-test-timeout: ; @echo "$(TEST_TIMEOUT)"' print-test-timeout
@@ -350,7 +350,7 @@ check "T11a the default TEST_TIMEOUT is a positive whole number" positive_whole 
 # CHEZ goes through when it is set, as on CI's runner, whose Chez is on no
 # PATH. Without it, env -i would leave the Makefile's default, scheme on
 # PATH, and a runner without one fails at the prerequisites, for another
-# reason (M0 slice 4's second CI run).
+# reason.
 for bad_timeout in 0 007 1.5 ''; do
   ( if [ -n "${CHEZ:-}" ]; then
       exec env -i PATH="$PATH" CHEZ="$CHEZ" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout"

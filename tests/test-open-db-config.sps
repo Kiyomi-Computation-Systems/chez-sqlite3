@@ -1,7 +1,6 @@
 #!r6rs
-;;; The suite for db_config's four settings at open (ADR-0021, decisions 1 to
-;;; 5 and 10; ADR-0018, amended for M4; the M4 plan, sections 4.1, 4.3 and
-;;; 4.7, and section 5, item 3), in (chez-sqlite3 private open):
+;;; The suite for db_config's four settings at open (ADR-0021, ADR-0018), in
+;;; (chez-sqlite3 private open):
 ;;; enable-load-extension, defensive, dqs-dml and dqs-ddl, each one
 ;;; sqlite3_db_config call in a critical section of its own, held by its own
 ;;; answer.
@@ -16,10 +15,10 @@
 ;;;                     sqlite3_open_v2, outside open-database, then the same
 ;;;                     read on a connection open-database opened with no
 ;;;                     setting, (), the six PRAGMAs, the opt-in's #f, or any
-;;;                     list of one op, the other three compared (decision 2)
+;;;                     list of one op, the other three compared
 ;;;   the opt-in's #f   beside an entry point sqlite3_auto_extension runs at
 ;;;                     every open, which starts the C switch at 1, as
-;;;                     Ubuntu's library does: no call of 0 is made (Q15)
+;;;                     Ubuntu's library does: no call of 0 is made
 ;;;   moved starts      beside an entry point that moves every op off this
 ;;;                     library's start at every open: no setting, (), and
 ;;;                     call-with-database keep every moved value; each list
@@ -28,7 +27,7 @@
 ;;;                     value unasked, or a set skipped where the value asked
 ;;;                     is the start, shows on every library
 ;;;   defensive         under it PRAGMA writable_schema = 1 answers done and
-;;;                     reads back 0; with it off, 1 (Q6)
+;;;                     reads back 0; with it off, 1
 ;;;   DQS               off, a double-quoted name that is no column fails at
 ;;;                     prepare, code error, never at the step; on, it is a
 ;;;                     string; each flag its own statements' alone
@@ -74,11 +73,11 @@
 ;;; without sqlite3_load_extension, so its rows are test-library-loading-
 ;;; extension's, on the decoy. The loading procedures are reached through eval,
 ;;; under a guard, as tests/test-statement.sps reaches them, so the suite runs
-;;; against a library that lacks slice 3's names, failing by name.
+;;; against a library that lacks the names the open reaches, failing by name.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -292,7 +291,7 @@
 ;; --- db_config's reads, through native ----------------------------------------------------
 
 ;; ops : (Listof (Pairof Symbol Natural))
-;; The four, by name and op, in the M4 plan's table order, the ops
+;; The four, by name and op, in the settings table's order, the ops
 ;; constants.sls's, which test-constants holds to sqlite3.h.
 (define ops
   (list (cons 'enable-load-extension sqlite-dbconfig-enable-load-extension)
@@ -305,7 +304,7 @@
 ;; next-fill : Natural
 ;; The sentinel the next read fills its cell with: each read its own, never
 ;; 0 or 1, so a read that leaves its cell is seen as left, never as a value
-;; another read wrote (AGENTS.md: each round trip its own sentinel).
+;; another read wrote (each round trip its own sentinel).
 (define next-fill 700)
 (define (fresh-fill!) (set! next-fill (+ next-fill 1)) next-fill)
 
@@ -338,7 +337,7 @@
 
 ;; raw-flags : Natural
 ;; open-database's flags with no option: read-write, create, the full mutex
-;; and extended codes (ADR-0012, decision 3).
+;; and extended codes (ADR-0012).
 (define raw-flags
   (bitwise-ior sqlite-open-readwrite sqlite-open-create sqlite-open-fullmutex sqlite-open-exrescode))
 
@@ -364,7 +363,7 @@
 
 ;; errstr : Integer -> Any
 ;; sqlite3_errstr's text for CODE, read through native: what a set's failure
-;; carries as its message (ADR-0021, decision 3).
+;; carries as its message (ADR-0021).
 (define (errstr code)
   (guard (e (#t (list 'raised (describe e))))
     (c-string->string (sqlite3-errstr code))))
@@ -389,7 +388,7 @@
 ;; unavailable-noted! : String -> Void
 ;; Where the library lacks sqlite3_load_extension, the row NAME's opt-in
 ;; part printed unavailable, its refusal asserted in its place, never
-;; passed unseen (ADR-0005, amended).
+;; passed unseen (ADR-0005).
 (define (unavailable-noted! name)
   (unless (eq? available #t)
     (display "UNAVAILABLE ")
@@ -547,7 +546,7 @@
                      (c (with-db (lambda () (open-database path 'no-mutex list-of)) op-reads)))
                 (list (list a) (list b) (list c) (native-counts)))))))
 
-;; --- each start unasked (decision 2; the M4 plan, section 4.7) -----------------------------
+;; --- each start unasked -----------------------------
 
 ;; starts-on : (-> Database) -> Any
 (define (starts-on open) (with-db open op-reads))
@@ -597,8 +596,8 @@
           '((enable-load-extension . #f) (defensive . #t) (defensive . #f) (dqs-dml . #t)
             (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f))))
 
-;; The review's R3 set defensive to 1 beside the opt-in, unasked, and passed
-;; when the opt-in's list stood outside this row; so every list of one op is
+;; A set of defensive to 1 beside the opt-in, unasked, once passed when the
+;; opt-in's list stood outside this row; so every list of one op is
 ;; here, each judged by the other three against the library's start.
 (test-equal "a list naming one op leaves the other three at the library's start: each of the four at #t and at #f, the opt-in's #t where the library has sqlite3_load_extension, each list's other three compared with the suite's own connection's"
   (let ((s (raw-starts ":memory:")))
@@ -612,10 +611,10 @@
         (let ((r (starts-on (lambda () (open-database ":memory:" (list (car rest)))))))
           (loop (cdr rest) (cons (list (car rest) (others-than (car (car rest)) r)) found))))))
 
-;; --- the opt-in's #f beside a C switch that starts on (Q15) ---------------------------------
+;; --- the opt-in's #f beside a C switch that starts on ---------------------------------
 ;; Ubuntu's library starts ENABLE_LOAD_EXTENSION at 1, every other this suite
-;; meets at 0 (the M4 pre-work's census), so the start rows see a call of 0
-;; for the opt-in's #f, which must never be made (ADR-0021, decision 5), on
+;; meets at 0, so the start rows see a call of 0
+;; for the opt-in's #f, which must never be made (ADR-0021), on
 ;; Ubuntu's alone. Here an entry point that sqlite3_auto_extension runs at
 ;; every open sets the op to 1 on each new connection, through native's
 ;; binding: a start of 1 on every lane, read first on the suite's own
@@ -623,9 +622,8 @@
 ;; calls it, is, and raises nothing. A libsqlite3 can refuse the
 ;; registration: Apple's 3.51.0 answers 21, SQLITE_MISUSE, as
 ;; test-open-interleave records; then the row is printed unavailable, and the
-;; refusal, 21 and no other code, is asserted in its place (ADR-0005,
-;; amended). It is unregistered by sqlite3_reset_auto_extension, which frees
-;; SQLite's list, and unlocked once.
+;; refusal, 21 and no other code, is asserted in its place (ADR-0005). It is unregistered by
+;; sqlite3_reset_auto_extension, which frees SQLite's list, and unlocked once.
 
 ;; int sqlite3_auto_extension(void (*xEntryPoint)(void))
 (define auto-extension
@@ -723,11 +721,10 @@
 
 ;; --- each set and each start, over moved starts --------------------------------------------
 ;; The start rows above hold each start where nothing moves it, so they
-;; cannot see a set that writes the library's own start value: in slice 3's
-;; review, defensive set to 0 at every open (R1) and dqs-dml set to 1 (R2)
-;; passed every row on Guix's library, and so did defensive's #f skipped and
-;; answered as a match (R6), since c-held's #f reads 0 either way. Here an
-;; entry point sqlite3_auto_extension runs at every open moves each of the
+;; cannot see a set that writes the library's own start value: defensive
+;; set to 0 at every open and dqs-dml set to 1 passed every row on Guix's
+;; library, and so did defensive's #f skipped and answered as a match, since c-held's #f reads 0
+;; either way. Here an entry point sqlite3_auto_extension runs at every open moves each of the
 ;; four ops off this library's start, read by raw-starts first, through
 ;; native's binding, so a value written unasked, or a set not made, shows on
 ;; any library, whatever its starts: the moved value is 1 less the start's
@@ -1017,7 +1014,7 @@
               (list (car files) (cadr files) (full-reads (caddr files)))
               files)))))
 
-;; --- defensive's writable_schema (Q6) ------------------------------------------------------
+;; --- defensive's writable_schema ------------------------------------------------------
 
 ;; writable : Database -> Any
 ;; PRAGMA writable_schema = 1 prepared and stepped on DB: what the step
@@ -1042,7 +1039,7 @@
 ;; prepared-as : Database String -> Any
 ;; SQL prepared on DB, then stepped once: (row V), V its first column,
 ;; done, or what the prepare or the step raised, by its who and code alone,
-;; never its message, which differs by version (the M4 plan, section 4.1).
+;; never its message, which differs by version.
 (define (prepared-as db sql)
   (guard (e ((sqlite-error? e) (list 'refused (who-of e) (sqlite-error-code e)))
             (#t (list 'raised (what-raised e))))
@@ -1221,9 +1218,9 @@
                                            found))))
               reads)))))
 
-;; --- the order across PRAGMAs and sets (ADR-0018, decision 5) -------------------------------
+;; --- the order across PRAGMAs and sets (ADR-0018) -------------------------------
 ;; busy-timeout first, then the rest in the list's order, PRAGMAs and the
-;; four alike (the M4 plan, section 4.1). Two PRAGMAs set flags that
+;; four alike. Two PRAGMAs set flags that
 ;; sqlite3_db_config reads too: foreign_keys SQLITE_DBCONFIG_ENABLE_FKEY's,
 ;; 1002, and trusted_schema SQLITE_DBCONFIG_TRUSTED_SCHEMA's, 1017, as the
 ;; ops of 3.45.1's and 3.54.1's headers are listed in tests/test-settings.sps.
@@ -1510,7 +1507,7 @@
 ;; current lane's, 3.54.1's, but the four, each named by ADR-0021's rule,
 ;; SQLITE_DBCONFIG_ dropped, lower-cased, _ turned to -: as tests/test-
 ;; settings.sps lists them, with the headers' sha256s. trusted-schema is
-;; ADR-0018's PRAGMA, the one way in to that flag (Q7).
+;; ADR-0018's PRAGMA, the one way in to that flag.
 (define other-ops
   '(maindbname lookaside enable-fkey enable-trigger enable-fts3-tokenizer no-ckpt-on-close
     enable-qpsg trigger-eqp reset-database writable-schema legacy-alter-table enable-view

@@ -1,6 +1,5 @@
 #!r6rs
-;;; The suite for one open's runs interleaved (ADR-0018, consequences; the
-;;; maintainer's "Guard every call", ADR-0016, amended in M3 slice 3), in
+;;; The suite for one open's runs interleaved (ADR-0018, consequences; ADR-0016), in
 ;;; (chez-sqlite3 private open). Chez's engine remainders are multi-shot: R,
 ;;; one remainder of a call, resumed until it expires again, is R1, and R
 ;;; can then be resumed again while R1 is pending. Each run of the call goes
@@ -51,8 +50,7 @@
 ;;;   an escape    call-with-database, SIGINT raised inside each of its
 ;;;                sections in turn, from the callbacks: Chez handles a
 ;;;                keyboard interrupt that came pending inside a critical
-;;;                section as the section ends, before the next expression
-;;;                (.plans/research/m3-slice-5/, section-end.sps), and the
+;;;                section as the section ends, before the next expression, and the
 ;;;                handler leaves the call: the extent closes the connection
 ;;;                each time, no later section runs, and nothing is counted. An engine and a
 ;;;                timer spend no ticks inside a section, so only such an
@@ -64,8 +62,8 @@
 ;;;                its exit and costs the engine ticks there, so a remainder is
 ;;;                taken at a section's exit too, before anything after it: a
 ;;;                claim advanced just after its section, not inside it,
-;;;                applied a setting twice there (M4's closing review, reviewer
-;;;                B's B1). The tell's callbacks allocate 32 KiB inside the
+;;;                applied a setting twice there.
+;;;                The tell's callbacks allocate 32 KiB inside the
 ;;;                open's section and each setting's prepare, so a request
 ;;;                falls due there. The low pass fails by name unless collect
 ;;;                requests fell in its trials, unless each forced section met
@@ -78,22 +76,22 @@
 ;;; The tell: sqlite3_auto_extension runs an entry point of this suite at
 ;;; every open, which notes the open and sets an authorizer on the new
 ;;; connection. SQLite calls the authorizer at every prepare, and a setting
-;;; takes effect at its prepare (M3's research, single P3), so each PRAGMA
+;;; takes effect at its prepare, so each PRAGMA
 ;;; prepared is noted, its connection, its name and its value, none for a
 ;;; read. Both callbacks are __collect_safe: SQLite calls them inside
 ;;; sqlite3_open_v2 and sqlite3_prepare_v3, which are. They answer data and
 ;;; raise nothing. The entry point is unregistered, and both unlocked, at
 ;;; the end. A libsqlite3 can refuse the registration: Apple's 3.51.0
 ;;; answers 21, SQLITE_MISUSE, for an entry point upstream takes. With no
-;;; tell, nothing is noted, and nothing is unavailable silently (ADR-0005,
-;;; amended): a row whose every check needs the tell, or that raises SIGINT
+;;; tell, nothing is noted, and nothing is unavailable silently (ADR-0005):
+;;; a row whose every check needs the tell, or that raises SIGINT
 ;;; from the callbacks, goes through tell-available!, which prints
 ;;; UNAVAILABLE and skips it; a row with checks that read the notes goes
 ;;; through tell-kept?, which prints UNAVAILABLE for them, and the row runs
 ;;; its others. The gate is held by an independent reading: before the tell
 ;;; registers, an entry point that does nothing is registered straight
 ;;; through the FFI and the list reset, and a row requires the gate to refuse
-;;; exactly when that answered 21 (M3's closing review, reviewer B).
+;;; exactly when that answered 21.
 ;;;
 ;;; Which fuels lie before the call's first expression is measured, not
 ;;; assumed, and by the sweep itself: a remainder taken past the call's first
@@ -103,24 +101,21 @@
 ;;; least, and make every whole new call, two connections opened, below the
 ;;; first fuel at which it met one. A refused call's completing fuel is no
 ;;; bound: an open's sections spend no ticks, so the open and its settings
-;;; span fewer fuels than the refusal's raise (M3's closing review, reviewer
-;;; B). Each trial begins with a collection, so its first slice runs as every
-;;; trial's at that fuel does, unless a collect request falls in it, which
+;;; span fewer fuels than the refusal's raise. Each trial begins with a collection, so its first
+;;; slice runs as every trial's at that fuel does, unless a collect request falls in it, which
 ;;; the bound sets aside (below), and a remainder lies further into the
-;;; call's first expressions at each fuel than at the one before. Until M4's
-;;; closing review a trial was judged by a control, the same call run at its
-;;; fuel, which the low trip moved from the trial; AGENTS.md forbids a bound
-;;; from a control run on the code under test (reviewer B's B2). Each trial
-;;; is judged by what it saw itself.
+;;; call's first expressions at each fuel than at the one before. A bound
+;;; from a control run on the code under test, the same call run at its fuel,
+;;; would move with the low trip: each trial is judged by what it saw itself.
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
-;;; the Scheme work between the open's sections (.plans/traps.md). The
+;;; the Scheme work between the open's sections. The
 ;;; loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -314,7 +309,7 @@
 ;; unavailable! : Any String (U String #f) -> Boolean
 ;; Whether ANSWER, registered's, is the refusal; then the row NAME, or its
 ;; CHECK, the one part that reads the tell, is printed unavailable, so it
-;; is never passed unseen (ADR-0005, amended). The one place both gates
+;; is never passed unseen (ADR-0005). The one place both gates
 ;; below decide.
 (define (unavailable! answer name check)
   (let ((refused (tell-refused? answer)))
@@ -406,7 +401,7 @@
 ;; A collection now, at a trial's start, with collect-trip-bytes raised to
 ;; 128 MiB, far above what one trial's runs allocate, so no collect request
 ;; falls in a trial of the high pass: a request costs a run up to a tick,
-;; and more than one can cost two (.plans/research/m3-slice-5/, gc-ticks.sps).
+;; and more than one can cost two.
 (define (quieted!)
   (collect-trip-bytes (expt 2 27))
   (collect))
@@ -418,7 +413,7 @@
 ;; until the trial ends: a request then falls due all through it, and one
 ;; due inside a critical section is handled at the section's exit, where it
 ;; costs the engine ticks, so an expiry can fall at a section's exit, before
-;; anything after it (.plans/traps.md). Every request the trials meet goes
+;; anything after it. Every request the trials meet goes
 ;; through counted-request, which counts it, and the low rows judge where
 ;; they fell (where a remainder lies, below).
 
@@ -434,9 +429,8 @@
 ;; A request in a run before its expiry costs the engine ticks there, so
 ;; that run's remainder lies earlier in the call than its fuel says: a whole
 ;; new call came at the fuel at which a trial was refused, R before the
-;; open, where a request fell in its first slice (M4's closing review,
-;; builder D). So each trial notes whether a request fell in its first
-;; slice, and the sweep's bound on a whole new call reads only the trials
+;; open, where a request fell in its first slice. So each trial notes whether a request fell in its
+;; first slice, and the sweep's bound on a whole new call reads only the trials
 ;; where none did; a whole new call where one did is counted and printed,
 ;; and judged by its other evidence. The bound's refusal may come from any
 ;; trial: a request moves a remainder earlier, never later.
@@ -460,8 +454,7 @@
 ;; lies at that section's exit, before anything after it. A probe's marker,
 ;; set inside a section and overwritten just after it, read the section's
 ;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB (M4's closing review, builder D's
-;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
 ;; its request before the next forced section or its slice's end, which a
 ;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
 ;; about one time in eight; and unless some first slice expired at a forced
@@ -556,7 +549,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -808,8 +801,8 @@
 ;; What the procedure's own call-with-open-handle raises when an expiry
 ;; falls in the few instructions between its finished flag and its wind's
 ;; exit, and its resume enters the wind again: that call's refusal, as its
-;; comment in (chez-sqlite3 private connection) says. M1's closing review
-;; found no engine reaching the window over fuel 1 to 3000 in one slice; a
+;; comment in (chez-sqlite3 private connection) says. Measured:
+;; no engine reaches the window over fuel 1 to 3000 in one slice; a
 ;; remainder resumed at a fuel of 1 to 3 reaches it here.
 (define own-wind-refused
   '(raised (assertion-violation test-open-interleave (re-entered))))
@@ -1125,8 +1118,7 @@
 ;; The open verbs' claim, made-claim's, made by the call's first expression.
 ;; The sweeps below hold it through the calls; these rows hold it whole: no
 ;; position the call has passed is claimed again, 0 above all, the open's,
-;; which any remainder taken before the open carries (M3's closing review,
-;; reviewer B's N1o).
+;; which any remainder taken before the open carries.
 
 ;; claimed : (Listof Natural) -> (Listof Boolean)
 ;; A fresh claim given each of STEPS, in order: what it answered each time.

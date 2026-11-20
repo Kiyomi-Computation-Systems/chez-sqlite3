@@ -3,22 +3,22 @@
 ;;; each copied from sqlite3.h as of SQLite 3.45.1, the floor (ADR-0001,
 ;;; ADR-0003). SQLite never renumbers a result code or a flag. A later
 ;;; release may add some: a code this table lacks stays an integer
-;;; (ADR-0013, decision 3).
+;;; (ADR-0013).
 ;;;
 ;;; tests/test-constants.sps holds every value here to the sqlite3.h the
 ;;; compiler finds, with a C program compiled at test time (ADR-0001).
 ;;;
-;;;   sqlite-open-*             the open flags v1 uses (ADR-0012, decision 3)
+;;;   sqlite-open-*             the open flags v1 uses (ADR-0012)
 ;;;   sqlite-row, sqlite-done   what sqlite3_step answers for a row, and at
-;;;                             the end (M2)
+;;;                             the end
 ;;;   sqlite-integer ... sqlite-null
-;;;                             sqlite3_column_type's five type codes (M2)
-;;;   sqlite-utf8               the text encoding bound text is given (M2)
+;;;                             sqlite3_column_type's five type codes
+;;;   sqlite-utf8               the text encoding bound text is given
 ;;;   sqlite-prepare-persistent
 ;;;                             sqlite3_prepare_v3's flag for a statement kept
-;;;                             and run again (M3)
+;;;                             and run again
 ;;;   sqlite-dbconfig-*         the four sqlite3_db_config ops v1 sets, each
-;;;                             in the shape (db op int int*) (M4, ADR-0021)
+;;;                             in the shape (db op int int*) (ADR-0021)
 ;;;   sqlite-result-codes       every primary and extended result code in
 ;;;                             3.45.1's sqlite3.h, in the header's order
 ;;;   sqlite-result-code-name   a code's name, or the integer
@@ -63,7 +63,7 @@
   ;; sqlite-done : Natural              SQLITE_DONE: sqlite3_step has finished
   (define sqlite-done 101)
 
-  ;; The type codes sqlite3_column_type answers (ADR-0015, decision 7).
+  ;; The type codes sqlite3_column_type answers (ADR-0015).
   ;; sqlite-integer : Natural           SQLITE_INTEGER
   (define sqlite-integer 1)
   ;; sqlite-float : Natural             SQLITE_FLOAT
@@ -78,15 +78,15 @@
   (define sqlite-null 5)
 
   ;; sqlite-utf8 : Natural              SQLITE_UTF8: sqlite3_bind_text64's
-  ;; encoding (ADR-0015, decision 5)
+  ;; encoding (ADR-0015)
   (define sqlite-utf8 1)
 
   ;; sqlite-prepare-persistent : Natural   SQLITE_PREPARE_PERSISTENT:
   ;; sqlite3_prepare_v3's prepFlags bit for a statement that is kept and run
-  ;; again, so SQLite avoids the lookaside memory for it (M3, ADR-0020)
+  ;; again, so SQLite avoids the lookaside memory for it (ADR-0020)
   (define sqlite-prepare-persistent #x01)
 
-  ;; The sqlite3_db_config ops of v1's four settings (ADR-0021, decision 1).
+  ;; The sqlite3_db_config ops of v1's four settings (ADR-0021).
   ;; Each takes an int, 1 to set, 0 to clear, -1 to read, and an int* for the
   ;; state after the call.
   ;; sqlite-dbconfig-enable-load-extension : Natural   SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION

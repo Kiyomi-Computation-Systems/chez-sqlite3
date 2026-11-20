@@ -67,7 +67,7 @@
   ;;   suite-exit-status: the NAME check passed: TEXT
   ;;   suite-exit-status: exit 1 (the NAME check failed): TEXT
   ;;   suite-exit-status: the NAME check is unavailable: TEXT
-  ;; Unavailable fails nothing, and is never silent (ADR-0005, amended). A
+  ;; Unavailable fails nothing, and is never silent (ADR-0005). A
   ;; check that raises, or answers anything else, has failed, and its line
   ;; says what it raised or answered.
   (define (suite-exit-status runner)
@@ -177,7 +177,7 @@
           ;; leaves a directory the after thunk cannot see. The section
           ;; answers what was made, and a failure is raised after it: a raise
           ;; inside one would reach a with-exception-handler handler with
-          ;; interrupts still disabled (M1's closing review).
+          ;; interrupts still disabled.
           (let ((made (critical-section
                        (let ((outcome (make-capture-directory)))
                          (when (eq? (car outcome) 'made) (set! dir (cadr outcome)))
@@ -414,7 +414,7 @@
   ;; ARGV, the command of a child that reaches native code, as the memory
   ;; gate runs it. make test-memory exports CHEZ_SQLITE3_GATE_CHILD to each
   ;; suite: Valgrind and the gate's own options, a log of the child's own
-  ;; among them (ADR-0005, amended). When GETENV reads it, its words, cut at
+  ;; among them (ADR-0005). When GETENV reads it, its words, cut at
   ;; whitespace as make cuts VALGRIND, come first, so the child runs under the
   ;; gate and the gate reads its log; when it is unset, ARGV comes back
   ;; unchanged. Valgrind runs Chez itself: nothing comes between them. A

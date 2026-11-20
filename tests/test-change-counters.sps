@@ -1,28 +1,27 @@
 #!r6rs
-;;; The suite for the change counters and in-transaction? (ADR-0016, decision
-;;; 8; the M3 plan, section 4.1), in (chez-sqlite3 private connection): every
-;;; case of M3's research, single B2, through them, and single B1's items 1
-;;; and 2 through in-transaction?. Not yet exported from (chez-sqlite3), whose
+;;; The suite for the change counters and in-transaction? (ADR-0016), in
+;;; (chez-sqlite3 private connection): every counter case through them, and
+;;; the in-transaction? cases through in-transaction?. Not yet exported from (chez-sqlite3), whose
 ;;; names and docs come with the conveniences.
 ;;;
-;;;   the cases   as the research's counters.c runs them: before each
+;;;   the cases   as a C program of the counters runs them: before each
 ;;;               statement, an INSERT OR REPLACE of two rows into z sets
 ;;;               changes to 2 and last-insert-rowid to 7777, values no
 ;;;               statement measured gives by itself; the statement runs to
 ;;;               its end, and the three counters are read after its last
 ;;;               step and again after its finalize, total-changes as its
 ;;;               move across the statement. Each row asserts what the
-;;;               research's output gives, alike on 3.53.1 and 3.45.1
+;;;               C program's output gives, alike on 3.53.1 and 3.45.1
 ;;;   the raises  each counter checks, in order, a database, its owning
 ;;;               thread and that it is open, naming itself, at depth 1
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
-;;; tests/test-statement.sps reaches them. Statements run through M2's
-;;; statement tier, the conveniences being part B's.
+;;; tests/test-statement.sps reaches them. Statements run through the
+;;; statement tier, not the conveniences.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -125,7 +124,7 @@
 
 ;; with-counters-db : (List String) (String Database -> Any) -> Any
 ;; PROC's answer, or what it raised, given a file c.db in a temporary
-;; directory, made with the research's tables z and t and then SETUP, and a
+;; directory, made with the tables z and t and then SETUP, and a
 ;; connection to it, closed after.
 (define (with-counters-db setup proc)
   (in-dir
@@ -246,9 +245,9 @@
   zero-counts
   (native-counts))
 
-;; --- single B2, case by case ------------------------------------------------------------------
-;; Each row's expected values are the research's output for its case, on
-;; 3.53.1 and 3.45.1 alike (.plans/research/m3-plan/single/counters-*.txt).
+;; --- case by case ------------------------------------------------------------------
+;; Each row's expected values are the C program's output for its case, on
+;; 3.53.1 and 3.45.1 alike.
 
 (test-equal "C0: a fresh connection's counters are 0, 0 and 0"
   '(0 0 0)
@@ -439,7 +438,7 @@
              (after-rollback (counters db before)))
         (list after-insert after-rollback)))))
 
-;; --- in-transaction?, by single B1's items 1 and 2 ------------------------------------------------
+;; --- in-transaction?, by its cases ------------------------------------------------
 
 (test-equal "in-transaction? is #f in autocommit, #t after a deferred BEGIN that has read nothing, #f after COMMIT; #t after BEGIN IMMEDIATE, #f after ROLLBACK; #t after a SAVEPOINT outside a transaction, #f after its RELEASE"
   '(#f #t #f #t #f #t #f)

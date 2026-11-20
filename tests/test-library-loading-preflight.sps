@@ -8,7 +8,7 @@
 ;;;
 ;;; The nine were one suite until it passed 450 s under the memory gate on
 ;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; there, over half of it (ADR-0005); now each runs at most 11
 ;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
@@ -26,7 +26,7 @@
 ;;;     error, which the probe reports as a raise.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005, decision 4). Each runs through
+;;; requires them zero (ADR-0005). Each runs through
 ;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
 ;;; with a log of its own that the gate reads. Every child says whether it ran
 ;;; under Valgrind, and a row requires yes exactly when the gate asked: the
@@ -34,14 +34,14 @@
 ;;; preflight prints none, so (library-loading)'s preflight reads the one new
 ;;; log in the gate's directory for it, and requires that log's Command: line
 ;;; to be preflight's own, whole. A child that escaped the gate fails its row
-;;; (ADR-0005, amended).
+;;; (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
 ;;; failing, and none is #f: SRFI-64 makes #f of a raise in the actual
 ;;; expression. Anything that can raise is computed under a guard with a
 ;;; sentinel. Effects run in order, through let*, named lets and for-each,
-;;; never map (AGENTS.md).
+;;; never map.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
@@ -158,7 +158,7 @@
 ;; The candidates' lines preflight prints for not-found, each "    PATH\n",
 ;; built under a guard, so a list of another shape makes the row fail by
 ;; name instead of killing the suite: SRFI-64 doesn't catch a raise in an
-;; expected expression (AGENTS.md).
+;; expected expression.
 (define guix-not-found-lines
   (guard (e (#t 'candidates-unreadable))
     (if (and (list? guix-not-found-candidates) (for-all string? guix-not-found-candidates))
@@ -175,7 +175,7 @@
 
 ;; What the fixture raises, as the probe prints it: its &who, and the condition
 ;; types it is, by name (rnrs's error: serious, error, who, message and
-;; irritants); never its text (ADR-0013, decision 9).
+;; irritants); never its text (ADR-0013).
 (define fixture-raised '(loaded-libsqlite3 (serious error who message irritants)))
 
 (test-equal "a raise that is not a refusal: the probe prints its who and its types, each reference again, and exits 2"
@@ -246,7 +246,7 @@
   (exists (lambda (line) (string-prefix? "(reason " line)) (lines-of text)))
 
 ;; A raise that is no refusal is Chez's default handler's to print, and what
-;; it prints is its own text, never asserted here (ADR-0013, decision 9): the
+;; it prints is its own text, never asserted here (ADR-0013): the
 ;; row asserts the exit status, that nothing reached stdout, and that no
 ;; refusal's reason line appeared.
 (test-equal "preflight, a raise that is not a refusal: Chez's default handler, exit 255, nothing on stdout, and no reason line"

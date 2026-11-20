@@ -1,9 +1,8 @@
 #!r6rs
-;;; (chez-sqlite3 private statement-state): the state table of ADR-0014,
-;;; decision 5, as pure functions. A statement's record keeps its state in
-;;; Scheme, so that SQLite's undefined cases, a column read without a row and
-;;; a bind while a row is ready, never reach C: each verb is checked against
-;;; the state first.
+;;; (chez-sqlite3 private statement-state): the state table of ADR-0014, as
+;;; pure functions. A statement's record keeps its state in Scheme, so that
+;;; SQLite's undefined cases, a column read without a row and a bind while a
+;;; row is ready, never reach C: each verb is checked against the state first.
 ;;;
 ;;;   state      reached by                    allowed
 ;;;   ready      prepare, reset!               bind!, bind-all!, clear-bindings!,
@@ -18,8 +17,8 @@
 ;;; finalized statement; column-count, column-name, statement-sql and
 ;;; parameter-count work in every state but finalized.
 ;;;
-;;; Every function answers data for any argument, so slices 3 and 4 call them
-;;; inside critical sections; the verbs raise the refusals after the section.
+;;; Every function answers data for any argument, so the verbs call them
+;;; inside critical sections, and raise the refusals after the section.
 (library (chez-sqlite3 private statement-state)
   (export statement-states statement-verbs statement-verb-check state-after-step
           finish-failure)
@@ -78,7 +77,7 @@
   ;; ANSWER: #f when ANSWER's low byte is 0, 100 or 101, for raise-sqlite-error
   ;; refuses those as no errors; #f when STATE is failed, for the answer
   ;; repeats the step's code, raised already; else ANSWER, a failure of
-  ;; reset's or finalize's own (ADR-0014, decision 7). Total.
+  ;; reset's or finalize's own (ADR-0014). Total.
   (define (finish-failure state answer)
     (cond ((not (and (integer? answer) (exact? answer))) #f)
           ((memv (bitwise-and answer 255) (list 0 (sqlite-code 'row) (sqlite-code 'done))) #f)

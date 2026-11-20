@@ -1,12 +1,12 @@
 #!r6rs
-;;; The suite for M3's who-taking internals in (chez-sqlite3 private
-;;; statement) and (chez-sqlite3 private statement-values) (ADR-0013, decision
-;;; 2; ADR-0014 and ADR-0016, amended for M3; the M3 plan, findings F1 and F11).
-;;; A convenience reaches M2's statement verbs through these, so each raise
-;;; must name the procedure the caller called, never M2's verb.
+;;; The suite for the who-taking internals in (chez-sqlite3 private
+;;; statement) and (chez-sqlite3 private statement-values) (ADR-0013;
+;;; ADR-0014 and ADR-0016).
+;;; A convenience reaches the statement verbs through these, so each raise
+;;; must name the procedure the caller called, never the verb.
 ;;;
 ;;;   the who        at every raise site of every internal, the raise names
-;;;                  the WHO it was given, here the-convenience, a name no M2
+;;;                  the WHO it was given, here the-convenience, a name no
 ;;;                  verb has; and reaches a with-exception-handler handler at
 ;;;                  depth 1, after the section, against a no-raise sentinel.
 ;;;                  The internals: prepared, finalized, step!/who,
@@ -42,11 +42,11 @@
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them: a refused library fails the rows by
 ;;; name. SQLite's answers here were measured on 3.53.1 and 3.45.1 alike
-;;; (.plans/research/m3-slice-3/) before a row asserts them.
+;;; before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -786,7 +786,7 @@
 
 ;; --- prepared-at: one statement from an offset, as data -------------------------------------------
 ;; Measured on 3.53.1 and 3.45.1 alike
-;; (.plans/research/m3-slice-3/lookaside-tails.sps): the tail of select 1;
+;;: the tail of select 1;
 ;; select 2 is 9; of ;; select 2 is 11, one statement holding the semicolons
 ;; before it; of -- c alone 5, with no statement.
 
@@ -888,10 +888,10 @@
             (hit (handed-over db "select 1")))
        (list miss hit)))))
 
-;; Measured on both libraries (.plans/research/m3-slice-3/lookaside-tails.sps):
+;; Measured on both libraries:
 ;; ten held statements of select 1, 2 where ?1 prepared with no flags take 70
 ;; of the connection's lookaside slots, and with SQLITE_PREPARE_PERSISTENT
-;; none, so their memory comes from the heap (M3's research, single K1).
+;; none, so their memory comes from the heap.
 (test-equal "prepared-at's flags reach SQLite: ten statements held, prepared with no flags, take lookaside slots; prepared with SQLITE_PREPARE_PERSISTENT, none"
   (list 'some 0)
   (let ((held-by (lambda (flags)

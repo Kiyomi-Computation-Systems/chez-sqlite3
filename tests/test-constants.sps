@@ -21,7 +21,7 @@
 ;;;   completeness the result-code macros of $CC -dM -E must be exactly the
 ;;;                table's names when the header is the floor's, and the
 ;;;                table's names must be a subset of them when it is newer
-;;;                (ADR-0013, decision 4). A newer header may name more codes
+;;;                (ADR-0013). A newer header may name more codes
 ;;;                than the floor's; the suite says so, by line, when it
 ;;;                could check only a subset. A header older than the floor
 ;;;                fails. What counts as a result code macro (result-code-
@@ -47,12 +47,12 @@
 ;;;                sqlite3_uint64, double, unsigned char, and any pointer, a
 ;;;                destructor among them, to uptr), holds the row's Chez
 ;;;                types to its C types. A prototype that ends "..." is a
-;;;                variadic function's (M4): its named parameters map to the
+;;;                variadic function's: its named parameters map to the
 ;;;                row's leading arguments, at least one argument follows
 ;;;                them, its row's convention must be variadic, and the
 ;;;                count that convention-forms writes for variadic must be
 ;;;                the named parameters' count; a row that is variadic must
-;;;                have such a prototype (ADR-0001, amended 2026-11-17). A
+;;;                have such a prototype (ADR-0001). A
 ;;;                wrong row fails by name, and each kind of wrong row is
 ;;;                planted in the suite.
 ;;;
@@ -738,9 +738,8 @@
 (test-equal "values: the table asks 108 codes, and the checks ask 128 names: those, the 9 open flags, the 5 type codes, SQLITE_UTF8, SQLITE_PREPARE_PERSISTENT and M4's four db_config ops; SQLITE_ROW and SQLITE_DONE are the table's own"
   '(108 128) (list (length table) (length asked-names)))
 
-;; The four ops, written out (the M4 plan, section 4.1; ADR-0021, decision
-;; 1), beside the header's own check above: a constant and its row's C name
-;; changed together would still meet the header.
+;; The four ops, written out (ADR-0021), beside the header's own check above: a
+;; constant and its row's C name changed together would still meet the header.
 (test-equal "values: M4's four db_config ops are 1005, 1010, 1013 and 1014, ENABLE_LOAD_EXTENSION, DEFENSIVE, DQS_DML and DQS_DDL, and the header agrees"
   '((1005 1010 1013 1014) (1005 1010 1013 1014))
   (list (map constant-value '(sqlite-dbconfig-enable-load-extension sqlite-dbconfig-defensive
@@ -1198,7 +1197,7 @@
           (list "sqlite3_get_autocommit" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
           (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'void 'plain '())))))
 
-;; M4's two required near their misses: a variadic prototype is no other.
+;; The two required variadic-group entry points near their misses: a variadic prototype is no other.
 ;; The optional sqlite3_load_extension's near miss is asked in its own
 ;; compile, above.
 (test-equal "the prototype check refuses each of M4's two required entry points written as its near miss: sqlite3_db_config without its \"...\", its variadic tail's int and int* written in its place, and with one named parameter fewer; sqlite3_free's void* as const void*, each by name; and answers 1 for each written right"
@@ -1215,7 +1214,7 @@
     (list (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'int 'variadic '())
           (list "sqlite3_free" '("void" ("void*")) '(uptr) 'void 'plain '())))))
 
-;; The variadic rule (the M4 plan, section 4.2), on rows planted here.
+;; The variadic rule, on rows planted here.
 (define db-config-row
   (list "sqlite3_db_config" '("int" ("sqlite3*" "int" "...")) '(uptr int int uptr) 'int 'variadic '()))
 

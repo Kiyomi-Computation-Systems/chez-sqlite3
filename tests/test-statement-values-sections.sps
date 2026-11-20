@@ -1,5 +1,5 @@
 #!r6rs
-;;; The value verbs under engines (ADR-0014, decision 10; ADR-0015). Each
+;;; The value verbs under engines (ADR-0014; ADR-0015). Each
 ;;; verb's checks, its counts, its C calls and its block share one critical
 ;;; section, the accessor's, where an engine spends no ticks, so an expiry
 ;;; falls only before the section or after it. Sweeps of a first engine A
@@ -34,7 +34,7 @@
 ;;; TEXT's, would be freed at an expiry and its resume refused.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. Effects run in order, through let* and named lets (AGENTS.md).
+;;; own. Effects run in order, through let* and named lets.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)

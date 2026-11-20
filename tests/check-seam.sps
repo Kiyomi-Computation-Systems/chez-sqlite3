@@ -2,7 +2,7 @@
 ;;; make check-seam: reads every .sls file under the directory named on the
 ;;; command line (make passes src) as data, with Chez's reader, and evaluates
 ;;; nothing. It names, with the file and the import or the export, each
-;;; library that breaks one of these rules (ADR-0009, amended):
+;;; library that breaks one of these rules (ADR-0009):
 ;;;
 ;;;   (c) a library imports (chezscheme) other than as (only (chezscheme)
 ;;;       name ...), or names in that list one that is not in
@@ -191,7 +191,7 @@
 ;; native's alone, as nothing else needs them. get-thread-id belongs to
 ;; connection, whose every verb checks that it runs on the connection's owning
 ;; thread (ADR-0010): a library that asked for thread ids elsewhere would be a
-;; second owner check, the place a gap opens. M2's statements check through
+;; second owner check, the place a gap opens. The statements check through
 ;; connection's call-with-open-handle.
 ;; Adding a name or a library is a reviewed change to the seam (ADR-0009).
 (define library-only-chez-names

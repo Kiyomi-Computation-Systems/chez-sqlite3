@@ -393,8 +393,8 @@
 
 ;; --- raised after the section, and engines ----------------------------------------------------
 ;; A raise made inside a critical section reaches a with-exception-handler
-;; handler with interrupts still disabled (M1's closing review measured what
-;; that costs). The handler reads its depth, as depth-N: 1 outside any
+;; handler with interrupts still disabled (an engine never expires
+;; there). The handler reads its depth, as depth-N: 1 outside any
 ;; section.
 
 ;; interrupt-depth : -> Positive-Integer

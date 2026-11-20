@@ -1,6 +1,6 @@
 #!r6rs
-;;; The tail scan against SQLite's own prepare, R2's oracle (ADR-0014,
-;;; decision 4, amended). For each SQL: prepare-statement refuses it as more
+;;; The tail scan against SQLite's own prepare, the oracle (ADR-0014).
+;;; For each SQL: prepare-statement refuses it as more
 ;;; than one statement exactly when SQLite, preparing the SQL alone, leaves a
 ;;; tail whose own prepare, alone, gives a statement or an error. SQLite is
 ;;; asked live, on the library loaded, through native's sqlite3_prepare_v3,
@@ -10,12 +10,12 @@
 ;;;   - every character of one byte, U+0001 to U+007F;
 ;;;   - every two characters over those 127, U+FEFF, U+0085 and U+00A0, a set
 ;;;     the gate's budget allows: the whole suite, 20,602 inputs of three
-;;;     prepares each, took 21 s under make test-memory (M2 slice 3);
+;;;     prepares each, took 21 s under make test-memory;
 ;;;   - every two and every three characters over a 14-character alphabet: the ten ASCII
 ;;;     bytes the scan's rules name (space, \t, \n, \v, \f, \r, ;, -, /, *),
 ;;;     A, U+FEFF, and U+0085 and U+00A0, which SQLite does not count as
 ;;;     whitespace (measured);
-;;;   - every input of M2 slice 1's two literals of what SQLite leaves empty,
+;;;   - every input of the two literals of what SQLite leaves empty,
 ;;;     read from tests/test-sql-tail.sps as data, that is a string: well-formed
 ;;;     UTF-8 with no NUL;
 ;;; and then each edge ADR-0014 names, as whole SQL, first statements without
@@ -23,7 +23,7 @@
 ;;;
 ;;; A prepare-statement takes a string, so its SQL is well-formed UTF-8: the
 ;;; bytes 80 to FF reach the scan only inside a character's encoding, and
-;;; slice 1's byte-level oracle, tests/test-sql-tail.sps, holds the scan on
+;;; the byte-level oracle, tests/test-sql-tail.sps, holds the scan on
 ;;; every byte. SQL holding U+0000 is refused before it is scanned.
 (import (rnrs)
         (rnrs eval)

@@ -1,7 +1,7 @@
 #!r6rs
 ;;; The suite for tests/check-variadic.sh, the check behind `make
 ;;; check-variadic`, which CI's main job runs as a step and make test does
-;;; not (ADR-0001, amended 2026-11-17; the M4 plan, section 4.2). The real
+;;; not (ADR-0001). The real
 ;;; script's real run is make check-variadic's own: this suite holds each of
 ;;; its branches, every failure among them, so that a check loosened to pass
 ;;; leaves this suite red.
@@ -33,7 +33,7 @@
 ;;; asserts the exit status, the whole stdout and the whole stderr, each
 ;;; line written here by hand, never read back from the script. No child
 ;;; reaches native code: the stand-ins run no Chez, so none runs under the
-;;; gate (ADR-0005, amended, M1 slice 5).
+;;; gate (ADR-0005).
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
@@ -713,7 +713,7 @@
 
 ;; the machine type, and what the check needs before it starts. Each answer
 ;; is taken before its expected value is built, which names the row's own
-;; CHEZ: a call's arguments run in no fixed order (AGENTS.md).
+;; CHEZ: a call's arguments run in no fixed order.
 (let* ((answer (run-check native-once "printf 'Exception: no\\n'; exit 1" standard '()))
        (n counter))
   (test-equal "Chez failing its machine-type question stops the check, showing what it printed"

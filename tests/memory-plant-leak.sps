@@ -8,8 +8,7 @@
 ;;; It allocates a 777-byte foreign block and drops its address: no live
 ;;; value holds it, so Valgrind counts it definitely lost. A Chez fixnum
 ;;; holds an address shifted, never as the raw pointer, so the dropped
-;;; integer does not keep the block reachable (measured in M0 slice 3:
-;;; .plans/research/memory-gate/). A plain run exits 0: check-memory-gate
+;;; integer does not keep the block reachable. A plain run exits 0: check-memory-gate
 ;;; requires that first, so a red gate can only mean Valgrind saw the leak.
 ;;; The size is a sentinel: nothing else in a run loses a block of 777
 ;;; bytes.

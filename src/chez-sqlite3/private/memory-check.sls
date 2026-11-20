@@ -1,7 +1,6 @@
 #!r6rs
 ;;; (chez-sqlite3 private memory-check): the sqlite3_memory_used check a
-;;; suite's end runs, with its positive control (ADR-0005, decision 5 and the
-;;; amendment for a library that keeps no memory count).
+;;; suite's end runs, with its positive control (ADR-0005).
 ;;;
 ;;; The baseline is the count once libsqlite3 is loaded and initialised,
 ;;; before anything is opened: (chez-sqlite3 private native) reads it there,

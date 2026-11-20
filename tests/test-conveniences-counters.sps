@@ -1,20 +1,20 @@
 #!r6rs
-;;; The suite for the change counters and in-transaction? through the
-;;; conveniences (ADR-0016, decision 8; the M3 plan, section 4.1): every case
-;;; of M3's research, single B2, run by execute!, as tests/test-change-counters.sps
-;;; runs them through M2's statement tier, and single B1's items 1 and 2
-;;; through in-transaction?. The cases tests/test-change-counters.sps alone
-;;; can reach stay there: a fresh connection's counters (C0), a statement
-;;; finalized unstepped (C14's second half), and an insert ... returning read
-;;; step by step (C12), which no convenience stops between steps.
+;;; The suite for the change counters and in-transaction? through the conveniences
+;;; (ADR-0016): every counter case run by execute!, as
+;;; tests/test-change-counters.sps runs them through the statement tier, and the
+;;; in-transaction? cases through in-transaction?. The cases
+;;; tests/test-change-counters.sps alone can reach stay there: a fresh connection's
+;;; counters (C0), a statement finalized unstepped (C14's second half), and an
+;;; insert ... returning read step by step (C12), which no convenience stops
+;;; between steps.
 ;;;
-;;;   the cases     as the research's counters.c runs them: before each
+;;;   the cases     as measured: before each
 ;;;                 statement, an INSERT OR REPLACE of two rows into z, run by
 ;;;                 execute!, sets changes to 2 and last-insert-rowid to 7777;
 ;;;                 the statement runs by execute!, to done, reset and cached;
 ;;;                 then changes, total-changes' move across it, and
-;;;                 last-insert-rowid are read. Each row asserts what the
-;;;                 research's output gives, alike on 3.53.1 and 3.45.1
+;;;                 last-insert-rowid are read. Each row asserts what was
+;;;                 measured, alike on 3.53.1 and 3.45.1
 ;;;   RETURNING     execute! of an insert ... returning of 3 counts at its
 ;;;                 done; query-row's of 3, and of a delete ... returning,
 ;;;                 count at the reset after the first row (C12b, C12c)
@@ -28,7 +28,7 @@
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -112,7 +112,7 @@
 
 ;; with-counters-db : (List String) (String Database -> Any) -> Any
 ;; PROC's answer, or what it raised, given a file c.db in a temporary
-;; directory, made with the research's tables z and t and then SETUP, and a
+;; directory, made with the tables z and t and then SETUP, and a
 ;; connection to it, closed after.
 (define (with-counters-db setup proc)
   (in-dir
@@ -129,7 +129,7 @@
          (lambda () (when db (guard (e (#t #f)) (close-database! db)))))))))
 
 ;; prime! : Database -> Void
-;; changes 2 and last-insert-rowid 7777 (counters.c's prime).
+;; changes 2 and last-insert-rowid 7777.
 (define (prime! db)
   (execute! db "insert or replace into z(rowid, v) values (7776, 'p'), (7777, 'p')"))
 
@@ -142,7 +142,7 @@
     (list c t r)))
 
 ;; measure : Database String -> (List Any (List Integer Integer Integer))
-;; counters.c's measure, through execute!: DB primed, SQL run by execute!;
+;; The measure, through execute!: DB primed, SQL run by execute!;
 ;; done, or the failure's extended code; then the counters.
 (define (measure db sql)
   (prime! db)
@@ -174,10 +174,9 @@
   zero-counts
   (native-counts))
 
-;; --- single B2, case by case, through execute! ----------------------------------------------
-;; Each row's expected values are the research's output for its case, on
-;; 3.53.1 and 3.45.1 alike (.plans/research/m3-plan/single/counters-*.txt),
-;; as tests/test-change-counters.sps reads them after the last step.
+;; --- case by case, through execute! ---------------------------------------------------------
+;; Each row's expected values are measured for its case, on 3.53.1 and 3.45.1 alike, as
+;; tests/test-change-counters.sps reads them after the last step.
 
 (test-equal "C1, by execute!: an INSERT of 3 rows counts 3 and names its last row; an UPDATE of 3, then of none, counts 3, then 0; a DELETE of 2 counts 2; an INSERT ... SELECT of 5 counts 5 and names its last row"
   (list (done 3 3 103) (done 3 3 7777) (done 0 0 7777) (done 2 2 7777) (done 5 5 205))
@@ -339,7 +338,7 @@
              (after-rollback (counters db before)))
         (list after-insert after-rollback)))))
 
-;; --- in-transaction?, by single B1's items 1 and 2 ------------------------------------------------
+;; --- in-transaction? ----------------------------------------------------------------
 
 (test-equal "in-transaction?, around execute!: #f in autocommit, #t after a deferred BEGIN that has read nothing, #f after COMMIT; #t after BEGIN IMMEDIATE, #f after ROLLBACK; #t after a SAVEPOINT outside a transaction, #f after its RELEASE"
   '(#f #t #f #t #f #t #f)

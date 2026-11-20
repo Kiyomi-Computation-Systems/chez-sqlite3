@@ -1,15 +1,13 @@
 #!r6rs
 ;;; (chez-sqlite3 private interrupt): the exclusion between
 ;;; interrupt-database!, the one verb any thread may call, and the close
-;;; (ADR-0019, decisions 2 to 4). SQLite calls sqlite3_interrupt unsafe on a
-;;; connection that is closed, or might close before it returns, so no
-;;; interrupt may be in flight once sqlite3_close starts, and none may start
-;;; after.
+;;; (ADR-0019). SQLite calls sqlite3_interrupt unsafe on a connection that is
+;;; closed, or might close before it returns, so no interrupt may be in
+;;; flight once sqlite3_close starts, and none may start after.
 ;;;
 ;;; A latch is the state the connection record keeps for it: a mutex, and a
-;;; flag that says the connection is interruptible. Slice 6 puts one in the
-;;; record. The procedures here take the foreign calls as arguments, so a
-;;; suite runs them on stand-ins:
+;;; flag that says the connection is interruptible. The procedures here take
+;;; the foreign calls as arguments, so a suite runs them on stand-ins:
 ;;;
 ;;;   the open       interrupt-latch-open!: sets the flag, once the record
 ;;;                  exists
@@ -27,8 +25,7 @@
 ;;;                  the flag back as it read it, the same way, whatever the
 ;;;                  work did. with-transaction's exits use it, so an
 ;;;                  interrupt sent while their ROLLBACK, or ROLLBACK TO and
-;;;                  RELEASE, runs is dropped (the maintainer's "Shut the
-;;;                  latch on exit", 2026-11-17)
+;;;                  RELEASE, runs is dropped
 ;;;
 ;;; The interrupt calls INTERRUPT holding the mutex, and the close clears the
 ;;; flag holding it, so an interrupt in flight when the close begins ends
@@ -39,11 +36,11 @@
 ;;; across one read or write of the flag, and across INTERRUPT, which is
 ;;; sqlite3_interrupt, bound plain, measured at microseconds. Never across
 ;;; the close's work, which can write a checkpoint, nor the shut's, which
-;;; steps a statement. A section keeps out only
-;;; this thread's engines, timers and interrupts: the mutex is the exclusion
-;;; between threads, and the section keeps this thread from being stopped,
-;;; by an engine's expiry above all, between reading the flag and calling
-;;; INTERRUPT, or while it holds the mutex.
+;;; steps a statement. A section keeps out only this thread's engines, timers
+;;; and interrupts: the mutex is the exclusion between threads, and the
+;;; section keeps this thread from being stopped, by an engine's expiry above
+;;; all, between reading the flag and calling INTERRUPT, or while it holds the
+;;; mutex.
 ;;;
 ;;; Nothing raises inside a section here. A raise from INTERRUPT, from the
 ;;; close's WORK or from its LEFT-OPEN?, or from the shut's WORK, is caught
@@ -51,8 +48,9 @@
 ;;; so it cannot be resumed. The flag stays clear after a raise from the
 ;;; close's work or the predicate: a close that did not say the connection
 ;;; is open never makes it interruptible. After a raise from the shut's
-;;; work it is put back, as after its answer: the shut closes nothing. No argument is checked: these are private, given the
-;;; record's own latch and the library's own procedures.
+;;; work it is put back, as after its answer: the shut closes nothing. No
+;;; argument is checked: these are private, given the record's own latch and
+;;; the library's own procedures.
 (library (chez-sqlite3 private interrupt)
   (export make-interrupt-latch interrupt-latch-open! interrupt-latch-interrupt!
           interrupt-latch-close! interrupt-latch-shut!)
@@ -82,15 +80,15 @@
 
   ;; interrupt-latch-open! : Interrupt-Latch -> Void
   ;; LATCH's connection interruptible: the open calls it once the record
-  ;; exists (ADR-0019, decision 2).
+  ;; exists (ADR-0019).
   (define (interrupt-latch-open! latch)
     (set-interruptible! latch #t))
 
   ;; interrupt-latch-interrupt! : Interrupt-Latch (-> Any) -> Boolean
   ;; In one critical section, holding LATCH's mutex: INTERRUPT called when
   ;; the flag is set, its answer dropped. #t when it was called, #f when the
-  ;; connection is closed or closing, which is no error (ADR-0019, decision
-  ;; 4). A raise from INTERRUPT is raised after the section, the same object.
+  ;; connection is closed or closing, which is no error (ADR-0019). A raise
+  ;; from INTERRUPT is raised after the section, the same object.
   (define (interrupt-latch-interrupt! latch interrupt)
     (let ((outcome
            (critical-section

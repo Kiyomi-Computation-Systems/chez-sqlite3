@@ -1,7 +1,6 @@
 #!r6rs
 ;;; The close's order: sqlite3_close first, sqlite3_next_stmt counted only
-;;; when it fails (the maintainer's "Close first, count on failure",
-;;; 2026-11-17; ADR-0012, decision 5, amended). close-database! finalizes the
+;;; when it fails (ADR-0012). close-database! finalizes the
 ;;; statements it tracks and empties its cache, then calls sqlite3_close:
 ;;; SQLITE_OK gives the close's outcomes as before; any other answer leaves
 ;;; the connection open and counted, and only then are the statements left
@@ -16,8 +15,7 @@
 ;;; storing some prepared statements internally"). Counted before the close,
 ;;; they were refused as untracked: an FTS5 table, made and nothing more,
 ;;; left 2 (3 at 3.45.1); an RTREE table 8; FTS3 and FTS4 left theirs once
-;;; queried, 10 for FTS4 after an insert and a search, which FTS5's left 7
-;;; (.plans/research/m4-close-fix/, vtab-close.sps).
+;;; queried, 10 for FTS4 after an insert and a search, which FTS5's left 7.
 ;;;
 ;;;   the modules    each module's rows chosen by what the library reports:
 ;;;                  fts5 by sqlite-compile-option? "ENABLE_FTS5", fts4 by
@@ -62,7 +60,6 @@
 ;;;                  FTS5 table takes writes again, in and out of a
 ;;;                  transaction, intact, and the file reopened keeps them
 ;;;   the boundary   the close vouches only for what chez-sqlite3 tracks
-;;;                  (the maintainer's "Vouch only for ours", 2026-11-17).
 ;;;                  A refusal means work something else left open, from a
 ;;;                  defect or foreign code; what SQLite's close does to that
 ;;;                  work is SQLite's. These rows hold it as measured, so a
@@ -776,8 +773,8 @@
                (when (and backup (not (eqv? backup 0))) (guard (e (#t #f)) (backup-finish backup)))))))))))
 
 ;; --- the boundary ---------------------------------------------------------------------------
-;; The close vouches only for the statements chez-sqlite3 tracks (the
-;; maintainer's "Vouch only for ours", 2026-11-17): it finalizes them, calls
+;; The close vouches only for the statements chez-sqlite3 tracks: it
+;; finalizes them, calls
 ;; sqlite3_close and reports its answer, and judges no statement it did not
 ;; make. Work something else left open on the connection, a statement, a
 ;; blob or a backup, from a defect or from foreign code such as a loaded

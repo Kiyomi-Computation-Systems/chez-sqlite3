@@ -2,7 +2,7 @@
 ;;; The suite for (chez-sqlite3 private transaction-plan): the pure core of
 ;;; with-transaction (ADR-0017). It loads no libsqlite3: the library holds no
 ;;; foreign code, and the shell that runs the statements, keeps the flags and
-;;; reads autocommit is M3 slice 4's.
+;;; reads autocommit is the transaction library's.
 ;;;
 ;;;   the mode         deferred, immediate or exclusive; anything else
 ;;;                    refused, every name (chezscheme) exports among it
@@ -12,9 +12,9 @@
 ;;;   the exits        a return, a raise and an escape, by the flags begun
 ;;;                    and ended and autocommit read after the body, at every
 ;;;                    level a begin answers, against a model of ADR-0017's
-;;;                    decisions 5 to 7 written in this suite
+;;;                    rules written in this suite
 ;;;   a failed commit  the level rolled back while it is still there
-;;;   the walks        §4.2's cases carried through the plans as slice 4
+;;;   the walks        the cases carried through the plans as the shell
 ;;;                    carries the flags
 ;;;   the refusal      an unknown mode as an assertion violation from WHO
 ;;;
@@ -100,7 +100,7 @@
 
 ;; --- the model, from ADR-0017 -------------------------------------------------------------
 
-;; The statements of ADR-0017's decision 4, written out for a level.
+;; The statements of ADR-0017, written out for a level.
 (define (savepoint-name n) (string-append "chez_sqlite3_" (number->string n)))
 
 (define (commit-of level)
@@ -116,17 +116,17 @@
             (string-append "RELEASE " (savepoint-name (cadr level))))))
 
 ;; exit-table : (Listof (List Symbol Boolean Boolean Integer Symbol))
-;; ADR-0017's decisions 5 to 7 and the plan's §4.2, one row per case: HOW,
+;; ADR-0017, one row per case: HOW,
 ;; BEGUN, ENDED, AUTOCOMMIT after the body, and the plan, as a kind. A kind
 ;; commit is COMMIT or RELEASE for the level, rollback its rollback; the
 ;; others are the plans themselves.
-;;   - ended, a later exit (decision 7): a return is told the transaction
+;;   - ended, a later exit: a return is told the transaction
 ;;     ended, issuing nothing; a raise or an escape does nothing more;
-;;   - never begun (decision 5): nothing to roll back, whatever autocommit
+;;   - never begun: nothing to roll back, whatever autocommit
 ;;     says; a return, which the shape never makes, is told it ended;
 ;;   - begun, not ended, the first exit: a return commits while autocommit is
-;;     0 (decision 6), and is told it ended otherwise; a raise or an escape
-;;     rolls back while it is 0 (decision 5), and does nothing otherwise.
+;;     0, and is told it ended otherwise; a raise or an escape
+;;     rolls back while it is 0, and does nothing otherwise.
 (define exit-table
   '((return  #t #t 0 transaction-ended) (return  #t #t 1 transaction-ended)
     (raise   #t #t 0 nothing)           (raise   #t #t 1 nothing)
@@ -355,7 +355,7 @@
 
 ;; walk : Any Natural Any (Listof (U (List 'leave Symbol Integer) (List 'commit-fails Integer)))
 ;;        -> (Listof Any)
-;; with-transaction carried through the plans as M3 slice 4 keeps its flags:
+;; with-transaction carried through the plans as the shell keeps its flags:
 ;; the begin answered sets begun; a commit that succeeds, a failed commit's
 ;; plan carried out, and the after thunk's plan for a raise or an escape,
 ;; whatever it issued, set ended. Each event is an
@@ -422,7 +422,7 @@
 ;; --- every statement ------------------------------------------------------------------------
 
 ;; The statements of every plan above, and of the begins: each is one of
-;; ADR-0017's decision 4, written out, for depths 0, 1 and 12.
+;; ADR-0017, written out, for depths 0, 1 and 12.
 (define every-statement
   (append '("BEGIN DEFERRED" "BEGIN IMMEDIATE" "BEGIN EXCLUSIVE" "COMMIT" "ROLLBACK")
           (apply append

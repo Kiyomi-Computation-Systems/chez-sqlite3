@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private conditions): the root every library
-;;; condition sits under, and the four M1 raises (ADR-0013, ADR-0002).
+;;; condition sits under, and its first four raises (ADR-0013, ADR-0002).
 ;;;
 ;;;   &chez-sqlite3-error           the fieldless root, under &error
 ;;;   &sqlite-library-unavailable   libsqlite3 was refused: six reasons, what
@@ -20,16 +20,16 @@
 ;;;                                 well-formed UTF-8, under the root: the
 ;;;                                 column's index and the byte offset of the
 ;;;                                 first ill-formed subpart
-;;;   &sqlite-interrupt             M3: a fourth subtype of &sqlite-error, no
+;;;   &sqlite-interrupt             a fourth subtype of &sqlite-error, no
 ;;;                                 field of its own, made by make-sqlite-error
 ;;;                                 from the primary code interrupt
-;;;   &sqlite-setting-mismatch      M3: a setting read back differs, under the
+;;;   &sqlite-setting-mismatch      a setting read back differs, under the
 ;;;                                 root: the setting's name, the value asked
 ;;;                                 for and the value read
-;;;   &sqlite-transaction-ended     M3: a body returned after its transaction
+;;;   &sqlite-transaction-ended     a body returned after its transaction
 ;;;                                 ended, under the root, no field
 ;;;   &sqlite-extensions-unavailable
-;;;                                 M4: an open that opts in to extension
+;;;                                 an open that opts in to extension
 ;;;                                 loading on a library without
 ;;;                                 sqlite3_load_extension, under the root, no
 ;;;                                 field, neither an &sqlite-error nor an
@@ -80,7 +80,7 @@
 ;; raised : (-> Any) -> Any
 ;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT) for
 ;; any other raise, or (no-raise VALUE). The message is a condition's type,
-;; not its text: its wording is no contract (ADR-0013, decision 9).
+;; not its text: its wording is no contract (ADR-0013).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))
@@ -477,10 +477,10 @@
     (assertion-violation libsqlite3-info-path ((kind other))))
   (map (lambda (v) (raised (lambda () (libsqlite3-info-path v)))) shown-values))
 
-;; --- &sqlite-error, &sqlite-wrong-thread and &sqlite-closed (M1 slice 4) ----------------------
+;; --- &sqlite-error, &sqlite-wrong-thread and &sqlite-closed ---------------------------------
 ;; Each fixture field holds a value no other field holds. Every refusal names
 ;; the field or the rule it broke first among its irritants, so two refusals
-;; from one who are told apart without their message (ADR-0013, decision 9).
+;; from one who are told apart without their message (ADR-0013).
 
 ;; an-sqlite-error, a-wrong-thread, a-closed : -> Condition
 (define (an-sqlite-error)
@@ -682,7 +682,7 @@
              (lambda () (raise-wrong-thread 'w 1 2))
              (lambda () (raise-closed 'w)))))
 
-;; --- M2 slice 1: the subtypes of &sqlite-error, and &sqlite-invalid-text --------------------
+;; --- the subtypes of &sqlite-error, and &sqlite-invalid-text -----------------------------------
 
 ;; none-if-false : Any -> Any
 ;; An answer of #f as the symbol none: no row here expects #f.
@@ -1070,7 +1070,7 @@
     (with-exception-handler (lambda (c) 'handled) (lambda () (raise-invalid-text 'w 1 2)))
     'returned-normally))
 
-;; --- M3 slice 1: &sqlite-setting-mismatch and &sqlite-transaction-ended -------------------
+;; --- &sqlite-setting-mismatch and &sqlite-transaction-ended ---------------------------------
 ;; The interrupt's class is held above, with the other classes of
 ;; &sqlite-error, over every primary code.
 
@@ -1207,7 +1207,7 @@
        (list (lambda () (raise-setting-mismatch 'w 'busy-timeout 1 0))
              (lambda () (raise-transaction-ended 'w)))))
 
-;; --- M4 slice 1: &sqlite-extensions-unavailable (ADR-0021, decision 10) -------------------
+;; --- &sqlite-extensions-unavailable (ADR-0021) ---------------------------------------------
 ;; Its kinds against every other type are held in the matrix above, and its
 ;; parent and its fields with the other types'.
 

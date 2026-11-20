@@ -1,12 +1,12 @@
 #!r6rs
 ;;; The suite that holds (chez-sqlite3-testing) and the counters it imports
-;;; to loading no libsqlite3 (the M1 plan, §3.7). make check-suites, the
+;;; to loading no libsqlite3. make check-suites, the
 ;;; copy check-test-fails makes, which holds only require-threaded and the
 ;;; counters in all but its leaks case, the launcher's env -i runs of make
 ;;; test, and the seven children test-chez-sqlite3-testing starts to test the
 ;;; temporary directories all import the testing library, and each would
 ;;; break, or become a child that reaches native code, if it loaded
-;;; libsqlite3. Since M1 slice 4, native's load registers the
+;;; libsqlite3. Native's load registers the
 ;;; sqlite3_memory_used check with the counters, so the testing library runs
 ;;; it without importing native.
 ;;;

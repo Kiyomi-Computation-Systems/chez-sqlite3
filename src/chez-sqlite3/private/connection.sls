@@ -1,15 +1,15 @@
 #!r6rs
 ;;; (chez-sqlite3 private connection): a connection to a database, opened,
 ;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its two
-;;; public procedures, close-database! and database?, M3's counters and
+;;; public procedures, close-database! and database?, the counters and
 ;;; interrupt-database!; call-with-open-handle, the one way to a
-;;; connection's handle, and
-;;; check-database-owner are M2's statements', with the tracking procedures
-;;; below; failure-details, first-finalize-failure and
-;;; interrupt-database/with are exported for the suites too.
+;;; connection's handle, and check-database-owner are the statement tier's,
+;;; with the tracking procedures below; failure-details,
+;;; first-finalize-failure and interrupt-database/with are exported for the
+;;; suites too.
 ;;;
 ;;; The open verbs, open-database and call-with-database, are (chez-sqlite3
-;;; private open)'s since M3 slice 5: their settings run statements through
+;;; private open)'s: their settings run statements through
 ;;; (chez-sqlite3 private statement), which imports this library, so this
 ;;; one cannot (ADR-0018). Their parts are here and exported to it:
 ;;; prepared-open, the checks of a filename and its options;
@@ -17,85 +17,79 @@
 ;;; outcome raised; and close-connection, the close for a who.
 ;;;
 ;;; A connection is a database record, opaque and sealed, holding the
-;;; sqlite3* as an integer, so Valgrind sees one never closed (the M1 plan,
-;;; §3.1), and the get-thread-id of the thread that opened it. The handle
-;;; field is #f once closed. No accessor of it escapes this library but
-;;; call-with-open-handle, which checks first (ADR-0012, decision 2).
+;;; sqlite3* as an integer, so Valgrind sees one never closed, and the
+;;; get-thread-id of the thread that opened it. The handle field is #f once
+;;; closed. No accessor of it escapes this library but call-with-open-handle,
+;;; which checks first (ADR-0012).
 ;;;
-;;; Every verb checks, in order, that its argument is a database, that it
-;;; runs on the owning thread, and that the connection is open, before
-;;; anything reaches C (ADR-0012, decision 7). close-database! does the first
-;;; two, and on a closed connection does nothing.
+;;; Every verb checks, in order, that its argument is a database, that it runs
+;;; on the owning thread, and that the connection is open, before anything
+;;; reaches C (ADR-0012). close-database! does the first two, and on a closed
+;;; connection does nothing.
 ;;;
 ;;; The handle is read out of the record, used by each native call, and the
 ;;; record and the connection count changed, all in one critical section, and
 ;;; anything raised is raised after it, from the data it returns. An engine
 ;;; can preempt between any two calls, and two engines on one thread may share
 ;;; a connection: a check made outside the section, then a switch, then the
-;;; other's close, would hand C a freed address. The native builder measured
-;;; that a __collect_safe call inside critical-section lets other threads
-;;; collect (ADR-0011's amendment), so sqlite3_open_v2 and sqlite3_close run
-;;; there too.
+;;; other's close, would hand C a freed address. A __collect_safe call
+;;; inside critical-section lets other threads collect (ADR-0011), so
+;;; sqlite3_open_v2 and sqlite3_close run there too.
 ;;;
 ;;; Nothing raises inside a section, nor inside call-with-database's critical
 ;;; after thunk. A raise there would reach a with-exception-handler handler
 ;;; with interrupts still disabled, where an engine never expires and another
-;;; thread's collection waits for the handler (M1's closing review). So each
-;;; answers data, and the raise follows it. A raise from a call made inside
-;;; one, the open's string helpers, count-down! or call-with-open-handle's
-;;; procedure, is caught there and raised again after it, the same object.
-;;; The open's section holds the filename's whole C string, so no engine's
-;;; expiry unwinds the string's block and finds it freed on resuming: a
-;;; program under engines takes open-database (ADR-0012, amended).
+;;; thread's collection waits for the handler. So each answers data, and the
+;;; raise follows it. A raise from a call made inside one, the open's string
+;;; helpers, count-down! or call-with-open-handle's procedure, is caught there
+;;; and raised again after it, the same object. The open's section holds the
+;;; filename's whole C string, so no engine's expiry unwinds the string's
+;;; block and finds it freed on resuming: a program under engines takes
+;;; open-database (ADR-0012).
 ;;;
 ;;;   the count   up when sqlite3_open_v2 hands back a handle, failed or not;
-;;;               down when sqlite3_close answers SQLITE_OK (ADR-0012,
-;;;               decision 6)
+;;;               down when sqlite3_close answers SQLITE_OK (ADR-0012)
 ;;;   a failure   its extended code and message read from its handle, then
 ;;;               the handle closed, then &sqlite-error raised; a NULL handle
-;;;               takes its message from sqlite3_errstr (decision 4)
+;;;               takes its message from sqlite3_errstr
 ;;;   the close   every statement the connection tracks is finalized, oldest
-;;;               first, keeping the first failure a finalize reported (M2;
-;;;               ADR-0014, decision 8). Then sqlite3_close, never
-;;;               sqlite3_close_v2. Once it is closed, the first finalize
-;;;               failure is raised (R1). The close vouches only for the
-;;;               statements it tracks, and judges none it did not make (the
-;;;               maintainer's "Vouch only for ours", 2026-11-17). An answer
-;;;               but SQLITE_OK means something else left work open on the
-;;;               connection, a statement, a blob or a backup: a defect of
-;;;               chez-sqlite3's, or foreign code's, such as a loaded
-;;;               extension's. The connection stays open and counted, and
-;;;               only then does sqlite3_next_stmt count what is left, as a
-;;;               diagnostic: one or more, an assertion violation naming the
-;;;               count; none, a backup's, sqlite3_close's own &sqlite-error
-;;;               (decision 5). The count names every statement left,
-;;;               SQLite's own among them: a virtual table's module, FTS3's,
-;;;               FTS4's, FTS5's or RTREE's, keeps statements on the
-;;;               connection, which sqlite3_close finalizes as it disconnects
-;;;               the table, before it looks for statements, but not for a
-;;;               table a statement left open still holds. sqlite3_close has
-;;;               by then also rolled back each virtual table a transaction
-;;;               wrote, which is the other work's affair, not the library's
-;;;               (the maintainer's "Close first, count on failure",
-;;;               2026-11-17)
+;;;               first, keeping the first failure a finalize reported
+;;;               (ADR-0014). Then sqlite3_close, never sqlite3_close_v2. Once
+;;;               it is closed, the first finalize failure is raised. The
+;;;               close vouches only for the statements it tracks, and judges
+;;;               none it did not make. An answer but SQLITE_OK means
+;;;               something else left work open on the connection, a
+;;;               statement, a blob or a backup: a defect of chez-sqlite3's,
+;;;               or foreign code's, such as a loaded extension's. The
+;;;               connection stays open and counted, and only then does
+;;;               sqlite3_next_stmt count what is left, as a diagnostic: one
+;;;               or more, an assertion violation naming the count; none, a
+;;;               backup's, sqlite3_close's own &sqlite-error. The count names
+;;;               every statement left, SQLite's own among them: a virtual
+;;;               table's module, FTS3's, FTS4's, FTS5's or RTREE's, keeps
+;;;               statements on the connection, which sqlite3_close finalizes
+;;;               as it disconnects the table, before it looks for statements,
+;;;               but not for a table a statement left open still holds.
+;;;               sqlite3_close has by then also rolled back each virtual
+;;;               table a transaction wrote, which is the other work's affair,
+;;;               not the library's
 ;;;
-;;; A connection tracks its live statements (ADR-0012, amended; ADR-0014,
-;;; decision 8). (chez-sqlite3 private statement) makes them and imports this
-;;; library, so this one cannot name a statement's record: it holds, for each,
-;;; an entry that statement.sls made, and track-statement!, untrack-statement!
-;;; and tracked-statements are its private procedures for them.
+;;; A connection tracks its live statements (ADR-0012; ADR-0014).
+;;; (chez-sqlite3 private statement) makes them and imports this library, so
+;;; this one cannot name a statement's record: it holds, for each, an entry
+;;; that statement.sls made, and track-statement!, untrack-statement! and
+;;; tracked-statements are its private procedures for them.
 ;;;
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
-;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
+;;; shown-value, never a string's text (ADR-0013).
 ;;;
-;;; M3 adds (ADR-0016, ADR-0020):
+;;; The library also holds (ADR-0016; ADR-0020; ADR-0012; ADR-0021):
 ;;;
-;;;   the cache      the record holds its statement cache, slice 1's table,
-;;;                  its capacity fixed when the record is made: the one
+;;;   the cache      the record holds its statement cache, statement-cache.sls's
+;;;                  table, its capacity fixed when the record is made: the one
 ;;;                  connection-outcome is given, the settings' statement-cache,
-;;;                  0 to 1024, 32 when they give none (ADR-0018, decision
-;;;                  4; ADR-0020, decision 1). The
+;;;                  0 to 1024, 32 when they give none (ADR-0018; ADR-0020). The
 ;;;                  database-cache procedures read and change it inside a
 ;;;                  verb's critical section, for (chez-sqlite3 private
 ;;;                  statement)'s check-out and return; the close empties it,
@@ -104,39 +98,35 @@
 ;;;                  in-transaction?, each one plain call through
 ;;;                  call-with-open-handle, which makes every verb's checks
 ;;;                  first
-;;;   the interrupt  the record holds slice 1's latch, a mutex and an
+;;;   the interrupt  the record holds its latch, a mutex and an
 ;;;                  interruptible flag ((chez-sqlite3 private interrupt);
-;;;                  ADR-0019, decision 2). connection-outcome's section sets
-;;;                  the flag once the record exists; close-connection runs
-;;;                  its work through interrupt-latch-close!, which clears it
-;;;                  before the first finalize and sets it again when the
-;;;                  work left the connection open: sqlite3_close failing,
-;;;                  with a statement found untracked or none.
-;;;                  interrupt-database! is the one verb another thread may
-;;;                  call: it checks only that its argument is a database, and
-;;;                  calls sqlite3_interrupt through the latch, holding its
-;;;                  mutex, while the flag is set; the call itself is made
-;;;                  inside the latch, never after it returns. Its work is
-;;;                  interrupt-database/with's, which takes the foreign call,
-;;;                  so the suites run it on a stand-in. It lives here because
-;;;                  the record and its handle do, and the handle's one
-;;;                  accessor, call-with-open-handle, makes the owner check
-;;;                  this verb must not (ADR-0012, decision 2; ADR-0010,
-;;;                  amended). call-with-latch-shut runs with-transaction's
+;;;                  ADR-0019). connection-outcome's section sets the flag
+;;;                  once the record exists; close-connection runs its work
+;;;                  through interrupt-latch-close!, which clears it before
+;;;                  the first finalize and sets it again when the work left
+;;;                  the connection open: sqlite3_close failing, with a
+;;;                  statement found untracked or none. interrupt-database! is
+;;;                  the one verb another thread may call: it checks only that
+;;;                  its argument is a database, and calls sqlite3_interrupt
+;;;                  through the latch, holding its mutex, while the flag is
+;;;                  set; the call itself is made inside the latch, never
+;;;                  after it returns. Its work is interrupt-database/with's,
+;;;                  which takes the foreign call, so the suites run it on a
+;;;                  stand-in. It lives here because the record and its handle
+;;;                  do, and the handle's one accessor, call-with-open-handle,
+;;;                  makes the owner check this verb must not (ADR-0012;
+;;;                  ADR-0010). call-with-latch-shut runs with-transaction's
 ;;;                  exits through interrupt-latch-shut!, which clears the
-;;;                  flag around them and puts it back after (the maintainer's
-;;;                  "Shut the latch on exit", 2026-11-17)
-;;;
-;;; M4 adds (ADR-0012, amended for M4; ADR-0021, decision 5):
-;;;
+;;;                  flag around them and puts it back after
 ;;;   the opt-in     the record holds the connection's opt-in to extension
 ;;;                  loading, fixed when it is made, as the cache's capacity
 ;;;                  is: connection-outcome is given it, from the settings'
-;;;                  plan, whether its steps hold (enable-load-extension . #t)'s.
-;;;                  database-extension-loading? reads it, for the suites and
-;;;                  for M4 slice 4's load-extension!, which reads it last of
-;;;                  its checks. A set that fails closes the connection, so no
-;;;                  caller holds a record whose opt-in the C call lacks
+;;;                  plan, whether its steps hold
+;;;                  (enable-load-extension . #t)'s. database-extension-loading?
+;;;                  reads it, for the suites and for load-extension!, which
+;;;                  reads it last of its checks. A set that fails closes the
+;;;                  connection, so no caller holds a record whose opt-in the C
+;;;                  call lacks
 (library (chez-sqlite3 private connection)
   (export close-database! database?
           prepared-open connection-outcome opened-database close-connection
@@ -167,11 +157,11 @@
   ;; its entry; SERIAL the number the next one tracked takes, so the close
   ;; can finalize them oldest first. CACHE is its statement cache, of the
   ;; capacity the record is made with, which never changes (ADR-0020). DEPTH
-  ;; is how many with-transaction levels are open on it, from 0 (ADR-0017,
-  ;; decision 3). LATCH is its interrupt latch, made not interruptible: the
-  ;; open sets it, in its section (ADR-0019, decision 2). OPT-IN is whether
-  ;; it opted in to extension loading, #t or #f, fixed when it is made, as
-  ;; CACHE's capacity is (ADR-0012, amended for M4).
+  ;; is how many with-transaction levels are open on it, from 0 (ADR-0017).
+  ;; LATCH is its interrupt latch, made not interruptible: the open sets it,
+  ;; in its section (ADR-0019). OPT-IN is whether it opted in to extension
+  ;; loading, #t or #f, fixed when it is made, as CACHE's capacity is
+  ;; (ADR-0012).
   (define-record-type database
     (fields (mutable handle unchecked-database-handle set-database-handle!)
             (immutable owner unchecked-database-owner)
@@ -230,17 +220,16 @@
   ;; made again inside the section, first, with the thread id read there:
   ;; Chez resumes an engine's remainder on whichever thread calls it, so a
   ;; call that passed the first check on the owner's thread, then expired,
-  ;; can go on on another (M4's closing review, F2). There the section
+  ;; can go on on another. There the section
   ;; answers (wrong-thread OWNER CALLER), touching nothing, and
   ;; &sqlite-wrong-thread is raised from WHO after it, the procedure the
   ;; caller called, whatever state the connection is in, as the first check
   ;; does. The open check and PROC run in the section after it, so the
   ;; handle cannot be closed, nor the thread change, between the checks and
-  ;; its use. PROC runs with
-  ;; interrupts disabled, so it keeps to the C call and its reads, and answers
-  ;; data: what it raises is caught in the section and raised again after it,
-  ;; the same object, with raise. So a raise-continuable from PROC cannot be
-  ;; resumed (the maintainer, 2026-11-14).
+  ;; its use. PROC runs with interrupts disabled, so it keeps to the C call
+  ;; and its reads, and answers data: what it raises is caught in the section
+  ;; and raised again after it, the same object, with raise. So a
+  ;; raise-continuable from PROC cannot be resumed.
   ;;
   ;; The section sits in a plain dynamic-wind, as call-with-block's extent
   ;; does: a continuation captured in PROC and re-entered once the call has
@@ -251,14 +240,11 @@
   ;; resume enters it again, and must go on.
   ;; A few instructions lie between FINISHED's set! and the wind's exit.
   ;; An expiry there would make its resume refused, re-entered: harmless,
-  ;; the section's work done, and the refused run touching nothing. None was
-  ;; seen there: no engine over fuel 1 to 3000, 20 calls each (M1's closing
-  ;; review), and no timer's handler in M3's closing review's
-  ;; script-reenter4.sps, 2804 trials re-entering execute-script! from
-  ;; continuations the handler took, read by a copy that marked the window
-  ;; (.plans/research/m3-review/transaction/). The 212 to 218 of them that
-  ;; were refused, re-entered, had taken theirs inside the wind before the
-  ;; section: the re-entry this before thunk exists to refuse.
+  ;; the section's work done, and the refused run touching nothing. None is
+  ;; seen there, neither under engines over fuel 1 to 3000 nor under a
+  ;; timer's handler re-entering execute-script! from continuations it took:
+  ;; the runs refused, re-entered, take theirs inside the wind before the
+  ;; section, the re-entry this before thunk exists to refuse.
   (define (call-with-open-handle who db proc)
     (check-who 'call-with-open-handle who)
     (unless (procedure? proc)
@@ -317,7 +303,7 @@
   ;; accessor still, in statement.sls. Why the record as KEY: untracking and
   ;; tracked-statements find it by eq?, and a record of an opaque type cannot
   ;; be forged. Each entry also takes the database's next serial number, so
-  ;; the close finalizes oldest first (ADR-0014, decision 8) with an O(1) add
+  ;; the close finalizes oldest first (ADR-0014) with an O(1) add
   ;; and remove.
   ;;
   ;; Each procedure here is called inside the critical section of the verb
@@ -354,7 +340,7 @@
   ;; tracked-statements : Database -> (Listof Any)
   ;; The statements DB tracks, oldest first, read in one critical section.
   ;; DB checked by check-owned first, from tracked-statements. For the
-  ;; suites, and for M3's statement cache.
+  ;; suites, and for with-transaction.
   (define (tracked-statements db)
     (check-owned 'tracked-statements db)
     (critical-section (map car (entries-oldest-first db))))
@@ -389,8 +375,9 @@
   ;; return are called inside the critical section of the verb that makes
   ;; them, in call-with-open-handle's, with the connection checked open, so
   ;; they read and change the table with interrupts off; neither raises for a
-  ;; database and a string key, and each answers what slice 1's table
-  ;; answers. The caller finalizes what a return answers, after its section.
+  ;; database and a string key, and each answers what statement-cache.sls's
+  ;; table answers. The caller finalizes what a return answers, after its
+  ;; section.
 
   ;; database-cache-check-out! : Database String -> (U (List 'hit Any) (List 'miss))
   ;; The statement DB's cache holds under KEY, removed from it, as (hit S);
@@ -402,7 +389,7 @@
 
   ;; database-cache-return! : Database String Any -> (Listof Any)
   ;; STATEMENT filed under KEY as DB's cache's most recent: what to finalize,
-  ;; by slice 1's table, the evicted one, or STATEMENT itself at a capacity
+  ;; by the cache's table, the evicted one, or STATEMENT itself at a capacity
   ;; of 0 or when the cache holds KEY already; (STATEMENT) when DB is no
   ;; database. Raises nothing.
   (define (database-cache-return! db key statement)
@@ -421,15 +408,15 @@
   ;; Whether DB opted in to extension loading at open: its settings list
   ;; held (enable-load-extension . #t), so its plan held the opt-in's step,
   ;; and that set matched; #f for its #f, which makes no call, and for no
-  ;; setting (ADR-0021, decisions 5 and 6). Fixed when the record was made,
+  ;; setting (ADR-0021). Fixed when the record was made,
   ;; read whether DB is open or closed. DB checked by check-owned first, as
   ;; database-cache-capacity is: from WHO when it is given, else from
   ;; database-extension-loading?. A WHO that is no symbol is an assertion
-  ;; violation first. For the suites, and, with its WHO, for M4 slice 4's
-  ;; load-extension!, which reads it last of its checks. A remainder of that
-  ;; call can be resumed on another thread after its first checks, so this
-  ;; read's own owner check refuses it there, and names the verb the caller
-  ;; called (ADR-0013, decision 2; M4's closing review, F3).
+  ;; violation first. For the suites, and, with its WHO, for load-extension!,
+  ;; which reads it last of its checks. A remainder of that call can be
+  ;; resumed on another thread after its first checks, so this read's own
+  ;; owner check refuses it there, and names the verb the caller called
+  ;; (ADR-0013).
   (define database-extension-loading?
     (case-lambda
       ((db) (database-extension-loading? 'database-extension-loading? db))
@@ -446,7 +433,7 @@
     (check-owned 'database-cache-count db)
     (critical-section (statement-cache-count (unchecked-database-cache db))))
 
-  ;; --- the transaction depth (ADR-0017, decision 3) ------------------------------------
+  ;; --- the transaction depth (ADR-0017) ------------------------------------------------
   ;;
   ;; (chez-sqlite3 private transaction) reads and changes it inside its own
   ;; critical sections, on the owner's thread: neither procedure raises.
@@ -504,7 +491,7 @@
   ;; the uri option are assertion violations from WHO, before anything is
   ;; allocated. The caller's string is copied first and the copy alone is
   ;; checked and opened, so another thread cannot change it between the two
-  ;; (ADR-0011, decision 2). OPTIONS are the options alone, the settings
+  ;; (ADR-0011). OPTIONS are the options alone, the settings
   ;; list split from them (chez-sqlite3 private open).
   (define (prepared-open who filename options)
     (unless (string? filename)
@@ -537,10 +524,10 @@
   ;; raised, call-with-c-string's refusal of U+0000, from WHO before anything is
   ;; allocated, among them. One critical section holds the C string's whole
   ;; extent: the open, the read of its out-pointer, the count, the record
-  ;; and its latch made interruptible (ADR-0019, decision 2), or else the
-  ;; failure's details and its handle's close. So no
-  ;; handle is ever left uncounted, and no engine's expiry frees the string
-  ;; between the open's calls. It raises nothing.
+  ;; and its latch made interruptible (ADR-0019), or else the failure's
+  ;; details and its handle's close. So no handle is ever left uncounted, and
+  ;; no engine's expiry frees the string between the open's calls. It raises
+  ;; nothing.
   ;;
   ;; REFUSED?, the open's claim on its call, a procedure of no arguments or
   ;; #f for none, is evaluated first in the section: when it answers true,
@@ -548,7 +535,7 @@
   ;; opens nothing and answers refused. So of the runs an engine's multi-shot
   ;; remainder makes, or a continuation a timer's handler took, one alone
   ;; opens: none opens a connection that nothing would return or close
-  ;; ((chez-sqlite3 private open); ADR-0018, amended in M3 slice 5).
+  ;; ((chez-sqlite3 private open); ADR-0018).
   (define (connection-outcome who name flags capacity opt-in refused?)
     (critical-section
      (if (and refused? (refused?))
@@ -597,7 +584,7 @@
   ;; close-left-open? : (Pairof Symbol Any) -> Boolean
   ;; Whether a close's OUTCOME, as close-connection's work answers it, left
   ;; the connection open: sqlite3_close failing, with a statement found
-  ;; untracked after it, or none (ADR-0019, decision 2). Raises nothing.
+  ;; untracked after it, or none (ADR-0019). Raises nothing.
   (define (close-left-open? outcome)
     (and (memq (car outcome) '(untracked failed)) #t))
 
@@ -608,19 +595,18 @@
   ;; interrupt-latch-close!'s one critical section: DB's latch made not
   ;; interruptible, holding its mutex, before anything is finalized, so no
   ;; interrupt is in flight once the work starts and none starts after
-  ;; (ADR-0019, decision 2); then the work, with the mutex released: every
-  ;; tracked statement finalized, oldest first, the first failure kept; the
-  ;; cache emptied, its statements among those finalized, whether or not
-  ;; the connection then closes, so it never holds a freed one (ADR-0020,
-  ;; decision 9); sqlite3_close; on SQLITE_OK, the handle cleared and the
+  ;; (ADR-0019); then the work, with the mutex released: every tracked
+  ;; statement finalized, oldest first, the first failure kept; the cache
+  ;; emptied, its statements among those finalized, whether or not the
+  ;; connection then closes, so it never holds a freed one (ADR-0020);
+  ;; sqlite3_close; on SQLITE_OK, the handle cleared and the
   ;; count down; on any other answer, the connection left open and counted,
   ;; and only then sqlite3_next_stmt's count of the statements left on it,
   ;; and the latch made interruptible again. sqlite3_close comes before the
   ;; count because it disconnects every virtual table first, finalizing the
   ;; statements a module such as FTS5 keeps on the connection, which a
-  ;; count before it found as untracked (the maintainer's "Close first,
-  ;; count on failure", 2026-11-17). The close judges no statement it did
-  ;; not make ("Vouch only for ours", 2026-11-17): a refusal means work
+  ;; count before it would find as untracked. The close judges no statement
+  ;; it did not make: a refusal means work
   ;; something else left open, a defect of chez-sqlite3's or foreign
   ;; code's, and the count is a diagnostic of every statement left, a
   ;; module's among them while a leftover statement holds its table. After
@@ -628,9 +614,9 @@
   ;; with sqlite3_close failed, a statement found untracked, an assertion
   ;; violation naming the count, or with none, sqlite3_close's failure,
   ;; each raised in place of a finalize's failure, with the connection open
-  ;; and counted; else, the connection closed, the first finalize failure
-  ;; (R1), then a count-down that found the count at zero, count-down!'s
-  ;; double free. The work raises nothing.
+  ;; and counted; else, the connection closed, the first finalize failure,
+  ;; then a count-down that found the count at zero, count-down!'s double
+  ;; free. The work raises nothing.
   ;;
   ;; The owner is checked twice, as call-with-open-handle checks it: by
   ;; check-owned first, so the refusals keep their order, and again in a
@@ -638,7 +624,7 @@
   ;; read there, before the latch is touched. Chez resumes an engine's
   ;; remainder on whichever thread calls it, so a close that passed the
   ;; first check on the owner's thread could otherwise finalize and close
-  ;; on another (M4's closing review, the M4 session's check). There the
+  ;; on another. There the
   ;; section answers (wrong-thread OWNER CALLER), touching nothing, and
   ;; &sqlite-wrong-thread is raised from WHO after it. What
   ;; interrupt-latch-close! raises after its own section, only what the
@@ -699,24 +685,24 @@
   ;; interrupt-database! : Database -> Void
   ;; Any thread's: DB's running statement, a step or a prepare, made to
   ;; answer SQLITE_INTERRUPT, and one held at a row with it, by
-  ;; sqlite3_interrupt (ADR-0019, decisions 1 and 5). DB that is no database
-  ;; is an assertion violation; there is no owner check, and no other: on a
-  ;; closed connection, or one closing, it does nothing and raises nothing
-  ;; (decision 4). The handle is read and sqlite3_interrupt called by
+  ;; sqlite3_interrupt (ADR-0019). DB that is no database is an assertion
+  ;; violation; there is no owner check, and no other: on a closed
+  ;; connection, or one closing, it does nothing and raises nothing. The
+  ;; handle is read and sqlite3_interrupt called by
   ;; interrupt-latch-interrupt!, in its one critical section, holding DB's
   ;; latch's mutex, and only while the latch is interruptible, which the
   ;; close clears under the same mutex before it finalizes anything. So the
   ;; flag being set means the handle is live. It reads nothing else of the
   ;; connection, since any call that takes the connection's own mutex waits
-  ;; for the step it means to stop (M3's research, concurrency I8), and
-  ;; answers nothing. It is interrupt-database/with, given sqlite3_interrupt.
+  ;; for the step it means to stop, and answers nothing. It is
+  ;; interrupt-database/with, given sqlite3_interrupt.
   (define (interrupt-database! db)
     (interrupt-database/with db sqlite3-interrupt))
 
   ;; interrupt-database/with : Database (Positive-Integer -> Any) -> Void
   ;; interrupt-database!'s work, with its foreign call INTERRUPT given, so a
-  ;; suite runs the record's own wiring on a stand-in, as slice 1's suite
-  ;; runs the latch's (ADR-0019, consequences). DB that is no database is an
+  ;; suite runs the record's own wiring on a stand-in, as test-interrupt
+  ;; runs the latch's (ADR-0019). DB that is no database is an
   ;; assertion violation from interrupt-database!. Then, inside
   ;; interrupt-latch-interrupt!'s one critical section, holding DB's latch's
   ;; mutex and only while the latch is interruptible: DB's handle read, and
@@ -750,12 +736,11 @@
         (interrupt-latch-shut! (unchecked-database-latch db) work)
         (work)))
 
-  ;; --- the counters (ADR-0016, decision 8) ---------------------------------------------------
+  ;; --- the counters (ADR-0016) ---------------------------------------------------------------
   ;;
   ;; Each checks DB as every verb does, a database, on its owning thread, and
   ;; open, through call-with-open-handle, and makes its one plain call there:
-  ;; the counters are SQLite's, read as it keeps them (M3's research, single
-  ;; B1 and B2).
+  ;; the counters are SQLite's, read as it keeps them.
 
   ;; changes : Database -> Natural
   ;; The rows the last INSERT, UPDATE or DELETE on DB to finish changed,

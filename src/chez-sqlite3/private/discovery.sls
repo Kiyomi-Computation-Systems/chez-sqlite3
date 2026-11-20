@@ -12,9 +12,7 @@
 ;;;      invalid-override. The path chosen, here or below, is what the
 ;;;      loader is given, not always the file it loads: on macOS,
 ;;;      DYLD_LIBRARY_PATH sends dyld to a file of the same leaf name in its
-;;;      folders first, while on Linux LD_LIBRARY_PATH redirects neither
-;;;      (the M4 Mac run, dyld.txt; the maintainer's "Document it",
-;;;      2026-11-18).
+;;;      folders first, while on Linux LD_LIBRARY_PATH redirects neither.
 ;;;   2. Otherwise the platform comes from the machine type: a name ending
 ;;;      in le is Linux, one ending in osx is macOS, any other has no
 ;;;      candidates.

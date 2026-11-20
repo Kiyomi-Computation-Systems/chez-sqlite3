@@ -1,25 +1,23 @@
 #!r6rs
-;;; The suite for execute-script! (ADR-0016, decision 7, amended in M3 slice
-;;; 1; the M3 plan, section 4.1), in (chez-sqlite3 private conveniences): a
-;;; script run as a loop of prepares, each from the tail of the one before,
-;;; over one block holding the whole script. Each case is M3's research's
-;;; (single script X1 to X16), run on a fresh file, alike on 3.53.1 and
-;;; 3.45.1. Its raises' who and depth are tests/test-conveniences-who.sps's,
-;;; its re-entry rows tests/test-conveniences-reentry.sps's, and its engine
-;;; rows tests/test-conveniences-engines.sps's.
+;;; The suite for execute-script! (ADR-0016), in (chez-sqlite3 private
+;;; conveniences): a script run as a loop of prepares, each from the tail of
+;;; the one before, over one block holding the whole script. Each case is
+;;; measured, run on a fresh file, alike on 3.53.1 and 3.45.1. Its raises'
+;;; who and depth are tests/test-conveniences-who.sps's, its re-entry rows
+;;; tests/test-conveniences-reentry.sps's, and its engine rows
+;;; tests/test-conveniences-engines.sps's.
 ;;;
 ;;;   the loop      every statement in turn, its rows dropped, each prepared
-;;;                 only once the one before it has run (single P3); PRAGMAs
+;;;                 only once the one before it has run; PRAGMAs
 ;;;                 in order; a statement with no semicolon at its end
 ;;;   no statement  empty SQL, only semicolons, only comments or whitespace:
 ;;;                 no error; a NULL statement ends the loop, and leading
 ;;;                 semicolons and comments belong to the next statement
-;;;                 (slice 0's P11)
 ;;;   the first error
 ;;;                 stops the loop, the statements before it standing; no
 ;;;                 transaction begun, ended or rolled back by the runner: one
 ;;;                 the script began is left open, one its error ended is
-;;;                 ended (X1, X2, X4, X16)
+;;;                 ended
 ;;;   the error     rebuilt: the whole script as its sql, its offset in
 ;;;                 characters at the token SQLite points at for a prepare's
 ;;;                 error, at the failing statement's first token for a
@@ -32,18 +30,18 @@
 ;;;                 connection refused even for an empty script
 ;;;   no cache      a script's statements are never cached, nor is a cached
 ;;;                 statement of the same SQL touched; they are prepared with
-;;;                 no flags, read through lookaside (M3's research, single K1)
+;;;                 no flags, read through lookaside
 ;;;   code-number   a step's failure's extended code back to its number, for
 ;;;                 the rebuilt error: an integer itself, a name its number,
 ;;;                 anything else #f
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them. What a row reads back it reads
-;;; through M2's statement tier.
+;;; through the statement tier.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -169,7 +167,7 @@
   (for-each (lambda (db) (guard (e (#t #f)) (close-database! db))) databases))
 
 ;; tier-run : Database String -> (Listof (Vectorof Any))
-;; SQL run through M2's statement tier: prepared, stepped to its end, each
+;; SQL run through the statement tier: prepared, stepped to its end, each
 ;; row read whole, finalized; its rows.
 (define (tier-run db sql)
   (let ((st (prepare-statement db sql)))
@@ -266,9 +264,8 @@
              (f (no-value (execute-script! db "INSERT INTO s VALUES (80);  -- done\n  "))))
         (list (list a b c d e f) (xs db))))))
 
-;; Measured by M3 slice 0's research (P11), on both libraries: a NULL
-;; statement's tail is the input's end, and leading semicolons and comments go
-;; into the next statement.
+;; Measured on both libraries: a NULL statement's tail is the input's end, and
+;; leading semicolons and comments go into the next statement.
 (test-equal "a NULL statement ends the loop, and the semicolons and comments before a statement belong to it, so none is skipped: ; after a statement, ;; before one, a comment then ; before one, and U+FEFF then ; before one"
   (list '(no-value no-value no-value no-value) '(1 2 3 4))
   (with-script-db s-table
@@ -383,8 +380,7 @@
 ;; foreign blocks held: the most it counted, and at how many ticks. The
 ;; count after THUNK cannot tell a block allocated and freed on the way out
 ;; from none: a script that allocated before its checks, and freed the
-;; block as the refusal left, passed a row that read it then (M3's closing
-;; review, reviewer B's N6).
+;; block as the refusal left, passed a row that read it then.
 (define (most-blocks thunk)
   (let ((most 0) (ticks 0) (old (timer-interrupt-handler)))
     (let ((answer
@@ -456,11 +452,9 @@
     (thunk db)
     (read 0)))
 
-;; Measured (.plans/research/m3-slice-3/lookaside-by-flags.sps), on both
-;; libraries: a select of 200
-;; columns prepared with no flags fills the connection's lookaside, 123 slots
-;; at its high-water mark, and prepared SQLITE_PREPARE_PERSISTENT takes none,
-;; stepped and read or not (M3's research, single K1).
+;; Measured on both libraries: a select of 200 columns prepared with no flags
+;; fills the connection's lookaside, 123 slots at its high-water mark, and
+;; prepared SQLITE_PREPARE_PERSISTENT takes none, stepped and read or not.
 (test-equal "execute-script! prepares with no flags: a script of one select of 200 columns takes lookaside, as query does at a capacity of 0, set by the statement-cache setting, where query's miss, prepared SQLITE_PREPARE_PERSISTENT above 0, takes none"
   (list 'some 'some 0)
   (let* ((sql (string-append "select " two-hundred-columns))

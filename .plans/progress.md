@@ -123,14 +123,19 @@ newest first.
   - **M5 slice 2 is done,** the site's generator and its dependency, as PR #54, `8c18272`, by the
     M3 session, checked by the M4 session, squash-merged with CI passing in every job. The
     maintainer accepted its plan amendment, the generator as built (2026-11-20, "Accept").
-  - **M5 slice 4,** the docs, is building in the M4 session.
-  - **M5 slice 3 is PR #55 on `m5-slice-3`:** the site in CI, the `site` job and `pages.yml`, by the
-    M3 session, reviewed (Opus) and checked read-only by the M4 session; with it, the fixes from
-    slice 2's review. The maintainer accepted its plan amendment, the site in CI as built, and slice
-    2's amendment's three additions (2026-11-20, "Accept both"). As it merges, the maintainer adds
-    `site (the docs site, on Ubuntu's Chez)`, the job's name, to branch protection, and turns Pages
-    on, built from GitHub Actions, its `github-pages` environment taking `main` and the tag rule
-    `v*`.
+  - **M5 slice 3 is done,** the site in CI, as PR #55, `047ee91`, by the M3 session, reviewed
+    (Opus) and checked by the M4 session, squash-merged with CI passing in every job, with the
+    fixes from slice 2's review. The maintainer accepted its plan amendment, the site in CI as
+    built, and slice 2's amendment's three additions (2026-11-20, "Accept both"). Then, on the
+    maintainer's word, the M3 session set what chez-curl's repository has and read each back:
+    branch protection, strict, gained its seventh context, `site (the docs site, on Ubuntu's
+    Chez)`; Pages, built from GitHub Actions with HTTPS enforced, at
+    <https://kiyomi-computation-systems.github.io/chez-sqlite3/>; and its `github-pages`
+    environment takes custom rules alone, the branch `main` and the tag `v*`.
+  - **M5 slice 4 is done,** the docs, as PR #56, `9728bed`, by the M4 session, reviewed twice
+    (Opus) and checked by the M3 session, squash-merged with CI passing in every job. The
+    maintainer accepted its plan amendment, the docs as built, and ADR-0016's, an expiry past the
+    fold's last step (2026-11-20, "Accept both"), and its walk passed on Linux and on the Mac.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -230,6 +235,11 @@ newest first.
     "Report the runner's SQLite" step;** elsewhere it checks the value when one is there. A lost
     `CHEZ` fails on a runner with no `scheme`, but not where Ubuntu's `chezscheme` answers to
     `scheme` ([traps](traps.md); M5 slice 3 and its review).
+  - **For M5's closing review, from slice 4's amendment:** no suite row fails a fold that raises
+    closed after an expiry past its last step that finalized its statement; the versions the
+    pages name, 3.54.1, Guix's 3.53.1 and Apple's 3.51.0, are held to nothing; and two copies of
+    discovery's list, the quick start's Apple path and the reference's "Which SQLite" list, are
+    held to nothing, where `docs/finding-sqlite.md`'s tables are held.
   - **No tag ruleset limits who may push a `v*` tag,** so once the `github-pages` environment
     takes `v*`, any such tag deploys the site. With one maintainer that stands; a ruleset would
     close it (M5 slice 3's review).
@@ -247,6 +257,46 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5 slice 4: the docs (PR #56)
+
+By the M4 session ([its log](m5-slice-4-mutation-log.md); the plan's amendment, the docs as built).
+
+- **What it wrote:** `docs/quickstart.md`, the site's home, `docs/finding-sqlite.md` and
+  `docs/libraries.md`; the reference's three gaps and three wordings; README.org thinned to the
+  siblings' order, its one Scheme block a fragment held to a docs twin; and the nav of four pages.
+- **Its checks:** the twin rule; the clone-line check, which replaced `test-manifest`'s
+  tripwire; `check-floors` reading `docs/`; check-site's invariant 7 without its fallback, and
+  one H1, its nav label, per page; and, from its docs review's survivors, the maintainer's three:
+  whole programs run and their output held, `finding-sqlite`'s tables held to the code, and the
+  pages' `CHEZ_` names and override paths. Each watched failing.
+- **Reviewed** twice (Opus, read-only), once adversarially on the checks and once on the docs,
+  and **checked** by the M3 session's Opus cross-check: one major, the whole-program rows turned
+  off by a `#!r6rs` line, which the lead reproduced; four minors and six nits; all fixed or made
+  Open items, the fixes watched failing on the cross-check's plants.
+- **P4:** both anchor rules gave GitHub's anchor for all 105 headings of the four pages. **P6,
+  the walk as a reader:** on Linux, both of the quick start's programs ran as the page says; on
+  the maintainer's Mac, the same, Apple's and Homebrew's libraries found as the page says, a
+  `DYLD_LIBRARY_PATH` swapping an override's path for the first time, and `make test` 93 of 93
+  with each library.
+- **Slice 2's plants,** run on its four pages: the nav reversed, its neighbours, the home alone,
+  the home last and every page as `index.html` fail by name; the `pages.html` plant fails by
+  slice 2's review's `site-unit` row once #55 merged.
+- **One trap,** reproduced by the lead: outside the container, a distro's compiler can't run a
+  program against Guix's SQLite.
+- **Subagents,** the M4 session's:
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The reference's gaps | Opus | 242k | 74 | ~12 min |
+  | The pages and README | Opus | 298k | 98 | ~18 min |
+  | The four checks | Opus | 383k | 107 | ~28 min |
+  | The checks' review | Opus | 215k | 64 | ~12 min |
+  | The docs review | Opus | 304k | 116 | ~23 min |
+  | The maintainer's three checks | Opus | 244k | 71 | ~25 min |
+  | The cross-check's fixes | Opus | 178k | 48 | ~19 min |
+
+  And the M3 session's cross-check: Opus, 339k, 94, 17 min.
 
 ### 2026-11-20 — M5 slice 3: the site in CI (PR #55)
 

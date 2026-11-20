@@ -1,8 +1,7 @@
 #!r6rs
-;;; The suite for SQLite's JSON functions through (chez-sqlite3) (the M4
-;;; plan, section 4.5; ADR-0003, amended). JSON is built in by default since
-;;; SQLite 3.38.0, so every library at the floor has it, and every row runs on
-;;; every lane:
+;;; The suite for SQLite's JSON functions through (chez-sqlite3) (ADR-0003).
+;;; JSON is built in by default since SQLite 3.38.0, so every library at the
+;;; floor has it, and every row runs on every lane:
 ;;;
 ;;;   the option     (sqlite-compile-option? "OMIT_JSON") is #f, beside
 ;;;                  THREADSAFE's #t, so a library without JSON fails by name
@@ -18,24 +17,21 @@
 ;;;                  -1e400, and a flonum for 9223372036854775808, where
 ;;;                  9223372036854775807 stays an exact integer
 ;;;
-;;; Every value a row asserts is the research's (.plans/research/m4-plan/,
-;;; F3), the same on all four libraries it read: the floor's 3.45.1, Guix's
-;;; 3.53.1 and 3.54.1, plain and with FTS5, but two, measured in the
-;;; slice's review on those libraries (.plans/m4-slice-5-mutation-log.md): a
-;;; bound string's typeof is text, so a string bound as a BLOB fails the
-;;; bound row on every library, where 3.53.1 and 3.54.1 read a BLOB's JSON as
-;;; text; and json_each answers an object's keys in the document's order, so
-;;; the key-order row's object is written out of order. No row uses
-;;; json_pretty, which 3.45.1 lacks. The rows go through the conveniences and the statement
-;;; verbs, so they test the values' path through the library, not SQLite: a
-;;; row's REAL reads as a flonum, its INTEGER as an exact integer, its TEXT as
-;;; a string and its BLOB as a bytevector, and each is asserted whole.
+;;; Every value a row asserts was measured, the same on all four libraries: the floor's
+;;; 3.45.1, Guix's 3.53.1 and 3.54.1, plain and with FTS5, but two, measured on those
+;;; libraries: a bound string's typeof is text, so a string bound as a BLOB fails the bound
+;;; row on every library, where 3.53.1 and 3.54.1 read a BLOB's JSON as text; and json_each
+;;; answers an object's keys in the document's order, so the key-order row's object is
+;;; written out of order. No row uses json_pretty, which 3.45.1 lacks. The rows go through
+;;; the conveniences and the statement verbs, so they test the values' path through the
+;;; library, not SQLite: a row's REAL reads as a flonum, its INTEGER as an exact integer,
+;;; its TEXT as a string and its BLOB as a bytevector, and each is asserted whole.
 ;;;
 ;;; The library is reached through eval, under a guard, as
 ;;; tests/test-conveniences.sps reaches it. Every computation that can raise
 ;;; runs under a guard that answers what was raised; no actual expression
-;;; can answer #f for a raise. Effects run in order, through let*, never map
-;;; (AGENTS.md).
+;;; can answer #f for a raise. Effects run in order, through let*, never
+;;; map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)

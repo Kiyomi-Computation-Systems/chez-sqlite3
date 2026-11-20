@@ -1,15 +1,14 @@
 #!r6rs
 ;;; The suite for one execute-script!'s runs interleaved under a collect trip
-;;; of 256 bytes, at the fuels whose remainder by 4 is 0 (ADR-0016, amended in
-;;; M3 slice 5's part D and in M4 slice 4; M4's closing review, reviewer B's
-;;; B1), in (chez-sqlite3 private conveniences): a quarter of the low pass of
-;;; the interleaved row of tests/test-conveniences-pending-script-even.sps and
+;;; of 256 bytes, at the fuels whose remainder by 4 is 0 (ADR-0016), in
+;;; (chez-sqlite3 private conveniences): a quarter of the low pass of the
+;;; interleaved row of tests/test-conveniences-pending-script-even.sps and
 ;;; -odd.sps. The four suites tests/test-conveniences-pending-script-low-0.sps
 ;;; to -3.sps deal the fuels by their remainder by 4: each runs every G at its
 ;;; own, and G = 1 alone at the rest, which tells where the call completes.
 ;;; The high row's two halves took 119 to 196 s on CI under the memory gate,
-;;; and two low halves 167 and 169 s here, half again as costly. The
-;;; schedule, the tell, the bound, the judge and the two passes are
+;;; and two low halves 167 and 169 s here, half again as costly. The schedule,
+;;; the tell, the bound, the judge and the two passes are
 ;;; (conveniences-pending)'s, tests/conveniences-pending.sls.
 ;;;
 ;;;   interleaved  the high row, its trials at those fuels, each under a
@@ -37,7 +36,7 @@
 ;;; silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+;;; own. No expected value is #f where the actual could raise.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

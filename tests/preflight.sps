@@ -11,7 +11,7 @@
 ;;; way its last line is its counts, (chez-sqlite3 private counters)'
 ;;; native-counts: it is a child that reaches native code when
 ;;; tests/test-library-loading-real.sps and -preflight.sps run it, and each requires every
-;;; count zero (ADR-0005, decision 4). The reason is the contract; the rest
+;;; count zero (ADR-0005). The reason is the contract; the rest
 ;;; is for the reader (ADR-0002). Anything
 ;;; else raised is a bug, not a refusal, and is left to Chez's default
 ;;; handler, which exits non-zero. The report's accessors live in
@@ -20,7 +20,7 @@
 ;;;
 ;;; It does not import (chez-sqlite3 private native): Chez would run native's
 ;;; body, which is the load, before this program's guard could catch a
-;;; refusal (AGENTS.md). It evaluates (loaded-libsqlite3) in native's
+;;; refusal. It evaluates (loaded-libsqlite3) in native's
 ;;; environment inside the guard instead. The public (chez-sqlite3) loads
 ;;; the same way, so a program cannot guard its import either.
 (import (rnrs)

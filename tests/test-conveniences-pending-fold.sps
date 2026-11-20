@@ -1,9 +1,8 @@
 #!r6rs
-;;; The suite for one query-fold's runs interleaved (ADR-0016, amended in M3
-;;; slice 5's part D; the maintainer's "Guard every call", ADR-0016, amended in
-;;; M3 slice 3), in (chez-sqlite3 private conveniences): one remainder of the
-;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
-;;; schedule, the tell, the bound and the judge are (conveniences-pending)'s,
+;;; The suite for one query-fold's runs interleaved (ADR-0016), in
+;;; (chez-sqlite3 private conveniences): one remainder of the call, R, resumed
+;;; again while an earlier resume of it, R1, is pending. The schedule, the
+;;; tell, the bound and the judge are (conveniences-pending)'s,
 ;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
 ;;; one a convenience, so each stays well under the memory gate's limit.
 ;;;
@@ -29,9 +28,9 @@
 ;;;                completes before it runs: the raise reaches the caller, the
 ;;;                fold's wind finishing its statement
 ;;;
-;;; The fold keeps slice 3's flag: an expiry inside its wind finishes the
-;;; statement and sets the flag, so no second run reaches a statement another
-;;; holds. Its code is unchanged by part D, and the row holds it so.
+;;; The fold keeps its flag: an expiry inside its wind finishes the statement
+;;; and sets the flag, so no second run reaches a statement another holds.
+;;; The row holds it so.
 ;;;
 ;;; Its low pass, the interleaved row under a collect trip of 256 bytes, is
 ;;; tests/test-conveniences-pending-fold-low.sps, a suite of its own: this one
@@ -44,7 +43,7 @@
 ;;; so nothing is unavailable silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+;;; own. No expected value is #f where the actual could raise.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

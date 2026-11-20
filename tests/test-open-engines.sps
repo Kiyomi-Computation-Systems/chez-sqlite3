@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for open-database with settings under an engine (ADR-0018,
-;;; consequences, amended in M3 slice 1; the M3 plan, section 4.3), in
+;;; consequences), in
 ;;; (chez-sqlite3 private open). open-database holds no dynamic-wind around
 ;;; its settings, so an engine's expiry between two of their critical
 ;;; sections suspends the open, and the resume goes on.
@@ -24,8 +24,7 @@
 ;;;                  it, opens a connection, or reaches SQLite with SQL the
 ;;;                  checks computed again: Chez's number->string, resumed a
 ;;;                  second time from inside, answered "" or the digits
-;;;                  twice (.plans/research/m3-slice-5/, number-twice.sps),
-;;;                  and the checks run in one critical section, where no
+;;;                  twice, and the checks run in one critical section, where no
 ;;;                  remainder is taken
 ;;;
 ;;;   re-entered     call-with-database, whose connection does not survive an
@@ -53,11 +52,11 @@
 ;;;                  is handled at its exit and costs the engine ticks there, so
 ;;;                  a remainder or a continuation is taken at a section's exit
 ;;;                  too, before anything after it: a claim advanced just after
-;;;                  its section, not inside it, applied a setting twice there
-;;;                  (M4's closing review, reviewer B's B1). The low pass fails
+;;;                  its section, not inside it, applied a setting twice there.
+;;;                  The low pass fails
 ;;;                  by name unless collect requests fell in its trials, and
 ;;;                  unless a run past the call's last section answered again
-;;;   a failing      the review's F01: the procedure leaves a statement its
+;;;   a failing      the procedure leaves a statement its
 ;;;   close          connection does not track, so the close fails, then
 ;;;                  re-enters a continuation a timer's handler took at each
 ;;;                  tick until it starts. Inside the call's extent, refused at
@@ -70,24 +69,22 @@
 ;;;                  tick is judged by its own capture, the connections counted
 ;;;                  then, never by another run's: a collect request costs a
 ;;;                  run up to a tick, so two runs' ticks can differ
-;;;                  (.plans/research/m3-slice-5/, gc-ticks.sps)
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
-;;; the Scheme work between the open's sections (.plans/traps.md). Each trial
+;;; the Scheme work between the open's sections. Each trial
 ;;; of the two passes begins with a collection, so its first slice runs as
 ;;; every trial's at that fuel does, unless a collect request falls in it
 ;;; (below); each is judged by what it saw itself,
 ;;; and each bound on a whole new call is a refusal the sweep saw itself,
 ;;; never a refused call's fuel, a control run on the code under test, or a
-;;; caller's count (AGENTS.md). The low pass leaves sweep, cwd-sweep and
-;;; untracked-sweep alone: each judges a fuel by itself, and the last is F1's,
-;;; which the maintainer kept (M4's closing review). The loading procedures
+;;; caller's count. The low pass leaves sweep, cwd-sweep and
+;;; untracked-sweep alone: each judges a fuel by itself. The loading procedures
 ;;; are reached through eval, under a guard, as tests/test-statement.sps
 ;;; reaches them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -360,8 +357,8 @@
 ;; quieted! : -> Void
 ;; A collection now, at a fuel's or a tick's start, with collect-trip-bytes
 ;; raised to 128 MiB, far above what one fuel's runs allocate, so no collect
-;; request falls in them: one costs a run up to a tick
-;; (.plans/research/m3-slice-5/, gc-ticks.sps), and the rows that bound a
+;; request falls in them: one costs a run up to a tick, and
+;; the rows that bound a
 ;; whole new call read the fuels, or the ticks, in order.
 (define (quieted!)
   (collect-trip-bytes (expt 2 27))
@@ -376,7 +373,7 @@
 ;; falls due all through it, and one due inside a critical section is
 ;; handled at the section's exit, where it costs the engine ticks. So an
 ;; expiry, or a timer's tick, can fall at a section's exit, before anything
-;; after it (.plans/traps.md). Every request the trials meet goes through
+;; after it. Every request the trials meet goes through
 ;; counted-request, which counts it, and the low rows judge where they fell
 ;; (where a remainder lies, below).
 
@@ -394,7 +391,7 @@
 ;; the engine ticks there, so that run's remainder lies earlier in the call
 ;; than its fuel or tick says: a whole new call came at a fuel at or past
 ;; one a trial was refused at, R before the call's first section, where a
-;; request fell (M4's closing review, builder D). So each trial notes
+;; request fell. So each trial notes
 ;; whether a request fell before its remainder was taken, and the sweep's
 ;; bound on a whole new call reads only the trials where none did; a whole
 ;; new call where one did is counted and printed, and judged by its other
@@ -421,8 +418,7 @@
 ;; lies at that section's exit, before anything after it. A probe's marker,
 ;; set inside a section and overwritten just after it, read the section's
 ;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB (M4's closing review, builder D's
-;; exit-probe.sps). So a low row fails by name unless every forced section met
+;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
 ;; its request before the next forced section or its slice's end, which a
 ;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
 ;; about one time in eight; and unless some first slice expired at a forced
@@ -517,7 +513,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -853,8 +849,7 @@
 ;; new one at a fuel past that refusal is a deviation, unless a collect
 ;; request fell in its first slice: those are counted, last. A bound from the
 ;; call refused at its first check, a filename that is no string, was
-;; loose: it completed at fuel 68, the whole new calls ending at 9 (M3's
-;; closing review, reviewer B).
+;; loose: it completed at fuel 68, the whole new calls ending at 9.
 (define (twice-sweep pass path)
   (let loop ((fuel 1) (deviations '()) (refused 0) (same 0) (new 0) (refused-at #f) (moved 0))
     (let* ((r (twice pass path fuel))
@@ -1004,7 +999,7 @@
 ;; tick past that refusal is a deviation, unless a collect request fell in
 ;; the call before the capture: those are counted, last. A bound from the call refused at
 ;; its first check was loose: it took 71 ticks, the whole new calls ending
-;; at 8 (M3's closing review, reviewer B).
+;; at 8.
 (define (reentry-sweep pass path)
   (let loop ((i 1) (deviations '()) (refused 0) (again 0) (new 0) (refused-at #f) (moved 0))
     (let* ((p (reentered-at pass path i))
@@ -1171,7 +1166,7 @@
                     'some-closed 'none-closed)
                 (native-counts))))))
 
-;; --- a failing close beside a refused re-entry (the review's F01) -----------------------------
+;; --- a failing close beside a refused re-entry -----------------------------
 
 ;; raw-prepare! : Database String -> Positive-Integer
 ;; A statement of SQL on DB, made with the raw sqlite3_prepare_v2, so the
@@ -1235,8 +1230,8 @@
 ;; untracked-sweep : String -> (List Natural (Listof Any) (List Symbol Symbol))
 ;; untracked-reentry-at at each tick from 1 until the procedure starts, at
 ;; most 20000, each judged by its own capture, never by another run's: a
-;; collect request costs a run up to a tick, so two runs' ticks can differ
-;; (.plans/research/m3-slice-5/, gc-ticks.sps). With the connection open at
+;; collect request costs a run up to a tick, so two runs' ticks can differ.
+;; With the connection open at
 ;; the capture, the continuation lies inside the call's extent: refused at a setting's
 ;; section, the call raises &sqlite-closed, the close's refusal not raised
 ;; over it; or, past the settings, the procedure is called again and

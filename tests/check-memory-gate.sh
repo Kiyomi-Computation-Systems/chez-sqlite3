@@ -13,15 +13,14 @@
 #   b  connection   the same for the connection plant, which opens :memory:
 #                   through open-database and drops the record: one block
 #                   definitely lost, holding others, and allocated within
-#                   libsqlite3, read from the loss record's stack (the M1
-#                   plan, section 3.1)
+#                   libsqlite3, read from the loss record's stack
 #   b  statement    the same for the statement plant, which prepares select 1
 #                   through prepare-statement on a :memory: connection and
 #                   drops both: Valgrind sees the statement only through its
 #                   connection, the same one block definitely lost, holding
 #                   others, allocated within libsqlite3; its plain line, case
-#                   a's, holds the counters seeing the statement (ADR-0005,
-#                   amended for M2)
+#                   a's, holds the counters seeing the statement
+#                   (ADR-0005)
 #   b  fails        a program that Valgrind finds clean but that exits 1
 #                   is named FAIL with its exit, then its own lines, whole:
 #                   its FAIL line with its expected and actual values, 18
@@ -53,7 +52,7 @@
 #                   whole message naming the path, exit 2, running no
 #                   suite: the gate's child prefix is cut at whitespace
 #   n  shards       CI runs the gate in two jobs, memory-1 and memory-2,
-#                   one shard each (ADR-0005, amended in M3 slice 6), and
+#                   one shard each (ADR-0005), and
 #                   what a run ran is read from its own "=== " lines, a
 #                   stand-in for Valgrind running nothing: MEMORY_SHARD=1
 #                   and 2 each run the Makefile's own list, MEMORY_SUITES_1
@@ -115,7 +114,7 @@
 #   p  children     a child that reaches native code runs under the gate's
 #                   own Valgrind, through (chez-sqlite3-testing)'s
 #                   gated-command, with a log of its own, and the gate reads
-#                   it (ADR-0005, amended). Each parent below loses nothing
+#                   it (ADR-0005). Each parent below loses nothing
 #                   and ignores its child's exit status, so only the child's
 #                   log can fail it. Each runs plainly first, exit 0 and its
 #                   one line (plain). A child that leaks the leak plant's 777
@@ -169,7 +168,7 @@
 # which this gate has none of (it passes no suppression in any
 # environment). Its n all is g all here. Its o held two jobs, one per
 # shard, with an awk of its own; ours runs check-ci, which holds the whole
-# workflow, both shards' jobs among it (ADR-0005, amended). And the rule
+# workflow, both shards' jobs among it (ADR-0005). And the rule
 # that the two shards hold every suite once is make test's own, through
 # make check-memory-shards; n split holds that each shard runs its list.
 #
@@ -492,7 +491,7 @@ EOF
 # Two children that fork before they exec: each runs `true` through
 # capture-command. Valgrind, given --log-file with %p, opens a second log for
 # a fork before its exec, with a Command: line and no summary, unless it is
-# given --child-silent-after-fork=yes (M1 slice 3's review). The second also
+# given --child-silent-after-fork=yes. The second also
 # leaks the leak plant's 777 bytes.
 cat >"$kit/forkclean.sps" <<'EOF'
 #!r6rs

@@ -1,12 +1,12 @@
 #!r6rs
 ;;; One of the nine suites that load libsqlite3 end to end, through
 ;;; (chez-sqlite3 private native), tests/refusal-probe.sps and a decoy
-;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds M4's rows on
+;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the rows on
 ;;; the decoy, where it has sqlite3_load_extension and where it lacks it.
 ;;;
 ;;; The nine were one suite until it passed 450 s under the memory gate on
 ;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005, amended); now each runs at most 11
+;;; there, over half of it (ADR-0005); now each runs at most 11
 ;;; children, and (library-loading) holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
@@ -15,15 +15,14 @@
 ;;; a probe in a fresh Chez, through `env`, and reads back what it printed,
 ;;; as data, whole: exit status, every line, and stderr.
 ;;;
-;;;   - the optional entry point, outside the pattern (the M4 plan, section
-;;;     4.6): a build without sqlite3_load_extension loads, with no
-;;;     missing-api, and native records it absent; the control records it
-;;;     there;
-;;;   - the opt-in's check (M4 slice 3; the M4 plan, section 4.3): on the build
-;;;     without it, an open that opts in is refused by the named condition,
-;;;     after the list's own rules, the open never tried; on the control it is
-;;;     tried, and so is (enable-load-extension . #f) on the lacking build;
-;;;   - load-extension! on the decoy (M4 slice 4): reached on the build
+;;;   - the optional entry point, outside the pattern: a build without
+;;;     sqlite3_load_extension loads, with no missing-api, and native records
+;;;     it absent; the control records it there;
+;;;   - the opt-in's check: on the build without it, an open that opts in is
+;;;     refused by the named condition, after the list's own rules, the open
+;;;     never tried; on the control it is tried, and so is
+;;;     (enable-load-extension . #f) on the lacking build;
+;;;   - load-extension! on the decoy: reached on the build
 ;;;     without sqlite3_load_extension and on the control, it refuses what is
 ;;;     no database at depth 1, and the log shows nothing of SQLite's called.
 ;;;
@@ -33,19 +32,19 @@
 ;;; from packaging/floors.sexp (ADR-0008).
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005, decision 4). Each runs through
+;;; requires them zero (ADR-0005). Each runs through
 ;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
 ;;; with a log of its own that the gate reads. Every child here is the probe,
 ;;; which says whether it ran under Valgrind (memcheck's preload in
 ;;; /proc/self/maps), and a row requires yes exactly when the gate asked. A
-;;; child that escaped the gate fails its row (ADR-0005, amended).
+;;; child that escaped the gate fails its row (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
 ;;; failing, and none is #f: SRFI-64 makes #f of a raise in the actual
 ;;; expression. Anything that can raise is computed under a guard with a
 ;;; sentinel. Effects run in order, through let*, named lets and for-each,
-;;; never map (AGENTS.md).
+;;; never map.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)
@@ -136,12 +135,11 @@
 
 (define control-report (report floor-version floor-number "decoy-sourceid"))
 
-;; The optional entry point, outside the pattern (ADR-0002, amended
-;; 2026-11-17): a library without sqlite3_load_extension, as Apple's is,
-;; loads, never missing-api, and native records it absent, which an open that
-;; opts in reads (M4 slice 3). The control has it, and its record says so: the
-;; row above is the entry point's doing, not the probe's. Neither load calls
-;; it, so each log is a successful load's six calls.
+;; The optional entry point, outside the pattern (ADR-0002): a library without
+;; sqlite3_load_extension, as Apple's is, loads, never missing-api, and native
+;; records it absent, which an open that opts in reads. The control has it, and
+;; its record says so: the row above is the entry point's doing, not the
+;; probe's. Neither load calls it, so each log is a successful load's six calls.
 (decoy-row "lacks-sqlite3_load_extension" #f '("--extension-loading" "yes")
   "a library without the optional sqlite3_load_extension loads, with no missing-api, and native records it absent, load-extension-available? #f"
   (lambda (so) (outcome 0 (append (loaded-lines so 'override control-report 2)
@@ -154,7 +152,7 @@
                                   (list (cons 'load-extension-available? #t)))
                         '() '() (loaded-calls "control"))))
 
-;; --- the opt-in's check (M4 slice 3; the M4 plan, section 4.3) -------------------------
+;; --- the opt-in's check ----------------------------------------------------------------
 ;; An open whose settings opt in, (enable-load-extension . #t), on a library
 ;; without sqlite3_load_extension raises &sqlite-extensions-unavailable from
 ;; the verb, the fifth of the refusals, after the list's own rules: in the
@@ -178,7 +176,7 @@
 ;; lacking-cases : (Listof (Pairof (Listof Any) (Symbol -> Any)))
 ;; Each case's arguments, the filename first, and its refusal from a verb:
 ;; the opt-in alone and among the other three, the fifth step; then the
-;; list's own rules, the split's and M2's, each with the opt-in in the list,
+;; list's own rules, the split's and the open's, each with the opt-in in the list,
 ;; which raise their own refusal first, wherever the opt-in stands.
 (define lacking-cases
   (list
@@ -212,7 +210,7 @@
 
 ;; The control, which has sqlite3_load_extension: the same opt-in is tried,
 ;; so the refusal above is the entry point's doing. And (enable-load-
-;; extension . #f) on the lacking build is the same as leaving it out (Q15):
+;; extension . #f) on the lacking build is the same as leaving it out:
 ;; the open is tried. Each case opens twice, once by each verb, so the log
 ;; holds the open's two entries twice.
 (decoy-row "control" #f
@@ -231,7 +229,7 @@
                                         (cons 'opens (list (both cantopen-from)))))
                         '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
 
-;; --- load-extension! on the decoy (M4 slice 4) ---------------------------------------
+;; --- load-extension! on the decoy -------------------------------------------------------
 ;; The decoy's open always fails, so no connection of it reaches a load:
 ;; what a row sees is the verb itself, where the library lacks
 ;; sqlite3_load_extension and where it has it. On both, load-extension! is

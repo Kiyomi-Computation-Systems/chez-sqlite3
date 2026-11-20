@@ -1,8 +1,8 @@
 #!r6rs
 ;;; (chez-sqlite3 private utf8): the strict UTF-8 decoder, and SQLite's byte
-;;; offsets as character indexes (ADR-0015, D6; ADR-0014, Q6). Pure:
-;;; bytes in, data out, and no function here raises for a value of its stated
-;;; type, for slices 3 and 4 call them where nothing may raise.
+;;; offsets as character indexes (ADR-0015; ADR-0014). Pure: bytes in, data
+;;; out, and no function here raises for a value of its stated type, for
+;;; they are called where nothing may raise.
 ;;;
 ;;; Chez's utf8->string replaces bad bytes with U+FFFD, which hides the bad
 ;;; text from the caller, so a TEXT value is checked first, by Unicode's
@@ -78,7 +78,7 @@
 
   ;; utf8-offset->index : Bytevector Integer -> (U Natural #f)
   ;; SQLite's byte OFFSET into the SQL whose UTF-8 is B as a character index
-  ;; into the SQL's string (Q6). B should be well-formed, being string->utf8
+  ;; into the SQL's string. B should be well-formed, being string->utf8
   ;; of the SQL. An offset at a character's first byte, or at the end,
   ;; answers the characters before it; at a continuation byte, the index of
   ;; the character it belongs to. #f for -1, for any other offset below 0 or

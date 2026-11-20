@@ -1,21 +1,19 @@
 #!r6rs
 ;;; Running out of memory while reading a column, for real (ADR-0015,
-;;; decisions 7 and 9; ADR-0014's slice 3 amendment, the maintainer's
-;;; choice). In a process of its own: the heap limit is process-wide.
+;;; ADR-0014). In a process of its own: the heap limit is process-wide.
 ;;;
 ;;; The suite binds sqlite3_hard_heap_limit64 itself, and sets it to
 ;;; sqlite3_memory_used plus 1,000 bytes around the one read, setting it back
 ;;; to 0 however the read ends, and then sqlite3_soft_heap_limit64, bound
 ;;; here too, to 0: the hard limit sets the soft one with it, and its lift
 ;;; alone leaves SQLite's memory pressure on for the process, so a later
-;;; second connection's read beside a write transaction answered BUSY (M3
-;;; slice 4's groundwork, C4). Only the peer row below holds the soft lift:
-;;; the check that both limits read 0 can't tell the hard lift alone, since
+;;; second connection's read beside a write transaction answered BUSY. Only the peer row below holds
+;;; the soft lift: the check that both limits read 0 can't tell the hard lift alone, since
 ;;; sqlite3_hard_heap_limit64(0) zeroes the soft limit too. A 100,000-byte
 ;;; TEXT, bigger than SQLite's lookaside, bound with its length and read
 ;;; back through select ?1, makes sqlite3_column_text allocate a
-;;; NUL-terminated copy, and that allocation answers NOMEM (the research's
-;;; heap-limit.c, on both libraries).
+;;; NUL-terminated copy, and that allocation answers NOMEM (measured on
+;;; both libraries).
 ;;;
 ;;;   the read       column-value and column-bytevector raise &sqlite-error
 ;;;                  nomem once, with the SQL and no offset; the statement is
@@ -23,12 +21,12 @@
 ;;;                  raises nothing; it then steps and reads again
 ;;;   a transaction  a statement that reads a table rolls it back at the next
 ;;;                  reset or finalize; one that reads none keeps it (measured
-;;;                  on both libraries, build/m2s4/probes/nomem-bound.sps)
+;;;                  on both libraries)
 ;;;   column-name    sqlite3_column_name16, bound here, converts a name in
 ;;;                  place, so sqlite3_column_name must convert it back, and
 ;;;                  under the limit answers NULL, setting no code: column-name
 ;;;                  raises nomem with sqlite3_errstr's message, and the state
-;;;                  stays (measured on both, build/m2s4/probes/name-nomem.sps)
+;;;                  stays (measured on both)
 ;;;   after the section
 ;;;                  each raise at depth 1
 ;;;   the peer       after them, a second connection reads beside a write
@@ -36,11 +34,11 @@
 ;;;
 ;;; Where SQLite keeps no memory count, as on a build with
 ;;; SQLITE_DEFAULT_MEMSTATUS=0 like Apple's, the limit is kept but not
-;;; enforced (the research), so each row here is named unavailable and
+;;; enforced, so each row here is named unavailable and
 ;;; skipped, as the memory check is: never a pass.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. Effects run in order, through let* and named lets (AGENTS.md).
+;;; own. Effects run in order, through let* and named lets.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -492,7 +490,7 @@
        (finalize-statement! named)
        (list a b c)))))
 
-;; M3's who-taking internals (the M3 plan, finding F11): a convenience reads
+;; The who-taking internals: a convenience reads
 ;; and binds through them, so their NOMEM names the convenience.
 (define column-value/who (reach values-library 'column-value/who))
 (define column-bytevector/who (reach values-library 'column-bytevector/who))

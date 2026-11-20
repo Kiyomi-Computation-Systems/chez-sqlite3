@@ -12,10 +12,10 @@
 ;;;                       what a column read does with a NULL pointer, with
 ;;;                       the foreign calls it orders passed as procedures
 ;;;
-;;; Slices 3 and 4 call bind-plan and the readers inside critical sections,
-;;; where nothing may raise: they answer data for every value of their stated
-;;; type, a refusal included, and raise-bind-refusal is the one that raises,
-;;; called after the section.
+;;; (chez-sqlite3 private statement-values) calls bind-plan and the readers
+;;; inside critical sections, where nothing may raise: they answer data for
+;;; every value of their stated type, a refusal included, and
+;;; raise-bind-refusal is the one that raises, called after the section.
 (library (chez-sqlite3 private values)
   (export sql-null sql-null? bind-plan bind-refusal-rules raise-bind-refusal
           read-column-bytes read-column-name)
@@ -47,7 +47,7 @@
   ;;
   ;;   integer-out-of-range  an exact integer outside -2^63 to 2^63-1
   ;;   nan                   any NaN
-  ;;   boolean               #t and #f (D5)
+  ;;   boolean               #t and #f
   ;;   not-a-value           anything else
   (define bind-refusal-rules '(integer-out-of-range nan boolean not-a-value))
 
@@ -90,7 +90,7 @@
   ;; shown-value. Else an assertion violation from WHO for the value a bind refused: its
   ;; irritants are RULE, PARAMETER (itself when an exact positive integer,
   ;; else (kind K) of its kind) and (kind K) of VALUE's kind. The value is
-  ;; never shown: a bound value can be a secret (ADR-0015, decision 2). A
+  ;; never shown: a bound value can be a secret (ADR-0015). A
   ;; RULE outside bind-refusal-rules is an assertion violation from
   ;; raise-bind-refusal, led by not-a-rule.
   (define (raise-bind-refusal who parameter value rule)
@@ -124,7 +124,7 @@
   ;; (nomem CODE MESSAGE). Any other type is an empty value under a stale 7:
   ;; an empty bytevector, ERRMSG never called. BYTES and COPY are never
   ;; called on a 0 pointer. Otherwise BYTES is called, then (COPY pointer n)
-  ;; answered, and ERRCODE, TYPE and ERRMSG never (ADR-0015, decision 7). It
+  ;; answered, and ERRCODE, TYPE and ERRMSG never (ADR-0015). It
   ;; raises nothing itself; the order is the let*'s, never an argument order.
   (define (read-column-bytes pointer errcode type errmsg bytes copy)
     (let ((p (pointer)))
@@ -141,7 +141,7 @@
   ;;                    -> (U Bytevector 'nomem)
   ;; NAME stands for sqlite3_column_name, COPY-C-STRING for a copy of a C
   ;; string out of a pointer. A 0 pointer answers nomem and calls nothing
-  ;; else: SQLite sets no error code for this NULL (ADR-0015, decision 9).
+  ;; else: SQLite sets no error code for this NULL (ADR-0015).
   ;; Any other answers (COPY-C-STRING pointer).
   (define (read-column-name name copy-c-string)
     (let ((p (name)))

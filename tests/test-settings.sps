@@ -2,7 +2,7 @@
 ;;; The suite for (chez-sqlite3 private settings): the pure core of the
 ;;; settings list open-database and call-with-database take (ADR-0018). It
 ;;; loads no libsqlite3: the library holds no foreign code, and the shell that
-;;; runs the plan's SQL at open and raises its mismatch is M3 slice 5's.
+;;; runs the plan's SQL at open and raises its mismatch is open's.
 ;;;
 ;;;   the split        open's arguments after the filename: the options, in
 ;;;                    order, for parse-open-options, and at most one
@@ -22,13 +22,13 @@
 ;;;   the read-back    each setting's reader over its table and outside it,
 ;;;                    and the comparison over every expected value against
 ;;;                    every read-back
-;;;   db_config        M4 slice 1: the four sqlite3_db_config settings
-;;;                    (ADR-0021; ADR-0018, amended for M4): the table, its
+;;;   db_config        the four sqlite3_db_config settings
+;;;                    (ADR-0021; ADR-0018): the table, its
 ;;;                    names against every other op's and the list's, each
 ;;;                    domain against the universe, each step written out,
 ;;;                    the sentinel, and the set's verdict over codes, cells
 ;;;                    and values
-;;;   the join         M4 slice 3: the four in setting-names, after the
+;;;   the join         the four in setting-names, after the
 ;;;                    seven, and in settings-plan, their ops constants.sls's;
 ;;;                    each step in the list's order beside the PRAGMAs',
 ;;;                    busy-timeout still first, over every ordering of a set
@@ -174,8 +174,8 @@
 (define names '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema
                 statement-cache))
 
-;; The eleven, the seven then db_config's four in the M4 plan's table order,
-;; written out: what M4 slice 3's join makes setting-names.
+;; The eleven, the seven then db_config's four in table order,
+;; written out: what the join makes setting-names.
 (define all-names
   '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
     enable-load-extension defensive dqs-dml dqs-ddl))
@@ -229,8 +229,8 @@
   (guard (e (#t (list 'raised (describe e))))
     (sorted-names (library-exports '(chez-sqlite3 private settings)))))
 
-;; M4 slice 3 joins db_config's four after the seven, in the M4 plan's table
-;; order (section 4.1), so ADR-0018's order is kept for the seven.
+;; The join puts db_config's four after the seven, in table order, so
+;; ADR-0018's order is kept for the seven.
 (test-equal "setting-names, written out: ADR-0018's seven in its table order, then db_config's four in the M4 plan's"
   '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
     enable-load-extension defensive dqs-dml dqs-ddl)
@@ -277,7 +277,7 @@
         (split (list (cons 5 6)))))
 
 ;; Anything else that is neither a symbol nor a list goes to the options, so
-;; parse-open-options refuses it as unknown, as before M3.
+;; parse-open-options refuses it as unknown.
 (define atoms (list "read-only" 1 2.5 #t #f #\r (vector 'read-only) (bytevector 1) car
                     (make-a-thing 1)))
 
@@ -795,8 +795,8 @@
         (read-back 'temp-store "memory") (read-back 'statement-cache "wal")))
 
 ;; Over the suite's own eleven, written out, never the library's setting-names,
-;; so the count of ()s is the suite's (M4 slice 3 replaced the row that read
-;; setting-names, which the join's four lengthened).
+;; so the count of ()s is the suite's (a row that read setting-names would
+;; change with the join's four).
 (test-equal "a read-back that answered no row, none, reads as () for every setting, the eleven, and anything else that is no (row V) too"
   '(() () () () () () () () () () () () () ())
   (append (map (lambda (n) (read-back-raw n 'none)) all-names)
@@ -855,10 +855,9 @@
                                      p)))))
               read-back-table)))
 
-;; --- db_config's four (M4 slice 1; ADR-0021, decisions 1 to 3 and 5) --------------------
-;; Slice 1 builds them beside setting-names, not in it: open.sls runs every
-;; step settings-plan answers as SQL, so slice 3 joins them, with the open's
-;; calls (the M4 plan, section 5, item 1).
+;; --- db_config's four (ADR-0021) --------------------
+;; These are built beside setting-names: open.sls runs every step
+;; settings-plan answers as SQL, so the join adds them, with the open's calls.
 
 ;; dc-step : Any Any -> Any
 ;; db-config-step's answer, or (raised TEXT).
@@ -870,8 +869,7 @@
 (define (dc-verdict name value code cell)
   (guard (e (#t (list 'raised (describe e)))) (db-config-verdict name value code cell)))
 
-;; The four, written out from ADR-0021's decision 1 and the M4 plan's section
-;; 4.1: each setting's name, its op's value in C, and its domain.
+;; The four, written out from ADR-0021: each setting's name, its op's value in C, and its domain.
 (define db-config-written
   '((enable-load-extension 1005 (#t #f)) (defensive 1010 (#t #f)) (dqs-dml 1013 (#t #f))
     (dqs-ddl 1014 (#t #f))))
@@ -898,9 +896,9 @@
   (filter (lambda (p) (not (memq (car p) db-config-names-written))) dbconfig-ops))
 
 ;; step-expected : Symbol Any -> Any
-;; The step for one of the four and VALUE, written out from ADR-0021's
-;; decisions 3 and 5: #t is (name op 1 #t); #f is (name op 0 #f), but
-;; enable-load-extension's #f makes no call, no-call (Q15); any other value
+;; The step for one of the four and VALUE, written out from ADR-0021:
+;; #t is (name op 1 #t); #f is (name op 0 #f), but
+;; enable-load-extension's #f makes no call, no-call; any other value
 ;; is outside the domain.
 (define (step-expected name value)
   (let ((op (cdr (assq name dbconfig-ops))))
@@ -926,7 +924,7 @@
                            dbconfig-ops))
         (filter (lambda (p) (memq (car p) db-config-names-written)) dbconfig-ops)))
 
-;; M4 slice 3's join replaces slice 1's hold-out row: the four are in the
+;; The four are in the
 ;; live list, and settings-plan plans each by db-config-step, its step
 ;; written out here, enable-load-extension's #f making none.
 (test-equal "the four are in the live list, after the seven: setting-names holds each, and settings-plan plans each, #t and #f, alone, as its step written out, enable-load-extension's #f as no step at all (Q15)"
@@ -992,7 +990,7 @@
 ;; symbol, the four's own as strings among them. The seven are the suite's
 ;; own, names, written out, never the library's setting-names: read here, at
 ;; top level, a setting-names that is no list would raise and end the suite
-;; with no row named, and slice 3's join puts the four in it.
+;; with no row named, and the join puts the four in it.
 (define not-db-config-names
   (append names (map car other-ops) db-config-near-names left-out
           (if (list? chez-names) chez-names '())
@@ -1082,7 +1080,7 @@
         0.0 1.0 #t #f '() 'x "1"))
 
 ;; verdict-expected : Symbol Boolean Any Any -> Any
-;; ADR-0021's decision 3, written out: any code but 0 is an error with that
+;; ADR-0021, written out: any code but 0 is an error with that
 ;; code, whatever the cell; code 0 and the cell the value written, 1 for #t,
 ;; 0 for #f, match; code 0 and any other cell mismatch, the value read ()
 ;; for the sentinel, #t for 1, #f for 0, and anything else as itself.
@@ -1123,13 +1121,13 @@
                               (dc-verdict 'dqs-ddl #t v 1) (dc-verdict v #f 0 0)))
                       (append universe (list cyclic))))))
 
-;; --- the join (M4 slice 3; ADR-0018, amended for M4) ------------------------------------
+;; --- the join (ADR-0018) ------------------------------------
 ;; settings-plan plans the four beside the PRAGMAs: a step of
 ;; db-config-step's shape, (name op written expected), in the list's order,
 ;; busy-timeout's first; enable-load-extension's #f no step, yet a name seen.
 ;; The two shapes are told apart by db-config-step?, and the record's opt-in
 ;; is read from the steps by steps-opt-in?: the opt-in's step, never the
-;; name. Both are slice 3's, reached through eval under names of the suite's
+;; name. Both are the join's, reached through eval under names of the suite's
 ;; own, so this suite runs against a library without them and fails by name.
 
 ;; reach-settings : Symbol -> Procedure

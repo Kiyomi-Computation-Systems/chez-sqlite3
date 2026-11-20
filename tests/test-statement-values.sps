@@ -1,9 +1,9 @@
 #!r6rs
 ;;; The suite for a statement's values, (chez-sqlite3 private statement-values):
 ;;; bind!, bind-all!, clear-bindings!, column-value, column-bytevector and
-;;; column-name (ADR-0015; ADR-0014, decisions 3 and 5, amended).
+;;; column-name (ADR-0015; ADR-0014).
 ;;;
-;;;   binding        every row of the M2 plan's section 4.3 on a real library:
+;;;   binding        every row of the binding's table on a real library:
 ;;;                  the integer boundaries, bound and refused by their rule;
 ;;;                  the infinities, -0.0 through select ? and a REAL column,
 ;;;                  NaN refused; booleans, an exact non-integer, a complex, a
@@ -40,12 +40,12 @@
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them: a refused library fails the rows
-;;; by name. SQLite's answers are the research's (.plans/research/m2-slice-4/)
-;;; or measured on both libraries before a row asserts them (build/m2s4/probes/).
+;;; by name. SQLite's answers are
+;;; measured on both libraries before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -332,7 +332,7 @@
 
 ;; long-bytes : Bytevector
 ;; 5,000 bytes, each its index modulo 256: bigger than SQLite's lookaside
-;; slots, so Valgrind sees a free of it (ADR-0005, amended).
+;; slots, so Valgrind sees a free of it (ADR-0005).
 (define long-bytes
   (let ((b (make-bytevector 5000 0)))
     (let loop ((i 0))
@@ -700,9 +700,9 @@
 
 ;; --- a bind SQLite refuses -----------------------------------------------------------------------
 ;; SQLITE_LIMIT_LENGTH is lowered after the prepare, since it holds the
-;; statement's column names at prepare too (the research's trap), and to 30,
+;; statement's column names at prepare too, and to 30,
 ;; the smallest 3.53.1 keeps; the floor keeps it too. 30 bytes then bind on
-;; both, and 31 answer SQLITE_TOOBIG (the research, item 2).
+;; both, and 31 answer SQLITE_TOOBIG.
 
 (define (text-of n) (make-string n #\a))
 (define (bytes-of n) (make-bytevector n 98))

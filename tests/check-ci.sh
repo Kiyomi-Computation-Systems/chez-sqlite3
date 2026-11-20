@@ -39,14 +39,14 @@
 #     run uses" (its run block, line for line) and "Report the runner's
 #     SQLite" (its run line, and its env CHEZ), in that order;
 #   - in jobs floor and current, which build SQLite and run the suites against
-#     it (ADR-0003, decision 3), and nowhere else: the checkout with
+#     it (ADR-0003), and nowhere else: the checkout with
 #     submodules first; then, after check-chez, the step that names the
 #     compiler (with id: cc), and for each SQLite build the job makes, in
 #     turn, the steps that build it (under its own if), check it, run make
 #     build (for the job's first build alone) and run make test, each as one
 #     step's whole run line, in order. Job floor makes one build, floor; job
 #     current makes two, current and then no-load, built without extension
-#     loading (M4's closing review), so it runs make test twice, the first
+#     loading, so it runs make test twice, the first
 #     for current and the second for no-load. Each build's cache has one
 #     restore and one save, its path and key held whole, the restore's id
 #     held (sqlite, or sqlite-no-load), and the save keyed by that id's
@@ -78,8 +78,8 @@
 #     floor.sh is run with sh by the others, so it needs no bit and is not held;
 #   - no other line names scripts/, a comment apart: it is a step's whole run
 #     line in that form, or a cache key's hashFiles( list;
-#   - in jobs memory-1 and memory-2, the memory gate's two shards (ADR-0005,
-#     amended in M3 slice 6): make check-memory-gate, then make test-memory
+#   - in jobs memory-1 and memory-2, the memory gate's two shards (ADR-0005):
+#     make check-memory-gate, then make test-memory
 #     MEMORY_SHARD=1 in memory-1 and =2 in memory-2, each one step's whole run
 #     line, with no if: on either; so neither job runs the other's shard, and
 #     no job runs a third;
@@ -773,8 +773,8 @@ BEGIN {
   CHEZP = "${{ runner.temp }}/chez-threads"
   CCLINE = "echo \"id=$(cc --version | head -n 1 | tr -c '[:alnum:].' '-')\" >> \"$GITHUB_OUTPUT\""
   # The SQLite builds, each by its name, and the lanes that make them, in
-  # order: floor makes floor, and current makes current, then no-load (M4's
-  # closing review). A build's tables are keyed by its name, never its job's.
+  # order: floor makes floor, and current makes current, then no-load.
+  # A build's tables are keyed by its name, never its job's.
   laneflag["floor"] = ""; laneflag["current"] = " --current"; laneflag["no-load"] = " --no-load"
   lanehash["floor"] = "'packaging/floors.sexp', 'scripts/ci/floor.sh', 'scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh'"
   lanehash["current"] = "'scripts/ci/build-sqlite.sh', 'scripts/ci/check-sqlite.sh'"

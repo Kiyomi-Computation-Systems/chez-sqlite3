@@ -1,27 +1,26 @@
 #!r6rs
-;;; (chez-sqlite3 private transaction): with-transaction (ADR-0017, amended
-;;; in M3 slices 1, 3, 4 and 6, and by M3's closing review), the shell over
-;;; the pure core, (chez-sqlite3 private transaction-plan). (chez-sqlite3)
-;;; exports it.
+;;; (chez-sqlite3 private transaction): with-transaction (ADR-0017), the
+;;; shell over the pure core, (chez-sqlite3 private transaction-plan).
+;;; (chez-sqlite3) exports it.
 ;;;
 ;;; A call begins a level, runs its body, and commits the level when the body
 ;;; returns, or rolls it back when the body raises or leaves. The level is
 ;;; outer, BEGIN with the mode, when sqlite3_get_autocommit reads 1, and a
 ;;; savepoint, SAVEPOINT chez_sqlite3_N, inside a transaction already open,
 ;;; N the levels with-transaction holds open outside it, kept in the
-;;; connection's record (decisions 2 and 3; slice 3's "Reuse N": N drops when
-;;; the call's level ends, whatever SQLite kept).
+;;; connection's record: N drops when the call's level ends, whatever SQLite
+;;; kept.
 ;;;
-;;; The shape is M2's call-with-database's (decision 7):
+;;; The shape is call-with-database's:
 ;;;   - the call's claim, made by its first expression, before any check:
 ;;;     the BEGIN's section takes it, so one run of the call alone reaches
 ;;;     the BEGIN. Chez's engine remainders are multi-shot, and a timer's
 ;;;     handler can take a continuation between any two sections; a run
 ;;;     that reaches the BEGIN's section once another has taken the claim
-;;;     steps nothing and raises &sqlite-transaction-ended (M3's closing
-;;;     review: before, the flags were made after the plan's section, and a
-;;;     remainder taken before them, resumed a second time once the call
-;;;     had ended, began, ran the body and committed again);
+;;;     steps nothing and raises &sqlite-transaction-ended. Without the
+;;;     claim, a remainder taken before the flags are made, resumed a second
+;;;     time once the call has ended, would begin, run the body and commit
+;;;     again;
 ;;;   - before anything reaches C, the body, then the mode, then the
 ;;;     database and its owner are checked;
 ;;;   - a plain dynamic-wind around a critical one, both before thunks doing
@@ -34,57 +33,54 @@
 ;;;     its plan, so no expiry falls inside it;
 ;;;   - the begin is one critical section: the claim, then the refusal and
 ;;;     the plan, then the BEGIN or SAVEPOINT taken, stepped and given back.
-;;;     No statement of the connection may be at a row or failed (decision
-;;;     1), read through tracked-statements and statement-state; then
-;;;     autocommit and the depth are read for begin-plan, which builds the
-;;;     savepoint's name there. So nothing splits the plan from its step:
-;;;     another engine's BEGIN between them made SQLite refuse the planned
-;;;     BEGIN IMMEDIATE inside its transaction, after taking its lock (M3's
-;;;     closing review). The refusal is raised after that section, before
-;;;     anything else reaches C, its irritants statement-not-finished, the
-;;;     state and the statement's own SQL, both read in that section (the
-;;;     maintainer, 2026-11-16);
+;;;     No statement of the connection may be at a row or failed, read
+;;;     through tracked-statements and statement-state; then autocommit and
+;;;     the depth are read for begin-plan, which builds the savepoint's name
+;;;     there. So nothing splits the plan from its step:
+;;;     another engine's BEGIN between them would make SQLite refuse the
+;;;     planned BEGIN IMMEDIATE inside its transaction, after taking its
+;;;     lock. The refusal is raised after that section, before anything else
+;;;     reaches C, its irritants statement-not-finished, the state and the
+;;;     statement's own SQL, both read in that section;
 ;;;   - the critical after thunk acts only when BEGUN is set and ENDED is
 ;;;     not: it reads autocommit, rolls the level back while it is there,
 ;;;     and sets ENDED, recording a failure and raising nothing; the plain
 ;;;     after thunk raises that failure, unless a raise is under way.
 ;;;
-;;; The two flags are M3's own. BEGUN is set in the section of the step that
-;;; answered the BEGIN or SAVEPOINT; ENDED in the section of the step that
-;;; commits, or of a rollback's last step taken, whatever it answered (slice
-;;; 3's "Once"), or in the section that plans nothing more. Each step that
+;;; The two flags are with-transaction's own. BEGUN is set in the section of
+;;; the step that answered the BEGIN or SAVEPOINT; ENDED in the section of
+;;; the step that commits, or of a rollback's last step taken, whatever it
+;;; answered, or in the section that plans nothing more. Each step that
 ;;; could end the level, and the begin's, reads ENDED in its own section
-;;; before it steps, and with it set steps nothing (slice 1's amendment);
-;;; the begin's takes the claim first. The flags are made after the claim,
-;;; so a run that makes flags of its own never passes the BEGIN's section,
-;;; and every run past it shares the one that took the claim's. A later
+;;; before it steps, and with it set steps nothing; the begin's takes the
+;;; claim first. The flags are made after the claim, so a run that makes
+;;; flags of its own never passes the BEGIN's section, and every run past it
+;;; shares the one that took the claim's. A later
 ;;; exit issues nothing: a later return raises &sqlite-transaction-ended,
 ;;; and a later raise or escape does nothing more.
 ;;;
 ;;; The rollback, ROLLBACK, or ROLLBACK TO then RELEASE, a raise's or a
 ;;; failed commit's, runs with the connection's interrupt latch shut, by
 ;;; call-with-latch-shut, so an interrupt-database! sent while it runs, from
-;;; any thread, is dropped (the maintainer's "Shut the latch on exit",
-;;; 2026-11-17). SQLite clears an interrupt as a statement starts with none
-;;; active, and checks it after: before, a watchdog that kept interrupting
-;;; stopped the ROLLBACK, and the transaction outlived the call. The COMMIT,
-;;; and the RELEASE that commits a savepoint, stay interruptible, and an
-;;; interrupted one is rolled back under the shut. One case stays: an
+;;; any thread, is dropped. SQLite clears an interrupt as a statement starts
+;;; with none active, and checks it after: without the shut, a watchdog that
+;;; kept interrupting would stop the ROLLBACK, and the transaction would
+;;; outlive the call. The COMMIT, and the RELEASE that commits a savepoint,
+;;; stay interruptible, and an interrupted one is rolled back under the
+;;; shut. One case stays: an
 ;;; interrupt sent before the shut while a statement of the connection is at
 ;;; a row still stops the rollback, since SQLite keeps it while a statement
-;;; is active (ADR-0017's consequences, the sticky interrupt).
+;;; is active: the sticky interrupt (ADR-0017).
 ;;;
 ;;; Each statement goes through the conveniences' path and the cache, taken
 ;;; from the cache, stepped and given back in one critical section, so no
 ;;; expiry lands between the three, and none of the call's statements is left
 ;;; checked out or failed. The section reads ENDED first, through checked-out's
 ;;; check, so a remainder resumed once the level has ended checks out none of
-;;; the call's statements (slice 3's open question, settled by
-;;; tests/test-transaction-engine.sps).
+;;; the call's statements (tests/test-transaction-engine.sps).
 ;;;
 ;;; Everything raised names with-transaction, and is raised after every
-;;; critical section (decision 8). The body's own conditions reach the
-;;; caller unchanged.
+;;; critical section. The body's own conditions reach the caller unchanged.
 (library (chez-sqlite3 private transaction)
   (export with-transaction)
   (import (chez-sqlite3 private require-threaded)
@@ -219,12 +215,12 @@
                           (else (cadr outcome)))))))))
       ;; failed-commit! : -> Void
       ;; After the COMMIT or RELEASE failed: the level rolled back while it
-      ;; is still there and ENDED is unset (Q6, failed-commit-plan); ENDED set
+      ;; is still there and ENDED is unset (failed-commit-plan); ENDED set
       ;; in the section that plans nothing more. The plan and every step of
       ;; the rollback run in one critical section, where no expiry lands, so
       ;; an engine's exit never falls between ROLLBACK TO and RELEASE to
-      ;; issue either again: the rollback is tried once ("Once", under any
-      ;; interleaving; tests/test-transaction-engine.sps). Each part answers
+      ;; issue either again: the rollback is tried once, under any
+      ;; interleaving (tests/test-transaction-engine.sps). Each part answers
       ;; data, and nothing raises out of the section. Its failures are
       ;; dropped: the commit's failure is raised after it.
       (define (failed-commit!)

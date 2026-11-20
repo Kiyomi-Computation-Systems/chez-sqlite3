@@ -1,5 +1,5 @@
 #!r6rs
-;;; The convention suite (ADR-0011, decision 6): every foreign-procedure form
+;;; The convention suite (ADR-0011): every foreign-procedure form
 ;;; under src/, read as data, held to a table with one row per binding. It
 ;;; never loads libsqlite3. tests/test-constants.sps holds each row's C
 ;;; prototype to sqlite3.h, and the map from its C types to its Chez types.
@@ -72,10 +72,11 @@
 ;; --- what the table must say, written out ---------------------------------------------
 
 ;; expected-names : (Listof String)
-;; ADR-0002's amended order: the report's three, the threadsafe answer,
-;; sqlite3_initialize, then the rest of M1's required list, then M2's 21
-;; (ADR-0002's M2 amendment), then M3's five (ADR-0002's M3 amendment), then
-;; M4's two required and its one optional (ADR-0002's M4 amendment).
+;; ADR-0002's order: the report's three, the threadsafe answer,
+;; sqlite3_initialize, then the rest of the first required list, then the
+;; statement tier's 21, then the five of the change counters, autocommit and
+;; interrupt, then the two required and one optional of the settings and
+;; extension calls (ADR-0002).
 (define expected-names
   '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"
     "sqlite3_threadsafe" "sqlite3_initialize"
@@ -94,10 +95,9 @@
     "sqlite3_db_config" "sqlite3_free" "sqlite3_load_extension"))
 
 ;; collect-safe-names : (Listof String)
-;; The calls that can block (ADR-0011, decision 5): open and close from M1,
-;; M2's four, prepare, step, reset and finalize, and M4's load (ADR-0011,
-;; amended). The one variadic binding is sqlite3_db_config's. Every other is
-;; plain.
+;; The calls that can block (ADR-0011): open and close, prepare, step, reset
+;; and finalize, and the extension load. The one variadic binding is
+;; sqlite3_db_config's. Every other is plain.
 (define collect-safe-names
   '("sqlite3_open_v2" "sqlite3_close"
     "sqlite3_prepare_v3" "sqlite3_finalize" "sqlite3_step" "sqlite3_reset"
@@ -107,7 +107,7 @@
 
 ;; optional-names : (Listof String)
 ;; The entry points a library may lack, and native binds by bind-optional
-;; (ADR-0002, amended 2026-11-17).
+;; (ADR-0002).
 (define optional-names '("sqlite3_load_extension"))
 
 ;; accepted-types : (Listof Any)
@@ -247,10 +247,9 @@
 
 ;; (library-loading)'s every-entry is what the pattern of four deals and
 ;; missing-api-rows makes a row for, the required entry points alone, and
-;; optional-entries follows it (the M4 plan, section 4.6). Held whole and in
-;; order, as merge-halves' row holds the parts: an optional entry point
-;; joined to every-entry would be dealt a missing-api row for a library that
-;; must load.
+;; optional-entries follows it. Held whole and in order, as merge-halves'
+;; row holds the parts: an optional entry point joined to every-entry would
+;; be dealt a missing-api row for a library that must load.
 (test-equal "table: its names are (library-loading)'s every-entry, the 43 required entry points, then its optional-entries, sqlite3_load_extension, whole and in order"
   (list (map row-name table) 43 '("sqlite3_load_extension"))
   (list (append every-entry optional-entries) (length every-entry) optional-entries))
@@ -280,9 +279,9 @@
        expected-names)
   (map row-convention table))
 
-;; ADR-0002's M4 amendment: the optional entry point's row says it is
-;; optional, and no required one's does. The words, not "optional" alone,
-;; which "bind-optional" holds too.
+;; ADR-0002: the optional entry point's row says it is optional, and no
+;; required one's does. The words, not "optional" alone, which
+;; "bind-optional" holds too.
 (test-equal "table: the rows whose records say \"an optional entry point\" are exactly the optional entry points', sqlite3_load_extension's"
   optional-names
   (map row-name
@@ -298,8 +297,8 @@
 
 (test-equal "table: the types its rows use are exactly the allowlists': every type an argument or a result, but void, is the argument allowlist, and every result, and void, the result allowlist; no type is allowed that no row uses"
   (list (sorted-symbols allowed-argument-types) (sorted-symbols allowed-result-types))
-  ;; void is a result only, so it joins the argument side never (M3's
-  ;; sqlite3_interrupt is the first row to write it).
+  ;; void is a result only, so it joins the argument side never
+  ;; (sqlite3_interrupt is the first row to write it).
   (list (sorted-symbols (unique (append (apply append (map row-arguments table))
                                         (filter (lambda (t) (not (eq? t 'void)))
                                                 (map row-result table)))))
@@ -594,10 +593,10 @@
                                                   (with-field (car (rows-named '("sqlite3_bind_int64")))
                                                               'arguments '(uptr int int))))))))
 
-;; M3's five, written out, so that a table loosened with the bindings it holds still fails.
-;; Each takes a handle, a uptr. The three counters answer sqlite3_int64,
-;; get_autocommit an int and the interrupt void, and none can block, so each
-;; is plain (ADR-0011, decision 5, M3 amendment).
+;; The change counters, autocommit and interrupt calls, written out, so that a table
+;; loosened with the bindings it holds still fails. Each takes a handle, a uptr. The three
+;; counters answer sqlite3_int64, get_autocommit an int and the interrupt void, and none
+;; can block, so each is plain (ADR-0011).
 (define m3-five
   '(("sqlite3_changes64" (uptr) integer-64 plain)
     ("sqlite3_total_changes64" (uptr) integer-64 plain)
@@ -643,10 +642,10 @@
          ("sqlite3_last_insert_rowid" . int) ("sqlite3_get_autocommit" . integer-64)
          ("sqlite3_interrupt" . int))))
 
-;; M4's three, written out (ADR-0021, decisions 4, 8 and 9): sqlite3_db_config
-;; in the shape (db op int int*), variadic and plain; sqlite3_free of a
-;; pointer, plain; sqlite3_load_extension of a handle, a path, an entry point
-;; and a message's slot, __collect_safe.
+;; The last three, written out (ADR-0021): sqlite3_db_config in the shape (db
+;; op int int*), variadic and plain; sqlite3_free of a pointer, plain;
+;; sqlite3_load_extension of a handle, a path, an entry point and a message's
+;; slot, __collect_safe.
 (define m4-three
   '(("sqlite3_db_config" (uptr int int uptr) int variadic)
     ("sqlite3_free" (uptr) void plain)

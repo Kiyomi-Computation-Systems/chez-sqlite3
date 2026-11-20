@@ -16,7 +16,7 @@
 ;;;
 ;;; A level is outer, a transaction this level began with BEGIN, or
 ;;; (savepoint N), one it began with SAVEPOINT chez_sqlite3_N inside a
-;;; transaction already open. Its statements (ADR-0017, decision 4):
+;;; transaction already open. Its statements (ADR-0017):
 ;;;
 ;;;   level           begin                   commit                  roll back
 ;;;   outer           BEGIN DEFERRED,         COMMIT                  ROLLBACK
@@ -26,12 +26,13 @@
 ;;;
 ;;; Autocommit is read as C reads sqlite3_get_autocommit's int: 0 is a
 ;;; transaction open, every other value none. It is the one test of whether a
-;;; level is still there (ADR-0017's context), for a savepoint as for the
+;;; level is still there (ADR-0017), for a savepoint as for the
 ;;; outer level.
 ;;;
 ;;; Each procedure but raise-transaction-refusal answers data for any argument
-;;; of its stated type and raises nothing, so slice 4 may call any of them
-;;; inside a critical section; raise-transaction-refusal is called after it.
+;;; of its stated type and raises nothing, so with-transaction may call any of
+;;; them inside a critical section; raise-transaction-refusal is called after
+;;; it.
 (library (chez-sqlite3 private transaction-plan)
   (export transaction-modes transaction-mode begin-plan exit-plan failed-commit-plan
           raise-transaction-refusal)
@@ -67,7 +68,7 @@
   ;; Level = (U 'outer (List 'savepoint Natural))
   ;; The level a with-transaction begins, and its statement, from AUTOCOMMIT
   ;; read before it, DEPTH, the levels with-transaction holds open on the
-  ;; connection, and the mode, immediate when absent (Q5). At an AUTOCOMMIT
+  ;; connection, and the mode, immediate when absent. At an AUTOCOMMIT
   ;; other than 0: outer, BEGIN with the mode, DEPTH no part of it. At 0:
   ;; (savepoint DEPTH), SAVEPOINT chez_sqlite3_DEPTH, the mode no part of
   ;; it. A mode that is none is refused at either, as transaction-mode
@@ -91,7 +92,7 @@
 
   ;; rollback-of : Level -> (Pairof 'rollback (Listof String))
   ;; A savepoint is rolled back by ROLLBACK TO, which leaves it open, then
-  ;; RELEASE (ADR-0017's context).
+  ;; RELEASE (ADR-0017).
   (define (rollback-of level)
     (if (eq? level 'outer)
         (list 'rollback "ROLLBACK")
@@ -101,7 +102,7 @@
   ;; exit-plan : Any Any Any Any Level -> Exit-Plan
   ;; Exit-Plan = (U (List 'commit String) Rollback (List 'nothing) (List 'transaction-ended))
   ;; Rollback = (Pairof 'rollback (Listof String))
-  ;; What an exit from LEVEL's extent does (ADR-0017, decisions 5 to 7). HOW
+  ;; What an exit from LEVEL's extent does (ADR-0017). HOW
   ;; is return for a normal return, and anything else, raise or escape, is a
   ;; raise or an escape: only a return commits. BEGUN and ENDED are the flags,
   ;; set when not #f; AUTOCOMMIT is read after the body.
@@ -131,9 +132,9 @@
   ;; After the COMMIT or RELEASE exit-plan answered for LEVEL failed, from
   ;; ENDED, the flag, set when not #f, and AUTOCOMMIT read after it: with
   ;; ENDED set, the level already ended, (nothing), never a second rollback;
-  ;; otherwise at 0, the level still open, (rollback S ...), as a raise's
-  ;; (Q6), and at any other value (nothing). The commit's failure is raised
-  ;; after either. Total for every LEVEL begin-plan answers.
+  ;; otherwise at 0, the level still open, (rollback S ...), as a raise's,
+  ;; and at any other value (nothing). The commit's failure is raised after
+  ;; either. Total for every LEVEL begin-plan answers.
   (define (failed-commit-plan ended autocommit level)
     (if (and (not ended) (eqv? autocommit 0)) (rollback-of level) (list 'nothing)))
 

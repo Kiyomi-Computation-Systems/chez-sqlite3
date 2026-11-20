@@ -1,12 +1,10 @@
 #!r6rs
 ;;; The suite for one execute-script!'s runs interleaved, at the even fuels
-;;; (ADR-0016, amended in M3 slice 5's part D; the maintainer's "Guard every
-;;; call", ADR-0016, amended in M3 slice 3), in (chez-sqlite3 private
-;;; conveniences): one remainder of the call, R, resumed again while an earlier
-;;; resume of it, R1, is pending. The schedule, the tell, the bound and the
-;;; judge are (conveniences-pending)'s, tests/conveniences-pending.sls, shared
-;;; with the other conveniences' suites, one a convenience, so each stays well
-;;; under the memory gate's limit.
+;;; (ADR-0016), in (chez-sqlite3 private conveniences): one remainder of the
+;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
+;;; schedule, the tell, the bound and the judge are (conveniences-pending)'s,
+;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
+;;; one a convenience, so each stays well under the memory gate's limit.
 ;;;
 ;;;   the tell     one execute-script! outside any engine: the authorizer notes
 ;;;                each of its two inserts prepared once, its rows inserted
@@ -32,7 +30,7 @@
 ;;; where the call completes; tests/test-conveniences-pending-script-odd.sps
 ;;; runs the rest. Every section of the script lies inside its block, and an
 ;;; expiry there frees the block, so no trial has both runs past its first
-;;; section. Its code is unchanged by part D, and the rows hold it so.
+;;; section. The rows hold it so.
 ;;;
 ;;; Its low pass, the interleaved row under a collect trip of 256 bytes, is
 ;;; four suites of their own, tests/test-conveniences-pending-script-low-0.sps
@@ -46,7 +44,7 @@
 ;;; so nothing is unavailable silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+;;; own. No expected value is #f where the actual could raise.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

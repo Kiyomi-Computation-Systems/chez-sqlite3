@@ -1,6 +1,5 @@
 #!r6rs
-;;; The suite for with-transaction (ADR-0017, amended in M3 slices 1 and 3;
-;;; the M3 plan, section 4.2), in (chez-sqlite3 private transaction). Its
+;;; The suite for with-transaction (ADR-0017), in (chez-sqlite3 private transaction). Its
 ;;; NOMEM rows are tests/test-transaction-nomem.sps's, its engine rows
 ;;; tests/test-transaction-engine.sps's, and its interrupted writes
 ;;; tests/test-transaction-interrupt.sps's.
@@ -11,8 +10,8 @@
 ;;;                 at the outer level and nested: with-transaction reads
 ;;;                 autocommit and rolls back only a level still there
 ;;;   [B]           nesting through the caller's own BEGIN
-;;;   [C]           a failed COMMIT or RELEASE rolled back (Q6), once
-;;;   [D]           a body that returns after its transaction ended (Q7)
+;;;   [C]           a failed COMMIT or RELEASE rolled back, once
+;;;   [D]           a body that returns after its transaction ended
 ;;;   [E]           the sticky interrupt's failed rollback and RELEASE, after
 ;;;                 a raise, a return or an escape
 ;;;   [F]           the refusal beside a statement at a row or failed
@@ -21,7 +20,8 @@
 ;;;                 nested level re-entered; a handler before the unwind that
 ;;;                 begins a transaction, rolled back with the body's, unless
 ;;;                 the call had already ended its level
-;;;   the plants    the M3 plan's section 4.8, each by its row
+;;;   primed cache  with-transaction's statements already in the cache, each
+;;;                 by its row
 ;;;   the depths    each raise site's handler at interrupt depth 1: the
 ;;;                 refusals, the BEGIN's failure, the commit's, the
 ;;;                 rollback's, the ended condition and the body's own raise
@@ -40,7 +40,7 @@
 ;;; Reached through eval under a guard, as the conveniences' suites reach
 ;;; them. Every computation that can raise runs under a guard with a sentinel
 ;;; of its own. No expected value is #f where the actual could raise.
-;;; Effects run in order, through let* and named lets, never map (AGENTS.md).
+;;; Effects run in order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -120,7 +120,7 @@
 ;; since, it counts a run when a step starts the statement's program: the
 ;; first step after a prepare or a reset. A step that fails at its entry, as
 ;; an interrupted one does beside a held row, starts none and counts none
-;; (M3 slice 4's review), so the interrupted rows, [E]'s, read no runs. The
+;; so the interrupted rows, [E]'s, read no runs. The
 ;; runs row below holds its meaning by a control.
 (define stmt-status (bound 'sqlite3_stmt_status (foreign-procedure "sqlite3_stmt_status" (uptr int int) int)))
 (define stmtstatus-run 6)
@@ -173,8 +173,7 @@
                            (string=? p (substring s 0 (string-length p)))))
 
 ;; own-sql? : String -> Boolean
-;; Whether SQL is one of with-transaction's own statements (ADR-0017,
-;; decision 4).
+;; Whether SQL is one of with-transaction's own statements (ADR-0017).
 (define (own-sql? s)
   (or (member s '("BEGIN DEFERRED" "BEGIN IMMEDIATE" "BEGIN EXCLUSIVE" "COMMIT" "ROLLBACK"))
       (prefix? "SAVEPOINT chez_sqlite3_" s) (prefix? "RELEASE chez_sqlite3_" s)
@@ -732,7 +731,7 @@
             (c (execute! db "rollback")))
        (list (reverse seen) code (issued db))))))
 
-;; --- [C] a failed COMMIT rolled back (Q6) -------------------------------------------------------
+;; --- [C] a failed COMMIT rolled back -------------------------------------------------------
 
 (test-equal "[C] E13, outer: a child with a deferred foreign key; COMMIT answers 787, so with-transaction rolls back, ROLLBACK kept, the failed COMMIT finalized, and raises &sqlite-constraint from with-transaction, extended 787; in-transaction? #f; the marker gone"
   '((raised (sqlite-constraint with-transaction constraint constraint-foreignkey)) no "(none)" "(none)"
@@ -860,7 +859,7 @@
     yes)
   (o7-nested #f))
 
-;; --- [D] a body that returns after its transaction ended (Q7) ----------------------------------
+;; --- [D] a body that returns after its transaction ended ----------------------------------
 
 (test-equal "[D] L1, outer: the body catches insert or rollback's constraint-unique and writes again; that write autocommits, and db2 sees it at once; the body's return raises &sqlite-transaction-ended from with-transaction, no COMMIT issued, the extended code the later write's"
   '((raised (transaction-ended with-transaction)) "after" 0 no "after" (("BEGIN DEFERRED" . ready)))
@@ -1325,7 +1324,7 @@
                     (attempt (lambda () (execute! db "insert or rollback into u values (1)")))
                     'returned)))
 
-;; --- the plants (the M3 plan, section 4.8) ---------------------------------------------------------
+;; --- the primed cache ---------------------------------------------------------
 
 ;; primed-case : (Database Database -> Any) -> Any
 ;; with-case, its cache holding with-transaction's statements from earlier
@@ -1483,7 +1482,7 @@
 ;;
 ;; A raise made inside a critical section reaches a with-exception-handler
 ;; handler with interrupts still disabled, where an engine never expires and
-;; another thread's collection waits (M1's closing review; AGENTS.md). Each
+;; another thread's collection waits. Each
 ;; of with-transaction's raise sites is held here by the depth a handler of
 ;; it runs at, 1 outside any section, as test-public's rows hold
 ;; sqlite-compile-option?'s: each refusal, the BEGIN's failure, the

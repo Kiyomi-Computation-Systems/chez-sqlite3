@@ -1,11 +1,10 @@
 #!r6rs
 ;;; (chez-sqlite3 private sql-tail): the scan of what follows a prepared
-;;; statement's first statement (R2; ADR-0014, decision 4, amended
-;;; 2026-11-14). prepare compiles the first statement and leaves the rest, so
-;;; a caller who gave one statement's SQL needs to know that the rest holds
-;;; nothing: only whitespace, comments and semicolons, as SQLite's tokenizer
-;;; counts them (measured: research/m2-slice-1/). Pure, total, and it raises
-;;; nothing: slices 3 and 4 call it where nothing may raise.
+;;; statement's first statement (ADR-0014). prepare compiles the first
+;;; statement and leaves the rest, so a caller who gave one statement's SQL
+;;; needs to know that the rest holds nothing: only whitespace, comments and
+;;; semicolons, as SQLite's tokenizer counts them. Pure, total, and it raises
+;;; nothing: it is called where nothing may raise.
 ;;;
 ;;; What the scan lets pass, each as a token of its own:
 ;;;
@@ -18,7 +17,7 @@
 ;;;   ;
 ;;;
 ;;; Anything else, a 0B or a 00 among it, is where the scan answers. SQL
-;;; holding U+0000 is refused before it is scanned (ADR-0011, amended).
+;;; holding U+0000 is refused before it is scanned (ADR-0011).
 (library (chez-sqlite3 private sql-tail)
   (export sql-tail-statement)
   (import (chez-sqlite3 private require-threaded)

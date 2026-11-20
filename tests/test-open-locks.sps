@@ -1,10 +1,9 @@
 #!r6rs
 ;;; The suite for the settings list under another connection's lock
-;;; (ADR-0018, decision 5 and its consequences; the M3 plan, section 4.3;
-;;; slice-0 P2, P3 and P14), through open-database and call-with-database.
+;;; (ADR-0018 and its consequences), through open-database and call-with-database.
 ;;; Each row has two connections on a file: the holder, which takes a lock,
-;;; and the open, a fresh connection that holds no read of its own
-;;; (AGENTS.md). busy-timeout runs first wherever the list puts it.
+;;; and the open, a fresh connection that holds no read of its own.
+;;; busy-timeout runs first wherever the list puts it.
 ;;;
 ;;;   waits        rollback journal, under another's exclusive lock:
 ;;;                journal-mode, wal or delete, waits out a busy timeout of
@@ -29,10 +28,10 @@
 ;;;   mid-wait     the holder, on a thread of its own, lets go 500 ms after
 ;;;                the open begins: the open succeeds after the release and
 ;;;                before its timeout's end, under an exclusive lock and under
-;;;                a read (P3)
+;;;                a read
 ;;;   WAL on WAL   on a file already in WAL, journal-mode wal opens at once
 ;;;                and reads back wal, beside another that is idle, reading,
-;;;                or in BEGIN IMMEDIATE or BEGIN EXCLUSIVE with a write (P14)
+;;;                or in BEGIN IMMEDIATE or BEGIN EXCLUSIVE with a write
 ;;;
 ;;; test-open-settings holds the cases it already had, which this suite does
 ;;; not repeat: under an exclusive lock, synchronous with busy-timeout listed
@@ -43,7 +42,7 @@
 ;;; wait takes. Each timed open's busy timeout is 1500 ms. A build that
 ;;; sleeps in milliseconds waits 1500 of it, and a retry in Scheme 3000; one
 ;;; without nanosleep sleeps whole seconds, so waits 1000 of it, and a retry
-;;; 2000 (AGENTS.md; concurrency B3; ADR-0019, no retry in Scheme). So the
+;;; 2000 (ADR-0019, no retry in Scheme). So the
 ;;; suite reads the build's grain first, as test-contention's P4 row does: a
 ;;; 250 ms busy timeout answers busy after about 250 ms on the first, and at
 ;;; once on the second. A wait is too long from 3000 ms on the first, and
@@ -51,17 +50,17 @@
 ;;; reader of the run. File descriptors are read only once
 ;;; the holder has closed: SQLite's unix VFS keeps a closed connection's
 ;;; descriptor while another connection of the process holds a POSIX lock on
-;;; the file (.plans/research/m3-slice-5/).
+;;; the file.
 ;;;
 ;;; A holder on a thread of its own answers whatever it raises, and every wait
-;;; for it is bounded (AGENTS.md). The loading procedures are reached through
+;;; for it is bounded. The loading procedures are reached through
 ;;; eval, under a guard, as tests/test-open-settings.sps reaches them. SQLite's
 ;;; answers here were measured on 3.53.1 and 3.45.1 alike before a row asserts
 ;;; them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -207,8 +206,8 @@
 ;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
 ;; answer busy, under another connection's reserved lock on a fresh file,
 ;; both on this thread: about 250 where the build sleeps in milliseconds, 0
-;; where it sleeps whole seconds, whose first sleep would pass the timeout
-;; (concurrency B3). Else what it answered, or raised.
+;; where it sleeps whole seconds, whose first sleep would pass the timeout.
+;; Else what it answered, or raised.
 (define (grain-ms)
   (in-dir
    (lambda (dir)

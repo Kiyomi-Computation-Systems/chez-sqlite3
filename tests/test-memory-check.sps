@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private memory-check): the sqlite3_memory_used
-;;; check a suite's end runs, with its positive control (ADR-0005, amended).
+;;; check a suite's end runs, with its positive control (ADR-0005).
 ;;;
 ;;;   memory-check-outcome  the verdict, from the baseline and the three
 ;;;                         counts the control reads, on synthetic counts
@@ -91,7 +91,7 @@
         (memory-check-outcome 700 700 701 701)))
 
 ;; A library that keeps no count answers one number throughout, as Apple's
-;; answers 0 (ADR-0005, amended). Unavailable whatever the baseline, since a
+;; answers 0 (ADR-0005). Unavailable whatever the baseline, since a
 ;; count that never moves can say nothing about one.
 (test-equal "the count did not rise while the control was open: unavailable, never a pass, at 0 and at any other count, and when it fell"
   (list (list 'unavailable (unavailable-text 0 0))

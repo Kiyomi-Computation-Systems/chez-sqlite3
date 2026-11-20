@@ -7,7 +7,7 @@
  * -Wall -Werror and -shared -fPIC, or -dynamiclib on a Mac, against the
  * lane's own sqlite3ext.h, the header beside sqlite3.h that C_INCLUDE_PATH
  * or the compiler's own path finds. A missing compiler or header fails the
- * compile, and the suite with it, never a skip (ADR-0001, decision 3). It
+ * compile, and the suite with it, never a skip (ADR-0001). It
  * includes sqlite3ext.h, so it calls SQLite only through the routines the
  * loading library hands its entry point: it links no libsqlite3 of its own.
  *
@@ -42,7 +42,6 @@
  *                  process since the file was loaded: every load runs the
  *                  init again, and a close of the last connection that
  *                  loaded it unloads the file, so the count starts again
- *                  (the M4 plan's research, L4)
  *
  * An init counts itself first, then registers both functions, answering the
  * first registration's failure: a load whose init replaces the functions an

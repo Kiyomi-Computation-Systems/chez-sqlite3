@@ -1,19 +1,18 @@
 #!r6rs
 ;;; interrupt-database!, the one verb any thread may call, and the close's
-;;; exclusion of it, through the real connection record (ADR-0019, decisions
-;;; 1 to 5; ADR-0010 and ADR-0012, amended in M3's plan). The record holds
-;;; slice 1's latch: the open sets its flag, the close clears it before it
-;;; finalizes anything, and a close that leaves the connection open sets it
-;;; again. tests/test-interrupt.sps holds the latch itself on stand-ins.
+;;; exclusion of it, through the real connection record (ADR-0019; ADR-0010
+;;; and ADR-0012). The record holds the latch: the open sets its flag, the
+;;; close clears it before it finalizes anything, and a close that leaves
+;;; the connection open sets it again. tests/test-interrupt.sps holds the
+;;; latch itself on stand-ins.
 ;;;
 ;;; The probe. An interrupt that reaches sqlite3_interrupt while no statement
 ;;; runs is lost for what follows, but leaves sqlite3_is_interrupted reading 1
-;;; until the next statement starts (M3's research, concurrency I1 and I2).
-;;; This suite binds sqlite3_is_interrupted itself, after the load, as the
-;;; library never does (ADR-0019, decision 7): it reads clear before an
-;;; interrupt, and set after one that reached sqlite3_interrupt. So each row
-;;; reads whether the verb called SQLite, on one thread, with no statement
-;;; running and nothing timed.
+;;; until the next statement starts. This suite binds sqlite3_is_interrupted
+;;; itself, after the load, as the library never does (ADR-0019): it reads
+;;; clear before an interrupt, and set after one that reached
+;;; sqlite3_interrupt. So each row reads whether the verb called SQLite, on
+;;; one thread, with no statement running and nothing timed.
 ;;;
 ;;;   the verb       a value that is no database, from this thread and
 ;;;                  another: an assertion violation from the verb; from
@@ -21,7 +20,7 @@
 ;;;                  the probe reads set; on a closed connection, from either
 ;;;                  thread, it does nothing and raises nothing, after a second
 ;;;                  close too, and after a close that closed and raised a
-;;;                  finalize's failure, M2's R1
+;;;                  finalize's failure
 ;;;   the open       open-database, with settings and without, and
 ;;;                  call-with-database each leave the connection
 ;;;                  interruptible
@@ -35,7 +34,7 @@
 ;;;                  either, the verb reaches SQLite. The library binds no
 ;;;                  backup; this suite binds sqlite3_backup_init and
 ;;;                  sqlite3_backup_finish, as tests/test-connection.sps does
-;;;   the others     slice 5's close of a connection whose setting failed,
+;;;   the others     the close of a connection whose setting failed,
 ;;;                  reached through applied-settings!, and
 ;;;                  call-with-database's close: each clears the flag inside,
 ;;;                  and each that is left open sets it again
@@ -63,22 +62,21 @@
 ;;;
 ;;; The engine rows run with collect-trip-bytes at a gigabyte, and no low
 ;;; pass. The gigabyte is for coverage: no collect request falls in a sweep,
-;;; so each fuel stops the call at one point of its code, and the sweep
-;;; passes every point it has. A low pass is what a call that holds a claim
-;;; needs, since a request due inside a section costs the engine ticks at
-;;; the section's exit, and a claim advanced just after its section is split
-;;; from it only there (M4's closing review, reviewer B's B1). This verb holds
-;;; no claim: the latch's one section reads the flag and the handle and makes
-;;; the call, and nothing follows that section but the verb's return, so a
-;;; remainder taken at its exit does nothing more when resumed, once or
-;;; twice (M4's closing review, Proposal 1, item F).
+;;; so each fuel stops the call at one point of its code, and the sweep passes
+;;; every point it has. A low pass is what a call that holds a claim needs,
+;;; since a request due inside a section costs the engine ticks at the
+;;; section's exit, and a claim advanced just after its section is split from
+;;; it only there. This verb holds no claim: the latch's one section reads the
+;;; flag and the handle and makes the call, and nothing follows that section
+;;; but the verb's return, so a remainder taken at its exit does nothing more
+;;; when resumed, once or twice.
 ;;;
 ;;; A thread this suite forks answers whatever it raises, and every wait for
-;;; it is bounded (AGENTS.md). The loading procedures are reached through
-;;; eval, under a guard, so a refused library or a missing name fails rows by
-;;; name. Every computation that can raise runs under a guard with a sentinel
-;;; of its own; no expected value is #f. Effects run in order, through let*
-;;; and named lets, never map.
+;;; it is bounded. The loading procedures are reached through eval, under a
+;;; guard, so a refused library or a missing name fails rows by name. Every
+;;; computation that can raise runs under a guard with a sentinel of its own;
+;;; no expected value is #f. Effects run in order, through let* and named
+;;; lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -207,7 +205,7 @@
 
 ;; answered : (-> Any) -> Any
 ;; What THUNK answered, by attempt, the void object as void: what the verb
-;; answers, Void (ADR-0019, decision 1).
+;; answers, Void (ADR-0019).
 (define (answered thunk)
   (let ((r (attempt thunk)))
     (if (eq? r (if #f #f)) 'void (list 'answered r))))
@@ -256,7 +254,7 @@
 ;; inside the close's critical section with DB's handle, reads the probe,
 ;; calls interrupt-database! on DB, reads the probe again, and answers
 ;; finalized, raising nothing. Tracked when DB tracks nothing else, it is
-;; the oldest, so the first the close finalizes (ADR-0014, decision 8).
+;; the oldest, so the first the close finalizes (ADR-0014).
 ;; Answers a reader of what the finalize saw, (BEFORE VERB AFTER), or
 ;; not-finalized when it was never called.
 (define (probed! db)
@@ -420,7 +418,7 @@
 ;; A statement's own unfinished write fails its finalize at the close: an
 ;; insert ... returning stepped once, under another connection's read, can't
 ;; commit, and its finalize answers busy. The close goes on, closes, and
-;; raises that first failure (M2's R1; tests/test-statement.sps).
+;; raises that first failure (tests/test-statement.sps).
 (test-equal "a close that closes and then raises a finalize's failure, M2's R1: the verb did nothing from inside it; close-database! raises the insert's busy; the connection is closed, and interrupt-database! from the owner and from another thread does nothing and raises nothing"
   (list '(raised (sqlite-error close-database! busy busy)) '(clear void clear)
         '(raised (closed test-interrupt-database)) 'void 'void zero-counts)
@@ -564,10 +562,10 @@
         (when (and backup (not (eqv? backup 0))) (guard (e (#t #f)) (backup-finish backup)))
         (for-each (lambda (db) (when db (close-quietly db))) (list source target))))))
 
-;; --- the other closes: slice 5's failed setting, call-with-database's -------------------------
+;; --- the other closes: a failed setting, call-with-database's ---------------------------------
 
 ;; A step whose set statement fails to prepare: applied-settings! closes the
-;; connection, then raises the prepare's condition (ADR-0018, decision 7).
+;; connection, then raises the prepare's condition (ADR-0018).
 (define failing-step '(busy-timeout "select * from no_such_table" "pragma busy_timeout" 0))
 
 (test-equal "slice 5's close of a connection whose setting failed, through applied-settings!: the verb did nothing from inside it; it closes, and raises the setting's own condition; left open by an untracked statement, the flag is set again: the probe reads clear, the verb answers void, then set"
@@ -645,26 +643,24 @@
     (list closes left-open)))
 
 ;; --- engines: the call inside the latch -----------------------------------------------------
-;; interrupt-latch-interrupt!'s one critical section holds the flag's read
-;; and the call together (ADR-0019, decision 2), and an engine spends no
-;; ticks inside a section (.plans/traps.md). So an expiry comes before the
-;; section, and a close then clears the flag, so the remainder calls
-;; nothing; or after the call, which the close then follows. How the record
-;; hands its call to the latch is these rows' to hold: tests/test-interrupt.sps
-;; holds the latch alone, on stand-ins. A call made after the latch returns,
-;; the handle read inside it, can expire between the two with the live
-;; handle in hand, and its remainder, resumed after the close, calls on a
-;; freed connection (the slice's review, P-a).
+;; interrupt-latch-interrupt!'s one critical section holds the flag's read and the call
+;; together (ADR-0019), and an engine spends no ticks inside a section. So an expiry comes
+;; before the section, and a close then clears the flag, so the remainder calls nothing; or
+;; after the call, which the close then follows. How the record hands its call to the latch is
+;; these rows' to hold: tests/test-interrupt.sps holds the latch alone, on stand-ins. A call
+;; made after the latch returns, the handle read inside it, can expire between the two with the
+;; live handle in hand, and its remainder, resumed after the close, calls on a freed
+;; connection.
 ;;
 ;; Each trial takes a fresh connection and a fresh engine, closes the
-;; connection at the engine's first expiry, and resumes the remainder to
-;; its end. A fuel names no fixed point in the code, so the fuels run from 1
-;; until a trial completes without expiring (.plans/traps.md), and a sweep
-;; with no trial resumed after a close fails by name. A collect request
-;; costs an engine's ticks, so each sweep collects first, with
-;; collect-trip-bytes raised far above what it allocates, and fails by name
-;; when a collection ran during it: each fuel then stops at one point of the
-;; code, and the sweep passes every point the call has.
+;; connection at the engine's first expiry, and resumes the remainder to its
+;; end. A fuel names no fixed point in the code, so the fuels run from 1
+;; until a trial completes without expiring, and a sweep with no trial
+;; resumed after a close fails by name. A collect request costs an engine's
+;; ticks, so each sweep collects first, with collect-trip-bytes raised far
+;; above what it allocates, and fails by name when a collection ran during
+;; it: each fuel then stops at one point of the code, and the sweep passes
+;; every point the call has.
 
 ;; max-fuel : Positive-Integer
 ;; Where a sweep gives up: far past the fuel at which the call completes.
@@ -773,11 +769,10 @@
 ;; call: called-live when it is handed LIVE, else (called HANDLE). It calls
 ;; nothing. The spin gives an engine ticks to stop it at: a stand-in that
 ;; only notes its call may cost none, and then no fuel stops a call made
-;; after the latch returns before its note. Against P-a, the slice's probe
-;; with such a stand-in expired after the latch at no fuel, and this suite's
-;; at one fuel of 14; with the spin, the probe at 20 fuels of 26 and this
-;; suite at 21 of 34 (.plans/research/m3-slice-6/a2-engine-trials.sps; the
-;; slice's mutation log). Inside the latch's section the spin costs no tick.
+;; after the latch returns before its note. Against that, a probe with such
+;; a stand-in expired after the latch at no fuel, and this suite's at one
+;; fuel of 14; with the spin, the probe at 20 fuels of 26 and this suite at
+;; 21 of 34. Inside the latch's section the spin costs no tick.
 (define (stand-in live note!)
   (lambda (h)
     (spin 20)
@@ -808,11 +803,9 @@
 ;; sqlite3_interrupt after the latch returns, the latch handing it the
 ;; handle, passes it. Under make test-memory, Valgrind sees the write: at
 ;; each fuel that stops such a verb between the latch and its call, the
-;; suite's .valgrind log, build/memory/test-interrupt-database.valgrind,
-;; reports "Invalid write of size 4 at sqlite3_interrupt", 408 bytes inside
-;; a block sqlite3_close freed, of 840 bytes on 3.53.1 and 792 at the floor,
-;; and the gate fails the suite (the slice's mutation log, part A,
-;; follow-up 2).
+;; suite's .valgrind log reports "Invalid write of size 4 at
+;; sqlite3_interrupt", 408 bytes inside a block sqlite3_close freed, of 840
+;; bytes on 3.53.1 and 792 at the floor, and the gate fails the suite.
 (test-equal "interrupt-database! in an engine, swept the same way: every trial answers void and raises nothing; some trial was resumed after a close; the trial that completed reached SQLite, the probe reading set; no collection ran"
   '(none-went-wrong resumed-after-a-close (completed void set (closed))
                     no-collection-during-the-sweep)
@@ -823,14 +816,13 @@
                      (equal? (notes-of trial) '(closed))))))
 
 ;; --- two threads: the call under the latch's mutex ------------------------------------------
-;; A critical section keeps out only its own thread's engines and
-;; interrupts; between threads the latch's mutex is the exclusion (ADR-0019,
-;; decision 3). A call made inside a section of the record's own, after the
-;; latch has let its mutex go, passes the engine rows, since no expiry
-;; splits the section, and the rows inside the close, where the flag reads
-;; clear; slice 1's race holds the latch alone. This row holds a stand-in in
-;; flight on another thread while the owner closes, and the close's first
-;; finalize, an entry of this suite's own, notes when the work starts.
+;; A critical section keeps out only its own thread's engines and interrupts; between threads
+;; the latch's mutex is the exclusion (ADR-0019). A call made inside a section of the record's
+;; own, after the latch has let its mutex go, passes the engine rows, since no expiry splits
+;; the section, and the rows inside the close, where the flag reads clear;
+;; tests/test-interrupt.sps's race holds the latch alone. This row holds a stand-in in flight
+;; on another thread while the owner closes, and the close's first finalize, an entry of this
+;; suite's own, notes when the work starts.
 
 ;; The waits: in-flight-ms, the stand-in's wait for the close's work to
 ;; start, elapses whole when the record is right, so it is short; the other
@@ -908,9 +900,8 @@
 ;; interrupt-database! sent while one runs is dropped; its COMMIT, and the
 ;; RELEASE that commits a savepoint, stay interruptible, and an interrupted
 ;; commit is rolled back under the shut. The flag the shut found is put back
-;; after (the maintainer's "Shut the latch on exit", 2026-11-17). Before, a
-;; watchdog that kept interrupting stopped the ROLLBACK as it started, and
-;; the transaction outlived the call (M3's closing review).
+;; after. Before, a watchdog that kept interrupting stopped the ROLLBACK as
+;; it started, and the transaction outlived the call.
 ;;
 ;; SQLite's statement trace, SQLITE_TRACE_STMT, calls this suite's callback
 ;; as each statement starts its program, after SQLite has cleared any

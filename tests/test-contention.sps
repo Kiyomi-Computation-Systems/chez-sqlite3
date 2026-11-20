@@ -1,39 +1,37 @@
 #!r6rs
 ;;; Two connections to one WAL file under a busy timeout, each opened, used
-;;; and closed on a thread of its own (ADR-0019, decisions 8 to 11, amended
-;;; in M3 slice 5; ADR-0017, decision 2; ADR-0010; the M3 plan, sections 4.5
-;;; and 5, slice 6; M3's research, concurrency B3 to B6, and slice-0 P3).
-;;; Each connection opens with ((journal-mode . wal) (busy-timeout . 1500)),
-;;; or 250 for the short wait, and says both as read back, ("wal" 1500).
+;;; and closed on a thread of its own (ADR-0019; ADR-0017; ADR-0010). Each
+;;; connection opens with ((journal-mode . wal) (busy-timeout . 1500)), or
+;;; 250 for the short wait, and says both as read back, ("wal" 1500).
 ;;;
 ;;;   waits out      BEGIN IMMEDIATE, under the other's BEGIN IMMEDIATE and
 ;;;                  write, waits out the 1500 ms timeout, at least 1000 ms
 ;;;                  and under 3000, or 2000 on a whole-second build, then
 ;;;                  raises &sqlite-busy, busy and busy,
-;;;                  and leaves the waiter in autocommit (B3, B6)
+;;;                  and leaves the waiter in autocommit
 ;;;   the default    the same through with-transaction with no mode, so
 ;;;   waits out      BEGIN IMMEDIATE: it waits the timeout out once, raises
 ;;;                  &sqlite-busy from with-transaction, begins nothing, the
-;;;                  depth 0, and never runs its body (ADR-0019, decision 8)
+;;;                  depth 0, and never runs its body (ADR-0019)
 ;;;   mid-wait       BEGIN IMMEDIATE as in waits out, the other committing
 ;;;                  500 ms into the wait: it succeeds after the commit and
-;;;                  before its timeout's end, and sees the other's row (P3)
+;;;                  before its timeout's end, and sees the other's row
 ;;;   the upgrade    a deferred transaction reads, the other commits a write,
 ;;;                  and its own write raises &sqlite-busy, busy and
 ;;;                  busy-snapshot, at once, and again when tried again; the
 ;;;                  transaction stays open, reading its old snapshot; rolled
-;;;                  back, a new transaction's write commits (B5)
+;;;                  back, a new transaction's write commits
 ;;;   the snapshot   a reader in a transaction reads the rows as they were at
 ;;;                  its first read, while the other commits a write, holds
 ;;;                  one open and commits it, each at once; ended, it reads
-;;;                  them all (B4)
+;;;                  them all
 ;;;   the default    with-transaction with no mode, so immediate, on both
 ;;;                  threads, each body reading then writing: the second
 ;;;                  waits for the first's commit, never reading inside it,
 ;;;                  and both commit. With 'deferred the same bodies both
 ;;;                  read, the first commits, and the second's write raises
-;;;                  &sqlite-busy, busy-snapshot (ADR-0017, decision 2; Q5)
-;;;   the grain      probe P4: BEGIN IMMEDIATE with a 250 ms timeout raises
+;;;                  &sqlite-busy, busy-snapshot (ADR-0017)
+;;;   the grain      BEGIN IMMEDIATE with a 250 ms timeout raises
 ;;;                  &sqlite-busy, busy and busy, under 500 ms, and the row
 ;;;                  prints whether the library sleeps in milliseconds or in
 ;;;                  whole seconds
@@ -41,40 +39,39 @@
 ;;; A wait is told from none by 1000 ms, and from a retry by twice what one
 ;;; wait of its 1500 ms timeout takes: 3000 ms on a build that sleeps in
 ;;; milliseconds; 2000 on one without nanosleep, which sleeps whole seconds,
-;;; so waits 1000 of it (AGENTS.md; concurrency B3; ADR-0019, amended). The
-;;; suite reads the grain before any row, the short wait's way, on one
-;;; thread, and bounds the waits by it. A wait the other ends mid-wait is
-;;; asserted only as before its timeout's end. The short wait asserts only
-;;; what holds on either grain: busy, under twice its timeout, which a
-;;; whole-second build answers at once and a millisecond one after about
-;;; 250 ms (B3). Each timed wait prints its milliseconds for a reader of the
-;;; run, CI's main lane among them, whose log is where P4 is read. Every wait
-;;; SQLite times is a sleep in its busy handler, which under Valgrind lets
-;;; the other threads run: slice 5's 1500 ms waits ran 1509 to 1526 ms there.
+;;; so waits 1000 of it (ADR-0019). The suite reads the grain before any row,
+;;; the short wait's way, on one thread, and bounds the waits by it. A wait
+;;; the other ends mid-wait is asserted only as before its timeout's end. The
+;;; short wait asserts only what holds on either grain: busy, under twice its
+;;; timeout, which a whole-second build answers at once and a millisecond one
+;;; after about 250 ms. Each timed wait prints its milliseconds for a reader
+;;; of the run, CI's main lane among them. Every wait SQLite times is a sleep
+;;; in its busy handler, which under Valgrind lets the other threads run:
+;;; 1500 ms waits ran 1509 to 1526 ms there.
 ;;;
 ;;; No connection that waits on a lock holds a read of its own: each of its
-;;; statements has finished before the wait (AGENTS.md; slice-0 P12).
+;;; statements has finished before the wait.
 ;;;
 ;;; The threads. A row's two threads say what they have done on a board, and
 ;;; each waits up to long-ms for the other's word, raising, naming the word,
 ;;; when it never comes. Whatever a thread raises is its answer, the busy
 ;;; conditions the rows expect among them. This thread waits up to answer-ms
 ;;; for each answer, and one not given by then is unfinished, so a row fails
-;;; by name and never hangs (AGENTS.md). The one wait meant to run out is the
-;;; default row's: its first body waits window-ms for the second's read,
-;;; which immediate never lets happen, from the second's word that it runs,
-;;; so the window holds no wake-up of the second's. With 'deferred the second
-;;; reads at once, a with-transaction's BEGIN and one query-row on a thread
-;;; of its own, while the first waits on a condition. Each row's file is in a
+;;; by name and never hangs. The one wait meant to run out is the default
+;;; row's: its first body waits window-ms for the second's read, which
+;;; immediate never lets happen, from the second's word that it runs, so the
+;;; window holds no wake-up of the second's. With 'deferred the second reads
+;;; at once, a with-transaction's BEGIN and one query-row on a thread of its
+;;; own, while the first waits on a condition. Each row's file is in a
 ;;; directory of its own, removed after it: a thread that dies on a raise
-;;; runs the base exception handler, where make-process-temp-directory's
-;;; hook removes the directory it made, so a directory the rows shared would
-;;; fail every later row at its open (.plans/m3-slice-6-mutation-log.md).
+;;; runs the base exception handler, where make-process-temp-directory's hook
+;;; removes the directory it made, so a directory the rows shared would fail
+;;; every later row at its open.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard. Every
 ;;; computation that can raise runs under a guard with a sentinel of its own,
 ;;; and no expected value is #f. Effects run in order, through let* and named
-;;; lets, never map (AGENTS.md).
+;;; lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -221,8 +218,8 @@
 ;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
 ;; answer busy, under another connection's BEGIN IMMEDIATE and write on a
 ;; fresh WAL file, both on this thread: about 250 where the build sleeps in
-;; milliseconds, 0 where it sleeps whole seconds (B3). Else what it
-;; answered, or raised.
+;; milliseconds, 0 where it sleeps whole seconds. Else what it answered, or
+;; raised.
 (define (grain-ms)
   (attempt
    (lambda ()
@@ -554,13 +551,12 @@
 ;; RUN to end, then writes, answering the rows. The first's body, once its
 ;; read is said, waits for the second to say it runs, then up to window-ms
 ;; for the second's read, then writes, answering the rows and whether it saw
-;; that read. The window starts where the second says it acts, so it holds
-;; no thread's wake-up: a second woken late, its window started on the
-;; first's read, met a deferred default only once the first had committed,
-;; and read and wrote as immediate's does (.plans/traps.md, M3 slice 1's
-;; review). Each says its premise, and its mode as its RUN unwinds. Answers
-;; each thread's answer; each premise and mode; and the milliseconds from
-;; the second's RUN to its read.
+;; that read. The window starts where the second says it acts, so it holds no
+;; thread's wake-up: a second woken late, its window started on the first's
+;; read, met a deferred default only once the first had committed, and read
+;; and wrote as immediate's does. Each says its premise, and its mode as its
+;; RUN unwinds. Answers each thread's answer; each premise and mode; and the
+;; milliseconds from the second's RUN to its read.
 (define (contended path run)
   (let* ((b (make-board))
          (first (start-thread

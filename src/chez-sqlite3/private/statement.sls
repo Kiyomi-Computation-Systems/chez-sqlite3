@@ -1,19 +1,19 @@
 #!r6rs
 ;;; (chez-sqlite3 private statement): prepared statements, from prepare to
-;;; finalize, owned by their connection (ADR-0014; ADR-0010, decision 2).
+;;; finalize, owned by their connection (ADR-0014; ADR-0010).
 ;;; (chez-sqlite3) exports its public verbs; call-with-statement-handle, the
-;;; one way to a statement's handle, is slice 4's too, and statement-state and
-;;; sql-length-fits? are exported for the suites.
+;;; one way to a statement's handle, is (chez-sqlite3 private
+;;; statement-values)' too, and statement-state and sql-length-fits? are
+;;; exported for the suites.
 ;;;
 ;;; A statement is a statement record, opaque and sealed, holding the
 ;;; sqlite3_stmt* as an integer, #f once finalized; its database; a copy of
 ;;; the SQL it was given; and its live state, ready, row, done or failed
-;;; (ADR-0014, decisions 2 and 5). The handle alone says it is finalized: a
-;;; record that kept a freed address would pass every check. No accessor of
-;;; its handle escapes this library but call-with-statement-handle, which
-;;; checks first.
+;;; (ADR-0014). The handle alone says it is finalized: a record that kept a
+;;; freed address would pass every check. No accessor of its handle escapes
+;;; this library but call-with-statement-handle, which checks first.
 ;;;
-;;; Every verb checks, in order, before anything reaches C (decision 3):
+;;; Every verb checks, in order, before anything reaches C:
 ;;;
 ;;;   1. a statement        else an assertion violation, not-a-statement
 ;;;   2. the owning thread  the connection's, else &sqlite-wrong-thread
@@ -31,17 +31,17 @@
 ;;; call-with-statement-handle, which runs inside it: so each verb holds one
 ;;; critical section, in which the checks 3 and 4, the C call, sqlite3_errmsg
 ;;; read straight after it, the state's change, the tracking and the count
-;;; change together (decision 10). Nothing raises in it. It answers data, and
-;;; the raise follows it, so a with-exception-handler handler of a verb's
-;;; raise runs with interrupts enabled (ADR-0012, amended). prepare-statement
-;;; holds the SQL's C string, its two out-parameters, the prepare, the tail's
-;;; scan and the statement's tracking in that one section, so no engine's
-;;; expiry frees a block between them (ADR-0011, amended).
+;;; change together. Nothing raises in it. It answers data, and the raise
+;;; follows it, so a with-exception-handler handler of a verb's raise runs
+;;; with interrupts enabled (ADR-0012). prepare-statement holds the SQL's C
+;;; string, its two out-parameters, the prepare, the tail's scan and the
+;;; statement's tracking in that one section, so no engine's expiry frees a
+;;; block between them (ADR-0011).
 ;;;
 ;;;   prepare   the SQL copied, then checked: a string; no U+0000, which C
 ;;;             would read as its end; at most 2^31-2 bytes of UTF-8, so its
-;;;             nByte, the bytes and their NUL, fits C's int (ADR-0011,
-;;;             amended). Each before anything is allocated. Then
+;;;             nByte, the bytes and their NUL, fits C's int (ADR-0011).
+;;;             Each before anything is allocated. Then
 ;;;             sqlite3_prepare_v3, with no flags; a failure raises
 ;;;             &sqlite-error with the SQL and the offset as a character
 ;;;             index, #f for -1; a NULL statement is refused, no-statement;
@@ -51,31 +51,30 @@
 ;;;             statement is counted, tracked by its connection, and ready.
 ;;;   step!     sqlite3_step: row gives #t, done #f, anything else failed and
 ;;;             &sqlite-error from the step's own code, which is extended,
-;;;             with the statement's SQL and no offset (decision 6)
+;;;             with the statement's SQL and no offset
 ;;;   reset!    sqlite3_reset, then ready whatever it answered; a failure of
-;;;             its own, by finish-failure, raises (decision 7)
+;;;             its own, by finish-failure, raises
 ;;;   finalize  sqlite3_finalize, then the handle cleared, the statement
 ;;;             finalized, untracked and counted down whatever it answered;
 ;;;             then a failure of its own, by finish-failure, raises
 ;;;
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
-;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
+;;; shown-value, never a string's text (ADR-0013).
 ;;;
-;;; M3's internals (ADR-0013, decision 2; ADR-0014, amended for M3; the M3
-;;; plan, findings F1 and F11). Each takes a WHO, the procedure its caller's
-;;; caller called, and everything it raises names it; the public verbs above
-;;; are thin wrappers passing their own names:
+;;; The internals (ADR-0013; ADR-0014). Each takes a WHO, the procedure its
+;;; caller's caller called, and everything it raises names it; the public
+;;; verbs above are thin wrappers passing their own names:
 ;;;
-;;;   prepared, finalized    M2's, as they stood: prepare-statement's and
-;;;                          finalize-statement!'s work for a WHO
+;;;   prepared, finalized    prepare-statement's and finalize-statement!'s
+;;;                          work for a WHO
 ;;;   step!/who, reset!/who, column-count/who
 ;;;                          step!'s, reset!'s and column-count's
 ;;;   prepared-at            one statement prepared from a byte offset of a C
 ;;;                          string its caller holds, with flags 0 or
 ;;;                          SQLITE_PREPARE_PERSISTENT, answered as data with
 ;;;                          its tail's byte offset: never refused for a tail,
-;;;                          nor for holding no statement (F1)
+;;;                          nor for holding no statement
 ;;;   checked-out, returned  the statement cache's use (ADR-0020): a
 ;;;                          statement for SQL, the cache's or a fresh one,
 ;;;                          and the same statement given back
@@ -87,8 +86,7 @@
 ;;; prepared-at's callers, which check a whole script once.
 ;;;
 ;;; A convenience's call holds a flag, set once its statement leaves the
-;;; call, given back to the cache or finalized (the maintainer's choice,
-;;; 2026-11-16, after M3 slice 3's review): Chez's engine remainders are
+;;; call, given back to the cache or finalized: Chez's engine remainders are
 ;;; multi-shot, and a timer's or keyboard's handler can capture a
 ;;; continuation between any two sections, so a call can be resumed, or
 ;;; re-entered, after its statement has gone back to the cache, and another
@@ -165,7 +163,7 @@
   ;; Whether SQL of N bytes of UTF-8, passed with its NUL as nByte, fits C's
   ;; int: N an exact natural no greater than 2^31-2. Chez's int would take up
   ;; to 2^32-1, handing 2^31 and above to C as negative numbers, and raise
-  ;; beyond, inside the prepare's section (ADR-0011, amended). Pure, total.
+  ;; beyond, inside the prepare's section (ADR-0011). Pure, total.
   (define (sql-length-fits? n)
     (and (integer? n) (exact? n) (<= 0 n sql-max-bytes)))
 
@@ -181,8 +179,8 @@
   ;;   (Positive-Integer Positive-Integer String -> (Values (U Live-State #f) A ...)) -> A ...
   ;; Live-State = (U 'ready 'row 'done 'failed)
   ;; The answers PROC gives after its first, PROC given the connection's
-  ;; handle, the statement's, and the statement's SQL, once ST is checked for VERB, one of
-  ;; statement-verbs, by decision 3, in order:
+  ;; handle, the statement's, and the statement's SQL, once ST is checked
+  ;; for VERB, one of statement-verbs, in order:
   ;;   - a statement, else an assertion violation from WHO, not-a-statement;
   ;;   - on its connection's owning thread, else &sqlite-wrong-thread from WHO;
   ;;   - not finalized, else &sqlite-closed from WHO; a statement whose
@@ -199,7 +197,7 @@
   ;; PROC's first answer is the state SQLite's answers leave ST in: #f leaves
   ;; it as it was; ready, row, done or failed becomes ST's state, set in the
   ;; same section, before anything else can see ST. So step! answers the
-  ;; state its step leaves, reset! ready, and a slice 4 read that SQLite
+  ;; state its step leaves, reset! ready, and a column read that SQLite
   ;; answered with a failure can answer failed. Anything else as the first
   ;; answer, or no answer at all, is an assertion violation from
   ;; call-with-statement-handle, not-a-live-state, naming it, raised after
@@ -209,7 +207,7 @@
   ;;
   ;; The SQL PROC is given is the copy made at prepare, which never changes:
   ;; a failure PROC answers carries it, with no read of ST after the section,
-  ;; which a finalize by another engine could refuse (ADR-0013, amended).
+  ;; which a finalize by another engine could refuse (ADR-0013).
   ;;
   ;; PROC runs inside the connection's call-with-open-handle, in its critical
   ;; section, with the third and fourth checks: no engine, interrupt or
@@ -218,8 +216,8 @@
   ;; interrupts disabled, so it keeps to its C calls and their reads, and
   ;; answers data: a raise is raised again after the section, as the same
   ;; object, and the state is left as it was. Every refusal here is raised
-  ;; after the section. Slice 4's verbs call it, each reading the column
-  ;; count in PROC, with the read it guards.
+  ;; after the section. (chez-sqlite3 private statement-values)' verbs call
+  ;; it, each reading the column count in PROC, with the read it guards.
   (define (call-with-statement-handle who st verb proc)
     (check-who 'call-with-statement-handle who)
     (unless (memq verb statement-verbs)
@@ -352,7 +350,7 @@
   ;; connection; nothing when it is finalized already, or its connection
   ;; closed. A failure of the finalize's own, such as the commit of an
   ;; insert ... returning stepped once, then raises &sqlite-error; a failed
-  ;; step's code, which the finalize repeats, does not (ADR-0014, decision 7).
+  ;; step's code, which the finalize repeats, does not (ADR-0014).
   (define (finalize-statement! st)
     (finalized 'finalize-statement! st))
 
@@ -363,8 +361,8 @@
   ;; no string, a copy holding U+0000, and one of more than sql-max-bytes
   ;; bytes, are assertion violations from WHO, before anything is allocated.
   ;; The caller's string is copied first and the copy alone is checked and
-  ;; prepared, so another thread cannot change it between the two (ADR-0011,
-  ;; decision 2).
+  ;; prepared, so another thread cannot change it between the two
+  ;; (ADR-0011).
   (define (checked-sql who sql)
     (unless (string? sql)
       (assertion-violation who "SQL is a string" 'not-a-string (shown-value sql)))
@@ -380,7 +378,7 @@
 
   ;; prepare-flags? : Any -> Boolean
   ;; Whether FLAGS is a prepare's flags in v1: 0, or SQLITE_PREPARE_PERSISTENT,
-  ;; which the statement cache's statements take (ADR-0020, decision 4).
+  ;; which the statement cache's statements take (ADR-0020).
   (define (prepare-flags? flags)
     (or (eqv? flags 0) (eqv? flags sqlite-prepare-persistent)))
 
@@ -491,7 +489,7 @@
   ;;
   ;; A script's statements are prepared one at a time from one block, the
   ;; script's whole C string, which execute-script! holds for its loop
-  ;; (ADR-0016, decision 7): so the script is copied once, not once a
+  ;; (ADR-0016): so the script is copied once, not once a
   ;; statement, and each prepare passes the address of its statement's start.
   ;; The script is checked once, by checked-sql, before its block is made.
 
@@ -555,7 +553,7 @@
   ;;                       the text SQLite compiled, START to TAIL; ON-MADE
   ;;                       called with it in the prepare's section; TAIL the
   ;;                       byte offset in BYTES where the rest begins, never
-  ;;                       scanned or refused (the M3 plan, F1)
+  ;;                       scanned or refused
   ;;   (empty TAIL)        SQLite found no statement from START: only
   ;;                       whitespace, comments and semicolons, or nothing
   ;;   (failed CODE MESSAGE OFFSET)
@@ -576,9 +574,9 @@
   ;; raised from WHO after it. execute-script! passes every prepare a check
   ;; that claims the statement's byte offset, and refuses one the call has
   ;; passed, so no run of a call, re-entered before its block or jumped back
-  ;; inside it, prepares a statement again (M3's closing review).
-  ;; The section holds the out-parameters, the prepare, the reads after a
-  ;; failure, the count and the tracking (ADR-0014, decisions 4 and 10).
+  ;; inside it, prepares a statement again. The section holds the
+  ;; out-parameters, the prepare, the reads after a failure, the count and
+  ;; the tracking (ADR-0014).
   (define (prepared-at who db sql bytes block start flags on-made left?)
     (check-who 'prepared-at who)
     (unless (prepare-flags? flags)
@@ -614,14 +612,14 @@
   ;; finalized. SQL holding no statement, or more than one, is refused, the
   ;; second once its first statement is prepared, so that statement's
   ;; prepare-time effects stand: pragma cache_size = 7; select 1 sets the
-  ;; cache size (ADR-0014, consequences).
+  ;; cache size (ADR-0014).
   (define (prepare-statement db sql)
     (prepared 'prepare-statement db sql #f))
 
   ;; --- call-with-statement ------------------------------------------------------------
 
   ;; call-with-statement : Database String (Statement -> A ...) -> A ...
-  ;; PROC's answers, PROC given SQL prepared on DB (ADR-0014, decision 7).
+  ;; PROC's answers, PROC given SQL prepared on DB (ADR-0014).
   ;; PROC is checked first, then prepare-statement's checks, before anything
   ;; is prepared. Then:
   ;;   - PROC returns, or leaves through a continuation: the statement is
@@ -700,7 +698,7 @@
   ;; column-count : Statement -> Natural
   ;; How many columns ST's rows have now, sqlite3_column_count's answer, read
   ;; afresh at every call: another connection's change to a table changes it
-  ;; at the next step (ADR-0014, decision 5).
+  ;; at the next step (ADR-0014).
   (define (column-count st)
     (column-count/who 'column-count st))
 
@@ -754,36 +752,36 @@
   ;; ST rewound, ready again, its bindings kept, whatever sqlite3_reset
   ;; answered. A failure of the reset's own, such as the commit of an insert
   ;; ... returning stepped once, then raises &sqlite-error; a failed step's
-  ;; code, which the reset repeats, does not (ADR-0014, decision 7).
+  ;; code, which the reset repeats, does not (ADR-0014).
   (define (reset! st)
     (reset!/who 'reset! st))
 
   ;; --- the statement cache (ADR-0020) ------------------------------------------------------
   ;;
-  ;; The cache is the connection's, in its record (connection.sls), and
-  ;; holds only ready statements prepared SQLITE_PREPARE_PERSISTENT, each
-  ;; filed under its own SQL copy, which never changes. A statement is
-  ;; checked out while in use, and out of the cache meanwhile. Both changes
-  ;; are made inside call-with-open-handle's section, which raises nothing
-  ;; and answers data: before it, the database is checked to be one, on its
-  ;; owner's thread, and the SQL checked and copied, so the table's lookup
-  ;; cannot raise and its key cannot change; after it, a statement the
-  ;; return evicts, or refuses to file, is finalized by finalized, and its
-  ;; failure raised (ADR-0020, decisions 5 and 7). A finalized statement is
-  ;; a miss, in the cache or checked out: it is never handed out, nor filed.
+  ;; The cache is the connection's, in its record (connection.sls), and holds
+  ;; only ready statements prepared SQLITE_PREPARE_PERSISTENT, each filed
+  ;; under its own SQL copy, which never changes. A statement is checked out
+  ;; while in use, and out of the cache meanwhile. Both changes are made
+  ;; inside call-with-open-handle's section, which raises nothing and answers
+  ;; data: before it, the database is checked to be one, on its owner's
+  ;; thread, and the SQL checked and copied, so the table's lookup cannot
+  ;; raise and its key cannot change; after it, a statement the return evicts,
+  ;; or refuses to file, is finalized by finalized, and its failure raised
+  ;; (ADR-0020). A finalized statement is a miss, in the cache or checked out:
+  ;; it is never handed out, nor filed.
 
   ;; checked-out : Symbol Any Any (U (Statement -> Any) #f) (U (-> Any) #f) -> Statement
   ;; A ready statement for SQL on DB, for WHO: the one DB's cache holds under
   ;; SQL's text, checked out, or else one prepared afresh, by
   ;; prepare-statement's rules, with SQLITE_PREPARE_PERSISTENT while the
-  ;; cache's capacity is above 0, and with no flags at 0 (ADR-0020, decisions
-  ;; 2 and 4). ON-MADE, a procedure or #f, is called with it inside the
-  ;; section that checks it out or prepares it, so no escaping interrupt
-  ;; falls between its hand-over and the caller's knowing of it (ADR-0016,
-  ;; decision 6). A held statement that is not ready, finalized above all,
-  ;; is a miss: dropped from the cache, never handed out; one finalized
-  ;; already needs nothing more, and one a suite moved through
-  ;; tracked-statements stays tracked until it is finalized or DB closes.
+  ;; cache's capacity is above 0, and with no flags at 0 (ADR-0020). ON-MADE,
+  ;; a procedure or #f, is called with it inside the section that checks it
+  ;; out or prepares it, so no escaping interrupt falls between its hand-over
+  ;; and the caller's knowing of it (ADR-0016). A held statement that is not
+  ;; ready, finalized above all, is a miss: dropped from the cache, never
+  ;; handed out; one finalized already needs nothing more, and one a suite
+  ;; moved through tracked-statements stays tracked until it is finalized or
+  ;; DB closes.
   ;; LEFT?, the call's check, a procedure of no arguments or #f for none, is
   ;; evaluated first in the check-out's section, before the table is read,
   ;; and in a miss's prepare's, before it prepares: when it answers true,
@@ -849,7 +847,7 @@
   ;; state, read in that section:
   ;;   - finalized, or its connection closed: nothing, a miss;
   ;;   - failed, by its step or a read: finalized there, never kept, so the
-  ;;     next prepare reads the schema afresh (ADR-0020, decision 5); the
+  ;;     next prepare reads the schema afresh (ADR-0020); the
   ;;     finalize repeats the failure's code, which raises nothing again;
   ;;   - else reset, its bindings cleared, and filed as the cache's most
   ;;     recent, under its own SQL copy. The table answers what to finalize:
@@ -859,9 +857,9 @@
   ;;   - a reset or a clear that fails: ST finalized in the section, not
   ;;     kept, and that failure raised after it, &sqlite-error from WHO with
   ;;     ST's SQL. The reset that commits an insert ... returning stepped
-  ;;     once can answer BUSY, rolling the insert back (ADR-0014's context).
+  ;;     once can answer BUSY, rolling the insert back (ADR-0014).
   ;; Whether the caller is already raising, and its condition wins, is the
-  ;; caller's to know (ADR-0016, decision 5).
+  ;; caller's to know (ADR-0016).
   (define (returned who st)
     (let ((outcome
            (call-with-statement-handle who st 'finalize-statement!

@@ -1,25 +1,23 @@
 #!r6rs
 ;;; (chez-sqlite3 private script): where execute-script!'s error points
-;;; (ADR-0016, decision 7; ADR-0013, amended for M3). The script runs as a
-;;; loop of prepares over one block holding the whole script's UTF-8, each
-;;; prepare passed the address of its statement's start; so SQLite counts a
-;;; prepare's error offset from where that prepare started, never from the
-;;; script's start (M3's research, single script X5). The error carries the
-;;; whole script as its sql, and its offset counts characters of it, as
-;;; every &sqlite-error's offset does (ADR-0013, amended for M2):
+;;; (ADR-0016; ADR-0013). The script runs as a loop of prepares over one
+;;; block holding the whole script's UTF-8, each prepare passed the address
+;;; of its statement's start; so SQLite counts a prepare's error offset from
+;;; where that prepare started, never from the script's start. The error
+;;; carries the whole script as its sql, and its offset counts characters of
+;;; it, as every &sqlite-error's offset does (ADR-0013):
 ;;;
 ;;;   script-prepare-offset  a prepare's error: the character SQLite points
 ;;;                          at, START + OFFSET as bytes; SQLite's -1 points
 ;;;                          at none, so it answers the failing statement's
 ;;;                          first token, as script-step-offset does from
-;;;                          START (ADR-0016, decision 7, amended)
+;;;                          START (ADR-0016)
 ;;;   script-step-offset     a step's error, which SQLite gives no offset:
 ;;;                          the failing statement's first token, past the
 ;;;                          whitespace, U+FEFF, comments and semicolons
 ;;;                          before it, by ADR-0014's scan. A statement's
 ;;;                          text begins at the tail of the one before it, and
 ;;;                          leading semicolons and comments belong to it
-;;;                          (M3 slice 0's research, P11)
 ;;;
 ;;; Both are total and raise nothing, for any arguments. execute-script!
 ;;; calls them once call-with-c-string has returned, outside any critical
@@ -52,13 +50,11 @@
   ;; a continuation byte the index of the character it continues
   ;; (utf8-offset->index). For -1, which points at no token, SQLite answers
   ;; it for an error at the end of the SQL, and for a missing table, a
-  ;; missing collation and a busy prepare (ADR-0013, amended for M2; single
-  ;; script X6, X8): the failing statement's first token, exactly what
-  ;; (script-step-offset BYTES START) answers (ADR-0016, decision 7,
-  ;; amended: the maintainer, 2026-11-15, "Point at the statement"), #f when
-  ;; the statement has none. #f for anything else outside the script: a START
-  ;; below 0 or past the end, an OFFSET below -1 or past the end, or an
-  ;; argument of another type.
+  ;; missing collation and a busy prepare (ADR-0013): the failing
+  ;; statement's first token, exactly what (script-step-offset BYTES START)
+  ;; answers (ADR-0016), #f when the statement has none. #f for anything else
+  ;; outside the script: a START below 0 or past the end, an OFFSET below -1
+  ;; or past the end, or an argument of another type.
   (define (script-prepare-offset bytes start offset)
     (and (start-within? bytes start)
          (exact-integer? offset)

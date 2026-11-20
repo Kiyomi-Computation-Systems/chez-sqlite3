@@ -15,12 +15,12 @@
 ;;;                  sqlite3_db_mutex is non-NULL with FULLMUTEX and with no
 ;;;                  mutex flag at all, so the default row tells FULLMUTEX
 ;;;                  from NOMUTEX here, and from no flag only on Apple's
-;;;                  THREADSAFE=2 library (ADR-0010, decision 5);
+;;;                  THREADSAFE=2 library (ADR-0010);
 ;;;                  tests/test-open-options.sps holds the bit itself
 ;;;   refusals       before anything opens or is allocated: an option, a
 ;;;                  filename that is no string, a file: name without 'uri,
 ;;;                  U+0000, each asserted by who and irritants, never by
-;;;                  message (ADR-0013, decision 9), with the counts at the
+;;;                  message (ADR-0013), with the counts at the
 ;;;                  raise and no file made. FILE: and ./file: are plain names
 ;;;   failed opens   CANTOPEN, its handle closed before the raise: the counts
 ;;;                  at the raise are zero; NOFOLLOW's cantopen-symlink, whose
@@ -61,9 +61,9 @@
 ;;;                  ticks a slice, past the 44 where an expiry once unwound
 ;;;                  the open's string block and found it freed on resuming
 ;;;
-;;; &sqlite-closed has no public verb in M1 but close-database!, which does
-;;; nothing on a closed connection (ADR-0012, decision 7). So it is reached
-;;; here through the private call-with-open-handle, M2's helper.
+;;; &sqlite-closed has no public verb but close-database!, which does
+;;; nothing on a closed connection (ADR-0012). So it is reached
+;;; here through the private call-with-open-handle.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-native.sps reaches native: a refused library fails the rows by
@@ -873,7 +873,7 @@
 ;; another: a check made before the critical section vouches for nothing
 ;; there. call-with-open-handle makes it again inside its section, where no
 ;; expiry falls, and raises &sqlite-wrong-thread after it, from the
-;; procedure the caller called (M4's closing review, F2). Each sweep runs a
+;; procedure the caller called. Each sweep runs a
 ;; call at every fuel from 1 until it completes without expiring, with a
 ;; fresh connection for every trial, opened on this thread. A remainder is
 ;; finished on a forked thread, with fuel enough to end, whatever it raises
@@ -970,8 +970,7 @@
 (define (close-first db) (close-database! db) 'done)
 
 ;; In 3 of 12 trials of a bare call-with-open-handle, when the owner check
-;; came before the section alone, the procedure ran on the other thread
-;; (M4's closing review).
+;; came before the section alone, the procedure ran on the other thread.
 (test-equal "call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: each is refused with &sqlite-wrong-thread from its who, the owner this thread and the caller that one, or answers what its procedure gave on this thread before the expiry; the sweep reaches both, and every count is zero after"
   (list (list 'ran-on-the-owner 'closed) 'yes 'yes '() zero-counts)
   (attempt
@@ -1046,7 +1045,7 @@
 ;; connection open before the resume and an answer after it. A statement
 ;; held at a row gives the close a finalize to make. When the owner check
 ;; came before the section alone, fuels 9 and 10 closed the connection on
-;; the other thread (M4's closing review, the M4 session's check).
+;; the other thread.
 
 ;; open-or-closed : Database -> Any
 ;; Whether DB is open, read on this thread: open, closed, or what else the
@@ -1301,8 +1300,8 @@
 ;; --- raised after the section -------------------------------------------------------------------
 ;; A raise made inside a critical section reaches a with-exception-handler
 ;; handler with interrupts still disabled: there an engine never expires,
-;; and another thread's collection waits for the handler to end (measured by
-;; M1's closing review). So every raise follows the section that decided it.
+;; and another thread's collection waits for the handler to end (measured).
+;; So every raise follows the section that decided it.
 ;; Each row's handler reads its depth, written depth-N so no thread id is
 ;; taken for it, and what was raised: depth-1, and the site's own refusal.
 
@@ -1398,10 +1397,9 @@
   (list 'escaped 'depth-1 'the-same-object 'the-same-object 'closed zero-counts)
   (non-condition-raised-again (lambda () (list 'planted 'pair))))
 
-;; The procedure answers data (ADR-0012, amended): what it raises is raised
-;; again with raise, so a raise-continuable from it cannot be resumed (the
-;; maintainer, 2026-11-14). A handler that returns from that raise gets the
-;; &non-continuable R6RS raises in its place.
+;; The procedure answers data (ADR-0012): what it raises is raised
+;; again with raise, so a raise-continuable from it cannot be resumed. A handler that
+;; returns from that raise gets the &non-continuable R6RS raises in its place.
 (test-equal "call-with-open-handle: a warning its procedure raises with raise-continuable is raised again with raise, after the section; the handler runs once, its return is a &non-continuable, and the procedure does not go on"
   (list 'non-continuable 'handler-ran-on-a-warning 'proc-did-not-go-on 'closed zero-counts)
   (let ((db #f) (ran 'handler-not-run) (went-on 'proc-did-not-go-on))
@@ -1497,7 +1495,7 @@
 ;; The close's count-down finds the count at zero when this suite has taken
 ;; the connection's count away first: count-down! refuses that as a double
 ;; free, inside close-database!'s section, once the handle is closed and
-;; cleared (the review's plant, made from a suite).
+;; cleared (a plant made from a suite).
 (test-equal "close-database! raises its count-down's double free after its critical section: a handler of it runs at depth 1; the connection is closed, and the count stays at zero"
   (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'count-down! '(double-free connection)))
         (list 'raised (list 'closed 'test-connection 'message))

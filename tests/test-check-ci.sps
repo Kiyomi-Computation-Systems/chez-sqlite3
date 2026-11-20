@@ -554,7 +554,7 @@
 (define (h-suites j) (string-append "The suites against SQLite " (lane-where j)))
 (define (hdr-line h) (string-append "      - name: " h))
 
-;; The current job's second build, no-load (M4's closing review): its five
+;; The current job's second build, no-load: its five
 ;; steps, after the job's make test, the last of the file.
 (define h-nl-restore "Restore SQLite without extension loading")
 (define h-nl-build "Build SQLite without extension loading")
@@ -600,7 +600,7 @@
 (define if-sql "if: steps.sqlite.outputs.cache-hit != 'true'")
 (define if-nl "if: steps.sqlite-no-load.outputs.cache-hit != 'true'")
 ;; The ifs and the cache paths a lane may hold: floor's one build, and
-;; current's two, current and then no-load (M4's closing review).
+;; current's two, current and then no-load.
 (define (if-bad2 j)
   (if (lane-floor? j)
       (string-append "if is not one of \"" if-chez "\" or \"" if-sql "\"")
@@ -1058,7 +1058,7 @@
 
 ;; --- the memory jobs: memory-1 and memory-2, one shard each ------------------------
 ;; Each job runs make check-memory-gate, then make test-memory MEMORY_SHARD=N
-;; for its own N (ADR-0005, amended in M3 slice 6). Its rows: the job, either
+;; for its own N (ADR-0005). Its rows: the job, either
 ;; step, or check-chez deleted; the steps out of order or guarded; the shard's
 ;; number another shard's, a third's, or none, or given beside a list or
 ;; through env; the job's keys; and the Chez it runs.
@@ -1185,7 +1185,7 @@
 ;; After its make test, job current builds the pinned release again without
 ;; extension loading, by build-sqlite.sh --no-load, into a cache of its own,
 ;; id sqlite-no-load, checks it, and runs the whole make test again with that
-;; build's env (M4's closing review). Each row plants one fault in those five
+;; build's env. Each row plants one fault in those five
 ;; steps, or moves them, and names every problem it makes.
 
 (define nl-bld (bld* "no-load" " --no-load"))

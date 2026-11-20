@@ -12,77 +12,73 @@
 ;;;   execute-script!  a script, with no parameters: its statements prepared
 ;;;                    one at a time, each run to done, until the first error
 ;;;
-;;; A row is a vector of the row's values, in column order (the M3 plan's
-;;; Q2). Its column count is read once, at the row, after its step, and each
-;;; value is read by M2's who-taking column read, in a critical section of
-;;; its own (Q15); parameters are positional, bound by bind-each!/who,
-;;; every value checked before any is bound, then one value a section
-;;; (ADR-0015, decision 6).
+;;; A row is a vector of the row's values, in column order. Its column count
+;;; is read once, at the row, after its step, and each value is read by the
+;;; who-taking column read, in a critical section of its own; parameters are
+;;; positional, bound by bind-each!/who, every value checked before any is
+;;; bound, then one value a section (ADR-0015).
 ;;;
 ;;; Everything raised names the convenience the caller called: each reaches
-;;; M2's statement tier through part A's internals, which take a WHO
-;;; (ADR-0013, decision 2; ADR-0016, decision 9), and raises after their
-;;; critical sections, so a with-exception-handler handler of a convenience's
-;;; raise runs at depth 1.
+;;; the statement tier through the tier's internals that take a WHO
+;;; (ADR-0013; ADR-0016), and raises after their critical sections, so a
+;;; with-exception-handler handler of a convenience's raise runs at depth 1.
 ;;;
 ;;; Chez's engine remainders are multi-shot, and a timer's, keyboard's or
 ;;; collect request's handler can capture a continuation between any two
 ;;; critical sections, so one call can have several runs pending at once,
 ;;; each going on from where its remainder was taken: R, taken before the
 ;;; check-out and resumed until it expires again after it, is R1, and R can
-;;; then be resumed again while R1 holds the statement (M3 slice 5's part D,
-;;; the M2 session's sweep). Slice 3's flag, set once the statement left the
-;;; call, could not tell two pending runs apart: R found R1's statement out
-;;; of the cache, prepared a second, gave it back and set the flag, and R1
-;;; was refused at its next section still holding the first, left out of the
-;;; cache, at a row for query and query-row; and two runs both past the
-;;; check-out both stepped the one statement, one answering rows the other
-;;; had stepped past. So execute!, query and query-row hold a claim on their
-;;; call, as the open verbs do (ADR-0018, amended in M3 slice 5): the
-;;; position of the next section any run of the call may make, made by the
-;;; call's first expression. Each run carries its own position, an argument,
-;;; never assigned, so a continuation holds it as it was, and every section
-;;; of the call claims it inside the section, advancing the call's:
+;;; then be resumed again while R1 holds the statement. A flag set once the
+;;; statement leaves the call cannot tell two pending runs apart: R finds
+;;; R1's statement out of the cache, prepares a second, gives it back and
+;;; sets the flag, and R1 is refused at its next section still holding the
+;;; first, left out of the cache, at a row for query and query-row; and two
+;;; runs both past the check-out both step the one statement, one answering
+;;; rows the other has stepped past. So execute!, query and query-row hold a
+;;; claim on their call, as the open verbs do (ADR-0018): the position of the
+;;; next section any run of the call may make, made by the call's first
+;;; expression. Each run carries its own position, an argument, never
+;;; assigned, so a continuation holds it as it was, and every section of the
+;;; call claims it inside the section, advancing the call's:
 ;;;
 ;;;   0         the check-out, and a miss's prepare, in one section, so the
 ;;;             call makes its statement once, by one run
-;;;   1 ...     each bind's, the count's and each value's, by bind-each!/at
-;;;             (Q15, "One value each"); then each step's; at a row, the
-;;;             column count's and each column's read
+;;;   1 ...     each bind's, the count's and each value's, by bind-each!/at;
+;;;             then each step's; at a row, the column count's and each
+;;;             column's read
 ;;;   the last  the return, by returned, which ends the claim
 ;;;
 ;;; A run the call has passed is refused at its next section: the section
 ;;; touches nothing, and the run raises &sqlite-closed from the verb, and
-;;; makes no section after (the maintainer's "Guard every call", ADR-0016,
-;;; amended in M3 slice 3). So each section runs once a call, by whichever
-;;; run reaches it first, and a refused run holds nothing: no two runs of
-;;; one call each hold a statement, nor step one twice. Every section claims
-;;; its position, not only the two that make or hand out the statement:
+;;; makes no section after (ADR-0016). So each section runs once a call, by
+;;; whichever run reaches it first, and a refused run holds nothing: no two
+;;; runs of one call each hold a statement, nor step one twice. Every section
+;;; claims its position, not only the two that make or hand out the statement:
 ;;; with the flag kept for the rest, two runs both past the check-out would
 ;;; share the statement and pass every section. A section's outcome is data,
 ;;; with the run's next position, so a raise in one gives the statement back
 ;;; at the position after it. A raise no section caught, a timer's or a
 ;;; keyboard handler's between two sections, gives the statement back by a
-;;; claim of whatever position is next, unless the call has ended, so a
-;;; raise always finishes it, whichever run then held it.
+;;; claim of whatever position is next, unless the call has ended, so a raise
+;;; always finishes it, whichever run then held it.
 ;;;
-;;; query-fold keeps slice 3's flag, which its wind makes enough: an
-;;; engine's expiry inside the fold's wind finishes its statement and sets
-;;; its flag, so it does not survive a preemption, and no second run reaches
-;;; a statement another holds. Every critical section that touches the
-;;; call's statement reads the flag first: the check-out's, before the table
-;;; is read; a miss's prepare, before it prepares, both through
-;;; checked-out's LEFT?; each bind's, through bind-each!/who's; each step's
-;;; and each column read's, through while-held; and the return's or the
-;;; finalize's, which also sets it. Set, the section touches nothing, and
-;;; the convenience raises &sqlite-closed after it. execute-script! holds a
-;;; claim on its statements' byte offsets instead, each prepare's section
-;;; claiming its own (below): an expiry inside the script's block frees the
-;;; block, but a timer's handler can jump back inside it, crossing no
-;;; winder. A re-entry inside the library's own winds, call-with-open-
-;;; handle's, around a check-out or a prepare, and call-with-block's, around
-;;; a script, is refused by those winds, an assertion violation, re-entered,
-;;; before any flag or claim is read.
+;;; query-fold keeps a flag, which its wind makes enough: an engine's expiry
+;;; inside the fold's wind finishes its statement and sets its flag, so it
+;;; does not survive a preemption, and no second run reaches a statement
+;;; another holds. Every critical section that touches the call's statement
+;;; reads the flag first: the check-out's, before the table is read; a miss's
+;;; prepare, before it prepares, both through checked-out's LEFT?; each
+;;; bind's, through bind-each!/who's; each step's and each column read's,
+;;; through while-held; and the return's or the finalize's, which also sets
+;;; it. Set, the section touches nothing, and the convenience raises
+;;; &sqlite-closed after it. execute-script! holds a claim on its statements'
+;;; byte offsets instead, each prepare's section claiming its own (below): an
+;;; expiry inside the script's block frees the block, but a timer's handler
+;;; can jump back inside it, crossing no winder. A re-entry inside the
+;;; library's own winds, call-with-open-handle's, around a check-out or a
+;;; prepare, and call-with-block's, around a script, is refused by those
+;;; winds, an assertion violation, re-entered, before any flag or claim is
+;;; read.
 ;;;
 ;;; A remainder taken before a call's first expression is the caller's:
 ;;; resumed, it makes a whole new call, with a claim or a flag of its own.
@@ -92,7 +88,7 @@
 ;;; SQLITE_PREPARE_PERSISTENT on a miss above a capacity of 0, and give it
 ;;; back by returned: reset, its bindings cleared and filed; or finalized,
 ;;; when it failed, the capacity is 0, its SQL is held already, or its reset
-;;; failed (ADR-0020, decision 5). Only a statement checked-out answered is
+;;; failed (ADR-0020). Only a statement checked-out answered is
 ;;; given back. execute-script! uses no cache, and prepares with no flags.
 ;;;
 ;;;   execute!, query, query-row
@@ -109,16 +105,16 @@
 ;;;       before the return or after, raises &sqlite-closed at its next
 ;;;       section, touching nothing. A way out that is no raise, an escaping
 ;;;       timer or keyboard handler, or an engine never resumed, leaves the
-;;;       statement out of the cache until the close (ADR-0016, decision 6).
+;;;       statement out of the cache until the close (ADR-0016).
 ;;;   query-fold
-;;;       M2's call-with-statement's shape, with a flag of M3's own (ADR-0016,
-;;;       decision 6), below.
+;;;       call-with-statement's shape, with a flag of its own (ADR-0016),
+;;;       below.
 ;;;   execute-script!
 ;;;       one block, the script's C string, held for the loop by
 ;;;       call-with-c-string, whose before thunk refuses a re-entry; so
 ;;;       nothing raises out of the block's extent, and everything raised in
 ;;;       it is caught there and raised after call-with-c-string returns
-;;;       (ADR-0016, decision 7). Its claim is the byte offset of the last
+;;;       (ADR-0016). Its claim is the byte offset of the last
 ;;;       statement the call prepared, each prepare's section claiming its
 ;;;       own, past it, before it prepares: so a call re-entered before its
 ;;;       block, or jumped back inside it, refuses, &sqlite-closed, rather
@@ -146,10 +142,10 @@
 
   ;; row-of : Symbol Statement (-> Boolean) -> (Vectorof Value)
   ;; ST's row, at a row, for WHO: its column count read once, now, after the
-  ;; step (single K2.1, K2.2, K2.7), then each column from 0, in order, by
-  ;; column-value/who, each in a critical section of its own (Q15), each
-  ;; reading the call's flag, LEFT?, first, by while-held. A named let,
-  ;; never map, whose order of calls is not fixed (AGENTS.md).
+  ;; step, then each column from 0, in order, by column-value/who, each in a
+  ;; critical section of its own, each reading the call's flag, LEFT?, first,
+  ;; by while-held. A named let, never map, whose order of calls is not
+  ;; fixed.
   (define (row-of who st left?)
     (let* ((n (while-held who left? (lambda () (column-count/who who st))))
            (row (make-vector n)))
@@ -215,10 +211,9 @@
 
   ;; row-at : Symbol Statement Claim Natural -> Run
   ;; ST's row, at a row, for WHO, from position N: its column count read
-  ;; once, in the section at N, after the step (single K2.1, K2.2, K2.7),
-  ;; then each column from 0, in order, by column-value/who, each in a
-  ;; section of its own (Q15). A named let, never map, whose order of calls
-  ;; is not fixed (AGENTS.md). Done, answering the row.
+  ;; once, in the section at N, after the step, then each column from 0, in
+  ;; order, by column-value/who, each in a section of its own. A named let,
+  ;; never map, whose order of calls is not fixed. Done, answering the row.
   (define (row-at who st claim n)
     (let ((counted (in-section claim n #f (lambda () (column-count/who who st)))))
       (if (not (eq? (car counted) 'answered))
@@ -256,7 +251,7 @@
   ;; and is raised again: whichever run held it then is refused at its next
   ;; section. Everything is raised after every section. WORK is the
   ;; convenience's own, and calls nothing of the caller's; there is no
-  ;; dynamic-wind (ADR-0016, decision 6).
+  ;; dynamic-wind (ADR-0016).
   (define (with-checked-out who claim db sql work)
     (let* ((held #f)
            (outcome
@@ -285,8 +280,8 @@
   ;; execute! : Database String Value ... -> Void
   ;; SQL, one statement, run on DB with GIVEN bound to its parameters, 1 to
   ;; n: stepped to done, any rows it answers dropped, as sqlite3_exec drops
-  ;; them (M3's research, single script X7), a PRAGMA's set among them.
-  ;; Answers nothing: changes says what it counts (ADR-0016, decision 4).
+  ;; them, a PRAGMA's set among them. Answers nothing: changes says what it
+  ;; counts (ADR-0016).
   ;; The call's claim is its first expression.
   (define (execute! db sql . given)
     (let ((claim (made-claim)))
@@ -322,10 +317,10 @@
   ;; query-row : Database String Value ... -> (U Row #f)
   ;; The first row SQL answers on DB, GIVEN bound to its parameters, or #f
   ;; when it answers none; a second row is never stepped to, and the
-  ;; statement is reset after the first (the M3 plan's Q3). The reset that
+  ;; statement is reset after the first. The reset that
   ;; commits a multi-row insert ... returning in autocommit can fail, BUSY
   ;; under another's read, rolling the insert back, and that raises
-  ;; (ADR-0016, decision 5). The call's claim is its first expression.
+  ;; (ADR-0016). The call's claim is its first expression.
   (define (query-row db sql . given)
     (let ((claim (made-claim)))
       (with-checked-out 'query-row claim db sql
@@ -345,9 +340,9 @@
   ;; the last answer, SEED when there is no row. PROC is checked first, an
   ;; assertion violation not-a-procedure, then checked-out's checks. PROC
   ;; runs with the statement at its row, so the connection holds the fold's
-  ;; read meanwhile (ADR-0016, decision 6; slice 0's P12).
+  ;; read meanwhile (ADR-0016).
   ;;
-  ;; M2's call-with-statement's shape (statement.sls), where it holds:
+  ;; call-with-statement's shape (statement.sls), where it holds:
   ;;   - a plain dynamic-wind around a critical one, both before thunks
   ;;     doing nothing, so a re-entry goes through: a guard whose clauses do
   ;;     not match re-enters the raise's extent to raise again, and a before
@@ -365,7 +360,7 @@
   ;;   - the critical after thunk finishes the statement, under a guard that
   ;;     records its failure and raises nothing, and the plain after thunk
   ;;     raises that failure, unless a raise is under way.
-  ;; And M3's own, since the fold's finish is not idempotent: a statement
+  ;; And its own, since the fold's finish is not idempotent: a statement
   ;; given back to the cache may be another caller's by then:
   ;;   - the critical after thunk finishes once, on the first exit that holds
   ;;     the statement, and sets LEFT, the call's flag. An exit before the
@@ -374,7 +369,7 @@
   ;;     out and runs;
   ;;   - on a normal return the statement is at done, and goes back to the
   ;;     cache; on any other exit, a raise or an escape, it is finalized,
-  ;;     never kept (ADR-0020, decision 5);
+  ;;     never kept (ADR-0020);
   ;;   - every section that touches the statement reads LEFT first: the
   ;;     check-out's and a miss's prepare's, through checked-out's LEFT?;
   ;;     each bind's; and every step's, the column count's read's and every
@@ -388,7 +383,7 @@
   ;;     remainder resumed a second time, is refused at once, and never
   ;;     restarts from the first row nor checks the statement out again.
   ;;     Read in the step's own section, no engine's expiry falls between
-  ;;     the read and the step it guards (ADR-0017, amended in M3 slice 1).
+  ;;     the read and the step it guards (ADR-0017).
   ;;     A re-entry past the loop's last section meets only the critical
   ;;     after thunk, which finds LEFT set and does nothing, and answers the
   ;;     fold again;
@@ -463,19 +458,19 @@
 
   ;; execute-script! : Database String -> Void
   ;; SQL, a script, run on DB statement by statement, with no parameters
-  ;; (ADR-0016, decision 7; the M3 plan's Q4). The checks first: DB a
+  ;; (ADR-0016). The checks first: DB a
   ;; database, on its owning thread; SQL by checked-sql, a string holding no
   ;; U+0000, refused before anything is allocated; DB open, at the first
   ;; prepare's section. Then a loop of prepares, never sqlite3_exec, each
   ;; from the tail of the statement before it, through prepared-at, with no
   ;; flags and no cache, from one block holding the whole script's C string:
   ;; each statement is prepared only once the one before it has run, since
-  ;; preparing a PRAGMA applies it (single P3), stepped to done, its rows
-  ;; dropped, and finalized. The loop ends at the script's end, or at a NULL
-  ;; statement, whose tail was the input's end in every case measured
-  ;; (slice 0's P11): so SQL holding no statement is no error. It stops at
-  ;; the first error, the statements before it standing, and begins, ends or
-  ;; rolls back no transaction of its own (single script X1 to X4, X16).
+  ;; preparing a PRAGMA applies it, stepped to done, its rows dropped, and
+  ;; finalized. The loop ends at the script's end, or at a NULL statement,
+  ;; whose tail was the input's end in every case measured: so SQL holding no
+  ;; statement is no error. It stops at the first error, the statements
+  ;; before it standing, and begins, ends or rolls back no transaction of its
+  ;; own.
   ;;
   ;; Its &sqlite-error carries the whole script, as checked, as sql, and an
   ;; offset into it, in characters, that says which statement failed,
@@ -483,8 +478,7 @@
   ;; message, so its class comes from the primary code again: for a
   ;; prepare's, script-prepare-offset of SQLite's offset from the
   ;; statement's start; for a step's, which SQLite gives no offset,
-  ;; script-step-offset, the failing statement's first token (ADR-0016,
-  ;; decision 7, amended in M3 slice 1).
+  ;; script-step-offset, the failing statement's first token (ADR-0016).
   ;;
   ;; The call's claim, CLAIMED, is made by its first expression: the byte
   ;; offset of the last statement any run of the call has prepared, -1 at
@@ -502,10 +496,9 @@
   ;;     block, between two statements, and called by a later fire of the
   ;;     same call, jumps back within the block's extent and crosses no
   ;;     winder, so call-with-block never sees it: the next prepare is
-  ;;     refused, at an offset the call has passed (M3's closing review,
-  ;;     reviewer A's script-reenter3.sps: 629 of 2804 trials ran a
-  ;;     statement again under slice 3's flag, read by the first prepare
-  ;;     alone). One inside a statement's own extent meets that statement's
+  ;;     refused, at an offset the call has passed, where a flag read by the
+  ;;     first prepare alone would let it run a statement again. One inside
+  ;;     a statement's own extent meets that statement's
   ;;     state: a step at done is refused by the statement tier, an
   ;;     assertion violation, and a finalized statement's by &sqlite-closed.
   ;; A re-entry after an engine's expiry has freed the block is refused by
