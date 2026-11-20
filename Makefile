@@ -50,8 +50,8 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 # suite, which took 562 s with its 76 children on CI's slowest runner of M2,
 # 38 s short of the limit, then two, which took 319 s and 272 s on a slow
 # runner of M3's slice 2, then three, whose -real took 264 s with 35 children
-# on M4's. 600 s is far below CI's 60-minute job limit, so a hang is named
-# HUNG before the job is killed.
+# on M4's. 600 s is far below the memory jobs' 120-minute limit in CI, so a
+# hang is named HUNG before the job is killed.
 # make test-memory refuses a MEMORY_TIMEOUT that is not a positive whole
 # number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
