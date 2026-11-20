@@ -63,7 +63,7 @@
   ;; checked : Symbol (Libsqlite3-Info -> Any) -> (Any -> Any)
   ;; ACCESSOR for WHO, called on a report alone; anything else an assertion
   ;; violation from WHO naming it by shown, never the value: Chez's own check
-  ;; printed what it refused (chez-curl ADR-0036). A procedure is all this
+  ;; prints what it refuses (chez-curl ADR-0036). A procedure is all this
   ;; makes, so the body still cannot raise.
   (define (checked who accessor)
     (lambda (x)

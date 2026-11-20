@@ -2362,7 +2362,7 @@
 
 ;; own-prefix : (U String #f)
 ;; The prefix of that file when it is .../bin/scheme, as CI's build lays Chez
-;; out and as the container's is; else #f. Homebrew's Chez on a Mac is
+;; out and as the container's is; else #f. Homebrew's Chez on macOS is
 ;; .../bin/chez.
 (define own-prefix
   (and chez-path
@@ -2375,8 +2375,8 @@
 ;; The prefix the rows below hand check-chez.sh, in the tree ROOT: CHEZ's own
 ;; when it is .../bin/scheme; else ROOT/chez, made here, whose bin/scheme is a
 ;; shell script that execs the file CHEZ names. A script, not a link: a Chez
-;; run through a link of another name looks for boot files by that name
-;; (traps.md). Making it twice gives the same files.
+;; run through a link of another name looks for boot files by that name.
+;; Making it twice gives the same files.
 (define (prefix-in root)
   (cond
     (own-prefix own-prefix)

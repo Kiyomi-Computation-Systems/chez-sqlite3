@@ -1,12 +1,11 @@
 #!r6rs
-;;; The suite for the conveniences' re-entries (ADR-0016, decisions 6 and 7;
-;;; the M3 plan, sections 4.1 and 5, slice 3), in (chez-sqlite3 private
-;;; conveniences). A guard whose clauses do not match re-enters the raise's
-;;; extent to raise again (.plans/traps.md), so a before thunk that refused
-;;; would put its own condition in the caller's place; and query-fold's
-;;; finish is not idempotent, since the statement it gives back to the cache
-;;; may be another caller's by then, so it acts once, behind a flag, and the
-;;; loop reads the flag.
+;;; The suite for the conveniences' re-entries (ADR-0016), in (chez-sqlite3
+;;; private conveniences). A guard whose clauses do not match re-enters the
+;;; raise's extent to raise again, so a before thunk that refused would put
+;;; its own condition in the caller's place; and query-fold's finish is not
+;;; idempotent, since the statement it gives back to the cache may be
+;;; another caller's by then, so it acts once, behind a flag, and the loop
+;;; reads the flag.
 ;;;
 ;;;   the body's own  each convenience, under a guard whose clauses do not
 ;;;                   match inside one that catches everything, delivers its
@@ -42,18 +41,18 @@
 ;;;                   each section that prepares or steps, so the timer's
 ;;;                   handler runs at a section's exit too, where a claim set
 ;;;                   just after the prepare's section let the jump prepare a
-;;;                   statement again (M4's closing review). It fails by name
-;;;                   unless collect requests fell in its trials, each such
-;;;                   section met its request before the next, which a trip
-;;;                   slipped to 256 KiB does not, and some capture was made at
-;;;                   such a section's exit, which the high pass never does
+;;;                   statement again. It fails by name unless collect
+;;;                   requests fell in its trials, each such section met its
+;;;                   request before the next, which a trip slipped to 256 KiB
+;;;                   does not, and some capture was made at such a section's
+;;;                   exit, which the high pass never does
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -412,9 +411,8 @@
              (filter (lambda (s) (string=? (car s) "select 1 union all select abs(-9223372036854775807 - 1)"))
                      (states db)))))))
 
-;; Measured by M2's research (.plans/research/m2-slice-3/probe-block.sps), on
-;; both libraries: an insert ... returning stepped once under another's read
-;; answers a row, and its finalize busy.
+;; Measured on both libraries: an insert ... returning stepped once under
+;; another's read answers a row, and its finalize busy.
 (test-equal "a read of the fold's own that fails is raised, and the finish's failure beside it is not: an insert ... returning whose second column is not well-formed TEXT, under another's read, raises &sqlite-invalid-text from query-fold, never the finalize's busy; the procedure was never called, and the insert is rolled back"
   (list (list 'raised '(invalid-text query-fold 1 0)) 0 '(#(1)))
   (with-file-db
@@ -432,18 +430,17 @@
 ;; Pass = (U 'high 'low)
 ;; The jumped-back row runs twice. Each trial begins with begun!: a
 ;; collection, then PASS's trip, 2^27 in the high pass and 256 bytes in the
-;; low, until the trial ends. In the low pass a request falls due all
-;; through the trial, and one due inside a critical section is handled at
-;; the section's exit, where it costs ticks, so the timer's handler runs
-;; there too, before anything after it, and its continuation is taken
-;; there: a claim set just after the prepare's section, not inside it, let
-;; the jump prepare a statement again (M4's closing review, the M4
-;; session's check). A request fell only where the call's allocation crossed
+;; low, until the trial ends. In the low pass a request falls due all through
+;; the trial, and one due inside a critical section is handled at the
+;; section's exit, where it costs ticks, so the timer's handler runs there
+;; too, before anything after it, and its continuation is taken there: a claim
+;; set just after the prepare's section, not inside it, lets the jump prepare
+;; a statement again. A request fell only where the call's allocation crossed
 ;; a chunk, so in the low pass each trial's connection also carries SQLite's
 ;; trace and an authorizer, whose callbacks allocate 32 KiB: inside each
 ;; section that prepares a statement, steps a row or finishes one. Both are
-;; __collect_safe, as sqlite3_prepare_v3 and sqlite3_step are; both answer
-;; 0 and raise nothing; both are locked from here to the suite's end. Every
+;; __collect_safe, as sqlite3_prepare_v3 and sqlite3_step are; both answer 0
+;; and raise nothing; both are locked from here to the suite's end. Every
 ;; request goes through counted-request, which counts it.
 
 (define low-trip 256)
@@ -474,21 +471,20 @@
 ;; handler, and it fires at that section's exit.
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB (M4's closing review, builder D's
-;; exit-probe.sps). So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field
@@ -576,7 +572,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -750,11 +746,11 @@
 ;; called by a later fire of the same call, jumps back within the block's
 ;; extent and crosses no winder: call-with-block never sees it. Each
 ;; statement's prepare claims its byte offset, inside its section, and refuses
-;; one the call has passed, so the jump never prepares a statement again
-;; (reviewer A's script-reenter3.sps, M3's closing review: 629 of 2804 trials
-;; returned with a row twice before the claim). A jump inside one statement's
-;; own extent meets the statement tier's state, at done, which refuses a
-;; second step; one into a section's own wind, call-with-open-handle's refusal.
+;; one the call has passed, so the jump never prepares a statement again (629
+;; of 2804 trials returned with a row twice before the claim). A jump inside
+;; one statement's own extent meets the statement tier's state, at done, which
+;; refuses a second step; one into a section's own wind,
+;; call-with-open-handle's refusal.
 
 (define jump-script "insert into j values (1); insert into j values (2)")
 

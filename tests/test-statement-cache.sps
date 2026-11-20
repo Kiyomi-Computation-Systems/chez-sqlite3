@@ -3,7 +3,7 @@
 ;;; statement cache (ADR-0020), over opaque keys and opaque statements. It
 ;;; loads no libsqlite3: the table holds no foreign code, calls nothing of its
 ;;; caller's, and finalizes nothing; it answers what its caller must
-;;; finalize, and M3 slice 3 does.
+;;; finalize, and the statement layer does.
 ;;;
 ;;;   the table      its capacity, fixed when it is made, 0 to 1024
 ;;;   check-out      a statement filed under the key, removed, or a miss
@@ -396,7 +396,7 @@
 ;; among them, and the exact keys after: a check-out removes what it hits,
 ;; so a near spelling tried after its key's check-out misses even in a table
 ;; that would match it. let*, since Chez fixes no order for a call's
-;; arguments (AGENTS.md).
+;; arguments.
 (test-equal "string keys of other shapes: the empty string, one with a NUL, a long one and non-ASCII text, each its own key, told apart from its near spellings, each tried while the table holds all four"
   '((miss) (miss) (miss) 4 (hit "e") (hit "nul") (hit "long") (hit "uni") 0)
   (let* ((c (make 8)) (long (make-string 5000 #\a)))

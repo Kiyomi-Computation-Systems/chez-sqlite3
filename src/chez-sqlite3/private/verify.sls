@@ -6,15 +6,14 @@
 ;;; sqlite3_threadsafe and hands their answers here, so
 ;;; tests/test-verify.sps can make every decision on synthetic inputs. Each
 ;;; check takes the library's report too, and every refusal carries it. Which
-;;; runs first, the floor and then threadsafe, is native's order
-;;; (ADR-0002, amended).
+;;; runs first, the floor and then threadsafe, is native's order (ADR-0002).
 ;;;
 ;;;   check-version     the version number at least the floor, else
 ;;;                     below-floor
 ;;;   check-threadsafe  sqlite3_threadsafe() not 0, else not-threadsafe
 ;;;
 ;;; The floor is held to packaging/floors.sexp by behaviour, in
-;;; tests/test-verify.sps (ADR-0008, decision 4).
+;;; tests/test-verify.sps (ADR-0008).
 (library (chez-sqlite3 private verify)
   (export sqlite-floor check-version check-threadsafe version-number->string)
   (import (chez-sqlite3 private require-threaded)

@@ -1,13 +1,12 @@
 #!r6rs
-;;; The suite for load-extension! (ADR-0021, decisions 6 to 9; the M4 plan,
-;;; section 4.4, and section 5, item 4), in (chez-sqlite3 private
+;;; The suite for load-extension! (ADR-0021), in (chez-sqlite3 private
 ;;; extension), with the extension tests/extension.c, compiled here by
 ;;; (extension-build) against the lane's sqlite3ext.h.
 ;;;
 ;;;   the build        each variant of tests/extension.c compiled with $CC
 ;;;                    -Wall -Werror: a missing compiler or header fails
 ;;;                    this row, and every load row after it, never a skip
-;;;   the checks       in the plan's order, each refusal from
+;;;   the checks       in order, each refusal from
 ;;;                    load-extension!: every kind of value for the
 ;;;                    database, the path and the entry point; U+0000 at
 ;;;                    every position of each string; every first character
@@ -59,17 +58,17 @@
 ;;;
 ;;; Where the library lacks sqlite3_load_extension, as Apple's does, no
 ;;; connection can opt in: each load row is printed unavailable, and the
-;;; open's refusal asserted in its place (ADR-0005, amended); the checks and
-;;; the opt-in's refusal run on every library, since they reach no C. The
+;;; open's refusal asserted in its place (ADR-0005); the checks and the
+;;; opt-in's refusal run on every library, since they reach no C. The
 ;;; loading procedures are reached through eval, under a guard, so the suite
 ;;; runs against a library that lacks the verb, failing by name. Rows assert
 ;;; codes, never SQLite's text: a message is only ever compared with another
-;;; reading of the same library (ADR-0013, decision 9), and the Mac's dlopen
-;;; words its failures its own way (research/m4-mac/).
+;;; reading of the same library (ADR-0013), and Apple's dlopen words its
+;;; failures its own way.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -327,8 +326,8 @@
 ;; counts-memory? : Boolean
 ;; Whether the library keeps a count of its memory: sqlite3_memory_used
 ;; higher while a connection of the suite's is open than before it, as the
-;; memory check's own control asks (ADR-0005, amended). Apple's
-;; DEFAULT_MEMSTATUS=0 build keeps none.
+;; memory check's own control asks (ADR-0005). Apple's DEFAULT_MEMSTATUS=0
+;; build keeps none.
 (define counts-memory?
   (guard (e (#t #f))
     (let* ((before (sqlite3-memory-used))
@@ -355,7 +354,7 @@
 
 ;; memory-noted! : String -> Void
 ;; Where the library keeps no count, the row NAME's memory part printed
-;; unavailable, never passed unseen (ADR-0005, amended).
+;; unavailable, never passed unseen (ADR-0005).
 (define (memory-noted! name)
   (unless counts-memory?
     (display "UNAVAILABLE ")
@@ -374,8 +373,7 @@
 ;; built : Any
 ;; built-where-loadable's answer: each variant's name and path, or the
 ;; failure; or (unavailable), nothing compiled, where native records no
-;; sqlite3_load_extension, as on Apple's library (the maintainer's "Build
-;; named unavailable there").
+;; sqlite3_load_extension, as on Apple's library.
 (define built
   (if (string? dir)
       (guard (e (#t (list 'raised (describe e)))) (built-where-loadable available dir))
@@ -485,8 +483,8 @@
 
 ;; in-order : (Any -> Any) (Listof Any) -> (Listof Any)
 ;; PROC called on each of ITEMS, first to last, by a named let, never map,
-;; whose order of calls is not fixed: a call of the verb is an effect
-;; (AGENTS.md). Their answers, in order.
+;; whose order of calls is not fixed: a call of the verb is an effect.
+;; Their answers, in order.
 (define (in-order proc items)
   (let loop ((rest items) (found '()))
     (if (null? rest)
@@ -691,17 +689,16 @@
 
 ;; --- the opt-in judged with the C switch on --------------------------------------------------------
 ;; Ubuntu's library opens every connection with ENABLE_LOAD_EXTENSION's C
-;; switch on, and there the verb's own check is all that stops a load (the
-;; M4 pre-work's Q3). Every other library this suite meets starts it at 0,
-;; where SQLite itself refuses a load, "not authorized", so a verb that
-;; dropped its check would show only on the main lane. Here an entry point
-;; sqlite3_auto_extension runs at every open turns the switch on, through
-;; native's binding, so every lane is Ubuntu's: a raw sqlite3_load_extension
-;; through native then loads on that connection, where the verb refuses. A
-;; libsqlite3 can refuse the registration, Apple's 3.51.0 answering 21, and
-;; then the row is printed unavailable and the refusal, 21, asserted in its
-;; place (ADR-0005, amended). It is unregistered by
-;; sqlite3_reset_auto_extension, and unlocked once.
+;; switch on, and there the verb's own check is all that stops a load. Every
+;; other library this suite meets starts it at 0, where SQLite itself refuses
+;; a load, "not authorized", so a verb that dropped its check would show only
+;; on the main lane. Here an entry point sqlite3_auto_extension runs at every
+;; open turns the switch on, through native's binding, so every lane is
+;; Ubuntu's: a raw sqlite3_load_extension through native then loads on that
+;; connection, where the verb refuses. A libsqlite3 can refuse the
+;; registration, Apple's 3.51.0 answering 21, and then the row is printed
+;; unavailable and the refusal, 21, asserted in its place (ADR-0005). It is
+;; unregistered by sqlite3_reset_auto_extension, and unlocked once.
 
 (define-syntax bound
   (syntax-rules ()
@@ -869,15 +866,15 @@
 
 ;; dlsym-stable? : Boolean
 ;; Whether dlsym's failure reads the same at a second load: everywhere but
-;; a Mac, where it names the handle dlopen gave, not the file
-;; (research/m4-mac/, run 1), which a second load need not share.
+;; macOS, where it names the handle dlopen gave, not the file, which a
+;; second load need not share.
 (define dlsym-stable? (not mac?))
 
 ;; failure-cases : (Listof (List String String (Listof String) Boolean))
 ;; Each failure: what it is, the path, the entry point given, if any, and
 ;; whether its message names only what the load was given, so that a
 ;; second load's reads the same: every case's, but an entry point the file
-;; lacks, dlsym's failure, on a Mac.
+;; lacks, dlsym's failure, on macOS.
 (define failure-cases
   (list (list "a path no file stands at" missing '() #t)
         (list "an empty file" empty '() #t)
@@ -947,7 +944,7 @@
                     (list 'message (cadr m) own))
                 (if (equal? after own) 'left-as-it-was (list 'after after own))))))))
 
-;; --- the held row (the research, L8; rv1, part B) ------------------------------------------------
+;; --- the held row --------------------------------------------------------------------------------
 
 (load-row "a load beside a held row: with a statement of the connection at a row, the default variant's first load takes; its second, whose init replaces the functions the first registered, raises &sqlite-error error, extended code error, the call's own, while the connection's own code reads busy, 5, through native, its message read there too; the condition's message ends with the connection's message, and is longer; then, the row let go, a third load takes, replacing the functions, and the cache's statement, prepared before it, still answers, the cache holding it as before"
   (list #t 'loaded 'present
@@ -1309,12 +1306,12 @@
 ;; Chez resumes an engine's remainder on whichever thread calls it, so the
 ;; call's checks can pass on the owner's thread, and the call go on on
 ;; another. Each check after the expiry refuses that thread, and every
-;; refusal names load-extension!, the opt-in's read among them (ADR-0013,
-;; decision 2). When the opt-in's read named itself, 99 of 109 refusals
-;; named database-extension-loading? (M4's closing review, F3). Each sweep
-;; runs the call at every fuel from 1 until it completes without expiring,
-;; a fresh connection for every trial, and finishes each remainder on a
-;; thread of its own, by in-thread, whose wait is bounded.
+;; refusal names load-extension!, the opt-in's read among them (ADR-0013).
+;; With an opt-in's read that names itself, 99 of 109 refusals name
+;; database-extension-loading? instead, as measured. Each sweep runs the
+;; call at every fuel from 1 until it completes without expiring, a fresh
+;; connection for every trial, and finishes each remainder on a thread of
+;; its own, by in-thread, whose wait is bounded.
 
 ;; load-answer : Database String -> Any
 ;; load-extension! of PATH on DB, and the thread it ran on: (loaded ID), or

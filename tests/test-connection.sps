@@ -15,13 +15,13 @@
 ;;;                  sqlite3_db_mutex is non-NULL with FULLMUTEX and with no
 ;;;                  mutex flag at all, so the default row tells FULLMUTEX
 ;;;                  from NOMUTEX here, and from no flag only on Apple's
-;;;                  THREADSAFE=2 library (ADR-0010, decision 5);
+;;;                  THREADSAFE=2 library (ADR-0010);
 ;;;                  tests/test-open-options.sps holds the bit itself
 ;;;   refusals       before anything opens or is allocated: an option, a
 ;;;                  filename that is no string, a file: name without 'uri,
 ;;;                  U+0000, each asserted by who and irritants, never by
-;;;                  message (ADR-0013, decision 9), with the counts at the
-;;;                  raise and no file made. FILE: and ./file: are plain names
+;;;                  message (ADR-0013), with the counts at the raise and no
+;;;                  file made. FILE: and ./file: are plain names
 ;;;   failed opens   CANTOPEN, its handle closed before the raise: the counts
 ;;;                  at the raise are zero; NOFOLLOW's cantopen-symlink, whose
 ;;;                  extended code differs from its primary; failure-details
@@ -58,12 +58,14 @@
 ;;;                  own; and close-database!'s count-down, made a double free
 ;;;                  by a count-down! this suite makes first
 ;;;   engines        open-database under an engine, at every fuel from 1 to 60
-;;;                  ticks a slice, past the 44 where an expiry once unwound
-;;;                  the open's string block and found it freed on resuming
+;;;                  ticks a slice, past the 44 at which an open holding its
+;;;                  string outside a critical section would expire inside it,
+;;;                  and its resume find the string's block freed
 ;;;
-;;; &sqlite-closed has no public verb in M1 but close-database!, which does
-;;; nothing on a closed connection (ADR-0012, decision 7). So it is reached
-;;; here through the private call-with-open-handle, M2's helper.
+;;; close-database! does nothing on a closed connection (ADR-0012), so this
+;;; suite reaches &sqlite-closed through the private call-with-open-handle,
+;;; the accessor through which every verb that needs a connection's handle
+;;; reaches it.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-native.sps reaches native: a refused library fails the rows by
@@ -872,12 +874,12 @@
 ;; can pass its owner check on the owner's thread, expire, and go on on
 ;; another: a check made before the critical section vouches for nothing
 ;; there. call-with-open-handle makes it again inside its section, where no
-;; expiry falls, and raises &sqlite-wrong-thread after it, from the
-;; procedure the caller called (M4's closing review, F2). Each sweep runs a
-;; call at every fuel from 1 until it completes without expiring, with a
-;; fresh connection for every trial, opened on this thread. A remainder is
-;; finished on a forked thread, with fuel enough to end, whatever it raises
-;; its answer, the wait bounded by in-thread's.
+;; expiry falls, and raises &sqlite-wrong-thread after it, from the procedure
+;; the caller called. Each sweep runs a call at every fuel from 1 until it
+;; completes without expiring, with a fresh connection for every trial, opened
+;; on this thread. A remainder is finished on a forked thread, with fuel
+;; enough to end, whatever it raises its answer, the wait bounded by
+;; in-thread's.
 
 ;; finished-elsewhere : Engine -> Any
 ;; ENGINE run to its end on a forked thread, in slices of 10^8 ticks, at
@@ -970,8 +972,7 @@
 (define (close-first db) (close-database! db) 'done)
 
 ;; In 3 of 12 trials of a bare call-with-open-handle, when the owner check
-;; came before the section alone, the procedure ran on the other thread
-;; (M4's closing review).
+;; came before the section alone, the procedure ran on the other thread.
 (test-equal "call-with-open-handle's remainder, taken at every fuel on the owner's thread and finished on another, never runs its procedure there: each is refused with &sqlite-wrong-thread from its who, the owner this thread and the caller that one, or answers what its procedure gave on this thread before the expiry; the sweep reaches both, and every count is zero after"
   (list (list 'ran-on-the-owner 'closed) 'yes 'yes '() zero-counts)
   (attempt
@@ -1046,7 +1047,7 @@
 ;; connection open before the resume and an answer after it. A statement
 ;; held at a row gives the close a finalize to make. When the owner check
 ;; came before the section alone, fuels 9 and 10 closed the connection on
-;; the other thread (M4's closing review, the M4 session's check).
+;; the other thread.
 
 ;; open-or-closed : Database -> Any
 ;; Whether DB is open, read on this thread: open, closed, or what else the
@@ -1301,8 +1302,8 @@
 ;; --- raised after the section -------------------------------------------------------------------
 ;; A raise made inside a critical section reaches a with-exception-handler
 ;; handler with interrupts still disabled: there an engine never expires,
-;; and another thread's collection waits for the handler to end (measured by
-;; M1's closing review). So every raise follows the section that decided it.
+;; and another thread's collection waits for the handler to end (measured).
+;; So every raise follows the section that decided it.
 ;; Each row's handler reads its depth, written depth-N so no thread id is
 ;; taken for it, and what was raised: depth-1, and the site's own refusal.
 
@@ -1398,10 +1399,9 @@
   (list 'escaped 'depth-1 'the-same-object 'the-same-object 'closed zero-counts)
   (non-condition-raised-again (lambda () (list 'planted 'pair))))
 
-;; The procedure answers data (ADR-0012, amended): what it raises is raised
-;; again with raise, so a raise-continuable from it cannot be resumed (the
-;; maintainer, 2026-11-14). A handler that returns from that raise gets the
-;; &non-continuable R6RS raises in its place.
+;; The procedure answers data (ADR-0012): what it raises is raised again with
+;; raise, so a raise-continuable from it cannot be resumed. A handler that
+;; returns from that raise gets the &non-continuable R6RS raises in its place.
 (test-equal "call-with-open-handle: a warning its procedure raises with raise-continuable is raised again with raise, after the section; the handler runs once, its return is a &non-continuable, and the procedure does not go on"
   (list 'non-continuable 'handler-ran-on-a-warning 'proc-did-not-go-on 'closed zero-counts)
   (let ((db #f) (ran 'handler-not-run) (went-on 'proc-did-not-go-on))
@@ -1497,7 +1497,7 @@
 ;; The close's count-down finds the count at zero when this suite has taken
 ;; the connection's count away first: count-down! refuses that as a double
 ;; free, inside close-database!'s section, once the handle is closed and
-;; cleared (the review's plant, made from a suite).
+;; cleared (a plant made from a suite).
 (test-equal "close-database! raises its count-down's double free after its critical section: a handler of it runs at depth 1; the connection is closed, and the count stays at zero"
   (list (list 'raised-at-depth 'depth-1 (list 'assertion-violation 'count-down! '(double-free connection)))
         (list 'raised (list 'closed 'test-connection 'message))
@@ -1518,13 +1518,13 @@
 ;; --- engines --------------------------------------------------------------------------------------
 ;; An engine's expiry unwinds every dynamic-wind it is inside, and its resume
 ;; rewinds them: an expiry inside the open's C string would free its block,
-;; and the resume would find it freed. Before the open held its string in a
-;; critical section, an engine of 1 to 44 ticks a slice expired inside it at
-;; every fuel, and the open was refused (measured on Chez 10.4.0, where the
-;; open and close of :memory: took some 90 ticks). An engine spends no ticks
-;; inside a critical section (measured: a loop of 1,000 there, at 10 ticks a
-;; slice, never expired), so the open now expires only outside its section:
-;; at 1 tick a slice it still expires.
+;; and the resume would find it freed. The open holds its string in a
+;; critical section, where an engine spends no ticks (measured: a loop of
+;; 1,000 there, at 10 ticks a slice, never expired), so the open expires
+;; only outside its section: at 1 tick a slice it still expires. With the
+;; string outside a section, an engine of 1 to 44 ticks a slice expires
+;; inside it at every fuel, and the open is refused (measured on Chez
+;; 10.4.0, where the open and close of :memory: take some 90 ticks).
 
 ;; fuels : Positive-Integer -> (Listof Positive-Integer)
 ;; 1 to N.

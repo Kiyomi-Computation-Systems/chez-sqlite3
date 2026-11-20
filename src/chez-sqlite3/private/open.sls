@@ -1,13 +1,13 @@
 #!r6rs
 ;;; (chez-sqlite3 private open): the open verbs, open-database and
-;;; call-with-database, and the settings list they take (ADR-0012, decisions
-;;; 3 and 8; ADR-0018). (chez-sqlite3) exports the two; applied-settings! is
-;;; exported for the suites, with applied-settings/with, its form that takes
-;;; the db_config binding, and made-claim, which they hold whole: no
-;;; position a call has passed is claimed again, 0 included.
+;;; call-with-database, and the settings list they take (ADR-0012; ADR-0018).
+;;; (chez-sqlite3) exports the two; applied-settings! is exported for the
+;;; suites, with applied-settings/with, its form that takes the db_config
+;;; binding, and made-claim, which they hold whole: no position a call has
+;;; passed is claimed again, 0 included.
 ;;;
 ;;; They live here, not in (chez-sqlite3 private connection), because the
-;;; settings run statements through M2's statement tier, (chez-sqlite3
+;;; settings run statements through the statement tier, (chez-sqlite3
 ;;; private statement) and (chez-sqlite3 private statement-values), which
 ;;; import the connection's library. The connection's library keeps the
 ;;; open's parts: prepared-open, connection-outcome, opened-database and
@@ -15,75 +15,71 @@
 ;;;
 ;;; At most one of the arguments after the filename is a settings list, any
 ;;; pair or (), an association list from a setting's name to its value; the
-;;; rest are the options, symbols (ADR-0018, decision 1, amended). Every check
-;;; comes before anything is allocated, and every refusal names the verb the
-;;; caller called, in the order the open uses its arguments:
+;;; rest are the options, symbols (ADR-0018). Every check comes before
+;;; anything is allocated, and every refusal names the verb the caller
+;;; called, in the order the open uses its arguments:
 ;;;
 ;;;   1. the split       the options told from the list: a second list is
 ;;;                      refused, second-settings-list
-;;;   2. M2's checks     prepared-open's, in M2's order: the filename a
-;;;                      string, the options, a file: name without uri
+;;;   2. prepared-open   its checks, in its order: the filename a string,
+;;;                      the options, a file: name without uri
 ;;;   3. the list        settings-plan's rules: its shape, then each entry's
 ;;;                      name, a repeat, its value's domain
 ;;;   4. the opt-in      (enable-load-extension . #t) on a library without
 ;;;                      sqlite3_load_extension, native's record at its load:
-;;;                      &sqlite-extensions-unavailable (ADR-0021, decision 5;
-;;;                      ADR-0012 and ADR-0018, amended for M4)
+;;;                      &sqlite-extensions-unavailable (ADR-0021; ADR-0012;
+;;;                      ADR-0018)
 ;;;
 ;;; The split comes first, since it is what tells an option from the list.
-;;; M2's checks come next, so each of M2's refusals stands as it was, with a
-;;; list or without one. The list's come after: its settings run only once the
-;;; connection is open (M3 slice 5's choice; ADR-0018, amended in slice 1).
-;;; The opt-in's is last: it reads the plan's steps, so a list refused anyway
-;;; raises its own refusal first, opt-in or not. The four run in one critical
-;;; section, what they raise caught there and raised again after it, so no
-;;; engine's expiry and no timer's handler falls inside them (below).
+;;; prepared-open's checks come next, so each of its refusals is the same with
+;;; a list or without one. The list's come after: its settings run only once
+;;; the connection is open (ADR-0018). The opt-in's is last: it reads the
+;;; plan's steps, so a list refused anyway raises its own refusal first,
+;;; opt-in or not. The four run in one critical section, what they raise
+;;; caught there and raised again after it, so no engine's expiry and no
+;;; timer's handler falls inside them (below).
 ;;;
 ;;; Then the open, its statement cache of the list's statement-cache, 32 when
 ;;; it gives none, and its opt-in, whether the plan's steps hold the opt-in's
 ;;; step, each fixed in the record when it is made, before any setting runs
-;;; (ADR-0018, decision 4; ADR-0020, decision 1; ADR-0012, amended for M4).
-;;; Then each of SQLite's settings the list gives, busy-timeout first, then
-;;; the rest in the list's order (decision 5). A PRAGMA is set by one
-;;; statement, then read back by a second, PRAGMA and its name, and compared
-;;; by settings' read-back-comparison (decision 4). Each statement is
-;;; prepared with no flags through the statement tier, never the cache
-;;; (ADR-0020, decision 3), run, and finalized before the next is prepared.
-;;; One of db_config's four is one sqlite3_db_config call, in a critical
-;;; section of its own (ADR-0021, decision 3): through call-with-open-handle,
-;;; its cell native's call-with-int-cell, filled with the core's
-;;; db-config-sentinel, never a literal; the call made; and the core's
-;;; db-config-verdict read from its own answer and cell, never a second
-;;; call. A mismatch raises &sqlite-setting-mismatch, its setting, the value
-;;; asked for and the value read; a statement's failure raises its own
-;;; condition, &sqlite-busy under another's lock among them; a set's code
+;;; (ADR-0018; ADR-0020; ADR-0012). Then each of SQLite's settings the list
+;;; gives, busy-timeout first, then the rest in the list's order. A PRAGMA is
+;;; set by one statement, then read back by a second, PRAGMA and its name, and
+;;; compared by settings' read-back-comparison. Each statement is prepared
+;;; with no flags through the statement tier, never the cache (ADR-0020), run,
+;;; and finalized before the next is prepared. One of db_config's four is one
+;;; sqlite3_db_config call, in a critical section of its own (ADR-0021):
+;;; through call-with-open-handle, its cell native's call-with-int-cell,
+;;; filled with the core's db-config-sentinel, never a literal; the call made;
+;;; and the core's db-config-verdict read from its own answer and cell, never
+;;; a second call. A mismatch raises &sqlite-setting-mismatch, its setting,
+;;; the value asked for and the value read; a statement's failure raises its
+;;; own condition, &sqlite-busy under another's lock among them; a set's code
 ;;; but 0 raises &sqlite-error of that code, the call's own, never the
 ;;; connection's, which a refused set leaves at another call's or at 0, and
 ;;; its message sqlite3_errstr's, read in the set's section, since db_config
-;;; sets no error on its connection (M4's research, D3, rv2); but a code that
-;;; names no error, its low byte 0, 100 or 101, or no exact integer, is an
-;;; assertion violation from the verb, (not-an-error CODE), tested here
-;;; before raise-sqlite-error, whose own refusal would name it (ADR-0021,
-;;; amended in M4 slice 1). Either way the connection is closed first,
-;;; then the condition raised (decision 7). A close that fails then is not
+;;; sets no error on its connection; but a code that names no error, its low
+;;; byte 0, 100 or 101, or no exact integer, is an assertion violation from
+;;; the verb, (not-an-error CODE), tested here before raise-sqlite-error,
+;;; whose own refusal would name it (ADR-0021). Either way the connection is
+;;; closed first, then the condition raised. A close that fails then is not
 ;;; raised over it: the setting's condition reaches the caller, and the
 ;;; connection stays open and counted, for the gate to see, as
 ;;; call-with-database's close is not raised over its procedure's raise
-;;; (ADR-0012, decision 8). call-with-database runs the settings inside its
-;;; wind's body, after the open, and never calls its procedure when one
-;;; fails.
+;;; (ADR-0012). call-with-database runs the settings inside its wind's body,
+;;; after the open, and never calls its procedure when one fails.
 ;;;
 ;;; One call, many runs. Chez's engine remainders are multi-shot, and a
 ;;; timer's handler can capture a continuation between any two critical
 ;;; sections, so one call can have several runs pending at once, each going
-;;; on from where its remainder was taken: R, taken before the open and
-;;; resumed until it expires again after it, is R1; R resumed again then
-;;; opened a second connection, and R1 the first, which nothing returned or
-;;; closed; or, R taken after the open, the second run applied the settings
-;;; again and left the first's statement at a row on the connection it
-;;; returned (the slice's review). A flag set once the connection leaves the
-;;; call cannot tell two pending runs apart; a position each run carries in
-;;; its own continuation can.
+;;; on from where its remainder was taken. Unguarded: R, taken before the
+;;; open and resumed until it expires again after it, is R1; R resumed again
+;;; opens a second connection, and R1 the first, which nothing returns or
+;;; closes; or, R taken after the open, the second run applies the settings
+;;; again and leaves the first's statement at a row on the connection it
+;;; returns. A flag set once the connection leaves the call cannot tell two
+;;; pending runs apart; a position each run carries in its own continuation
+;;; can.
 ;;;
 ;;; So each call holds a claim, the position of the next section any run of
 ;;; it may make, made by the call's first expression; each run carries its
@@ -91,35 +87,34 @@
 ;;; it was. Every section of the call compares the two, inside the section,
 ;;; and claims it by advancing the call's: the open's, at 0; then each of the
 ;;; settings', in order: a statement's prepare, each step, the read, the
-;;; finalize; a db_config set's one call; and a failure's close. A run whose position the call has passed
-;;; is refused there: the section touches nothing, and the run raises
-;;; &sqlite-closed after it, from the verb, and makes no section after (the
-;;; maintainer's "Guard every call", ADR-0016, amended in M3 slice 3). So each
-;;; section runs once a call, by whichever run reaches it first: one open, each
-;;; setting applied once, each statement finalized once, and a refused run
-;;; opens, prepares and closes nothing. A section's
-;;; outcome is data; a run's next position is the one after its last
-;;; section claimed, so a failure's close is claimed by the run whose section
-;;; failed.
+;;; finalize; a db_config set's one call; and a failure's close. A run whose
+;;; position the call has passed is refused there: the section touches
+;;; nothing, and the run raises &sqlite-closed after it, from the verb, and
+;;; makes no section after (ADR-0016). So each section runs once a call, by
+;;; whichever run reaches it first: one open, each setting applied once, each
+;;; statement finalized once, and a refused run opens, prepares and closes
+;;; nothing. A section's outcome is data; a run's next position is the one
+;;; after its last section claimed, so a failure's close is claimed by the
+;;; run whose section failed.
 ;;;
 ;;; The checks' section keeps the plan's SQL from being computed twice from
 ;;; inside: Chez's own number->string keeps state outside the continuation,
-;;; and a remainder taken inside it, resumed a second time, answered "" or the
-;;; digits twice, "12341234" (.plans/research/m3-slice-5/, number-twice.sps).
-;;; A run that overtakes the first reaches the open first, so a claim cannot
-;;; refuse what it computed: the section is what keeps any remainder out of
-;;; the checks. A remainder taken before the call's first expression is the
-;;; caller's own: resumed, it makes a whole new call, with a claim of its own.
+;;; and a remainder taken inside it, resumed a second time, answers "" or the
+;;; digits twice, "12341234". A run that overtakes the first reaches the
+;;; open first, so a claim cannot refuse what it computed: the section is
+;;; what keeps any remainder out of the checks. A remainder taken before the
+;;; call's first expression is the caller's own: resumed, it makes a whole
+;;; new call, with a claim of its own.
 ;;;
 ;;; open-database holds no dynamic-wind around the settings, so an engine's
 ;;; expiry between two of their sections suspends the open, and the resume
-;;; goes on (ADR-0018, consequences). call-with-database's connection does not
-;;; survive an expiry, as before (ADR-0012, amended): the extent owns it, and
-;;; any run that leaves the extent, refused or not, closes it.
+;;; goes on (ADR-0018). call-with-database's connection does not survive an
+;;; expiry (ADR-0012): the extent owns it, and any run that leaves the
+;;; extent, refused or not, closes it.
 ;;;
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
-;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9).
+;;; shown-value, never a string's text (ADR-0013).
 (library (chez-sqlite3 private open)
   (export open-database call-with-database applied-settings! applied-settings/with made-claim)
   (import (chez-sqlite3 private require-threaded)
@@ -245,13 +240,12 @@
 
   ;; ran : Symbol Database String Claim Natural Boolean -> Run
   ;; SQL, one statement of the library's own, prepared on DB for WHO by the
-  ;; statement tier, with no flags, never through the cache (ADR-0020,
-  ;; decision 3), in the section at N; then stepped to done, when READ? is
-  ;; #f, or once and read, when READ? is #t; then finalized, in a section of
-  ;; its own. Each its own section, in order. A raise or a refusal ends the
-  ;; run's work there, the statement left tracked, for the close to
-  ;; finalize: a refused run's twin, which claimed what it was refused, holds
-  ;; it.
+  ;; statement tier, with no flags, never through the cache (ADR-0020), in the
+  ;; section at N; then stepped to done, when READ? is #f, or once and read,
+  ;; when READ? is #t; then finalized, in a section of its own. Each its own
+  ;; section, in order. A raise or a refusal ends the run's work there, the
+  ;; statement left tracked, for the close to finalize: a refused run's twin,
+  ;; which claimed what it was refused, holds it.
   (define (ran who db sql claim n read?)
     (let ((made (in-section claim n (lambda () (prepared who db sql #f)))))
       (if (not (eq? (car made) 'answered))
@@ -275,24 +269,22 @@
   ;; names-error? : Any -> Boolean
   ;; Whether CODE, a db_config set's answer, names an error: an exact
   ;; integer whose low byte is none of 0, 100 and 101, which
-  ;; raise-sqlite-error refuses as no error (ADR-0021, amended in M4 slice
-  ;; 1). Raises nothing.
+  ;; raise-sqlite-error refuses as no error (ADR-0021). Raises nothing.
   (define (names-error? code)
     (and (integer? code) (exact? code)
          (not (memv (bitwise-and code 255) '(0 100 101)))))
 
   ;; configured : Symbol Database Db-Config-Step Claim Natural DbConfig -> Run
   ;; Db-Config-Step = (List Symbol Integer (U 0 1) Boolean), settings-plan's
-  ;; STEP's set made on DB for WHO by one DB-CONFIG call, in the section at
-  ;; N (ADR-0021, decision 3): through call-with-open-handle, the one way to
-  ;; the handle; its cell native's call-with-int-cell, a counted int block
-  ;; filled with db-config-sentinel, the core's, so the fill and the
-  ;; verdict's reading are one value, read and freed in this section; the
-  ;; call given STEP's op and value; then db-config-verdict of its answer and
-  ;; cell. For a code that names an error, its message, sqlite3_errstr's,
-  ;; copied in the section too. Answers done, match; a mismatch; failed, the
-  ;; code and the message; not-an-error, the code; what a call raised; or
-  ;; refused.
+  ;; STEP's set made on DB for WHO by one DB-CONFIG call, in the section at N
+  ;; (ADR-0021): through call-with-open-handle, the one way to the handle; its
+  ;; cell native's call-with-int-cell, a counted int block filled with
+  ;; db-config-sentinel, the core's, so the fill and the verdict's reading are
+  ;; one value, read and freed in this section; the call given STEP's op and
+  ;; value; then db-config-verdict of its answer and cell. For a code that
+  ;; names an error, its message, sqlite3_errstr's, copied in the section too.
+  ;; Answers done, match; a mismatch; failed, the code and the message;
+  ;; not-an-error, the code; what a call raised; or refused.
   (define (configured who db step claim n db-config)
     (let ((s (in-section claim n
                (lambda ()
@@ -321,8 +313,8 @@
   ;; by db-config-step?, by configured; else a PRAGMA's, its setting set on
   ;; DB by its set statement, then read back by its read statement, each by
   ;; ran, the set's finalized before the read is prepared; then compared by
-  ;; read-back-comparison, the set's own row never the check (ADR-0018,
-  ;; decision 4): done, answering match, or a mismatch.
+  ;; read-back-comparison, the set's own row never the check (ADR-0018):
+  ;; done, answering match, or a mismatch.
   (define (step-applied who db step claim n db-config)
     (if (db-config-step? step)
         (configured who db step claim n db-config)
@@ -401,9 +393,9 @@
   ;; open-database : String (U Symbol Settings) ... -> Database
   ;; Settings = (Listof (Pairof Symbol Any))
   ;; FILENAME opened with the options among ARGUMENTS (open-options' table;
-  ;; ADR-0012, decision 3), owned by the calling thread, its statement cache
-  ;; of the settings list's statement-cache, 32 when it gives none; then the
-  ;; list's settings applied, busy-timeout first, each read back (ADR-0018).
+  ;; ADR-0012), owned by the calling thread, its statement cache of the
+  ;; settings list's statement-cache, 32 when it gives none; then the list's
+  ;; settings applied, busy-timeout first, each read back (ADR-0018).
   ;; The call's claim is its first expression; the open is its section 0,
   ;; the settings' from 1 (the library's header).
   (define (open-database filename . arguments)
@@ -426,9 +418,9 @@
 
   ;; call-with-database : String (U Symbol Settings) ... (Database -> A ...) -> A ...
   ;; PROC's answers, PROC given FILENAME opened with the options before it,
-  ;; and the settings list among them applied (ADR-0012, decision 8;
-  ;; ADR-0018). Every check comes before anything opens: that PROC, the last
-  ;; argument, is a procedure, then open-database's. Then:
+  ;; and the settings list among them applied (ADR-0012; ADR-0018). Every
+  ;; check comes before anything opens: that PROC, the last argument, is a
+  ;; procedure, then open-database's. Then:
   ;;   - a setting fails, or mismatches: the connection is closed, then the
   ;;     setting's condition raised, and PROC is never called;
   ;;   - PROC returns, or leaves through a continuation: the connection is

@@ -1,19 +1,17 @@
 #!r6rs
-;;; The suite for the settings list at open (ADR-0018; the M3 plan, section
-;;; 4.3, and section 5, item 5), in (chez-sqlite3 private open):
-;;; open-database's and call-with-database's settings, checked before
-;;; anything is allocated, then applied on the open connection.
+;;; The suite for the settings list at open (ADR-0018), in (chez-sqlite3
+;;; private open): open-database's and call-with-database's settings, checked
+;;; before anything is allocated, then applied on the open connection.
 ;;;
-;;;   refusals     every rule of ADR-0018's decision 2, through both verbs,
-;;;                each before anything is allocated: the counts at the raise
+;;;   refusals     every refusal rule of ADR-0018, through both verbs, each
+;;;                before anything is allocated: the counts at the raise
 ;;;                and after are zero, and no file is made. '() is accepted,
 ;;;                and a list of options, '(read-only), refused as
 ;;;                not-an-association-list
 ;;;   db_config    each of the four db_config settings, #t and #f, accepted
-;;;                and opened, on :memory: and on a file: M4 slice 3 joined
-;;;                them to the live list and replaced slice 1's two rows that
-;;;                held them out; their sets are test-open-db-config's
-;;;   the order    the split first, a second list; then M2's checks, the
+;;;                and opened, on :memory: and on a file; their sets are
+;;;                test-open-db-config's
+;;;   the order    the split first, a second list; then the existing checks, the
 ;;;                filename, the options, file: without uri; then the list's
 ;;;   together     options and a list, the list at each position among two
 ;;;                options, through both verbs: each option and each setting
@@ -23,10 +21,10 @@
 ;;;                second connection's view, which the file keeps; foreign-keys
 ;;;                by what it refuses; all six at once
 ;;;   mismatches   journal-mode on :memory: at each of its values reads
-;;;                memory, and wal on a temporary database delete (Q9; single
-;;;                P11; concurrency S4), through both verbs; each of the six
-;;;                read back as other than asked, through applied-settings!
-;;;                with steps no list makes; the three fields whole
+;;;                memory, and wal on a temporary database delete, through
+;;;                both verbs; each of the six read back as other than asked,
+;;;                through applied-settings! with steps no list makes; the
+;;;                three fields whole
 ;;;   a failure    closes: a mismatch, a set that fails, a read that fails,
 ;;;   closes       each leaves no connection counted and no file descriptor
 ;;;                open; call-with-database's procedure is never called; a
@@ -42,7 +40,7 @@
 ;;;                only busy-timeout's running first explains; without
 ;;;                busy-timeout it answers busy at once
 ;;;   unasked      a connection opened without busy-timeout keeps SQLite's 0,
-;;;                and a list's other settings are a plain open's (decision 8)
+;;;                and a list's other settings are a plain open's
 ;;;   depth        a with-exception-handler handler of each raise site runs at
 ;;;                interrupt depth 1, its who the verb called
 ;;;
@@ -52,7 +50,7 @@
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -311,7 +309,7 @@
 
 ;; refusal-cases : (Listof (Pairof (Listof Any) (Listof Any)))
 ;; Each case's arguments after the filename, and the irritants its refusal
-;; names: every rule of ADR-0018's decision 2, each setting's domain.
+;; names: every refusal rule of ADR-0018, each setting's domain.
 (define refusal-cases
   (list
    (cons '(() ()) '(second-settings-list))
@@ -380,17 +378,16 @@
          (d (attempt (lambda () (call-with-database ":memory:" '(read-only) database-cache-capacity)))))
     (list a b c d (native-counts))))
 
-;; The four db_config settings (ADR-0021, decision 1) joined the live list in
-;; M4 slice 3, which replaced slice 1's two rows here that held them out,
-;; refused as unknown-setting: each is accepted now, and opens. Their sets,
-;; each read back, are tests/test-open-db-config.sps's.
+;; The four db_config settings (ADR-0021) are in the live list: each is
+;; accepted, and opens. Their sets, each read back, are
+;; tests/test-open-db-config.sps's.
 (define db-config-cases
   '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t) (defensive . #f)
     (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))
 
 ;; extension-loading : Any
 ;; native's record of sqlite3_load_extension: where it is not #t, the
-;; opt-in's #t is refused before anything opens (ADR-0021, decision 5).
+;; opt-in's #t is refused before anything opens (ADR-0021).
 (define extension-loading
   (guard (e (#t (list 'unreached (describe e))))
     (eval 'load-extension-available? (environment '(chez-sqlite3 private native)))))
@@ -643,7 +640,7 @@
 ;; A step no list makes, whose set writes other than the value it expects,
 ;; for each of the six; and the mismatch's setting, expected and actual. Each
 ;; actual is what SQLite reads back: synchronous = 4 is stored as 4, no
-;; level of SQLite's (single P4).
+;; level of SQLite's.
 (define crafted-mismatches
   '(((busy-timeout "PRAGMA busy_timeout = 5" "PRAGMA busy_timeout" 6) busy-timeout 6 5)
     ((foreign-keys "PRAGMA foreign_keys = 1" "PRAGMA foreign_keys" #f) foreign-keys #f #t)
@@ -783,8 +780,7 @@
 ;; connections and statements counted after it, while a second connection to
 ;; PATH holds LOCK: exclusive, BEGIN EXCLUSIVE and a write; reserved, BEGIN
 ;; IMMEDIATE and a write. That connection's three statements stay in its
-;; cache; the one THUNK opens is fresh, and holds no read of its own
-;; (AGENTS.md).
+;; cache; the one THUNK opens is fresh, and holds no read of its own.
 (define (under-lock path lock thunk)
   (let ((holder (open-database path)))
     (dynamic-wind
@@ -808,8 +804,7 @@
 ;; answer busy, under another connection's reserved lock on a fresh file,
 ;; both on this thread: about 250 where the build sleeps in milliseconds, 0
 ;; where it sleeps whole seconds, whose first sleep would pass the timeout
-;; (concurrency B3; test-contention's P4 row). Else what it answered, or
-;; raised.
+;; (test-contention's probe P4 row). Else what it answered, or raised.
 (define (grain-ms)
   (in-dir
    (lambda (dir)
@@ -836,8 +831,8 @@
 
 ;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
 ;; The build's busy-wait grain, read once, before the timed row:
-;; milliseconds from 125 ms, half the timeout, as test-contention's P4 row
-;; tells them apart.
+;; milliseconds from 125 ms, half the timeout, as test-contention's probe
+;; P4 row tells them apart.
 (define grain
   (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
     (cond ((not (integer? ms)) (list 'unread ms))

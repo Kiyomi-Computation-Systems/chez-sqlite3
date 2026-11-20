@@ -4,7 +4,7 @@
 ;;;
 ;;; `make check-memory-gate` runs it through `make test-memory` and requires
 ;;; the gate to FAIL on it, with Valgrind's own loss record in the log
-;;; (ADR-0005, amended for M2; ADR-0014, consequences).
+;;; (ADR-0005; ADR-0014, consequences).
 ;;;
 ;;; It opens :memory: through open-database, prepares select 1 through
 ;;; prepare-statement, and drops both records, the statement never finalized

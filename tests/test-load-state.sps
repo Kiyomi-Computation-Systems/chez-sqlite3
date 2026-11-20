@@ -10,7 +10,7 @@
 ;;; failing, and none is #f: SRFI-64 makes #f of a raise in the actual
 ;;; expression. A library body that raises is reached only through eval,
 ;;; since a guard in a program cannot catch a raise from an imported
-;;; library's body (AGENTS.md).
+;;; library's body.
 (import (rnrs)
         (srfi :64)
         (only (chezscheme) eval environment interaction-environment)

@@ -1,6 +1,5 @@
 #!/bin/sh
-# tests/check-variadic.sh, run by `make check-variadic` (ADR-0001, amended
-# 2026-11-17; ADR-0021, decision 4; the M4 plan, section 4.2).
+# tests/check-variadic.sh, run by `make check-variadic` (ADR-0001; ADR-0021).
 #
 #   sh tests/check-variadic.sh
 #
@@ -47,9 +46,9 @@
 #
 # make test does not run it: inside make test it would also run inside each
 # of check-test-fails' cases, under their 5 s suite timeout. CI's main job
-# runs it as a step of its own; the Mac's hand run runs it by hand, the one
-# place the arm64 step bites. make check-variadic hands it CHEZ, TIMEOUT and
-# TEST_TIMEOUT; run directly, it uses scheme, timeout and 300 s.
+# runs it as a step of its own, and on macOS's arm64, the one place the arm64
+# step bites, it is run by hand. make check-variadic hands it CHEZ, TIMEOUT
+# and TEST_TIMEOUT; run directly, it uses scheme, timeout and 300 s.
 # tests/test-check-variadic.sps exercises every branch with stand-ins for
 # CHEZ, TIMEOUT and sed, and holds the list of ten to test-conventions' own
 # tests. Portable sh for macOS's tools as well as GNU's: awk does the line

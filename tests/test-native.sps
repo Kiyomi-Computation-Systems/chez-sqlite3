@@ -5,11 +5,11 @@
 ;;; Valgrind.
 ;;;
 ;;; Native's body is the load, and a guard in a program cannot catch a raise
-;;; from an imported library's body (AGENTS.md). So this suite reaches native
-;;; through eval, under a guard: a refused library names the row "native
-;;; loads", and every row that needs native fails by name, where an import
-;;; would kill the suite, unnamed, before its first line. Refusals themselves
-;;; are M1 slice 3's, each in a process of its own.
+;;; from an imported library's body. So this suite reaches native through
+;;; eval, under a guard: a refused library names the row "native loads", and
+;;; every row that needs native fails by name, where an import would kill the
+;;; suite, unnamed, before its first line. Refusals themselves are the
+;;; library-loading suites', each in a process of its own.
 ;;;
 ;;;   the report     the path and source equal what this suite chose itself:
 ;;;                  CHEZ_SQLITE3_LIBRARY when it is set, else discovery on
@@ -20,7 +20,7 @@
 ;;;   the bindings   each one answers: an open and close of :memory:, and an
 ;;;                  open that fails and is closed, every return code
 ;;;                  asserted, the counts back at zero
-;;;   M2's bindings  each of the 21 answers, on :memory:: a prepare and its
+;;;   the 21        each of the 21 answers, on :memory:: a prepare and its
 ;;;                  tail, prepares that fail and their offsets (measured on
 ;;;                  3.53.1 and the floor, 3.45.1, alike), step, reset and
 ;;;                  finalize, the parameters; each bind held by SQLite, read
@@ -29,18 +29,18 @@
 ;;;                  sqlite-transient; and every column read, held whole to
 ;;;                  what the C oracle reads of the same SQL. sqlite-transient
 ;;;                  is the header's SQLITE_TRANSIENT, through the oracle
-;;;   M3's five      sqlite3_changes64, sqlite3_total_changes64,
+;;;   the five      sqlite3_changes64, sqlite3_total_changes64,
 ;;;                  sqlite3_last_insert_rowid, sqlite3_get_autocommit and
-;;;                  sqlite3_interrupt (M3 slice 2). The counters: a fixed
-;;;                  script on :memory:, the four read after each statement,
-;;;                  held whole to what the C oracle reads of the same script
-;;;                  and to a written-out literal, and to the 64-bit rowids at
-;;;                  2^63-1, -2^63 and past 2^32. The autocommit flag: each
-;;;                  state its own row. The interrupt, on one thread: a held
-;;;                  row's next step answers SQLITE_INTERRUPT, and with no
-;;;                  statement running it is a no-op. Every argument is a
-;;;                  handle, a uptr, so Chez's int range never bites here
-;;;   M4's three     sqlite3_db_config, variadic: each of the four ops
+;;;                  sqlite3_interrupt. The counters: a fixed script on
+;;;                  :memory:, the four read after each statement, held whole
+;;;                  to what the C oracle reads of the same script and to a
+;;;                  written-out literal, and to the 64-bit rowids at 2^63-1,
+;;;                  -2^63 and past 2^32. The autocommit flag: each state its
+;;;                  own row. The interrupt, on one thread: a held row's next
+;;;                  step answers SQLITE_INTERRUPT, and with no statement
+;;;                  running it is a no-op. Every argument is a handle, a
+;;;                  uptr, so Chez's int range never bites here
+;;;   the three     sqlite3_db_config, variadic: each of the four ops
 ;;;                  round-trips through the binding on a :memory: connection
 ;;;                  of its own, read, set to the other value, read, set back
 ;;;                  and read, a fresh sentinel in its cell before each call;
@@ -68,7 +68,7 @@
 ;;;                  re-entry refused. c-string->string reads them back
 ;;;   out-pointers   call-with-out-pointer: a zeroed, counted slot, read after
 ;;;                  PROC and freed on every path
-;;;   int cells      call-with-int-cell (M4): a counted int block written with
+;;;   int cells      call-with-int-cell: a counted int block written with
 ;;;                  the caller's fill, read after PROC, the fill read back when
 ;;;                  PROC writes nothing, freed on every path, a fill no C int
 ;;;                  holds refused before anything is allocated
@@ -77,7 +77,7 @@
 ;;;                  never NULL for none, freed on return, raise and escape,
 ;;;                  re-entry refused; foreign-bytes and c-string->bytevector
 ;;;                  read bytes back undecoded into fresh bytevectors, and
-;;;                  c-string->string reads through the second (M2 slice 4)
+;;;                  c-string->string reads through the second
 ;;;   after the section
 ;;;                  each helper's refusals are raised outside the critical
 ;;;                  dynamic-wind thunks that make and free its block: a
@@ -90,12 +90,12 @@
 ;;;                  of a top-level load-step definition; and sqlite-transient
 ;;;                  computed from the pointer's size, never a literal. With one good library
 ;;;                  in one process neither can be seen by behaviour: the load
-;;;                  runs once, and every check passes. M1 slice 3's decoy sees
+;;;                  runs once, and every check passes. A decoy library sees
 ;;;                  them
 ;;;   collect-safe   sqlite3_open_v2 blocked on a FIFO while another thread
 ;;;                  collects: the collection finishes only if the call is
 ;;;                  __collect_safe; and sqlite3_load_extension, the same
-;;;                  way, on a connection with the C call on (M4). The types
+;;;                  way, on a connection with the C call on. The types
 ;;;                  and conventions of every binding are the convention
 ;;;                  suite's
 ;;;
@@ -103,7 +103,7 @@
 ;;; own: SRFI-64 makes #f of a raise in an actual expression, and catches
 ;;; none in an expected expression or a top-level definition. No expected
 ;;; value here is #f. Effects run in order, through let* and named lets,
-;;; never map (AGENTS.md).
+;;; never map.
 ;;;
 ;;; The oracle is a child process: C reading SQLite, not chez-sqlite3's native
 ;;; layer, and it keeps no counts. Under make test-memory it runs under the
@@ -302,7 +302,7 @@
   (list-sort (lambda (a b) (string<? (symbol->string a) (symbol->string b))) names))
 
 ;; A refusal is compared by its kind, who and irritants, never its message
-;; text (ADR-0013, decision 9).
+;; text (ADR-0013).
 
 ;; --- what this suite chose, and what the oracle read there -------------------------------------
 
@@ -523,11 +523,11 @@
                          (list message errstr-cantopen))
                      closed (native-counts)))))))))
 
-;; --- M2's bindings answer ----------------------------------------------------------------------
+;; --- the 21 bindings answer --------------------------------------------------------------------
 ;; Each row opens :memory: through the raw open, runs its calls in order
 ;; through let*, asserts every code, closes, and requires every count zero
 ;; after. The expected values were measured first, on Guix's 3.53.1 and on
-;; the floor, 3.45.1, which answered the same (build/m2s2's probe).
+;; the floor, 3.45.1, which answered the same.
 
 ;; with-memory : (Natural -> Any) -> (List Any Integer (Listof Pair))
 ;; PROC's answer, given the handle of a fresh :memory: database; then
@@ -613,7 +613,7 @@
 ;; with-bytes : Bytevector (Natural Natural -> Any) -> Any
 ;; PROC's answer, given a counted block holding BYTES and their count. The
 ;; block holds at least one byte, so an empty value's address is never NULL
-;; (ADR-0011, amended); it is freed after.
+;; (ADR-0011); it is freed after.
 (define (with-bytes bytes proc)
   (let ((n (bytevector-length bytes)))
     (with-block (max n 1)
@@ -640,9 +640,8 @@
          (list (car prepared) (if (eqv? (cadr prepared) 0) 'no-statement 'statement)
                (caddr prepared) offset finalized))))))
 
-;; Measured on 3.53.1 and 3.45.1 alike: the offset counts bytes, and is -1
-;; for an error at the end of the SQL (the M2 plan, section 4.6), 0 for one
-;; at its first byte.
+;; Measured on 3.53.1 and 3.45.1 alike: the offset counts bytes, and is -1 for
+;; an error at the end of the SQL, 0 for one at its first byte.
 (test-equal "a prepare that fails answers SQLITE_ERROR and no statement, and sqlite3_error_offset the error's byte: 10 for nosuchcol after \"select 1, \", 13 after \"select '\xE9;', \", whose \xE9; is two bytes, 0 for selectx, and -1 for an error at the end of the SQL, \"select 1 +\"; every count is zero after"
   (list (list (list error-code 'no-statement 10)
               (list error-code 'no-statement 13)
@@ -788,9 +787,9 @@
                       (sqlite3-bind-text64 statement 1 address n transient sqlite-utf8))))
                 (lambda (statement) (column-text-bytes statement 0)))))
 
-;; An empty BLOB reads back as a NULL pointer with 0 bytes (measured, the M2
-;; plan, section 4.4), read here as #f; bound from a NULL pointer it would
-;; be NULL, which typeof names null.
+;; An empty BLOB reads back as a NULL pointer with 0 bytes (measured), read
+;; here as #f; bound from a NULL pointer it would be NULL, which typeof names
+;; null.
 (test-equal "sqlite3_bind_blob64 binds 00 FF 7F 80 00 as a BLOB, read back the same by sqlite3_column_blob and sqlite3_column_bytes; and an empty value, from a block of one byte, never NULL, as an empty BLOB, which reads back as no pointer and 0 bytes; every count is zero after each"
   (list (trip sqlite-blob (u8-list->bytevector '(0 255 127 128 0)) "blob")
         (trip sqlite-blob '(#f 0) "blob"))
@@ -1096,7 +1095,7 @@
       (cons (length (cdar columns-oracle)) (map length (cdar columns-oracle)))
       columns-oracle))
 
-;; --- M3's five: the counters, the autocommit flag and the interrupt -------------------------------
+;; --- the change counters, autocommit and interrupt -----------------------------------------------
 ;; Every argument is a handle, a uptr, so Chez's int range (-2^31 to 2^32-1)
 ;; never bites here: no row feeds one a value past it. A result is another
 ;; matter, and the rows below read sqlite3_int64s past 32 bits.
@@ -1128,7 +1127,7 @@
         (list (car prepared) stepped finalized))))))
 
 ;; read-counters : Natural -> (List Integer Integer Integer Integer)
-;; (CHANGES TOTAL ROWID AUTOCOMMIT): the four of M3's five that read, called in
+;; (CHANGES TOTAL ROWID AUTOCOMMIT): the four of the five that read, called in
 ;; this order, each once.
 (define (read-counters db)
   (let* ((changes (sqlite3-changes64 db))
@@ -1337,8 +1336,7 @@
          (list began inside rolled outside))))))
 
 ;; sqlite3_interrupt, on one thread: deterministic. A statement held at a
-;; row is running, so the interrupt reaches it; with none running it is lost
-;; (the M3 plan, section 4.4; research: concurrency I2, I3).
+;; row is running, so the interrupt reaches it; with none running it is lost.
 (define interrupted (code-of 'interrupt))
 
 (test-equal "sqlite3_interrupt answers the unspecified value, as a void result does, never a number"
@@ -1401,14 +1399,15 @@
          (list (car first) first-row first-done (car second) second-row value second-done
                first-finalized second-finalized))))))
 
-;; --- M4's three: sqlite3_db_config, sqlite3_free and sqlite3_load_extension -------------------------
+;; --- the settings and extension calls ------------------------------------------------------------
+;; The three: sqlite3_db_config, sqlite3_free and sqlite3_load_extension.
 ;; sqlite3_db_config is variadic, int sqlite3_db_config(sqlite3*, int op, ...),
 ;; bound once in the shape (db op int int*) with (__varargs_after 2): the op's
 ;; value, then a counted int block, its cell, which gets the op's state after
-;; every call, a set's as a read's (ADR-0021, decision 4; research D6). A
-;; value of -1 reads and changes nothing. On x86-64 a binding without the
-;; convention answers alike, so these rows hold the binding's behaviour, and
-;; test-conventions, with make check-variadic, its convention.
+;; every call, a set's as a read's (ADR-0021). A value of -1 reads and
+;; changes nothing. On x86-64 a binding without the convention answers
+;; alike, so these rows hold the binding's behaviour, and test-conventions,
+;; with make check-variadic, its convention.
 
 ;; op-of : Symbol -> (U Natural (List 'no-op Symbol))
 ;; A db_config op's value, from (chez-sqlite3 private constants), which
@@ -1477,7 +1476,7 @@
 
 ;; extension-loading? : Boolean
 ;; Whether native's load found sqlite3_load_extension: its own record, which
-;; the suites choose their load rows by (ADR-0005, amended 2026-11-17).
+;; the suites choose their load rows by (ADR-0005).
 (define extension-loading? (eq? load-extension-available? #t))
 
 ;; load-row : String Any (-> Any) -> Void
@@ -1500,14 +1499,13 @@
 ;; ENABLE_LOAD_EXTENSION's round trip is chosen by the op's own first
 ;; answer, never by native's record of sqlite3_load_extension. Apple's
 ;; library answers 21, SQLITE_MISUSE, to every call of the op and leaves the
-;; cell (the M4 pre-work's Mac step); upstream's build without extension
-;; loading, -DSQLITE_OMIT_LOAD_EXTENSION, has no sqlite3_load_extension
-;; either, but answers 0 and round-trips a setting that does nothing. So
-;; where the first read answers 21, the round trip is printed unavailable,
-;; and the op's read, set to 1 and read are asserted in its place, each
-;; answering 21 with its cell at its own sentinel, as the Mac measured
-;; them; any other first answer runs the round trip, held as the other
-;; three ops are.
+;; cell; upstream's build without extension loading,
+;; -DSQLITE_OMIT_LOAD_EXTENSION, has no sqlite3_load_extension either, but
+;; answers 0 and round-trips a setting that does nothing. So where the first
+;; read answers 21, the round trip is printed unavailable, and the op's read,
+;; set to 1 and read are asserted in its place, each answering 21 with its
+;; cell at its own sentinel, as measured on it; any other first answer runs
+;; the round trip, held as the other three ops are.
 
 ;; misuse : Integer
 (define misuse (code-of 'misuse))
@@ -1536,7 +1534,7 @@
         (config-round-trip enable-load-extension-op 7400))))
 
 ;; 1999 is above SQLITE_DBCONFIG_MAX in every header measured, 1019 at the
-;; floor and 1023 in 3.53.1's and 3.54.1's (the M4 pre-work).
+;; floor and 1023 in 3.53.1's and 3.54.1's.
 (test-equal "sqlite3_db_config of an op the library does not know, 1999, answers SQLITE_ERROR and leaves the cell at its sentinel, to set and to read; the close answers SQLITE_OK and every count is zero after"
   (list (list (list error-code 7501) (list error-code 7502)) ok zero-counts)
   (guard (e (#t (list 'raised (describe e))))
@@ -1553,7 +1551,7 @@
 
 ;; Native's record of the optional entry point is this process's own answer:
 ;; foreign-entry? asks the whole process, which holds the one libsqlite3
-;; native loaded (ADR-0002, amended), and the binding is a procedure exactly
+;; native loaded (ADR-0002), and the binding is a procedure exactly
 ;; when the record says it is there.
 (test-equal "load-extension-available?, native's record, is a boolean, this process's own foreign-entry? of sqlite3_load_extension, and sqlite3-load-extension is a procedure exactly when it is #t"
   (let ((there (foreign-entry? "sqlite3_load_extension")))
@@ -1578,19 +1576,19 @@
 
 ;; message-of : (List Integer Any) -> (List Integer Symbol)
 ;; A load's code, and message for a string, as a row names it: it never
-;; asserts SQLite's text (ADR-0013, decision 9).
+;; asserts SQLite's text (ADR-0013).
 (define (message-of answer)
   (list (car answer) (if (string? (cadr answer)) 'message (cadr answer))))
 
 ;; A file that is no shared object: dlopen refuses it, and so does the path
-;; with .so appended, which isn't there (research L2). SQLite's message is
-;; its own allocation, and an unfreed one shows in the memory check and
-;; under the gate's Valgrind (X1). With the C call off the load answers "not
-;; authorized" without opening anything, so the row loads twice, with the
-;; call set off, then on, through the binding: each a failure with a
-;; message, and the two messages differ, two readings of one library, no
-;; text written here. A set that did not take, which leaves the call as the
-;; library starts it, gives two alike.
+;; with .so appended, which isn't there. SQLite's message is its own
+;; allocation, and an unfreed one shows in the memory check and under the
+;; gate's Valgrind. With the C call off the load answers "not authorized"
+;; without opening anything, so the row loads twice, with the call set off,
+;; then on, through the binding: each a failure with a message, and the two
+;; messages differ, two readings of one library, no text written here. A set
+;; that did not take, which leaves the call as the library starts it, gives
+;; two alike.
 (load-row "sqlite3_load_extension of a file that is no shared object answers SQLITE_ERROR and a message, which sqlite3_free frees, with ENABLE_LOAD_EXTENSION set to 0 through the binding and then to 1, and the two messages differ; the close answers SQLITE_OK and every count is zero after"
   (list (list (list ok 0) (list error-code 'message) (list ok 1) (list error-code 'message) 'messages-differ)
         ok zero-counts)
@@ -1871,10 +1869,10 @@
          (b (raised (lambda () (call-with-out-pointer 42 (lambda (slot) slot))))))
     (list a b (native-counts))))
 
-;; --- call-with-int-cell (M4 slice 2) -------------------------------------------------------------
+;; --- call-with-int-cell --------------------------------------------------------------------------
 ;; sqlite3_db_config's cell: a counted int block, its fill a sentinel of the
-;; caller's, read after PROC (ADR-0021, decision 3). A fill of 0, which a set
-;; writes, would make a call that left the cell read as one that wrote 0.
+;; caller's, read after PROC (ADR-0021). A fill of 0, which a set writes,
+;; would make a call that left the cell read as one that wrote 0.
 
 ;; int-bound : Integer -> Integer
 ;; 2^(B-1) for a C int of B bits: the first value above an int's range.
@@ -1933,7 +1931,7 @@
       (list r runs (native-counts)))))
 
 ;; The range is a C int's, not Chez's foreign int's, which also takes 2^31
-;; to 2^32-1 and hands them to C as negatives (AGENTS.md).
+;; to 2^32-1 and hands them to C as negatives.
 (test-equal "call-with-int-cell refuses a fill no C int holds, from its WHO, by shown-value, with nothing allocated at the raise and without running PROC: 2^31, -2^31-1, 2^32-1, the top of what Chez's foreign int takes, 2^32 and 2^63 beyond it, 1.5, 1.0, a symbol and a string"
   (list (map (lambda (irritant)
                (list (list 'assertion-violation 'open-database (list irritant)) zero-counts))
@@ -1963,11 +1961,10 @@
          (b (raised (lambda () (call-with-int-cell 42 -1 (lambda (cell) cell))))))
     (list a b (native-counts))))
 
-;; --- call-with-bytes, foreign-bytes and c-string->bytevector (M2 slice 4) -------------------------
+;; --- call-with-bytes, foreign-bytes and c-string->bytevector -------------------------------------
 ;; A bound TEXT or BLOB, and a column's bytes and name read back, cross in
-;; counted blocks and are copied by native's own code (ADR-0011, decisions 2
-;; and 4; ADR-0015, decisions 5, 7 and 9). No other library may read or write
-;; foreign memory (check-seam).
+;; counted blocks and are copied by native's own code (ADR-0011; ADR-0015). No
+;; other library may read or write foreign memory (check-seam).
 
 ;; long-bytes : Bytevector
 ;; 5,000 bytes, each its index modulo 256, so a copy that drops, repeats or
@@ -2141,8 +2138,8 @@
 ;; A raise made inside a critical section, or a critical dynamic-wind thunk,
 ;; reaches a with-exception-handler handler with interrupts still disabled:
 ;; there an engine never expires, and another thread's collection waits for
-;; the handler (measured by M1's closing review). Each row's handler reads
-;; its depth, as depth-N, and what was raised.
+;; the handler (measured). Each row's handler reads its depth, as depth-N, and
+;; what was raised.
 
 ;; interrupt-depth : -> Positive-Integer
 ;; How many critical sections this thread is inside, plus one: what
@@ -2246,7 +2243,7 @@
 ;; Neither the order of the load's steps nor whether a binding is eager can be
 ;; seen with one good library in one process: every check passes, and the load
 ;; runs once. So native.sls is read as data, forms and never comments, as
-;; M1 slice 3's decoy will hold the same by behaviour.
+;; a decoy library will hold the same by behaviour.
 
 (define native-source "src/chez-sqlite3/private/native.sls")
 
@@ -2556,7 +2553,7 @@
 ;; returns, so only a process outside it can end the wait. The verdict is who
 ;; released the opener. SQLite then reads the file's header, which a FIFO
 ;; cannot give (pread answers ESPIPE): SQLITE_IOERR, and the handle is closed.
-;; Measured in M1 slice 2's copy table (P3): plain, the process deadlocked.
+;; Measured with a plain binding: the process deadlocked.
 
 ;; wait-until : (-> Any) Natural -> (U 'satisfied 'iterations-exhausted)
 ;; DONE? asked every 10 ms, at most STEPS times.
@@ -2604,7 +2601,7 @@
 ;; or SQLITE_CANTOPEN, and left as it is otherwise. The open's answer is not
 ;; what the row is about: Guix's 3.53.1 and Homebrew's 3.54.1 answer IOERR,
 ;; reading the header from a FIFO, and Apple's 3.51.0 answers CANTOPEN
-;; (measured on the maintainer's Mac). Any other answer fails the row.
+;; (measured). Any other answer fails the row.
 (define (fifo-refused result)
   (if (and (pair? result) (pair? (car result)) (pair? (caar result))
            (memv (car (caar result)) (list ioerr cantopen)))
@@ -2636,36 +2633,33 @@
                (when pid (capture-command (list "kill" pid)))
                (list answers released-by (native-counts))))))))))
 
-;; --- __collect_safe, by behaviour: sqlite3_load_extension blocked on a FIFO (ADR-0011, amended) -----
-;; The open's method above, for M4's load (research L6 and X1). The
-;; connection has the C call on: ENABLE_LOAD_EXTENSION set to 1 through
-;; native's sqlite3_db_config, or the load would answer "not authorized"
-;; without opening anything. dlopen opens the FIFO read-only and waits for a
-;; writer. The collector, once the loader has called, waits a second, asks
-;; for a collection, notes that it finished, then releases the loader
-;; through release-until: the FIFO opened for writing, and again each second
-;; until the loader answers. Linux's dlopen opens the FIFO once; macOS's
-;; dyld opens it twice, each open waiting for a writer (the M4 session's Mac
-;; run 2, PR #38), so a single release left the Mac's load to the watchdog.
-;; .plans/research/m4-slice-2/fifo-double-open.sps shows a single release
-;; leaving an opener that opens twice waiting, on Linux too, and
-;; release-until freeing it. A plain binding holds the collection, and the
-;; collector with it, until the load returns, so only the watchdog shell can
-;; release it: after 30 s, its marker left first, it opens the FIFO for
-;; writing ten times, a second apart. The verdict is who released the
-;; loader. The loader notes, as its call returns, whether the collection had
-;; finished: a load that never waited, as one that did not open the FIFO
+;; --- __collect_safe, by behaviour: sqlite3_load_extension blocked on a FIFO (ADR-0011) -----------
+;; The open's method above, for the load. The connection has the C call on:
+;; ENABLE_LOAD_EXTENSION set to 1 through native's sqlite3_db_config, or the
+;; load would answer "not authorized" without opening anything. dlopen opens
+;; the FIFO read-only and waits for a writer. The collector, once the loader
+;; has called, waits a second, asks for a collection, notes that it finished,
+;; then releases the loader through release-until: the FIFO opened for
+;; writing, and again each second until the loader answers. Linux's dlopen
+;; opens the FIFO once; macOS's dyld opens it twice, each open waiting for a
+;; writer (measured on macOS), so a single release would leave macOS's load to
+;; the watchdog. A single release leaves an opener that opens twice waiting,
+;; on Linux too, and release-until frees it. A plain binding holds the
+;; collection, and the collector with it, until the load returns, so only the
+;; watchdog shell can release it: after 30 s, its marker left first, it opens
+;; the FIFO for writing ten times, a second apart. The verdict is who released
+;; the loader. The loader notes, as its call returns, whether the collection
+;; had finished: a load that never waited, as one that did not open the FIFO
 ;; would, returns before it, and fails the row too.
 ;;
 ;; While dlopen waits, glibc's dynamic loader holds its lock, and a thread
 ;; made then waits for it: pthread_create, which fork-thread calls, returned
-;; only when a blocked load did, 3.5 s after it was called (measured in M4
-;; slice 2, glibc 2.41). So the collector is forked first, and the loader,
-;; the last thread the row makes, after it. capture-command's shell, started
-;; by the collector, does not wait for the lock. Released, dlopen reads no
-;; header from the FIFO, and SQLite tries the path with .so appended, which
-;; isn't there: the load answers SQLITE_ERROR and a message, freed with
-;; sqlite3_free.
+;; only when a blocked load did, 3.5 s after it was called (measured, glibc
+;; 2.41). So the collector is forked first, and the loader, the last thread
+;; the row makes, after it. capture-command's shell, started by the collector,
+;; does not wait for the lock. Released, dlopen reads no header from the FIFO,
+;; and SQLite tries the path with .so appended, which isn't there: the load
+;; answers SQLITE_ERROR and a message, freed with sqlite3_free.
 
 ;; release-rounds : Natural
 ;; How many releases release-until makes at most, a second apart.

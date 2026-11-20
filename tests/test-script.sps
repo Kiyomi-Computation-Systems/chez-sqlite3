@@ -1,8 +1,8 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private script): where execute-script!'s
-;;; error points, in characters of the whole script (ADR-0016, decision 7;
-;;; ADR-0013, amended for M3; the M3 plan, section 4.1). It loads no
-;;; libsqlite3: the loop that calls these is M3 slice 3's.
+;;; error points, in characters of the whole script (ADR-0016; ADR-0013).
+;;; It loads no libsqlite3: the loop that calls these is execute-script!'s,
+;;; in (chez-sqlite3 private conveniences).
 ;;;
 ;;;   script-prepare-offset  a prepare that started at byte START of the
 ;;;                          script's UTF-8 and failed with SQLite's byte
@@ -18,11 +18,11 @@
 ;;; START's first token, over one script that mixes ASCII with characters of
 ;;; two, three and four bytes, a U+FEFF, comments of both kinds and runs of
 ;;; semicolons, so a byte offset and a character offset differ almost
-;;; everywhere. Then slice 0's measured cases: P11's leading semicolons and
-;;; comments, which belong to the next statement, and P11's tail at byte 30;
-;;; single script X5's offset of 1 from byte 26, and X6's and X8's -1.
+;;; everywhere. Then the measured cases: leading semicolons and comments,
+;;; which belong to the next statement, and a tail at byte 30; x5's offset
+;;; of 1 from byte 26, and x6's and x8's -1.
 ;;;
-;;; Both procedures are total and raise nothing, for slice 3 calls them where
+;;; Both procedures are total and raise nothing, for the loop calls them where
 ;;; nothing may raise. Each call is made under a guard that answers a symbol
 ;;; of its own, and an answer of #f is read as none: SRFI-64 turns a raise in
 ;;; the actual expression into #f, so no expected value is #f.
@@ -75,8 +75,8 @@
     (none-if-false (script-step-offset bytes start))))
 
 ;; The script, built from its characters, never from a \x escape: an R6RS \x
-;; escape ends at its own semicolon (.plans/traps.md), and this script has
-;; semicolons beside its U+FEFF. By hand, character (byte):
+;; escape ends at its own semicolon, and this script has semicolons beside its
+;; U+FEFF. By hand, character (byte):
 ;;
 ;;   s0(0) e1(1) l2(2) e3(3) c4(4) t5(5) _6(6) '7(7) é8(8-9) '9(10) ;10(11)
 ;;   ;11(12) U+FEFF12(13-15) ;13(16) _14(17) -15(18) -16(19) _17(20)
@@ -178,9 +178,9 @@
         (prepare-at script-bytes 100000000000000000000 0)
         (prepare-at script 0 1) (prepare-at #f 0 1)))
 
-;; Slice 0's measurement, single script X5: the loop's prepare at byte 26
-;; answered offset 1 for SELEKT, at byte 27 of the script. X6 and X8, no such
-;; table and incomplete input, answered -1 there.
+;; Measured: the loop's prepare at byte 26 answered offset 1 for x5's
+;; SELEKT, at byte 27 of the script; for x6's no such table and x8's
+;; incomplete input, -1 there.
 (define x5 "INSERT INTO s VALUES (40); SELEKT 1; INSERT INTO s VALUES (41);")
 (define x6 "INSERT INTO s VALUES (50);\nINSERT INTO nosuch VALUES (1);\nINSERT INTO s VALUES (51);")
 (define x8 "INSERT INTO s VALUES (70); INSERT INTO s VALUES (")
@@ -219,11 +219,11 @@
     (list (bytevector-length b)
           (map (lambda (start) (step-at b start)) '(0 1 2 5 9 10 17 18 19 20 21)))))
 
-;; Slice 0's P11, by prepare_v3 and prepare_v2 on both libraries: a NULL
-;; statement came only for nothing but semicolons, whitespace and comments;
-;; leading semicolons and comments went into the next statement's text, its
-;; tail at the end. So the statement prepared from START begins with them,
-;; and its first token is past them.
+;; Measured by prepare_v3 and prepare_v2 on both libraries: a NULL statement
+;; came only for nothing but semicolons, whitespace and comments; leading
+;; semicolons and comments went into the next statement's text, its tail at
+;; the end. So the statement prepared from START begins with them, and its
+;; first token is past them.
 
 ;; with-feff : String -> String
 ;; U+FEFF, then TEXT.

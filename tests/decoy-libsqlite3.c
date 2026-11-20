@@ -21,9 +21,11 @@
  * from dlsym:
  *
  *   (none)                   the control: the 44 entry points
- *                            (chez-sqlite3 private native) binds, M1's 15,
- *                            M2's 21, M3's five and M4's three, the optional
- *                            sqlite3_load_extension among them
+ *                            (chez-sqlite3 private native) binds: the
+ *                            load's 15; the statement tier's 21; the change
+ *                            counters, autocommit and interrupt, five; and
+ *                            the settings and extension calls, three, the
+ *                            optional sqlite3_load_extension among them
  *   DECOY_LACKS_<entry>      that one entry point left out; for
  *                            sqlite3_load_extension, a library the load
  *                            accepts, recording it absent
@@ -204,7 +206,8 @@ int sqlite3_initialize(void)
 /* --- the rest: bound by the load and never called there ----------------
    Each logs its call, so a call during the load shows in a log the suite
    expects without it, and each answers as a library that can do nothing
-   would: M2's 21, below M1's, as a library that holds no statement. */
+   would: the load's other ten here, and the statement tier's 21, below
+   them, as a library that holds no statement. */
 
 #ifndef DECOY_LACKS_sqlite3_compileoption_used
 int sqlite3_compileoption_used(const char *zOptName)
@@ -289,7 +292,7 @@ sqlite3_int64 sqlite3_memory_used(void)
 }
 #endif
 
-/* --- M2's 21 ------------------------------------------------------------
+/* --- the statement tier's 21 --------------------------------------------
    Each answers as if no statement could be made: a pointer's slot written
    NULL, a count of 0, a code that says nothing was done. */
 
@@ -493,7 +496,7 @@ int sqlite3_error_offset(sqlite3 *db)
 }
 #endif
 
-/* --- M3's five ------------------------------------------------------------
+/* --- the change counters, autocommit and interrupt ------------------------
    They exist for dlsym: the load binds each and calls none, so no row reads
    what they answer. Each answers as a connection that has done nothing would:
    no change, no rowid, in autocommit mode, and an interrupt with nothing to
@@ -543,7 +546,7 @@ void sqlite3_interrupt(sqlite3 *db)
 }
 #endif
 
-/* --- M4's three ------------------------------------------------------------
+/* --- the settings and extension calls --------------------------------------
    Native binds each, the last only where it is there, and the load calls
    none; the open always fails, so no row reaches them. Each answers as a
    library that can do nothing would. */

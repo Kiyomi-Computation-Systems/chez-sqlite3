@@ -1,19 +1,18 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private libsqlite3-info): the report a loaded
-;;; libsqlite3 gives of itself (ADR-0002, decision 4).
+;;; libsqlite3 gives of itself (ADR-0002).
 ;;;
 ;;;   - each accessor answers its own field (every field differs);
 ;;;   - each accessor refuses anything but a report, with an assertion
 ;;;     violation from the accessor naming the value by its kind, never the
-;;;     value: a string holding a secret is never printed (ADR-0013,
-;;;     decision 7);
+;;;     value: a string holding a secret is never printed (ADR-0013);
 ;;;   - the record is opaque, so record-rtd refuses a report and no one can
 ;;;     rebuild one from its type;
 ;;;   - the constructor is private, built by native alone, and checks
 ;;;     nothing, so it answers what it was given.
 ;;;
 ;;; "Sealed" cannot be held from here: an opaque record's type is out of
-;;; reach, so nothing can name it as a parent (the mutation log says so).
+;;; reach, so nothing can name it as a parent.
 ;;;
 ;;; SRFI-64 makes #f of a raise in the actual expression, so no expected
 ;;; value here is #f: every refusal is compared against a no-raise sentinel.
@@ -44,7 +43,7 @@
 ;; raised : (-> Any) -> Any
 ;; What THUNK raised: (assertion-violation WHO IRRITANTS), (other TEXT) for
 ;; any other raise, or (no-raise VALUE). The message is a condition's type,
-;; not its text: its wording is no contract (ADR-0013, decision 9).
+;; not its text: its wording is no contract (ADR-0013).
 (define (raised thunk)
   (guard (e ((and (assertion-violation? e) (who-condition? e) (message-condition? e)
                   (irritants-condition? e))

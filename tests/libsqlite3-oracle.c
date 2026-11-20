@@ -30,7 +30,7 @@
  *                                             vgpreload_memcheck, else no
  *                                             (as off Linux). Under make
  *                                             test-memory the suites require
- *                                             yes (ADR-0005, amended).
+ *                                             yes (ADR-0005).
  *
  * A NULL string is #f.
  *

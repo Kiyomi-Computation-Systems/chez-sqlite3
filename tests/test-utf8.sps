@@ -1,7 +1,7 @@
 #!r6rs
-;;; The suite for (chez-sqlite3 private utf8): the strict UTF-8 decoder (D6)
-;;; and SQLite's byte offsets as character indexes (Q6). It loads no
-;;; libsqlite3: the library is pure.
+;;; The suite for (chez-sqlite3 private utf8): the strict UTF-8 decoder and
+;;; SQLite's byte offsets as character indexes. It loads no libsqlite3: the
+;;; library is pure.
 ;;;
 ;;;   the offsets    utf8-ill-formed-offset: #f for a well-formed bytevector,
 ;;;                  else where the first maximal ill-formed subpart starts

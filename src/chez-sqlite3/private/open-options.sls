@@ -1,8 +1,8 @@
 #!r6rs
 ;;; (chez-sqlite3 private open-options): open-database's options as the flags
-;;; sqlite3_open_v2 gets, and which filenames are URIs (ADR-0012, decision
-;;; 3). Pure: data in, data out. (chez-sqlite3 private connection) turns a
-;;; refusal into an assertion violation; nothing here raises on a list.
+;;; sqlite3_open_v2 gets, and which filenames are URIs (ADR-0012). Pure: data
+;;; in, data out. (chez-sqlite3 private connection) turns a refusal into an
+;;; assertion violation; nothing here raises on a list.
 ;;;
 ;;; The options are symbols, each given once, in any order:
 ;;;
@@ -18,9 +18,8 @@
 ;;;   uri        adds URI            memory     adds MEMORY
 ;;;   no-follow  adds NOFOLLOW       no-mutex   NOMUTEX in place of FULLMUTEX
 ;;;
-;;; and EXRESCODE always (ADR-0010, decision 3). So the flags SQLite gets
-;;; hold exactly one of its three legal modes, and v1 never passes a
-;;; shared-cache flag.
+;;; and EXRESCODE always (ADR-0010). So the flags SQLite gets hold exactly one
+;;; of its three legal modes, and v1 never passes a shared-cache flag.
 ;;;
 ;;; It never loads libsqlite3.
 (library (chez-sqlite3 private open-options)

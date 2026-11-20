@@ -16,11 +16,11 @@
 ;;;   read-back-value       a read-back's answer, (row V) or none, as the
 ;;;                         Scheme value compared
 ;;;   read-back-comparison  a match, or the mismatch's setting, expected and
-;;;                         actual, for slice 5 to raise
+;;;                         actual, for the open to raise
 ;;;
-;;; M4 slice 1 adds the four sqlite3_db_config settings (ADR-0021, decisions 1
-;;; to 3 and 5; ADR-0018, amended for M4), and M4 slice 3 joins them to
-;;; setting-names and settings-plan, with the open's calls (open.sls):
+;;; The four sqlite3_db_config settings (ADR-0021; ADR-0018) are in
+;;; setting-names and settings-plan too, run by the open's calls (open.sls),
+;;; and these procedures serve them:
 ;;;
 ;;;   db-config-settings       the four: each name, its op and its domain
 ;;;   db-config-setting-names  their names
@@ -33,9 +33,8 @@
 ;;;   steps-opt-in?            whether a plan's steps hold the opt-in's step,
 ;;;                            which the record's opt-in is read from
 ;;;
-;;; The table (ADR-0018, decision 3), each value written as canonical SQL from
-;;; the words below and decimal integers alone, so no text of the caller's
-;;; reaches SQL:
+;;; The table (ADR-0018), each value written as canonical SQL from the words
+;;; below and decimal integers alone, so no text of the caller's reaches SQL:
 ;;;
 ;;;   setting          Scheme value                 written   read back
 ;;;   busy-timeout     exact integer, 0 to 2^31-1   decimal   INTEGER
@@ -47,12 +46,12 @@
 ;;;   statement-cache  exact integer, 0 to 1024;    never: the library's own,
 ;;;                    32 when absent               the cache's capacity
 ;;;
-;;; and db_config's four (ADR-0018, amended for M4), each written to its op,
-;;; constants.sls's sqlite-dbconfig-*, by one sqlite3_db_config call, and read
-;;; back from that call's own cell: never SQL.
+;;; and db_config's four (ADR-0018), each written to its op, constants.sls's
+;;; sqlite-dbconfig-*, by one sqlite3_db_config call, and read back from that
+;;; call's own cell: never SQL.
 ;;;
 ;;;   enable-load-extension  #t or #f   1 to its op, for #t alone: #f makes
-;;;                                     no call (Q15)
+;;;                                     no call
 ;;;   defensive              #t or #f   1 or 0
 ;;;   dqs-dml                #t or #f   1 or 0
 ;;;   dqs-ddl                #t or #f   1 or 0
@@ -74,13 +73,13 @@
 
   ;; setting-names : (Listof Symbol)
   ;; Every setting the list takes: ADR-0018's seven in its table order, then
-  ;; db_config's four in the M4 plan's (section 4.1), joined in M4 slice 3.
+  ;; db_config's four in db-config-settings' order.
   (define setting-names
     '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
       enable-load-extension defensive dqs-dml dqs-ddl))
 
   ;; setting-refusal-rules : (Listof Symbol)
-  ;; The rules a settings list is refused by (ADR-0018, decision 2):
+  ;; The rules a settings list is refused by (ADR-0018):
   ;;
   ;;   second-settings-list     open's arguments hold a second list
   ;;   not-an-association-list  the list is no list of pairs whose cars are
@@ -103,7 +102,7 @@
   ;; enumerated-settings : (Listof (List Symbol String (Listof (List Any String Any))))
   ;; Each of SQLite's settings with a fixed set of values: its name, its
   ;; PRAGMA, and each value as (scheme-value sql-text read-back), the
-  ;; read-back as M2's column-value answers it, an exact integer or a string.
+  ;; read-back as column-value answers it, an exact integer or a string.
   (define enumerated-settings
     '((foreign-keys "foreign_keys" ((#t "1" 1) (#f "0" 0)))
       (journal-mode "journal_mode" ((delete "delete" "delete") (truncate "truncate" "truncate")
@@ -122,14 +121,14 @@
   ;; split-open-arguments : (Listof Any) -> (U (List 'split (Listof Any) Any) Setting-Refusal)
   ;; ARGS, open's arguments after the filename, split in one pass: every
   ;; argument that is a pair or () is a settings list, and every other goes to
-  ;; the options, in its order, for parse-open-options to read as it did
-  ;; before M3. So a string, a number or a boolean is still an unknown option,
-  ;; and an improper pair is a settings list for settings-plan to refuse. The
-  ;; settings list is the caller's own, not a copy; with none, (). A second
-  ;; list is refused. ARGS is never changed, and is read more than once: the
-  ;; open verbs call it inside the one critical section that holds their
-  ;; checks (open.sls's checked), on a list no other thread changes, so no
-  ;; handler of this thread runs between the reads either.
+  ;; the options, in its order, for parse-open-options to read. So a string, a
+  ;; number or a boolean is an unknown option, and an improper pair is a
+  ;; settings list for settings-plan to refuse. The settings list is the
+  ;; caller's own, not a copy; with none, (). A second list is refused. ARGS
+  ;; is never changed, and is read more than once: the open verbs call it
+  ;; inside the one critical section that holds their checks (open.sls's
+  ;; checked), on a list no other thread changes, so no handler of this thread
+  ;; runs between the reads either.
   (define (split-open-arguments args)
     (let loop ((rest args) (options '()) (settings #f))
       (cond ((not (pair? rest)) (list 'split (reverse options) (if settings (car settings) '())))
@@ -190,10 +189,11 @@
   ;; step, (name op written expected), among the PRAGMAs' in the list's
   ;; order; its value outside #t and #f is setting-out-of-domain; and
   ;; (enable-load-extension . #f) plans no step, its no-call, yet is a name
-  ;; seen, so a second one is setting-given-twice. SETTINGS is never changed, and is read more than once: the open
-  ;; verbs call it inside the one critical section that holds their checks
-  ;; (open.sls's checked), on a list no other thread changes, so no handler
-  ;; of this thread runs between the reads either.
+  ;; seen, so a second one is setting-given-twice. SETTINGS is never changed,
+  ;; and is read more than once: the open verbs call it inside the one
+  ;; critical section that holds their checks (open.sls's checked), on a list
+  ;; no other thread changes, so no handler of this thread runs between the
+  ;; reads either.
   (define (settings-plan settings)
     (let ((bad-shape (shape-refusal settings)))
       (if bad-shape
@@ -276,13 +276,13 @@
   ;; read-back-value : Any Any -> Any
   ;; ANSWER, what a setting's read-back statement answered, as the Scheme
   ;; value compared with the one asked for: (row V), V the first column of
-  ;; the first row, as M2's column-value answers it, or none, the statement
+  ;; the first row, as column-value answers it, or none, the statement
   ;; answered no row. none, and anything that is neither, reads as (), the
   ;; mismatch's actual, meaning nothing was read. For an enumerated setting
   ;; a V its table holds reads as the table's Scheme value, 1 as #t, "wal" as
   ;; wal, 2 as full, matched by equal?, so whole and by case. journal-mode's
   ;; other TEXT reads as a symbol, string->symbol of the text as read, so
-  ;; "memory" from an in-memory database (Q9) reads as memory, and "WAL" as
+  ;; "memory" from an in-memory database reads as memory, and "WAL" as
   ;; WAL. Any other V reads as itself, unchanged: an integer outside a
   ;; table, a REAL, TEXT of any other setting, a BLOB or sql-null. It equals no
   ;; table's value, for SQLite answers no boolean or other symbol than
@@ -303,7 +303,7 @@
   ;; none, reads as EXPECTED, the step's expected value: match when
   ;; read-back-value's answer is eqv? to it and a row was read, else
   ;; (mismatch NAME EXPECTED ACTUAL), ACTUAL that answer, the fields of
-  ;; &sqlite-setting-mismatch for slice 5 to raise. No row is always a
+  ;; &sqlite-setting-mismatch for the open to raise. No row is always a
   ;; mismatch, its ACTUAL (), whatever EXPECTED is. Total.
   (define (read-back-comparison name expected answer)
     (let ((actual (read-back-value name answer)))
@@ -311,15 +311,14 @@
           'match
           (list 'mismatch name expected actual))))
 
-  ;; --- db_config's four (ADR-0021; ADR-0018, amended for M4) ------------------------------
+  ;; --- db_config's four (ADR-0021; ADR-0018) ----------------------------------------------
 
   ;; db-config-settings : (Listof (List Symbol Natural (Listof Boolean)))
-  ;; The four, in the M4 plan's table order (section 4.1): each setting's
-  ;; name, its op's C name with SQLITE_DBCONFIG_ dropped, lower-cased, _
-  ;; turned to - (ADR-0021, decision 1); its op, constants.sls's for that C
-  ;; name, which tests/test-constants.sps holds to sqlite3.h; and its domain,
-  ;; #t or #f. Each value is written to its op as 1 or 0, and read back from
-  ;; the call's own cell.
+  ;; The four: each setting's name, its op's C name with SQLITE_DBCONFIG_
+  ;; dropped, lower-cased, _ turned to - (ADR-0021); its op, constants.sls's
+  ;; for that C name, which tests/test-constants.sps holds to sqlite3.h; and
+  ;; its domain, #t or #f. Each value is written to its op as 1 or 0, and read
+  ;; back from the call's own cell.
   (define db-config-settings
     (list (list 'enable-load-extension sqlite-dbconfig-enable-load-extension '(#t #f))
           (list 'defensive sqlite-dbconfig-defensive '(#t #f))
@@ -327,18 +326,16 @@
           (list 'dqs-ddl sqlite-dbconfig-dqs-ddl '(#t #f))))
 
   ;; db-config-setting-names : (Listof Symbol)
-  ;; The four's names, in the table's order: setting-names' last four since
-  ;; M4 slice 3 joined them.
+  ;; The four's names, in the table's order: setting-names' last four.
   (define db-config-setting-names (map car db-config-settings))
 
   ;; db-config-sentinel : Integer
-  ;; What the call's cell holds before the call (ADR-0021, decision 3): the
-  ;; call writes 0 or 1 there whatever it is given (M4's research, D6), so a
-  ;; cell that still holds this after the call was left by it. An exact
-  ;; integer a C int holds, so the cell, a counted int block, holds it as
-  ;; written; neither 0 nor 1. It is the core's, not an argument: the cell's
-  ;; fill and the verdict's reading are one value, and the verdict, given
-  ;; none, cannot be handed a 0 or a 1.
+  ;; What the call's cell holds before the call (ADR-0021): the call writes 0
+  ;; or 1 there whatever it is given, so a cell that still holds this after
+  ;; the call was left by it. An exact integer a C int holds, so the cell, a
+  ;; counted int block, holds it as written; neither 0 nor 1. It is the
+  ;; core's, not an argument: the cell's fill and the verdict's reading are
+  ;; one value, and the verdict, given none, cannot be handed a 0 or a 1.
   (define db-config-sentinel -1)
 
   ;; Db-Config-Step = (List Symbol Natural (U 0 1) Boolean)
@@ -347,7 +344,7 @@
   ;; expected), written 1 for #t and 0 for #f, expected VALUE, the step's
   ;; name and expected where a PRAGMA's step has its own. (enable-load-
   ;; extension . #f) makes no call, no-call: it is the same as leaving the
-  ;; setting out, and the op's 0 is never sent (ADR-0021, decision 5; Q15).
+  ;; setting out, and the op's 0 is never sent (ADR-0021).
   ;; A VALUE outside NAME's domain is out-of-domain; a NAME that is none of
   ;; the four, any value at all, not-db-config. Total.
   (define (db-config-step name value)
@@ -360,13 +357,13 @@
   ;; db-config-verdict : Any Any Any Any
   ;;                     -> (U 'match (List 'mismatch Any Any Any) (List 'error Any))
   ;; What a set's call answered, CODE, and left in its cell, CELL, say of
-  ;; NAME's set to EXPECTED, #t or #f (ADR-0021, decision 3): any CODE but
-  ;; an exact 0 is (error CODE), whatever CELL holds, for M4 slice 3 to raise
-  ;; as &sqlite-error of that code; code 0 and CELL the value written, 1 for
-  ;; #t, 0 for #f, is match; code 0 and any other CELL is (mismatch NAME
-  ;; EXPECTED ACTUAL), the fields of &sqlite-setting-mismatch, ACTUAL () for a
-  ;; cell left at db-config-sentinel, nothing read, #t for 1, #f for 0, and
-  ;; anything else as itself. An EXPECTED that is no boolean matches no cell.
+  ;; NAME's set to EXPECTED, #t or #f (ADR-0021): any CODE but an exact 0 is
+  ;; (error CODE), whatever CELL holds, for the open to raise as &sqlite-error
+  ;; of that code; code 0 and CELL the value written, 1 for #t, 0 for #f, is
+  ;; match; code 0 and any other CELL is (mismatch NAME EXPECTED ACTUAL), the
+  ;; fields of &sqlite-setting-mismatch, ACTUAL () for a cell left at
+  ;; db-config-sentinel, nothing read, #t for 1, #f for 0, and anything else
+  ;; as itself. An EXPECTED that is no boolean matches no cell.
   ;; Total.
   (define (db-config-verdict name expected code cell)
     (cond ((not (eqv? code 0)) (list 'error code))
@@ -378,7 +375,7 @@
                        ((eqv? cell 0) #f)
                        (else cell))))))
 
-  ;; --- the join's two readers (M4 slice 3) ---------------------------------------------
+  ;; --- two readers of a plan's steps ---------------------------------------------------
 
   ;; db-config-step? : Any -> Boolean
   ;; Whether STEP, one of a plan's, is a db_config call's, db-config-step's
@@ -394,15 +391,14 @@
 
   ;; opt-in-step : Db-Config-Step
   ;; The opt-in's own step, (enable-load-extension op 1 #t), as db-config-
-  ;; step makes it for (enable-load-extension . #t) alone (ADR-0021, decision
-  ;; 5).
+  ;; step makes it for (enable-load-extension . #t) alone (ADR-0021).
   (define opt-in-step (db-config-step 'enable-load-extension #t))
 
   ;; steps-opt-in? : Any -> Boolean
   ;; Whether STEPS, a plan's steps, hold the opt-in's step, equal? to
   ;; opt-in-step: the connection's opt-in to extension loading, which the
-  ;; record holds, fixed when it is made (ADR-0012, amended for M4). Read from
-  ;; the step, never the name, so (enable-load-extension . #f), which plans
-  ;; no step, holds none. #f for anything that is no proper list. Total.
+  ;; record holds, fixed when it is made (ADR-0012). Read from the step, never
+  ;; the name, so (enable-load-extension . #f), which plans no step, holds
+  ;; none. #f for anything that is no proper list. Total.
   (define (steps-opt-in? steps)
     (and (list? steps) (member opt-in-step steps) #t)))

@@ -1,13 +1,11 @@
 #!r6rs
-;;; The suite for the conveniences under engines (ADR-0016, decision 6, and
-;;; its amendment in M3 slice 1; ADR-0020, decision 7, amended; the M3 plan,
-;;; section 4.1 and its probe P6), in (chez-sqlite3 private conveniences).
-;;; Each row sweeps fuel from 1 until the call completes without expiring,
-;;; never to a fixed bound, and prints that fuel. An engine spends no ticks
-;;; inside a critical section (.plans/traps.md), so each expiry falls between
-;;; sections.
+;;; The suite for the conveniences under engines (ADR-0016; ADR-0020), in
+;;; (chez-sqlite3 private conveniences). Each row sweeps fuel from 1 until
+;;; the call completes without expiring, never to a fixed bound, and prints
+;;; that fuel. An engine spends no ticks inside a critical section, so each
+;;; expiry falls between sections.
 ;;;
-;;;   P6            execute!, query and query-row, at every fuel, complete
+;;;   every fuel    execute!, query and query-row, at every fuel, complete
 ;;;                 with their answer, resumed after each expiry, and leave
 ;;;                 their statement cached, ready, none at a row: they hold no
 ;;;                 dynamic-wind, and nothing but the convenience reaches its
@@ -15,10 +13,10 @@
 ;;;                 connection, cold, a miss, then warm, a hit, so every fuel
 ;;;                 sweeps both, never a state an earlier fuel left
 ;;;   one value a   each value bound in a section of its own, and each read
-;;;   section       (the M3 plan's Q15): what is bound, by
-;;;                 sqlite3_expanded_sql, and what is read, by the lookaside
-;;;                 a UTF-16 TEXT read takes, seen at every tick by a timer's
-;;;                 handler, a count at a time; and the expiries' count
+;;;   section       of its own: what is bound, by sqlite3_expanded_sql, and
+;;;                 what is read, by the lookaside a UTF-16 TEXT read takes,
+;;;                 seen at every tick by a timer's handler, a count at a
+;;;                 time; and the expiries' count
 ;;;   query-fold    does not survive a preemption: an expiry inside its wind
 ;;;                 finalizes its statement, and the resumed loop raises
 ;;;                 &sqlite-closed. At every fuel it answers its fold or that,
@@ -33,17 +31,16 @@
 ;;;                 execute!, query and query-row on the same SQL, the cache
 ;;;                 warm: at every fuel each answers rightly, and the cache and
 ;;;                 the statement count end where they began, so no statement
-;;;                 was handed out twice, finalized twice or lost (ADR-0020,
-;;;                 decision 7)
+;;;                 was handed out twice, finalized twice or lost (ADR-0020)
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them. A row that needs the connection's
 ;;; lookaside, where a libsqlite3 takes none, prints UNAVAILABLE and is
-;;; skipped, never passed unseen (ADR-0005, amended).
+;;; skipped, never passed unseen (ADR-0005).
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -209,8 +206,7 @@
 ;; cached for its SQL; then again on that connection, warm, the first
 ;; having left it cached. A fuel expired when either did, and deviated when
 ;; either did. One connection kept across the fuels would sweep the miss at
-;; fuel 1 alone, and each later fuel from whatever the one before left
-;; (M3's closing review, reviewer B).
+;; fuel 1 alone, and each later fuel from whatever the one before left.
 (define (fresh-sweep setup trial)
   (sweep (lambda (fuel)
            (let ((r (with-memory-db
@@ -245,7 +241,7 @@
   zero-counts
   (native-counts))
 
-;; --- P6: execute!, query and query-row complete at every fuel ---------------------------------
+;; --- execute!, query and query-row complete at every fuel -------------------------------------
 
 (test-equal "execute! under an engine, at every fuel from 1 until it completes without expiring, each fuel on a fresh connection, cold then warm: it completes, inserting its row once, and leaves its statement cached and ready, none at a row"
   '()
@@ -291,20 +287,20 @@
                     (and (not (equal? after (list (vector (+ fuel 1)) '(("select ?1 + 1 union all select 0" . ready)) 1)))
                          after)))))))
 
-;; --- one value a section (the M3 plan's Q15) -----------------------------------------------
+;; --- one value a section -------------------------------------------------------------------
 ;; An engine spends no ticks inside a critical section, so at fuel 1 every
 ;; tick outside one expires. Each value's plan and checks, and each read's
 ;; finish, run outside any section, so 50 values cost ticks the one value
 ;; does not, however they are bound or read: bind-all!, which binds every
-;; value in one section, expired 249 times more for 50 values than for 1
-;; (M3's closing review, reviewer B's q15-binds.sps). So the expiries'
-;; count holds only that no section holds every value's work, checks and
-;; all; what each expiry sees bound holds the binds' sections: SQLite's
-;; sqlite3_expanded_sql shows each parameter bound or NULL, and at fuel 1 a
-;; call that binds one value a section shows each count from 1 to 49 at some
-;; expiry, where one that binds all in one section shows none. A timer's
-;; handler, run at every tick, reads it, as an expiry would, between the
-;; same sections, unwinding nothing, so query-fold is read too.
+;; value in one section, expires 249 times more for 50 values than for 1,
+;; as measured. So the expiries' count holds only that no section holds
+;; every value's work, checks and all; what each expiry sees bound holds the
+;; binds' sections: SQLite's sqlite3_expanded_sql shows each parameter bound
+;; or NULL, and at fuel 1 a call that binds one value a section shows each
+;; count from 1 to 49 at some expiry, where one that binds all in one
+;; section shows none. A timer's handler, run at every tick, reads it, as an
+;; expiry would, between the same sections, unwinding nothing, so query-fold
+;; is read too.
 
 ;; expiries : (-> Any) -> (List Any Natural)
 ;; THUNK's answer at fuel 1, resumed after each expiry, and how many there
@@ -449,8 +445,7 @@
 ;; anything else the read answered. In a UTF-16 database, the step's row
 ;; holds its TEXT values in UTF-16, and each column read by
 ;; sqlite3_column_text converts its value to UTF-8 in a slot of its own, so
-;; the level rises by one a column read (.plans/research/m3-review/
-;; conveniences/read-lookaside.sps, on both libraries).
+;; the level rises by one a column read, on both libraries.
 (define (read-levels db thunk)
   (let ((seen '()) (odd '()) (old (timer-interrupt-handler)))
     (let ((answer
@@ -550,7 +545,7 @@
 ;; checks it out, has either not checked it out or finished it, never left it
 ;; out of the cache unfinalized; query, which holds no dynamic-wind, leaves
 ;; its statement out of the cache, tracked, at some fuel at its row, until
-;; the close finalizes it (ADR-0016, decision 6).
+;; the close finalizes it (ADR-0016).
 
 ;; one-slice : (-> Any) Positive-Integer -> Boolean
 ;; Whether THUNK, given one slice of FUEL ticks, completed; the engine is

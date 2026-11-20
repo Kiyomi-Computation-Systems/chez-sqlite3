@@ -1,9 +1,9 @@
 #!r6rs
-;;; The suite for execute!, query, query-row and query-fold (ADR-0016; the M3
-;;; plan, section 4.1), in (chez-sqlite3 private conveniences), and the
-;;; statement cache through them (ADR-0020; the plan, section 4.6). The
-;;; raises' who and depth are tests/test-conveniences-who.sps's, the re-entry
-;;; rows tests/test-conveniences-reentry.sps's, the engines
+;;; The suite for execute!, query, query-row and query-fold (ADR-0016), in
+;;; (chez-sqlite3 private conveniences), and the statement cache through them
+;;; (ADR-0020). The raises' who and depth are
+;;; tests/test-conveniences-who.sps's, the re-entry rows
+;;; tests/test-conveniences-reentry.sps's, the engines
 ;;; tests/test-conveniences-engines.sps's, the counters through them
 ;;; tests/test-conveniences-counters.sps's, and execute-script!
 ;;; tests/test-execute-script.sps's.
@@ -18,13 +18,13 @@
 ;;;   the binds     every value checked before any is bound
 ;;;   the cache     the statement count after each convenience at the
 ;;;                 default, at 0 and at 1, set by the statement-cache
-;;;                 setting; the very statement
-;;;                 reused; a PRAGMA cached as any other (slice 0's P1);
-;;;                 foreign_keys = 1 re-preparing the rest (slice 0's P13),
-;;;                 and trusted_schema = 0 and = 1 each (slice 0's P13b); a
-;;;                 return into a full cache evicting the least recently used;
-;;;                 a failed step never kept; a reset's failure on return
-;;;                 raised, through query-row on a multi-row insert ...
+;;;                 setting; the very statement reused; a PRAGMA cached as any
+;;;                 other;
+;;;                 foreign_keys = 1 re-preparing the rest,
+;;;                 and trusted_schema = 0 and = 1 each; a return into a full
+;;;                 cache evicting the least recently used; a failed step
+;;;                 never kept; a reset's failure on return raised, through
+;;;                 query-row on a multi-row insert ...
 ;;;                 returning under another's read
 ;;;   every path    after a refused bind, a failed step and a failed read, no
 ;;;                 statement is left at a row: it is cached and ready, or
@@ -32,19 +32,17 @@
 ;;;                 escape, is finalized, and by a normal return cached
 ;;;   at a row      by SQLite's own account: after each convenience returns or
 ;;;                 raises, an interrupt is lost and the next prepare runs,
-;;;                 where a statement held at a row makes it answer 9 (the
-;;;                 M3 plan's section 4.8; concurrency I3)
+;;;                 where a statement held at a row makes it answer 9
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them. What a row reads back it reads
-;;; through M2's statement tier, never through the convenience it tests.
-;;; SQLite's answers here were measured on 3.53.1 and 3.45.1 alike
-;;; (.plans/research/m3-slice-3/conveniences-answers.sps, and the research
-;;; each row cites) before a row asserts them.
+;;; through the statement tier, never through the convenience it tests.
+;;; SQLite's answers here were measured on 3.53.1 and 3.45.1 alike before
+;;; a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -221,7 +219,7 @@
     (call-with-temp-directory proc)))
 
 ;; tier-run : Database String -> (Listof (Vectorof Any))
-;; SQL run through M2's statement tier: prepared, stepped to its end, each
+;; SQL run through the statement tier: prepared, stepped to its end, each
 ;; row read whole, finalized; its rows, shown.
 (define (tier-run db sql)
   (let ((st (prepare-statement db sql)))
@@ -294,7 +292,7 @@
 ;; connection, what select 7 answers through the statement tier. While no
 ;; statement of the connection holds a row the interrupt is lost, and it
 ;; answers (#(7)); while one does, the interrupt sticks, and its prepare
-;; answers SQLite's interrupt, 9 (M3's research, concurrency I2, I3).
+;; answers SQLite's interrupt, 9.
 (define (after-interrupt proc)
   (with-memory-db
    (lambda (db)
@@ -380,9 +378,8 @@
                 (c (no-value (execute! db "pragma journal_mode = truncate"))))
            (list a rows b d c (tier-run db "pragma journal_mode"))))))))
 
-;; Measured by M3's research (.plans/research/m3-plan/single/cache.c, K2.2),
-;; on both libraries: a held select * reads its new column at the step that
-;; re-prepares it.
+;; Measured on both libraries: a held select * reads its new column at the
+;; step that re-prepares it.
 (test-equal "a row's columns are read at the row, after its step: once alter table has added a column, the cached select * answers it, and is the very statement cached before"
   (list '(#(1)) '(#(1 9)) 'the-very-statement)
   (with-memory-db
@@ -460,9 +457,8 @@
       (let* ((counts (each-convenience! db)))
         (list counts (states db))))))
 
-;; Measured by M3 slice 0's research (P1), on both libraries: a PRAGMA's set,
-;; reset and stepped again, applies again, SQLite re-preparing it at that
-;; step.
+;; Measured on both libraries: a PRAGMA's set, reset and stepped again,
+;; applies again, SQLite re-preparing it at that step.
 (test-equal "a PRAGMA statement is cached as any other: user_version = 5, then 6, then the very cached 5 again applies 5, re-prepared once at its second step"
   (list '(#(6)) '(#(5)) 'the-very-statement 1)
   (with-memory-db
@@ -477,8 +473,8 @@
              (if (and held (eq? held (cached-statement db "pragma user_version = 5"))) 'the-very-statement 'another)
              (and held (reprepare-count held)))))))
 
-;; Measured by M3 slice 0's research (P13), on both libraries: any set of
-;; foreign_keys expires every other statement; a set of cache_size none.
+;; Measured on both libraries: any set of foreign_keys expires every
+;; other statement; a set of cache_size none.
 (test-equal "foreign_keys = 1, run by execute!, makes every other cached statement re-prepare once at its next use, answering rightly, where cache_size = 100 made none: each is the very statement cached before"
   (list '(0 0) '(0 0) '(1 1) '((#(1)) (#(1))) 'the-very-statements)
   (with-memory-db
@@ -505,9 +501,8 @@
                  'the-very-statements
                  'others))))))
 
-;; Measured by M3 slice 0's research (P13b), on both libraries: any set of
-;; trusted_schema, 0 or 1, expires every other statement, with the value
-;; changed and with it already so.
+;; Measured on both libraries: any set of trusted_schema, 0 or 1, expires
+;; every other statement, with the value changed and with it already so.
 (test-equal "trusted_schema = 0, then = 1, each run by execute!, makes every other cached statement re-prepare once at its next use, answering rightly: each is the very statement cached before"
   (list '(0 0) '(1 1) '(2 2) '((#(1)) (#(1))) 'the-very-statements)
   (with-memory-db
@@ -554,11 +549,8 @@
             (b (no-value (execute! db "insert into t values (?)" 1))))
        (list a left b (states db) (tier-run db "select x from t order by x"))))))
 
-;; Measured (.plans/research/m3-slice-3/busy-reset.sps, part A's;
-;; .plans/research/m2-slice-3/probe-block.sps), on both libraries: an
-;; insert ... returning stepped once
-;; under another's read answers busy at its reset, and the insert is rolled
-;; back.
+;; Measured on both libraries: an insert ... returning stepped once under
+;; another's read answers busy at its reset, and the insert is rolled back.
 (test-equal "a reset's failure on return is raised: query-row on a multi-row insert ... returning, under another connection's read, answers its first row, then its reset commits and answers busy, raised from query-row; the statement is finalized, not kept, and the insert rolled back"
   (list (list 'raised (list 'sqlite-error 'query-row 'busy 'busy returning-sql #f))
         '() '(#(1)))
@@ -631,9 +623,8 @@
 
 ;; SQLite's own account of a statement at a row, never this library's state:
 ;; while any statement of a connection holds one, an interrupt sticks, and
-;; every new prepare answers 9 (M3's research, concurrency I3; slice 0's
-;; P7). So the row reads what the cache's states cannot show, a statement
-;; filed ready that SQLite still holds at its row.
+;; every new prepare answers 9. So the row reads what the cache's states
+;; cannot show, a statement filed ready that SQLite still holds at its row.
 (test-equal "no convenience leaves its statement at a row, by SQLite's own account: after each returns or raises, an interrupt on its connection is lost and the next prepare runs, where a statement the suite holds at a row makes that prepare answer interrupt"
   (list (list 'held (list 'raised (list 'sqlite-error 'prepare-statement 'interrupt 'interrupt "select 7" #f)))
         '(#(1) (#(7)))

@@ -1,12 +1,9 @@
 #!r6rs
 ;;; (library-loading): what the nine suites that load libsqlite3 end to end
 ;;; share, tests/test-library-loading-*.sps (ADR-0002, ADR-0003, ADR-0010,
-;;; ADR-0013). They were one suite, tests/test-library-loading.sps, until it
-;;; passed 450 s under the memory gate on CI, three quarters of
-;;; MEMORY_TIMEOUT, where ADR-0005 (amended) splits it; then three, until
-;;; -real took 264 s there, over half the bound, in M4. Their cost is their
-;;; children, each under a Valgrind of its own there, so each suite runs at
-;;; most 11:
+;;; ADR-0013). Their cost is their children, each under a Valgrind of its
+;;; own under the memory gate, so the rows are split among nine suites, each
+;;; running at most 11, to keep each well under MEMORY_TIMEOUT (ADR-0005):
 ;;;
 ;;;   -missing-1 to -4  only missing-api rows, one part each
 ;;;   -real             the real libsqlite3, the refusals no decoy reaches,
@@ -14,7 +11,7 @@
 ;;;   -preflight        make build's other preflight rows, and a raise that
 ;;;                     is not a refusal
 ;;;   -extension        the optional sqlite3_load_extension, the opt-in's
-;;;                     check and load-extension! on the decoy (M4)
+;;;                     check and load-extension! on the decoy
 ;;;   -decoys           the decoy's behaviours, one switch a row
 ;;;   -combined         a build without the rest, one with no sqlite3_*
 ;;;                     function, the load's order, and the kept refusal
@@ -41,10 +38,9 @@
 ;;;                     a suite's scratch directory, and a row on one
 ;;;   the missing-api rows
 ;;;                     one per entry point of a part
-;;;   the opens         M4 slice 3's: a case list as the probe's --opens takes
-;;;                     it, and the entries a failed open writes to the
-;;;                     decoy's log; and M4 slice 4's, a case list as its
-;;;                     --loads takes it
+;;;   the opens         a case list as the probe's --opens takes it, and the
+;;;                     entries a failed open writes to the decoy's log; and
+;;;                     a case list as its --loads takes it
 ;;;   the world         the platform, the world and the empty profiles that
 ;;;                     discovery's rows and preflight's not-found row share
 ;;;   preflight         tests/preflight.sps run as make build runs it, with
@@ -144,8 +140,7 @@
   ;; Runs PROGRAM with ARGS in a fresh Chez with LIBDIRS as its library path,
   ;; under the memory gate's Valgrind when the gate asks (gated-command),
   ;; through env with ENV-ARGS (NAME=VALUE to set, -u NAME to unset): its exit
-  ;; status, stdout and stderr. Never env -i: CHEZ and PATH survive
-  ;; (.plans/traps.md).
+  ;; status, stdout and stderr. Never env -i: CHEZ and PATH survive.
   (define (spawn-in libdirs env-args program args)
     (guard (e (#t (list 'raised (describe e))))
       (capture-command
@@ -191,7 +186,7 @@
   ;; object the first did: the report, or the refusal raised again.
   (define once '(again . (same same)))
 
-  ;; Every count zero, whatever the load decided (ADR-0005, decision 4).
+  ;; Every count zero, whatever the load decided (ADR-0005).
   (define no-native-objects '(counts . ((block . 0) (connection . 0) (statement . 0))))
 
   ;; Under make test-memory, every child runs under the gate's own Valgrind,
@@ -271,12 +266,13 @@
   ;; --- the entries and their partition ---------------------------------------------
 
   ;; The entry points (chez-sqlite3 private native) requires, in its order
-  ;; (ADR-0002, amended): the report's three, threadsafe, initialize, and the
-  ;; rest, M1's ten, then M2's 21, M3's five and M4's two, sqlite3_db_config
-  ;; and sqlite3_free. A forty-fourth that native requires and the decoy
-  ;; lacks refuses the control, and the control's row fails. A row holds
-  ;; every-entry, then optional-entries, to the convention table's names,
-  ;; whole and in order.
+  ;; (ADR-0002): the report's three, threadsafe, initialize, and the rest:
+  ;; the load's other ten, the statement tier's 21, the change counters,
+  ;; autocommit and interrupt, and the settings and extension calls' two
+  ;; required, sqlite3_db_config and sqlite3_free. A forty-fourth that native
+  ;; requires and the decoy lacks refuses the control, and the control's row
+  ;; fails. A row holds every-entry, then optional-entries, to the convention
+  ;; table's names, whole and in order.
   (define report-entries '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"))
   (define rest-entries
     '("sqlite3_compileoption_used" "sqlite3_compileoption_get" "sqlite3_open_v2" "sqlite3_close"
@@ -296,11 +292,11 @@
   ;; optional-entries : (Listof String)
   ;; The entry points native binds where the library has them, by
   ;; bind-optional, and records absent where it has not, never refusing the
-  ;; load (ADR-0002, amended 2026-11-17): M4's sqlite3_load_extension, which
-  ;; Apple's library lacks. Outside every-entry, so the pattern deals it no
-  ;; missing-api row: joined to it, at 43, it would go to
-  ;; test-library-loading-missing-4 with a row expecting a library that must
-  ;; load to be refused. Its own rows run in test-library-loading-extension.
+  ;; load (ADR-0002): sqlite3_load_extension, which Apple's library lacks.
+  ;; Outside every-entry, so the pattern deals it no missing-api row: joined
+  ;; to it, at 43, it would go to test-library-loading-missing-4 with a row
+  ;; expecting a library that must load to be refused. Its own rows run in
+  ;; test-library-loading-extension.
   (define optional-entries '("sqlite3_load_extension"))
 
   ;; deal-pattern : (Listof String)
@@ -308,7 +304,7 @@
   ;; from 0, repeating: position mod 4 picks the file name at that place. Each
   ;; takes one of every four, 11, 11, 11 and 10 of the 43, and holds nothing
   ;; but missing-api rows, so none runs more than 11 children; a child costs
-  ;; the same wherever it is (ADR-0005, amended).
+  ;; the same wherever it is (ADR-0005).
   (define deal-pattern
     '("test-library-loading-missing-1.sps" "test-library-loading-missing-2.sps"
       "test-library-loading-missing-3.sps" "test-library-loading-missing-4.sps"))
@@ -316,15 +312,15 @@
   ;; decoy-parts : (Listof (Pairof String (Listof String)))
   ;; The partition: each missing suite's file name under tests/, then the
   ;; entry points whose missing-api rows it makes, in native's order, written
-  ;; out. Each part holds M1's, M2's, M3's and M4's alike: M4's
-  ;; sqlite3_db_config, at 41, is the second suite's, and sqlite3_free, at 42,
-  ;; the third's; the report's three are the first three suites', and
-  ;; sqlite3_threadsafe and sqlite3_initialize, whose rows expect logs of
-  ;; their own, the fourth's and the first's. A suite finds its part by its
-  ;; own file's name (suite-part), so a suite copied from another cannot run
-  ;; the other's part. Rows in each missing suite hold that the parts
-  ;; partition the convention table, that each is what deal-pattern deals it
-  ;; (entries-dealt), and that each suite named is a file.
+  ;; out. Each part holds every group alike: sqlite3_db_config, at 41, is the
+  ;; second suite's, and sqlite3_free, at 42, the third's; the report's three
+  ;; are the first three suites', and sqlite3_threadsafe and
+  ;; sqlite3_initialize, whose rows expect logs of their own, the fourth's and
+  ;; the first's. A suite finds its part by its own file's name (suite-part),
+  ;; so a suite copied from another cannot run the other's part. Rows in each
+  ;; missing suite hold that the parts partition the convention table, that
+  ;; each is what deal-pattern deals it (entries-dealt), and that each suite
+  ;; named is a file.
   (define decoy-parts
     '(("test-library-loading-missing-1.sps"
        "sqlite3_libversion_number" "sqlite3_initialize" "sqlite3_close"
@@ -494,7 +490,7 @@
     (guard (e (#t (list 'no-code name)))
       (cdr (assq name sqlite-result-codes))))
 
-  ;; --- the opens (M4 slice 3) ---------------------------------------------------------
+  ;; --- the opens ----------------------------------------------------------------------
 
   ;; opens-arg : (Listof (Listof Any)) -> String
   ;; CASES, each an open's arguments, its filename first, written as the one
@@ -504,18 +500,18 @@
 
   ;; loads-arg : (Listof (Listof Any)) -> String
   ;; CASES, each a call of load-extension!'s arguments, written as the one
-  ;; datum tests/refusal-probe.sps's --loads reads (M4 slice 4).
+  ;; datum tests/refusal-probe.sps's --loads reads.
   (define (loads-arg cases)
     (call-with-string-output-port (lambda (port) (write cases port))))
 
   ;; open-calls : -> (Listof String)
   ;; The entries one open with no option writes to the decoy's log, whose
   ;; sqlite3_open_v2 answers SQLITE_CANTOPEN with no handle: the open, its
-  ;; flags open-database's with no option, read-write, create, the full
-  ;; mutex and extended codes (ADR-0012, decision 3), from (chez-sqlite3
-  ;; private constants), which tests/test-constants.sps holds to sqlite3.h;
-  ;; then the failure's message, sqlite3_errstr of that code, as a failed
-  ;; open with no handle reads it.
+  ;; flags open-database's with no option, read-write, create, the full mutex
+  ;; and extended codes (ADR-0012), from (chez-sqlite3 private constants),
+  ;; which tests/test-constants.sps holds to sqlite3.h; then the failure's
+  ;; message, sqlite3_errstr of that code, as a failed open with no handle
+  ;; reads it.
   (define (open-calls)
     (let ((flags (bitwise-ior sqlite-open-readwrite sqlite-open-create sqlite-open-fullmutex
                               sqlite-open-exrescode))

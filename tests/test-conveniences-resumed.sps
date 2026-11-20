@@ -1,14 +1,13 @@
 #!r6rs
 ;;; The suite for a convenience re-entered after its statement has left it
-;;; (ADR-0016, decision 6; ADR-0020, decision 7; the maintainer's choice of
-;;; 2026-11-16, after M3 slice 3's review), in (chez-sqlite3 private
-;;; conveniences). Chez's engine remainders are multi-shot, and a timer's,
-;;; keyboard's or collect request's handler can capture a continuation
-;;; between any two critical sections. So each call of a convenience holds a
-;;; flag, set once its statement leaves the call, given back to the cache or
-;;; finalized, and every section that touches the statement reads it first:
-;;; set, the section touches nothing, and the convenience raises
-;;; &sqlite-closed after it.
+;;; (ADR-0016; ADR-0020), in (chez-sqlite3 private conveniences). Chez's
+;;; engine remainders are multi-shot, and a timer's, keyboard's or collect
+;;; request's handler can capture a continuation between any two critical
+;;; sections. So each call of a convenience holds a flag, set once its
+;;; statement leaves the call, given back to the cache or finalized, and
+;;; every section that touches the statement reads it first: set, the
+;;; section touches nothing, and the convenience raises &sqlite-closed after
+;;; it.
 ;;;
 ;;;   resumed twice   for execute!, query and query-row, at every fuel from 1
 ;;;                   until the call completes without expiring: an engine's
@@ -49,10 +48,10 @@
 ;;;                   exit and costs the engine ticks there, so a remainder is
 ;;;                   taken at a section's exit too, past the call's last
 ;;;                   section among them: a claim advanced just after its
-;;;                   section, not inside it, stepped a statement twice there
-;;;                   (M4's closing review, reviewer B's B1). SQLite's trace
-;;;                   allocates 32 KiB inside each section that steps a row
-;;;                   or finishes a statement, so a request falls due there.
+;;;                   section, not inside it, stepped a statement twice there.
+;;;                   SQLite's trace allocates 32 KiB inside each section that
+;;;                   steps a row or finishes a statement, so a request falls
+;;;                   due there.
 ;;;                   Each low row fails by name unless collect requests fell
 ;;;                   in its trials, unless each such section met its request
 ;;;                   before the next, which a trip slipped to 256 KiB does
@@ -73,23 +72,21 @@
 ;;; first expression and before its first section was refused: each trial
 ;;; begins with a collection, so its first slice runs as every trial's at
 ;;; that fuel does, unless a collect request falls in it, and a remainder
-;;; lies further into the call's first
-;;; expressions at each fuel than at the one before. A request that falls in
-;;; the first slice costs the engine ticks there, so such a trial's remainder
-;;; lies earlier than its fuel says: the bound reads only the trials where
-;;; none fell. A bound from the call refused at its first check, slice 3's,
-;;; was loose: its raise costs ticks of its own, and it completed at fuel
-;;; 75, the script's whole new calls ending at 7 (M3's closing review,
-;;; reviewer B). A bound from the last fuel at which the call held its
-;;; statement assumed the fuels in order past the first expressions, which a
-;;; low trip breaks (M4's closing review, reviewer B's B3).
+;;; lies further into the call's first expressions at each fuel than at the
+;;; one before. A request that falls in the first slice costs the engine
+;;; ticks there, so such a trial's remainder lies earlier than its fuel says:
+;;; the bound reads only the trials where none fell. A bound from the call
+;;; refused at its first check is loose: its raise costs ticks of its own,
+;;; and it completed at fuel 75, the script's whole new calls ending at 7. A
+;;; bound from the last fuel at which the call held its statement assumes the
+;;; fuels in order past the first expressions, which a low trip breaks.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -175,7 +172,7 @@
 ;; SQLite's trace fires, with SQLITE_TRACE_ROW, as a step answers a row, and,
 ;; with SQLITE_TRACE_PROFILE, as a statement finishes: inside the step that
 ;; reaches done, for query, execute!, query-fold and each statement of a
-;; script, and inside the return's reset for query-row (part D's keyboard-in
+;; script, and inside the return's reset for query-row (the keyboard-in row
 ;; reads it so). In the low pass the callback allocates 32 KiB
 ;; there, past which a collect request always fell inside a critical
 ;; section under the low trip, so one falls due inside that section and is
@@ -264,7 +261,7 @@
                          (cons (cons (statement-sql (car rest)) (statement-state (car rest))) found))))))
 
 ;; tier-run : Database String -> (Listof Any)
-;; SQL run through M2's statement tier: each row's first column, in order.
+;; SQL run through the statement tier: each row's first column, in order.
 (define (tier-run db sql)
   (let ((st (prepare-statement db sql)))
     (dynamic-wind
@@ -297,21 +294,20 @@
 ;; quieted! : -> Void
 ;; A collection now, at a trial's start, with collect-trip-bytes raised to
 ;; 128 MiB, far above what one trial's runs allocate, so no collect request
-;; falls in a trial of the high pass: one costs a run up to a tick
-;; (.plans/research/m3-slice-5/, gc-ticks.sps).
+;; falls in a trial of the high pass: one costs a run up to a tick.
 (define (quieted!)
   (collect-trip-bytes (expt 2 27))
   (collect))
 
 ;; Pass = (U 'high 'low)
 ;; Each trial of the two passes begins with begun!: quieted!'s collection,
-;; then PASS's trip. In the high pass it stays at 2^27. In the low pass it
-;; is 256 bytes, below what one call allocates, until the trial ends: a
-;; request then falls due all through it, and one due inside a critical
-;; section is handled at the section's exit, where it costs the engine
-;; ticks, so an expiry can fall at a section's exit, past the call's last
-;; among them, where no procedure call follows (.plans/traps.md). Every
-;; request the trials meet goes through counted-request, which counts it.
+;; then PASS's trip. In the high pass it stays at 2^27. In the low pass it is
+;; 256 bytes, below what one call allocates, until the trial ends: a request
+;; then falls due all through it, and one due inside a critical section is
+;; handled at the section's exit, where it costs the engine ticks, so an
+;; expiry can fall at a section's exit, past the call's last among them, where
+;; no procedure call follows. Every request the trials meet goes through
+;; counted-request, which counts it.
 
 (define low-trip 256)
 
@@ -333,21 +329,20 @@
 ;; statement, and query-row's return (the profile trace, above).
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB (M4's closing review, builder D's
-;; exit-probe.sps). So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field
@@ -435,7 +430,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -618,12 +613,11 @@
 
 ;; --- the claim, pure -------------------------------------------------------------------------
 ;; execute!, query and query-row each hold a claim, made-claim's, made by the
-;; call's first expression. The sweeps below and (conveniences-pending)'s
-;; hold it through the calls; a claim taken again once its call has ended,
-;; position 0 above all, which any remainder taken before the check-out
-;; carries, passed them all (M3's closing review, reviewer B's N1: execute!'s
-;; remainder at fuels 8 to 14, resumed twice, inserted twice). So these rows
-;; hold it whole.
+;; call's first expression. The sweeps below and (conveniences-pending)'s hold
+;; it through the calls; a claim taken again once its call has ended, position
+;; 0 above all, which any remainder taken before the check-out carries, passed
+;; them all: execute!'s remainder at fuels 8 to 14, resumed twice, inserted
+;; twice. So these rows hold it whole.
 
 ;; claimed : (Listof (List (U Natural #f) Boolean)) -> (Listof Boolean)
 ;; A fresh claim given each of STEPS, a position and LAST?, in order: what
@@ -770,11 +764,10 @@
 ;; sweep's own bound, a whole new call past it a deviation unless a collect
 ;; request fell in its first slice; and how many of those. Each trial is
 ;; judged by itself: a claim taken again once its call had ended, by a
-;; remainder between the call's first expression and its check-out,
-;; answered again there, and passed every row of this suite (M3's closing
-;; review, reviewer B's N1). A bound across fuels, the last at which the
-;; call held its statement, failed correct code under a low trip, which
-;; orders no fuels (M4's closing review, reviewer B's B3).
+;; remainder between the call's first expression and its check-out, answered
+;; again there, and passed every row of this suite. A bound across fuels, the
+;; last at which the call held its statement, failed correct code under a low
+;; trip, which orders no fuels.
 (define (twice-sweep check)
   (let loop ((fuel 1) (deviations '()) (kinds '()) (held 0) (refused-at #f) (moved 0))
     (let* ((r (check fuel))
@@ -824,13 +817,12 @@
 
 ;; both-ways : Pass Symbol String (Database Integer -> Any) Any Any -> (Listof Any)
 ;; The warm sweep's judgments, then the cold's; and, in the low pass, a
-;; remainder past the return answering again at some fuel, warm or cold,
-;; by name. The return is the same code in both, which differ at the
-;; check-out alone; and where a remainder lands past it moved with the
-;; heap: query's warm sweep completed at fuel 88 and took none past it in 3
-;; of 13 trees whose src/ differed only in transaction.sls, which
-;; (chez-sqlite3) loads too, its cold sweep 2 in every tree (M4's closing
-;; review, builder D).
+;; remainder past the return answering again at some fuel, warm or cold, by
+;; name. The return is the same code in both, which differ at the check-out
+;; alone; and where a remainder lands past it moved with the heap: query's
+;; warm sweep completed at fuel 88 and took none past it in 3 of 13 trees
+;; whose src/ differed only in transaction.sls, which (chez-sqlite3) loads
+;; too, its cold sweep 2 in every tree.
 (define (both-ways pass name what run mine theirs)
   (let*-values (((suffix) (if (eq? pass 'low) ", low trip" ""))
                 ((warm warm-again warm-kinds)
@@ -906,8 +898,7 @@
 ;; A return that fails finalizes the statement, and has set the call's flag
 ;; all the same: the statement has left the call. query-row of a multi-row
 ;; insert ... returning, under another connection's read, answers its first
-;; row, then its reset commits, answers busy, and rolls the insert back
-;; (part A's busy-reset.sps).
+;; row, then its reset commits, answers busy, and rolls the insert back.
 
 (define returning "insert into t values (1), (2) returning x")
 

@@ -24,11 +24,10 @@
 ;;;   has exactly one, and none is for a name that is not exported.
 ;;;
 ;;; The signature comments are read as text, up to the source's import
-;;; clause. This is the one place a test reads a code comment. AGENTS.md
-;;; says not to; its exception, the maintainer, 2026-11-14, holds the
-;;; reference's signatures to the source's signature comments, which are the
-;;; contract: the page is wrong when it differs from them. The export names
-;;; are still Chez's, never read from the text.
+;;; clause. This is the one place a test reads a code comment, because the
+;;; source's signature comments are the contract: the reference's signatures
+;;; are held to them, and the page is wrong when it differs from them. The
+;;; export names are still Chez's, never read from the text.
 ;;;
 ;;; Out of its reach: a signature comment that is itself wrong.
 ;;;

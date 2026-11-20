@@ -7,10 +7,10 @@
 ;;; that an earlier step refuses), and the kept refusal with the marker.
 ;;; tests/test-library-loading-decoys.sps holds each switch alone.
 ;;;
-;;; The nine were one suite until it passed 450 s under the memory gate on
-;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005, amended); now each runs at most 11
-;;; children, and (library-loading) holds what all nine use.
+;;; Under the memory gate each child runs under a Valgrind of its own, so
+;;; the rows are split among nine suites, each running at most 11 children,
+;;; to keep each well under MEMORY_TIMEOUT (ADR-0005); (library-loading)
+;;; holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -21,29 +21,29 @@
 ;;;   - decoys: tests/decoy-libsqlite3.c, compiled here with $CC (else cc)
 ;;;     once per build, and run under one behaviour per row, chosen by
 ;;;     CHEZ_SQLITE3_DECOY. Each row asserts the refusal's reason and every
-;;;     field (plan section 3.4), and the decoy's call log, whole. A lacking
-;;;     build run under a behaviour that an earlier step refuses holds that
-;;;     step's place: the earlier refusal must win. A failed compile fails
-;;;     its row, never skips it (ADR-0001). The decoy's versions are the floor
-;;;     and the one below it, read from packaging/floors.sexp (ADR-0008);
+;;;     field, and the decoy's call log, whole. A lacking build run under a
+;;;     behaviour that an earlier step refuses holds that step's place: the
+;;;     earlier refusal must win. A failed compile fails its row, never skips
+;;;     it (ADR-0001). The decoy's versions are the floor and the one below
+;;;     it, read from packaging/floors.sexp (ADR-0008);
 ;;;   - the load runs once: the probe references loaded-libsqlite3 three
 ;;;     times, and the later two must answer what the first did, with no
 ;;;     second load in the call log and no second library in the process.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005, decision 4). Each runs through
-;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
-;;; with a log of its own that the gate reads. Every child here is the probe,
-;;; which says whether it ran under Valgrind (memcheck's preload in
-;;; /proc/self/maps), and a row requires yes exactly when the gate asked. A
-;;; child that escaped the gate fails its row (ADR-0005, amended).
+;;; requires them zero (ADR-0005). Each runs through gated-command, so under
+;;; make test-memory the gate's own Valgrind runs it, with a log of its own
+;;; that the gate reads. Every child here is the probe, which says whether it
+;;; ran under Valgrind (memcheck's preload in /proc/self/maps), and a row
+;;; requires yes exactly when the gate asked. A child that escaped the gate
+;;; fails its row (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
 ;;; failing, and none is #f: SRFI-64 makes #f of a raise in the actual
 ;;; expression. Anything that can raise is computed under a guard with a
 ;;; sentinel. Effects run in order, through let*, named lets and for-each,
-;;; never map (AGENTS.md).
+;;; never map.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

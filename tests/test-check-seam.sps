@@ -1,6 +1,6 @@
 #!r6rs
 ;;; The suite for tests/check-seam.sps, the program behind `make check-seam`
-;;; (ADR-0009, amended). Every rule it holds has a fixture tree under
+;;; (ADR-0009). Every rule it holds has a fixture tree under
 ;;; tests/fixtures/seam/<case>/, or a tree this suite writes into a temporary
 ;;; directory, and this suite runs the program on each, in a fresh Chez,
 ;;; through capture-command. A case asserts the exit status, the whole of

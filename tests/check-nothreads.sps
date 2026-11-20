@@ -168,7 +168,7 @@
                                 reads))))
         (library-directories (list root))
         ;; Each import is an effect, so they run in order, one at a time, never
-        ;; through map, which calls its procedure in no fixed order (AGENTS.md).
+        ;; through map, which calls its procedure in no fixed order.
         (let* ((verdicts (let loop ((rest names) (done '()))
                            (if (null? rest)
                                (reverse done)

@@ -1,19 +1,19 @@
 #!r6rs
 ;;; (chez-sqlite3 private statement-values): a statement's values, bound to
-;;; its parameters and read from its columns (ADR-0015; ADR-0014, decisions
-;;; 3 and 5, amended). (chez-sqlite3) exports its six verbs.
+;;; its parameters and read from its columns (ADR-0015; ADR-0014).
+;;; (chez-sqlite3) exports its six verbs.
 ;;;
 ;;; Every verb goes through (chez-sqlite3 private statement)'s
-;;; call-with-statement-handle, with its own verb's name from
-;;; statement-verbs, so the accessor makes decision 3's checks, in order, and
-;;; the state's, before anything reaches C. The accessor's procedure runs in
-;;; the connection's critical section: there each verb reads the count it
-;;; checks an index against, makes its C calls, reads sqlite3_errmsg straight
-;;; after a failure, and answers data, the state the call leaves first, #f
-;;; for unchanged. Nothing raises in it. Every refusal and failure is raised
-;;; after the section, from that data (ADR-0014, decision 10).
+;;; call-with-statement-handle, with its own verb's name from statement-verbs,
+;;; so the accessor makes its checks, in order, and the state's, before
+;;; anything reaches C. The accessor's procedure runs in the connection's
+;;; critical section: there each verb reads the count it checks an index
+;;; against, makes its C calls, reads sqlite3_errmsg straight after a failure,
+;;; and answers data, the state the call leaves first, #f for unchanged.
+;;; Nothing raises in it. Every refusal and failure is raised after the
+;;; section, from that data (ADR-0014).
 ;;;
-;;; Binding (ADR-0015, decisions 2 to 6):
+;;; Binding (ADR-0015):
 ;;;
 ;;;   the value      bind-plan decides it, before the section: it is pure,
 ;;;                  and a string's encoding then runs outside the section.
@@ -30,28 +30,27 @@
 ;;;                  sqlite-utf8 for text, and sqlite-transient
 ;;;   SQLite refuses an &sqlite-error from the bind's code, sqlite3_errmsg
 ;;;                  read straight after, the statement's SQL and no offset:
-;;;                  sqlite3_error_offset can be an earlier prepare's (the
-;;;                  research's trap). The state stays ready
+;;;                  sqlite3_error_offset can be an earlier prepare's. The
+;;;                  state stays ready
 ;;;
 ;;; The checks of a bind come in this order: the accessor's (a statement, its
 ;;; thread, not finalized, ready), then the parameter, then the value; and
 ;;; for bind-all!, the count, then every value, before any bind.
 ;;;
-;;; Reading (ADR-0015, decisions 7 to 9): a column's index is checked against
+;;; Reading (ADR-0015): a column's index is checked against
 ;;; sqlite3_column_count, read in the read's section, never cached. The type
 ;;; is read first, then the matching accessor: TEXT through
 ;;; sqlite3_column_text and BLOB through sqlite3_column_blob, each by
-;;; read-column-bytes, then sqlite3_column_bytes, copied out by
-;;; foreign-bytes. TEXT is decoded by strict-utf8->string after the section,
-;;; and ill-formed bytes raise &sqlite-invalid-text with the column and the
-;;; byte offset. A NOMEM read moves the statement to failed, by the
-;;; maintainer's choice (ADR-0014, amended): it raises &sqlite-error nomem
-;;; once, and reads and step! are refused until reset!, whose repeat of the
-;;; code raises nothing.
+;;; read-column-bytes, then sqlite3_column_bytes, copied out by foreign-bytes.
+;;; TEXT is decoded by strict-utf8->string after the section, and ill-formed
+;;; bytes raise &sqlite-invalid-text with the column and the byte offset. A
+;;; NOMEM read moves the statement to failed (ADR-0014): it raises
+;;; &sqlite-error nomem once, and reads and step! are refused until reset!,
+;;; whose repeat of the code raises nothing.
 ;;;
 ;;; Every refusal of a caller's mistake is an assertion violation whose
 ;;; irritants begin with a symbol naming its rule, then the value by
-;;; shown-value, never a string's text (ADR-0013, decisions 7 and 9):
+;;; shown-value, never a string's text (ADR-0013):
 ;;;
 ;;;   not-a-parameter          a parameter that is neither an exact integer
 ;;;                            nor a string
@@ -69,20 +68,17 @@
 ;;;
 ;;; and a value bind-plan refuses, by raise-bind-refusal's rule.
 ;;;
-;;; M3's internals (ADR-0013, decision 2; ADR-0016, decisions 3 and 9; the
-;;; M3 plan, finding F11): each verb's work for a WHO, which everything it
-;;; raises names, the verb itself a thin wrapper passing its own name:
-;;; bind!/who, bind-all!/who, clear-bindings!/who, column-value/who,
+;;; The internals (ADR-0013; ADR-0016): each verb's work for a WHO, which
+;;; everything it raises names, the verb itself a thin wrapper passing its own
+;;; name: bind!/who, bind-all!/who, clear-bindings!/who, column-value/who,
 ;;; column-bytevector/who and column-name/who. And bind-each!/who, which the
 ;;; conveniences bind through: bind-all!'s rule, every value checked before
-;;; any is bound, with each value bound in a critical section of its own
-;;; (the maintainer's answer to the M3 plan's Q15, "One value each"), each
+;;; any is bound, with each value bound in a critical section of its own, each
 ;;; of its sections reading the convenience's call's flag first, through
-;;; (chez-sqlite3 private statement)'s while-held. And bind-each!/at, its
-;;; work as data, each section made by its caller's sectioner: execute!,
-;;; query and query-row's claim on their call, at the run's position
-;;; (ADR-0016, amended in M3 slice 5's part D); bind-each!/who is it, each
-;;; section by while-held.
+;;; (chez-sqlite3 private statement)'s while-held. And bind-each!/at, its work
+;;; as data, each section made by its caller's sectioner: execute!, query and
+;;; query-row's claim on their call, at the run's position (ADR-0016);
+;;; bind-each!/who is it, each section by while-held.
 (library (chez-sqlite3 private statement-values)
   (export bind! bind-all! clear-bindings! column-value column-bytevector column-name
           bind!/who bind-all!/who bind-each!/who bind-each!/at clear-bindings!/who
@@ -265,12 +261,11 @@
 
   ;; bind! : Statement (U Positive-Integer String) Value -> Void
   ;; VALUE bound to ST's PARAMETER: an index from 1 to (parameter-count ST),
-  ;; or a name with its sigil, ":name", as the SQL writes it. Allowed in
-  ;; ready only (ADR-0014, decision 5). A parameter or value refused is an
-  ;; assertion violation before C, by its rule; a bind SQLite refuses, such
-  ;; as TOOBIG over its length limit, raises &sqlite-error with ST's SQL,
-  ;; the parameter then NULL and the state ready (ADR-0015, decisions 2 and
-  ;; 6).
+  ;; or a name with its sigil, ":name", as the SQL writes it. Allowed in ready
+  ;; only (ADR-0014). A parameter or value refused is an assertion violation
+  ;; before C, by its rule; a bind SQLite refuses, such as TOOBIG over its
+  ;; length limit, raises &sqlite-error with ST's SQL, the parameter then NULL
+  ;; and the state ready (ADR-0015).
   (define (bind! st parameter value)
     (bind!/who 'bind! st parameter value))
 
@@ -287,7 +282,7 @@
 
   ;; plans-of : (Listof Any) -> (Listof Bind-Plan)
   ;; GIVEN's bind plans, in order, by a named let: never map, whose order of
-  ;; calls is not fixed (AGENTS.md). Pure.
+  ;; calls is not fixed. Pure.
   (define (plans-of given)
     (let loop ((rest given) (found '()))
       (if (null? rest)
@@ -323,15 +318,15 @@
   ;; section, is value-count-mismatch, and every value is checked, before
   ;; anything is bound: a refusal of ours binds nothing. A bind SQLite
   ;; refuses midway raises &sqlite-error, and leaves the parameters before it
-  ;; bound (ADR-0015, decision 6).
+  ;; bound (ADR-0015).
   (define (bind-all! st . given)
     (bind-all!/who 'bind-all! st given))
 
   ;; bind-each!/who : Symbol Statement (Listof Value) (U (-> Any) #f) -> Void
   ;; Every parameter of ST bound, 1 to n, from GIVEN, n values, for WHO, by
-  ;; bind-all!'s rule, each value in a critical section of its own (the M3
-  ;; plan's Q15). GIVEN is planned first, outside any section, so a string
-  ;; is encoded once. Then, in order:
+  ;; bind-all!'s rule, each value in a critical section of its own. GIVEN is
+  ;; planned first, outside any section, so a string is encoded once. Then,
+  ;; in order:
   ;;   - the count, read in a section of its own by the accessor for
   ;;     bind-all!, so its checks come first: a statement, on its
   ;;     connection's owning thread, not finalized, ready;
@@ -428,7 +423,7 @@
   ;; clear-bindings! : Statement -> Void
   ;; Every parameter of ST NULL again, by sqlite3_clear_bindings. Allowed in
   ;; ready only: SQLite allows it while a row is ready, and then frees what
-  ;; the row still reads (ADR-0014, decision 5).
+  ;; the row still reads (ADR-0014).
   (define (clear-bindings! st)
     (clear-bindings!/who 'clear-bindings! st))
 
@@ -501,14 +496,14 @@
   ;; FLOAT a flonum, TEXT a string decoded strictly, BLOB a fresh bytevector,
   ;; NULL sql-null. Allowed in row only. TEXT that is not well-formed UTF-8
   ;; raises &sqlite-invalid-text, and column-bytevector reads its bytes. A
-  ;; read SQLite answers with NOMEM leaves ST failed and raises
-  ;; &sqlite-error nomem, once (ADR-0015, decision 7; ADR-0014, amended).
+  ;; read SQLite answers with NOMEM leaves ST failed and raises &sqlite-error
+  ;; nomem, once (ADR-0015; ADR-0014).
   (define (column-value st column)
     (column-value/who 'column-value st column))
 
   ;; column-value/who : Symbol Statement Natural -> Value
   ;; column-value's work for WHO, which everything it raises names: the
-  ;; conveniences read a row one column a section through it (Q15).
+  ;; conveniences read a row one column a section through it.
   (define (column-value/who who st column)
     (finish who
       (call-with-statement-handle who st 'column-value
@@ -520,7 +515,7 @@
   ;; sqlite3_column_text, so the bytes a TEXT value decodes from, BLOB
   ;; through sqlite3_column_blob, each a fresh bytevector; NULL sql-null; an
   ;; INTEGER or FLOAT value is not-text-or-blob. Allowed in row only. NOMEM
-  ;; as column-value (ADR-0015, decision 8).
+  ;; as column-value (ADR-0015).
   (define (column-bytevector st column)
     (column-bytevector/who 'column-bytevector st column))
 
@@ -539,8 +534,7 @@
   ;; means an allocation failed, and SQLite sets no code for it, so it raises
   ;; &sqlite-error nomem with sqlite3_errstr's message. That leaves the
   ;; state as it was: no code sticks to the statement, so nothing else a
-  ;; statement does fails for it, unlike a value's NOMEM (ADR-0015, decision
-  ;; 9).
+  ;; statement does fails for it, unlike a value's NOMEM (ADR-0015).
   (define (column-name st column)
     (column-name/who 'column-name st column))
 

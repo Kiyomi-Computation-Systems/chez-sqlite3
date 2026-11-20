@@ -70,10 +70,10 @@
 # whatever else the tree holds: (chez-sqlite3 private counters), which every
 # suite's (chez-sqlite3-testing) imports, and (chez-sqlite3 private
 # require-threaded), which it imports first. So those cases also show that
-# check-suites and the testing library need no other, and load no
-# libsqlite3 (the M1 plan, §3.7; tests/test-never-loads.sps holds the
-# imports). README.org and packaging/floors.sexp are the tree's own, and
-# agree, so check-floors passes in every case but floors and floors-script.
+# check-suites and the testing library need no other, and load no libsqlite3
+# (tests/test-never-loads.sps holds the imports). README.org and
+# packaging/floors.sexp are the tree's own, and agree, so check-floors passes
+# in every case but floors and floors-script.
 # Its Makefile is the tree's, but for its two shard lists, MEMORY_SUITES_1
 # and MEMORY_SUITES_2, which name the copy's own suites, the plant's in the
 # first and the after-suite's in the second, so check-memory-shards, which
@@ -87,8 +87,8 @@
 # registered. The plant prints the count it read once loaded and the one its
 # open left, and the check's line must name those two: a failure where the
 # open raised the count, and unavailable, on a library that keeps none, such
-# as Apple's (ADR-0005, amended). Valgrind sees the same leak, definitely
-# lost: tests/check-memory-gate.sh's own plant of it.
+# as Apple's (ADR-0005). Valgrind sees the same leak, definitely lost:
+# tests/check-memory-gate.sh's own plant of it.
 #
 # `make check-test-fails` passes MAKE and TIMEOUT, the tools it found. Run
 # directly, the script takes make and timeout from PATH.
@@ -448,8 +448,8 @@ rm -f "${copy:?}/${site_plant:?}"
 # and the rule needs none: it names the library the entry lists. Without
 # check-seam among make test's prerequisites, or with it reading a directory
 # but src/, no check sees the plant and make test passes: the case fails then
-# (traps.md: each new prerequisite comes with its plant). check-seam passes
-# before and after: the plant is removed.
+# (each new prerequisite comes with its plant). check-seam passes before and
+# after: the plant is removed.
 cat >"$plant_dir/seam" <<'EOF'
 #!r6rs
 ;;; Planted by tests/check-test-fails.sh: a private library that allocates
@@ -493,9 +493,8 @@ cp "$root/README.org" "$copy/README.org"
 # floor, read from the copy's floors file. check-floors reads every file under
 # scripts/ci, so it names the line. Without scripts/ci among the directories
 # check-floors is run on (the Makefile's fourth argument), no check sees the
-# plant and make test passes: the case fails then (traps.md: each new
-# prerequisite comes with its plant). check-floors passes before and after: the
-# plant is removed.
+# plant and make test passes: the case fails then (each new prerequisite comes
+# with its plant). check-floors passes before and after: the plant is removed.
 sqlite_floor=$(sed -n 's/^ *(sqlite "\([0-9.]*\)").*$/\1/p' "$root/packaging/floors.sexp")
 case "$sqlite_floor" in
   "" | *[!0-9.]*) bad "floors-script: could not read the SQLite floor from packaging/floors.sexp"; sqlite_floor=0.0.0 ;;

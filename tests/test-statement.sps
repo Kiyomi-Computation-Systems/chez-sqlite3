@@ -1,7 +1,7 @@
 #!r6rs
 ;;; The suite for prepared statements, (chez-sqlite3 private statement), and
 ;;; the connection's tracking of them in (chez-sqlite3 private connection)
-;;; (ADR-0014; ADR-0012 and ADR-0013, amended).
+;;; (ADR-0014; ADR-0012 and ADR-0013).
 ;;;
 ;;;   prepare        a statement, ready, counted and tracked; statement-sql a
 ;;;                  copy; the parameter and column counts SQLite gives
@@ -11,10 +11,11 @@
 ;;;                  on 2 GiB; a failure's code, SQL and character offset, #f
 ;;;                  for SQLite's -1; a refused SQL's first statement prepared,
 ;;;                  so pragma cache_size = 7; select 1 sets the cache size
-;;;   decision 3     a non-statement, the wrong thread, a finalized statement,
+;;;   the checks     a non-statement, the wrong thread, a finalized statement,
 ;;;                  in that order, for every verb; finalize-statement! twice
 ;;;   the states     every verb in every state, and call-with-statement-handle
-;;;                  for every verb of the table in every state, slice 4's too
+;;;                  for every verb of the table in every state, the value
+;;;                  verbs' too
 ;;;   step           #t then #f; done and failed refused until reset!; a
 ;;;                  failed step's extended code; the subtypes by real SQL: a
 ;;;                  constraint, a read-only database, another's lock
@@ -48,16 +49,16 @@
 ;;;
 ;;; The four __collect_safe calls are held by behaviour in
 ;;; tests/test-statement-block.sps, the tail scan against SQLite's own
-;;; prepare in tests/test-statement-tail.sps, and decision 10's "change
+;;; prepare in tests/test-statement-tail.sps, and ADR-0014's "change
 ;;; together", an engine's expiry between a verb's section and its tracking or
 ;;; state, in tests/test-statement-sections.sps.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-connection.sps reaches them: a refused library fails the rows
-;;; by name. SQLite's measured answers (build/m2s3/'s probes, on both
-;;; libraries) are written out where a row expects them. A column is read
-;;; here through call-with-statement-handle and native's sqlite3_column_int64,
-;;; since the column verbs are slice 4's.
+;;; by name. SQLite's measured answers (on both libraries) are written out
+;;; where a row expects them. A column is read here through
+;;; call-with-statement-handle and native's sqlite3_column_int64, since the
+;;; value verbs have a suite of their own.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
@@ -299,7 +300,7 @@
 
 ;; column-int : Statement Natural -> Integer
 ;; Column I of ST's row, read through sqlite3_column_int64 inside
-;; call-with-statement-handle, as slice 4's column-value will.
+;; call-with-statement-handle, as column-value does.
 (define (column-int st i)
   (call-with-statement-handle 'test-statement st 'column-value
     (lambda (connection handle sql) (values #f (sqlite3-column-int64 handle i)))))
@@ -489,8 +490,7 @@
 ;; A record that record-rtd opens can be rebuilt from its type, and one that is
 ;; not sealed extended, so a caller could make a statement holding any handle.
 ;; Opaque, record-rtd raises instead; sealed cannot be held from here, since an
-;; opaque record's type is out of reach, so nothing can name it as a parent
-;; (the mutation log argues it).
+;; opaque record's type is out of reach, so nothing can name it as a parent.
 (test-equal "a statement is opaque: record-rtd refuses it, from record-rtd, and record? says it is no record"
   '((assertion-violation record-rtd) #f)
   (with-memory-db
@@ -671,9 +671,9 @@
 
 ;; failed-prepare : String -> Any
 ;; SQL's failure on a fresh :memory:, its first prepare, then on the same
-;; connection once it has prepared and finalized select 1: some offsets
-;; differ by that on some builds (the coordinator's measurement, from slice
-;; 4's research: select ?0), so a row keeps to inputs alike on both.
+;; connection once it has prepared and finalized select 1: some offsets differ
+;; by that on some builds (measured with select ?0), so a row keeps to inputs
+;; alike on both.
 (define (failed-prepare sql)
   (with-memory-db
    (lambda (db)
@@ -688,8 +688,7 @@
                     'a-copy)))
     (list once once)))
 
-;; Measured on 3.53.1 and 3.45.1 alike, on a fresh connection and a used one
-;; (build/m2s3/probe-codes.sps and this row; M2 slice 2's log):
+;; Measured on 3.53.1 and 3.45.1 alike, on a fresh connection and a used one:
 ;; sqlite3_error_offset is 10 for nosuchcol after select 1, 13 bytes after
 ;; 'é', 0 for selectx, and -1 where SQLite gives none: an error at the end of
 ;; the SQL, a missing table, and a missing collation, whose code is the
@@ -707,7 +706,7 @@
        '("select 1, nosuchcol" "select 'é', nosuchcol" "selectx 1" "select 1 +" "select (" "select é,"
          "select 'éé' from nosuchtable" "select 'a' < 'b' collate no_such_collation")))
 
-;; --- decision 3's checks, in order --------------------------------------------------------
+;; --- the checks, in order -----------------------------------------------------------------
 
 (test-equal "every verb refuses what is no statement, by its rule and shown-value, from the verb: a symbol, a number, a string by its kind, a database by its kind, a list holding a statement by its kind"
   (map (lambda (v)
@@ -850,8 +849,8 @@
               (list 'failed 0 'failed 1) (list 'finalized (list 'raised (closed 'column-count)) 'finalized 0)))
   (list (row-of statement-sql) (row-of parameter-count) (row-of column-count)))
 
-;; The accessor's own table, for every verb statement-state knows, slice 4's
-;; among them: PROC runs where the verb is allowed, and answers the two
+;; The accessor's own table, for every verb statement-state knows, the value
+;; verbs among them: PROC runs where the verb is allowed, and answers the two
 ;; handles' kinds; elsewhere the refusal, the state left as it was.
 (define (accessor-cell verb state)
   (with-file-db
@@ -873,7 +872,7 @@
        (list answer after)))))
 
 ;; allowed-in : Symbol -> (Listof Symbol)
-;; ADR-0014 decision 5's table, written out: where each verb is allowed.
+;; ADR-0014's table, written out: where each verb is allowed.
 (define (allowed-in verb)
   (case verb
     ((bind! bind-all! clear-bindings!) '(ready))
@@ -1010,8 +1009,8 @@
        (finalize-statement! st)
        (list a sa b sb c sc r sr d sd)))))
 
-;; Measured on 3.53.1 and 3.45.1 alike (build/m2s3/probe-codes.sps): a unique
-;; violation answers the extended 2067; a reset after it 2067, then 0.
+;; Measured on 3.53.1 and 3.45.1 alike: a unique violation answers the
+;; extended 2067; a reset after it 2067, then 0.
 (test-equal "a failed step raises &sqlite-error from step!, its code the step's own, extended: constraint and constraint-unique, a &sqlite-constraint, with the SQL and no offset; the statement is failed, step! is refused, reset! raises nothing, and the step fails again"
   (list (list 'raised (sqlite-failure 'step! 'constraint 'constraint-unique insert-sql #f 'constraint))
         'failed
@@ -1033,9 +1032,8 @@
 
 ;; A trigger's RAISE(ABORT, text) reaches the message as the text, whose own
 ;; leading U+FEFF the lenient decoding of Chez's utf8->string would drop
-;; (found by the review, build/m2s3-verify/feff-errmsg.sps; native's
-;; c-string->string keeps it). The text is the SQL's own, so the row asserts
-;; it whole, with a second message that has no U+FEFF as the control.
+;; (native's c-string->string keeps it). The text is the SQL's own, so the row
+;; asserts it whole, with a second message that has no U+FEFF as the control.
 (test-equal "a failed step's message keeps a leading U+FEFF of the trigger's own text, and a text without one is unchanged"
   (list (list 'sqlite-error 'constraint 'constraint-trigger "\xFEFF;boom")
         (list 'sqlite-error 'constraint 'constraint-trigger "boom"))
@@ -1056,8 +1054,8 @@
             (b (message-of-insert "insert into t values (2)")))
        (list a b)))))
 
-;; Measured (build/m2s3/probe-codes.sps): on a connection opened read-only, an
-;; insert prepares, and its step answers 8, SQLITE_READONLY, with no extension.
+;; Measured: on a connection opened read-only, an insert prepares, and its
+;; step answers 8, SQLITE_READONLY, with no extension.
 (test-equal "a write to a database opened read-only: the insert prepares, and its step raises &sqlite-error, readonly and readonly, a &sqlite-read-only, with the SQL; the statement is failed, and its finalize, repeating the code, raises nothing"
   (list 'ready
         (list 'raised (sqlite-failure 'step! 'readonly 'readonly "insert into t values (1)" #f 'read-only))
@@ -1089,8 +1087,8 @@
 (define (release! reader)
   (when (pair? reader) (undo! (list (cdr reader)) (list (car reader)))))
 
-;; Measured (build/m2s3/probe-codes.sps): under another connection's read,
-;; with no busy timeout, a plain insert's step answers 5 at once.
+;; Measured: under another connection's read, with no busy timeout, a plain
+;; insert's step answers 5 at once.
 (test-equal "a lock held by a second connection: under its read, an insert's step raises &sqlite-error, busy and busy, a &sqlite-busy, with the SQL; the statement is failed, and the table keeps its one row"
   (list (list 'raised (sqlite-failure 'step! 'busy 'busy "insert into t values (5)" #f 'busy))
         'failed 1)
@@ -1113,9 +1111,8 @@
 ;; --- reset's and finalize's own failures -----------------------------------------------------
 ;; An insert ... returning stepped once answers a row, and its commit runs at
 ;; its reset or finalize. Under another connection's read, with no busy
-;; timeout, each answers 5 and the insert is rolled back (measured: M2 slice
-;; 0's review, and build/m2s3/probe-codes.sps); a reset or finalize after a
-;; reset that failed answers 0.
+;; timeout, each answers 5 and the insert is rolled back (measured); a reset
+;; or finalize after a reset that failed answers 0.
 
 (define returning-sql "insert into t values (1), (2) returning x")
 
@@ -1241,11 +1238,11 @@
                        n)))))
          (lambda () (release! reader)))))))
 
-;; Measured (build/m2s3/probe-close.sps), on both libraries: of two inserts
-;; stepped once under a read, the one finalized second answers 5 and the
-;; first 0, whichever was prepared first, and both are rolled back. So the
-;; SQL of the failure the close raises names the statement it finalized
-;; last: the newest, when it finalizes oldest first.
+;; Measured on both libraries: of two inserts stepped once under a read, the
+;; one finalized second answers 5 and the first 0, whichever was prepared
+;; first, and both are rolled back. So the SQL of the failure the close raises
+;; names the statement it finalized last: the newest, when it finalizes oldest
+;; first.
 (test-equal "close-database! finalizes oldest first: of two inserts stepped once under a read, the failure raised is the newer's, busy, with its SQL, from close-database!; the connection is closed, both statements finalized, both inserts rolled back, and nothing is counted but the reader and its statement, until they are closed"
   (list #t #t
         (list 'raised (sqlite-failure 'close-database! 'busy 'busy "insert into t values (2) returning 'b'" #f 'busy))
@@ -1307,10 +1304,10 @@
                      (cons 'b (lambda () '(failed 5 "second" "select 'b'"))))
                planted-object))
 
-;; Measured (build/m2s3/probe-close.sps), on both libraries: a backup reading
-;; from the connection makes sqlite3_close answer 5 with every statement
-;; finalized; nothing in M2's own entry points can (SQLite's documentation
-;; names unfinalized statements, unfinished backups and open BLOB handles).
+;; Measured on both libraries: a backup reading from the connection makes
+;; sqlite3_close answer 5 with every statement finalized; nothing in the
+;; library's own entry points can (SQLite's documentation names unfinalized
+;; statements, unfinished backups and open BLOB handles).
 (test-equal "a close that fails, after a finalize that failed: the close's own failure is raised, busy, with no SQL; the statement is finalized and counted down, the connection open and counted; once the backup is finished the connection closes, raising nothing, and the finalize's failure is lost"
   (list 'backup
         (list 'raised (sqlite-failure 'close-database! 'busy 'busy #f #f 'busy))
@@ -1801,8 +1798,7 @@
 
 ;; --- what docs/reference.md says, each held by a row ------------------------------------
 
-;; Measured on 3.53.1 and 3.45.1 alike (build/m2s3-verify/m3-items.sps and
-;; build/m2s3-fix/probe-docs.sps): a held select * reads its column count
+;; Measured on 3.53.1 and 3.45.1 alike: a held select * reads its column count
 ;; again at each call, and SQLite re-prepares it at its next step.
 (test-equal "column-count changes at the statement's next step after an alter table, on its own connection or another: a held select * reads 2, 2, then #t and 3, the alter made on its own connection; 1, 1, then #t and 2 when another connection made it"
   (list (list 2 2 #t 3) (list 1 1 #t 2))
@@ -1835,10 +1831,10 @@
               (list before after-alter stepped after-step)))
           (lambda () (undo! '() (list other)))))))))
 
-;; Measured on both libraries (build/m2s3-verify/m3-items.sps): begin, an
-;; insert ... returning stepped once, then commit answers busy, "cannot commit
-;; transaction - SQL statements in progress": no wait fixes it, and a reset
-;; of the insert lets the commit through.
+;; Measured on both libraries: begin, an insert ... returning stepped once,
+;; then commit answers busy, "cannot commit transaction - SQL statements in
+;; progress": no wait fixes it, and a reset of the insert lets the commit
+;; through.
 (test-equal "a commit refused while the connection's own statement is mid-row raises &sqlite-busy from step!, the statement failed; after a reset! of the insert, the same commit, reset, steps to done, and the table holds the insert's two rows"
   (list #t (list 'raised (sqlite-failure 'step! 'busy 'busy "commit" #f 'busy))
         'failed #f 'done 2)
@@ -1858,8 +1854,8 @@
        (list row refused state again after (query-int db "select count(*) from t"))))))
 
 ;; reset! rewinds the statement and keeps its bindings (docs/reference.md): a
-;; value bound by sqlite3_bind_int64 through the accessor, which slice 4's
-;; bind! will be, reads back after a reset and a second step.
+;; value bound by sqlite3_bind_int64 through the accessor, as bind! does,
+;; reads back after a reset and a second step.
 (test-equal "reset! keeps the bindings: select ?1 bound to 7 reads 7, is reset, and reads 7 again"
   '(7 7)
   (with-memory-db

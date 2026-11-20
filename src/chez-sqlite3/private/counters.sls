@@ -98,7 +98,7 @@
   ;; A check of what a native library holds at a suite's end, which only that
   ;; library can make: (chez-sqlite3 private native) registers the
   ;; sqlite3_memory_used check once its load has initialised SQLite, so a
-  ;; process that never loaded libsqlite3 has none to run (the M1 plan, §3.7).
+  ;; process that never loaded libsqlite3 has none to run.
   ;; The checks are kept here because suite-exit-status already reads this
   ;; library, and registering one loads nothing. A check is a procedure of no
   ;; arguments that answers (pass TEXT), (fail TEXT) or (unavailable TEXT);

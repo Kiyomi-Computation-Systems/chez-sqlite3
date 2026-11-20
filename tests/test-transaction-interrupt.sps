@@ -1,8 +1,7 @@
 #!r6rs
 ;;; with-transaction beside an interrupted statement (ADR-0017's context:
 ;;; an interrupted write ends the transaction and its savepoints, and an
-;;; interrupted SELECT doesn't; concurrency I5, trap 3), in
-;;; (chez-sqlite3 private transaction).
+;;; interrupted SELECT doesn't), in (chez-sqlite3 private transaction).
 ;;;
 ;;; The body runs a long statement through execute!, while a watchdog thread
 ;;; calls native's sqlite3_interrupt on the connection's handle, read once
@@ -20,16 +19,15 @@
 ;;;                  autocommit 0; with-transaction rolls the level back
 ;;;
 ;;; The watchdog is tests/test-interrupt-reach.sps's device, copied and
-;;; adapted: a program keeps its own code. Valgrind runs one thread at a
-;;; time, and a thread running C keeps it: slice 4's watchdog, a plain thread
-;;; waking every 5 ms, sent its first interrupt 16.5 s into a step, and the
-;;; suite took 31 to 318 s on CI and 429 to 434 s under the gate here
-;;; (.plans/traps.md; ADR-0005's slice 6 amendment). A thread blocked on a
-;;; mutex lets the others run. So the watchdog takes SQLite's own memory
-;;; mutex, SQLITE_MUTEX_STATIC_MEM, which sqlite3_malloc and sqlite3_free
-;;; take while memory statistics are on, as they are on both libraries. The
-;;; statement allocates as it runs, calling randomblob for each row, so it
-;;; blocks inside SQLite while the watchdog holds it.
+;;; adapted: a program keeps its own code. Valgrind runs one thread at a time,
+;;; and a thread running C keeps it: a plain-thread watchdog, waking every 5
+;;; ms, sends its first interrupt 16.5 s into a step, and with one the suite
+;;; took 31 to 318 s on CI and 429 to 434 s under a local gate (ADR-0005). A
+;;; thread blocked on a mutex lets the others run. So the watchdog takes
+;;; SQLite's own memory mutex, SQLITE_MUTEX_STATIC_MEM, which sqlite3_malloc
+;;; and sqlite3_free take while memory statistics are on, as they are on both
+;;; libraries. The statement allocates as it runs, calling randomblob for each
+;;; row, so it blocks inside SQLite while the watchdog holds it.
 ;;;
 ;;; An interrupt stops the step only from inside it: SQLite clears the
 ;;; connection's interrupt as a statement starts with none active. So the
@@ -37,11 +35,11 @@
 ;;; interrupts before the statement starts, which it then may; reads the
 ;;; flag each 1 ms until it reads clear, which only the step's start does,
 ;;; the step then held at its next allocation; interrupts again, inside the
-;;; step; and lets the mutex go. Each later round takes the mutex, sleeps
-;;; 1 ms holding it, interrupts, lets it go, and sleeps 1 ms. Slice 6's
-;;; first round, without the handshake, could interrupt before the step's
-;;; clear, and a later round then had to win the CPU from Valgrind: with the
-;;; call made 200 ms late, this suite took 11 to 22 s under the gate, and
+;;; step; and lets the mutex go. Each later round takes the mutex, sleeps 1 ms
+;;; holding it, interrupts, lets it go, and sleeps 1 ms. A first round without
+;;; the handshake could interrupt before the step's clear, and a later round
+;;; then had to win the CPU from Valgrind: with the call made 200 ms late,
+;;; this suite took 11 to 22 s under the gate, and
 ;;; tests/test-interrupt-close.sps 10 to 45 s, four runs each, where with the
 ;;; handshake each took 11 s every time (tests/test-interrupt-reach.sps's
 ;;; header).
@@ -65,15 +63,14 @@
 ;;; the round's handler lets the mutex go if the round took it, notes the
 ;;; raise, counts the watchdog started, sleeps 1 ms, and the next round
 ;;; follows, until the statement is done or the deadline has passed, for a
-;;; thread that dies on a raise leaves the statement uninterrupted, or
-;;; blocked inside SQLite for good, and the suite hung, naming no row
-;;; (AGENTS.md). The one raise it can't answer is a mutex-leave that raises
-;;; every time: the mutex is then held, and the statement's next allocation
-;;; blocks for good. The deadline bounds the watchdog's life, never the
-;;; interrupt's latency.
+;;; thread that dies on a raise leaves the statement uninterrupted, or blocked
+;;; inside SQLite for good, and the suite hung, naming no row. The one raise
+;;; it can't answer is a mutex-leave that raises every time: the mutex is then
+;;; held, and the statement's next allocation blocks for good. The deadline
+;;; bounds the watchdog's life, never the interrupt's latency.
 ;;;
 ;;; Every wait is bounded. Every computation that can raise runs under a
-;;; guard with a sentinel of its own. Effects run in order (AGENTS.md).
+;;; guard with a sentinel of its own. Effects run in order.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)

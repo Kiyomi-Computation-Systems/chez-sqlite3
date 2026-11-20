@@ -10,27 +10,19 @@
 ;;;                                opened it (ADR-0010)
 ;;;   &sqlite-closed               a connection used once closed (ADR-0012)
 ;;;
-;;; M2 adds three classes of &sqlite-error, told by its primary code (ADR-0013,
-;;; amended), and one more member under the root:
+;;; Four classes of &sqlite-error, told by its primary code (ADR-0013), and
+;;; four more members under the root:
 ;;;
 ;;;   &sqlite-error
 ;;;     &sqlite-busy               busy and locked
 ;;;     &sqlite-constraint         constraint
 ;;;     &sqlite-read-only          readonly
-;;;   &sqlite-invalid-text         TEXT that is not well-formed UTF-8 (ADR-0015)
-;;;
-;;; M3 adds a fourth class, and two more members under the root (ADR-0013,
-;;; amended for M3):
-;;;
-;;;   &sqlite-error
 ;;;     &sqlite-interrupt          interrupt (ADR-0019)
+;;;   &sqlite-invalid-text         TEXT that is not well-formed UTF-8 (ADR-0015)
 ;;;   &sqlite-setting-mismatch     a setting read back differs from the value
 ;;;                                written (ADR-0018)
 ;;;   &sqlite-transaction-ended    a body returned after its transaction ended
 ;;;                                under it (ADR-0017)
-;;;
-;;; M4 adds one more member under the root (ADR-0013, amended for M4):
-;;;
 ;;;   &sqlite-extensions-unavailable  an open opted in to extension loading
 ;;;                                   on a library without
 ;;;                                   sqlite3_load_extension (ADR-0021)
@@ -124,8 +116,8 @@
   ;; checked-accessor : Symbol (Any -> Boolean) String (Any -> Any) -> (Any -> Any)
   ;; ACCESSOR, a record's or a condition type's, for WHO: called on what
   ;; PREDICATE holds; anything else an assertion violation from WHO, "not
-  ;; WHAT", naming it by shown-value, never the value. Chez's own check named
-  ;; what it refused (chez-curl ADR-0036).
+  ;; WHAT", naming it by shown-value, never the value. Chez's own check names
+  ;; what it refuses (chez-curl ADR-0036).
   (define (checked-accessor who predicate what accessor)
     (lambda (x)
       (unless (predicate x)
@@ -136,7 +128,7 @@
 
   ;; sqlite-library-unavailable-reasons : (Listof Symbol)
   ;; Why a libsqlite3 was refused. They are the contract: tests and CI assert
-  ;; these symbols, never the message (ADR-0002, amended).
+  ;; these symbols, never the message (ADR-0002).
   ;;
   ;;   invalid-override  CHEZ_SQLITE3_LIBRARY is set, but not to an absolute path
   ;;   not-found         no candidate exists
@@ -177,7 +169,7 @@
 
   ;; Each accessor checks its argument first: anything else is an assertion
   ;; violation from the accessor, naming it by shown-value, never printed, as
-  ;; Chez's own check printed it.
+  ;; Chez's own check prints it.
   (define sqlite-library-unavailable-reason
     (checked-accessor 'sqlite-library-unavailable-reason sqlite-library-unavailable?
                       "a &sqlite-library-unavailable" unchecked-sqlite-library-unavailable-reason))
@@ -231,7 +223,7 @@
                       (make-message-condition message)
                       (make-irritants-condition irritants))))
 
-  ;; --- &sqlite-error (ADR-0013, decision 3) -------------------------------------
+  ;; --- &sqlite-error (ADR-0013) -------------------------------------------------
   ;;
   ;;   code           the primary code's name: its C name without SQLITE_,
   ;;                  lower-cased, _ turned to -, by (chez-sqlite3 private
@@ -240,8 +232,13 @@
   ;;                  code with no extension is its own
   ;;   message        sqlite3_errmsg for the connection, or sqlite3_errstr of
   ;;                  the code when there is none
-  ;;   sql, offset    the statement's text and its error offset, from M2's
-  ;;                  prepare; #f otherwise, as in all of M1
+  ;;   sql, offset    the SQL the failure came from, as given, and an offset
+  ;;                  into it as a character index: SQLite's error offset for
+  ;;                  a prepare's failure, none for a step's; each #f when
+  ;;                  there is none, and an open's failure has neither.
+  ;;                  execute-script!'s carries the whole script, and its
+  ;;                  offset, for a step's failure, is the failing
+  ;;                  statement's first token.
   (define-condition-type &sqlite-error &chez-sqlite3-error
     unchecked-make-sqlite-error sqlite-error?
     (code unchecked-sqlite-error-code)
@@ -266,7 +263,7 @@
     (checked-accessor 'sqlite-error-offset sqlite-error? "an &sqlite-error"
                       unchecked-sqlite-error-offset))
 
-  ;; --- the classes of &sqlite-error (ADR-0013, amended; ADR-0014 decision 8) -------
+  ;; --- the classes of &sqlite-error (ADR-0013; ADR-0014) ---------------------------
   ;;
   ;; Each is an &sqlite-error with the same fields and none of its own, so a
   ;; caller catches a class (&sqlite-busy for busy and locked) or the family.
@@ -286,8 +283,8 @@
     unchecked-make-sqlite-read-only sqlite-read-only?)
 
   ;; sqlite-interrupt? : Any -> Boolean
-  ;; M3's class: a statement another thread's interrupt-database! stopped
-  ;; (ADR-0019, decision 6).
+  ;; The class of a statement another thread's interrupt-database! stopped
+  ;; (ADR-0019).
   (define-condition-type &sqlite-interrupt &sqlite-error
     unchecked-make-sqlite-interrupt sqlite-interrupt?)
 
@@ -372,7 +369,7 @@
            (compound (condition c (make-who-condition who) (make-message-condition message))))
       (raise compound)))
 
-  ;; --- &sqlite-invalid-text (ADR-0015, decision 6; ADR-0013, amended) -------------
+  ;; --- &sqlite-invalid-text (ADR-0015; ADR-0013) ----------------------------------
   ;;
   ;;   column  the column's index, an exact natural
   ;;   offset  the byte offset where the first maximal ill-formed subpart of
@@ -414,7 +411,7 @@
                         (make-message-condition
                          "a TEXT value or a column name that is not well-formed UTF-8; column-bytevector reads a value's bytes")))))
 
-  ;; --- &sqlite-wrong-thread (ADR-0010, decision 1; ADR-0013, decision 6) ---------
+  ;; --- &sqlite-wrong-thread (ADR-0010; ADR-0013) ---------------------------------
   ;;
   ;;   owner   the get-thread-id of the thread that opened the connection
   ;;   caller  the get-thread-id of the thread that used it
@@ -451,7 +448,7 @@
                                  "a connection belongs to the thread that opened it, and is used on that thread alone"))))
       (raise compound)))
 
-  ;; --- &sqlite-closed (ADR-0012, decision 7; ADR-0013, decision 6) ----------------
+  ;; --- &sqlite-closed (ADR-0012; ADR-0013) ----------------------------------------
 
   ;; make-sqlite-closed : -> &sqlite-closed
   ;; sqlite-closed? : Any -> Boolean
@@ -466,7 +463,7 @@
     (raise (condition (make-sqlite-closed) (make-who-condition who)
                       (make-message-condition "the connection or statement is closed"))))
 
-  ;; --- &sqlite-setting-mismatch (ADR-0018; ADR-0013, amended for M3) ---------------
+  ;; --- &sqlite-setting-mismatch (ADR-0018; ADR-0013) -------------------------------
   ;;
   ;;   setting   the setting's name, a symbol, as the settings list names it
   ;;   expected  the value asked for, as a Scheme value
@@ -514,7 +511,7 @@
                         (make-message-condition
                          "a setting read back differs from the value written")))))
 
-  ;; --- &sqlite-transaction-ended (ADR-0017; ADR-0013, amended for M3) ---------------
+  ;; --- &sqlite-transaction-ended (ADR-0017; ADR-0013) -------------------------------
 
   ;; make-sqlite-transaction-ended : -> &sqlite-transaction-ended
   ;; sqlite-transaction-ended? : Any -> Boolean
@@ -531,7 +528,7 @@
                       (make-message-condition
                        "the body returned after its transaction had ended under it"))))
 
-  ;; --- &sqlite-extensions-unavailable (ADR-0021, decision 10; ADR-0013, amended for M4) ----
+  ;; --- &sqlite-extensions-unavailable (ADR-0021; ADR-0013) ---------------------------------
   ;;
   ;; No field beyond the &who and the fixed &message its raise compounds.
   ;; Under the root, neither an &sqlite-error, since SQLite answered no code,
@@ -539,7 +536,7 @@
   ;; its load: this library loaded and works, and lacks only
   ;; sqlite3_load_extension. An open whose settings opt in to extension
   ;; loading, (enable-load-extension . #t), raises it before anything opens
-  ;; (ADR-0021, decision 5).
+  ;; (ADR-0021).
 
   ;; make-sqlite-extensions-unavailable : -> &sqlite-extensions-unavailable
   ;; sqlite-extensions-unavailable? : Any -> Boolean

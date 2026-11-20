@@ -1,7 +1,7 @@
 #!/bin/sh
 # check-memory-shards: hold the memory gate's two shards, the Makefile's
 # MEMORY_SUITES_1 and MEMORY_SUITES_2, to every suite once between them
-# (ADR-0005, amended in M3 slice 6).
+# (ADR-0005).
 #
 #   sh tests/check-memory-shards.sh SUITES ONE TWO
 #

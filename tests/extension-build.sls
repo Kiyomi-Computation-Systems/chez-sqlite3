@@ -1,11 +1,10 @@
 #!r6rs
 ;;; (extension-build): the loadable extension the load-extension! suites
-;;; load, tests/extension.c, compiled at test time (ADR-0021, consequences;
-;;; the M4 plan, section 4.4).
+;;; load, tests/extension.c, compiled at test time (ADR-0021, consequences).
 ;;;
 ;;;   extension-suffix   the suffix SQLite appends to a path it cannot
 ;;;                      load, and the one the built files take: .so, or
-;;;                      .dylib on a Mac, by Chez's machine type
+;;;                      .dylib on macOS, by Chez's machine type
 ;;;   build-extensions   each variant compiled into a directory, with $CC
 ;;;                      -Wall -Werror against the lane's sqlite3ext.h:
 ;;;                      their paths, or the first compile's whole failure
@@ -16,16 +15,14 @@
 ;;;   extension-path     one variant's path, from build-extensions' answer
 ;;;
 ;;; The compiler is a test oracle, never an install dependency: a missing
-;;; compiler or header fails the compile, and the suite's first row names
-;;; it, never a skip (ADR-0001, decision 3). The one exception is a library
-;;; that lacks sqlite3_load_extension, as Apple's does: no connection of it
-;;; can load an extension, so the build is named unavailable there, and the
-;;; suites assert the opt-in's refusal in its place (the maintainer's
-;;; "Build named unavailable there", 2026-11-18). $CC is read as the constants'
-;;; oracle reads it, (libsqlite3-oracle)'s c-compiler, and the header comes
-;;; from the compiler's own path, which C_INCLUDE_PATH leads on a floor run
-;;; (AGENTS.md). Nothing here runs at import: each compile runs when a suite
-;;; calls for it.
+;;; compiler or header fails the compile, and the suite's first row names it,
+;;; never a skip (ADR-0001). The one exception is a library that lacks
+;;; sqlite3_load_extension, as Apple's does: no connection of it can load an
+;;; extension, so the build is named unavailable there, and the suites assert
+;;; the opt-in's refusal in its place. $CC is read as the constants' oracle
+;;; reads it, (libsqlite3-oracle)'s c-compiler, and the header comes from the
+;;; compiler's own path, which C_INCLUDE_PATH leads on a floor run. Nothing
+;;; here runs at import: each compile runs when a suite calls for it.
 ;;;
 ;;; Test-only: it lives in tests/, which make test puts on Chez's library
 ;;; path. It loads no libsqlite3.
@@ -44,8 +41,8 @@
       (and (>= n 3) (string=? (substring name (- n 3) n) "osx"))))
 
   ;; extension-suffix : String
-  ;; .so on Linux, .dylib on a Mac: what SQLite appends to a path that does
-  ;; not load, by its own azEndings (the research, L2; research/m4-mac/).
+  ;; .so on Linux, .dylib on macOS: what SQLite appends to a path that does
+  ;; not load, by its own azEndings.
   (define extension-suffix (if mac? ".dylib" ".so"))
 
   ;; shared-flags : (Listof String)

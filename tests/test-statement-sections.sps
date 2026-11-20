@@ -1,11 +1,11 @@
 #!r6rs
-;;; Decision 10's "change together", held by behaviour (ADR-0014; the review of
-;;; M2 slice 3). A verb's C call, its tracking and its state's change share
-;;; one critical section; a verb that made one of them after the section left
-;;; a window where an engine's expiry let another engine, on the same thread,
-;;; see the statement half made. Three sweeps, each a first engine A that
-;;; expires once, at every fuel from 1 to 60, and a second thread of control B
-;;; that runs at A's first expiry, on the same thread; then A finishes:
+;;; ADR-0014's "change together", held by behaviour. A verb's C call, its
+;;; tracking and its state's change share one critical section; a verb that
+;;; makes one of them after the section leaves a window where an engine's
+;;; expiry lets another engine, on the same thread, see the statement half
+;;; made. Three sweeps, each a first engine A that expires once, at every fuel
+;;; from 1 to 60, and a second thread of control B that runs at A's first
+;;; expiry, on the same thread; then A finishes:
 ;;;
 ;;;   prepare against close   A prepares, B closes the connection. A's
 ;;;                           statement is tracked in the prepare's section,
@@ -22,12 +22,12 @@
 ;;;
 ;;; The fuel range: the windows the mutants open fall at fuels 25 to 39 of A's
 ;;; first slice, on both libraries: the tracking made after the section at 27
-;;; to 30, the state's change at 25 and 26, the untracking at 34 to 39 (the
-;;; mutation log). 60 passes the last of them with room, and is the range the
-;;; other engine sweeps use.
+;;; to 30, the state's change at 25 and 26, the untracking at 34 to 39. 60
+;;; passes the last of them with room, and is the range the other engine
+;;; sweeps use.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. Effects run in order, through let* and named lets (AGENTS.md).
+;;; own. Effects run in order, through let* and named lets.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)

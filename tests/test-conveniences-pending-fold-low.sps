@@ -1,12 +1,10 @@
 #!r6rs
-;;; The suite for one query-fold's runs interleaved under a collect trip of
-;;; 256 bytes (ADR-0016, amended in M3 slice 5's part D and in M4 slice 4; M4's
-;;; closing review, reviewer B's B1), in (chez-sqlite3 private conveniences):
-;;; the low pass of tests/test-conveniences-pending-fold.sps's interleaved row,
-;;; a suite of its own, since that one took 73 to 85 s on CI under the memory
-;;; gate and the low pass costs more. The schedule, the tell, the bound, the
-;;; judge and the two passes are (conveniences-pending)'s,
-;;; tests/conveniences-pending.sls.
+;;; The suite for one query-fold's runs interleaved under a collect trip of 256
+;;; bytes (ADR-0016), in (chez-sqlite3 private conveniences): the low pass of
+;;; tests/test-conveniences-pending-fold.sps's interleaved row, a suite of its
+;;; own, since that one took 73 to 85 s on CI under the memory gate and the low
+;;; pass costs more. The schedule, the tell, the bound, the judge and the two
+;;; passes are (conveniences-pending)'s, tests/conveniences-pending.sls.
 ;;;
 ;;;   interleaved  the parent suite's interleaved row, each trial under a
 ;;;                collect trip of 256 bytes from its start to its end, its
@@ -27,7 +25,7 @@
 ;;; silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+;;; own. No expected value is #f where the actual could raise.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

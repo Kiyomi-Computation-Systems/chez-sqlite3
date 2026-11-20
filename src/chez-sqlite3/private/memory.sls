@@ -19,12 +19,12 @@
 ;;; it decided is raised after it: a raise inside one would reach a
 ;;; with-exception-handler handler with interrupts still disabled, where an
 ;;; engine never expires and another thread's collection waits for the
-;;; handler (M1's closing review). A raise from a call made in a section,
-;;; foreign-alloc's or count-down!'s, is caught there and raised again, the
-;;; same object, after it.
+;;; handler. A raise from a call made in a section, foreign-alloc's or
+;;; count-down!'s, is caught there and raised again, the same object, after
+;;; it.
 ;;;
 ;;; A refusal names the value it refused by shown-value: a number as itself,
-;;; a string by its kind, never its text (ADR-0013, decision 7).
+;;; a string by its kind, never its text (ADR-0013).
 ;;;
 ;;; It never loads libsqlite3.
 (library (chez-sqlite3 private memory)

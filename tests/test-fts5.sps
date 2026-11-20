@@ -1,8 +1,7 @@
 #!r6rs
 ;;; The suite for FTS5, SQLite's full-text search, through (chez-sqlite3)
-;;; (the M4 plan, section 4.5 and Q2; ADR-0003, amended). A library compiles
-;;; FTS5 in or doesn't, so the suite chooses its rows by what the library
-;;; reports, and runs on every lane:
+;;; (ADR-0003). A library compiles FTS5 in or doesn't, so the suite chooses
+;;; its rows by what the library reports, and runs on every lane:
 ;;;
 ;;;   the check     (sqlite-compile-option? "ENABLE_FTS5") held to
 ;;;                 select count(*) from pragma_module_list where name =
@@ -23,39 +22,37 @@
 ;;;                 prepares, then raises &sqlite-error, code error, at its
 ;;;                 step, never checked by its message
 ;;;
-;;; The refusal's row holds the unavailable line (ADR-0005's amendment of
-;;; M3's closing review): a library with FTS5 answers done at that create's
-;;; step, where the rows' first row asserts it, so a check that takes the
-;;; refusal wrongly fails by name wherever FTS5 is.
+;;; The refusal's row holds the unavailable line (ADR-0005): a library with
+;;; FTS5 answers done at that create's step, where the rows' first row
+;;; asserts it, so a check that takes the refusal wrongly fails by name
+;;; wherever FTS5 is.
 ;;;
 ;;; FTS5 prepares statements of its own on the connection, for its shadow
 ;;; tables, from the create on, and finalizes them only when its table is
 ;;; disconnected: by a drop, or by sqlite3_close. close-database! finalizes
 ;;; its own statements and calls sqlite3_close before it counts any, and
-;;; counts only when SQLite refuses (ADR-0012, amended), so every row here
-;;; closes with its FTS5 tables in place. One row closes, outside
-;;; call-with-database, a connection that made, filled and queried one.
+;;; counts only when SQLite refuses (ADR-0012), so every row here closes with
+;;; its FTS5 tables in place. One row closes, outside call-with-database, a
+;;; connection that made, filled and queried one.
 ;;;
-;;; Every value a row asserts is the research's (.plans/research/m4-plan/,
-;;; F1 and F2), the same on Guix's 3.53.1 and the FTS5 build of 3.54.1, and
-;;; the refusal the same on 3.45.1 and the plain 3.54.1, but two, measured in
-;;; the slice's review on those libraries and on 3.45.1 with FTS5
-;;; (.plans/m4-slice-5-mutation-log.md): "sqlite OR rank" ranks 3 before 2,
-;;; where rowid order is 2 then 3, so the rank rows can tell the orders
-;;; apart; and the phrase "text full" matches nothing, where the words'
-;;; AND matches 2, so the phrase row can tell a phrase from an AND. The
-;;; bound MATCH's row asserts its parameter's typeof, text, so a string bound
-;;; as a BLOB, which FTS5 reads as text, fails it. The agreement row holds
-;;; the check against its complement: a probe that raised, and a module
-;;; count neither 0 nor 1, with each answer of the option. The rows go through
-;;; the conveniences and the statement verbs, so they test the values' path
-;;; through the library, not SQLite: UTF-8 in SQL text and bound strings,
-;;; rows read back as vectors of exact integers, flonums and strings.
+;;; Every value a row asserts was measured, the same on Guix's 3.53.1 and the
+;;; FTS5 build of 3.54.1, and the refusal the same on 3.45.1 and the plain
+;;; 3.54.1, but two, measured on those libraries and on 3.45.1 with FTS5:
+;;; "sqlite OR rank" ranks 3 before 2, where rowid order is 2 then 3, so the
+;;; rank rows can tell the orders apart; and the phrase "text full" matches
+;;; nothing, where the words' AND matches 2, so the phrase row can tell a
+;;; phrase from an AND. The bound MATCH's row asserts its parameter's typeof,
+;;; text, so a string bound as a BLOB, which FTS5 reads as text, fails it. The
+;;; agreement row holds the check against its complement: a probe that raised,
+;;; and a module count neither 0 nor 1, with each answer of the option. The
+;;; rows go through the conveniences and the statement verbs, so they test the
+;;; values' path through the library, not SQLite: UTF-8 in SQL text and bound
+;;; strings, rows read back as vectors of exact integers, flonums and strings.
 ;;;
 ;;; The library is reached through eval, under a guard, as
 ;;; tests/test-conveniences.sps reaches it. Every computation that can raise
 ;;; runs under a guard that answers what was raised; no expected value is #f.
-;;; Effects run in order, through let* and named lets, never map (AGENTS.md).
+;;; Effects run in order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -199,7 +196,7 @@
 
 ;; --- the rows, where FTS5 is ---------------------------------------------------------------
 
-;; The research's table: three documents, the first in UTF-8 beyond ASCII.
+;; The table: three documents, the first in UTF-8 beyond ASCII.
 (define docs-create "create virtual table docs using fts5(title, body)")
 (define docs-insert
   (string-append

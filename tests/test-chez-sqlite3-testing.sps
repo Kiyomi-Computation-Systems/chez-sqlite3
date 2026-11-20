@@ -452,7 +452,7 @@
 ;; The directory is made, and its name recorded, in a critical section, so
 ;; no escape leaves one the cleanup cannot see; the refusal follows the
 ;; section. A raise inside it would reach a handler with interrupts still
-;; disabled (M1's closing review).
+;; disabled.
 (test-equal "capture-command: with no scratch directory to write in, it raises after its critical section: a handler of it runs at depth 1, naming capture-command and the directory it could not make"
   '((raised-at-depth depth-1 (who-and-irritants capture-command (under-missing))) absent)
   (call-with-temp-directory
@@ -716,7 +716,7 @@
   (process-outcome
    (string-append "(warning 'probe \"just a warning\")\n" kept-line)))
 
-;; --- the exit checks (ADR-0005, amended; the M1 plan, §3.7) ----------------
+;; --- the exit checks (ADR-0005) --------------------------------------------
 ;; suite-exit-status runs every check registered with the counters, in the
 ;; order registered, and names each outcome on the error port: a pass, a
 ;; failure, which exits 1, or unavailable. A check is registered for good, so
@@ -926,8 +926,7 @@
 
 ;; counting? : Boolean
 ;; Whether this libsqlite3 keeps a memory count: the plant's open raised it.
-;; Apple's does not (ADR-0005, amended), and there every check below is
-;; unavailable.
+;; Apple's does not (ADR-0005), and there every check below is unavailable.
 (define counting? (and plant-read? (> (cadr plant-read) (car plant-read))))
 
 (test-equal "SQLite memory held past the end through a raw open, never closed: exit 1, the check's line naming the count and the baseline, and no count of ours, which never saw the open; or, where the library keeps no count, unavailable and exit 0"

@@ -1,7 +1,7 @@
 #!r6rs
-;;; (chez-sqlite3 private report): what the loaded libsqlite3 says it is,
-;;; for (chez-sqlite3) (ADR-0002, amended; brief §2.6). Each answer is read
-;;; from native's report, or asked of the library, at each call.
+;;; (chez-sqlite3 private report): what the loaded libsqlite3 says it is, for
+;;; (chez-sqlite3) (ADR-0002). Each answer is read from native's report, or
+;;; asked of the library, at each call.
 ;;;
 ;;; Every string and list answered is a fresh copy: the report holds one
 ;;; string per field, and a caller that changed an answer in place would
@@ -39,7 +39,7 @@
   ;; CHEZ_SQLITE3_LIBRARY's. On macOS, DYLD_LIBRARY_PATH can make dyld load
   ;; a file of the same leaf name from its folders instead, and then this
   ;; is still the path asked for, while the version and the source id are
-  ;; the loaded file's (the M4 Mac run, dyld.txt).
+  ;; the loaded file's.
   (define (sqlite-library-path)
     (string-copy (libsqlite3-info-path (loaded-libsqlite3))))
 

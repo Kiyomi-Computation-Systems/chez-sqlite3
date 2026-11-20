@@ -1,11 +1,10 @@
 #!r6rs
-;;; The suite for one execute!'s runs interleaved (ADR-0016, amended in M3
-;;; slice 5's part D; the maintainer's "Guard every call", ADR-0016, amended in
-;;; M3 slice 3), in (chez-sqlite3 private conveniences): one remainder of the
-;;; call, R, resumed again while an earlier resume of it, R1, is pending. The
-;;; schedule, the tell, the bound and the judge are (conveniences-pending)'s,
-;;; tests/conveniences-pending.sls, shared with the other conveniences' suites,
-;;; one a convenience, so each stays well under the memory gate's limit.
+;;; The suite for one execute!'s runs interleaved (ADR-0016), in (chez-sqlite3
+;;; private conveniences): one remainder of the call, R, resumed again while an
+;;; earlier resume of it, R1, is pending. The schedule, the tell, the bound and
+;;; the judge are (conveniences-pending)'s, tests/conveniences-pending.sls,
+;;; shared with the other conveniences' suites, one a convenience, so each
+;;; stays well under the memory gate's limit.
 ;;;
 ;;;   the tell     one execute! outside any engine: the authorizer notes its
 ;;;                insert prepared once, its row inserted once, and the cache
@@ -28,9 +27,9 @@
 ;;;                handled at its exit and costs the engine ticks there, so R1
 ;;;                is taken at a section's exit too: a claim advanced just
 ;;;                after its section, not inside it, inserted execute!'s row
-;;;                twice there (M4's closing review, reviewer B's B1). SQLite's
-;;;                trace allocates 32 KiB inside each section that steps a
-;;;                row or finishes a statement, so a request falls due there.
+;;;                twice there. SQLite's trace allocates 32 KiB inside each
+;;;                section that steps a row or finishes a statement, so a
+;;;                request falls due there.
 ;;;                Each fails by name unless collect requests fell in its
 ;;;                trials, unless some trial had R before the give-back and R1
 ;;;                past it, unless each such section met its request before
@@ -48,7 +47,7 @@
 ;;; so nothing is unavailable silently.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
-;;; own. No expected value is #f where the actual could raise (AGENTS.md).
+;;; own. No expected value is #f where the actual could raise.
 (import (rnrs)
         (srfi :64)
         (chez-sqlite3-testing)

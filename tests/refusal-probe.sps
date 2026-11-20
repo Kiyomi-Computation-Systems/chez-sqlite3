@@ -15,8 +15,8 @@
 ;;;             (version-number . N) (source-id . STRING), the report's
 ;;;             fields; then (threadsafe . N), (chez-sqlite3 private
 ;;;             native)'s loaded-threadsafe; with --extension-loading,
-;;;             (load-extension-available? . BOOLEAN), native's record of
-;;;             the optional sqlite3_load_extension (M4); with --opens,
+;;;             (load-extension-available? . BOOLEAN), native's record of the
+;;;             optional sqlite3_load_extension; with --opens,
 ;;;             (opens . RESULTS), below; with --loads, (loads . RESULTS),
 ;;;             below; and the exit status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
@@ -34,7 +34,7 @@
 ;;;             WHO is the condition's &who, or #f; TYPES lists, by name, the
 ;;;             condition types it is, in a fixed order: serious, error,
 ;;;             violation, assertion, warning, who, message, irritants,
-;;;             library-unavailable. Never its text (ADR-0013, decision 9)
+;;;             library-unavailable. Never its text (ADR-0013)
 ;;;
 ;;; With --then-override, CHEZ_SQLITE3_LIBRARY is set to PATH after the
 ;;; first reference, and (then-override . VALUE) shows what getenv then
@@ -48,7 +48,7 @@
 ;;; read once the three references are done. The counters count per
 ;;; process, and a suite's suite-exit-status reads only its own, so this
 ;;; process prints its counts, and its suite requires every one zero,
-;;; refusals included (ADR-0005, decision 4).
+;;; refusals included (ADR-0005).
 ;;;
 ;;; With --marker, (marker . present) or (marker . absent) follows: whether
 ;;; this process has the entry point NAME, as foreign-entry? answers.
@@ -58,7 +58,7 @@
 ;;; preload. Under make test-memory, the test-library-loading suites run
 ;;; this probe through the gate's own Valgrind, and require yes there and no
 ;;; elsewhere, so a child the gate should check that ran outside it fails its
-;;; row (ADR-0005, amended).
+;;; row (ADR-0005).
 ;;;
 ;;; Last comes (calls . LOG) when the most recently loaded library has the
 ;;; entry point decoy_calls, as tests/decoy-libsqlite3.c does: its call log,
@@ -88,11 +88,10 @@
 ;;;   (raised WHO TYPES)
 ;;;             anything else, as the first reference's line names it
 ;;;
-;;; It is M4 slice 3's: where the library lacks sqlite3_load_extension, as the
-;;; decoy built DECOY_LACKS_sqlite3_load_extension does, an open that opts in
-;;; is refused before anything opens, and the decoy's call log, which always
-;;; follows, shows whether sqlite3_open_v2 was called (the M4 plan, section
-;;; 4.3).
+;;; Where the library lacks sqlite3_load_extension, as the decoy built
+;;; DECOY_LACKS_sqlite3_load_extension does, an open that opts in is refused
+;;; before anything opens, and the decoy's call log, which always follows,
+;;; shows whether sqlite3_open_v2 was called.
 ;;;
 ;;; With --loads, CASES is one datum, a list of cases, each the arguments of
 ;;; a call of (chez-sqlite3)'s load-extension!, after the open's cases, in
@@ -100,13 +99,13 @@
 ;;; V) for an answer. A case is data, so no case holds a database: what a
 ;;; row on the decoy can see is that the verb's library loads where the
 ;;; library lacks sqlite3_load_extension, that its refusals come at depth 1
-;;; with every count zero, and, from the call log, that nothing of SQLite's
-;;; is called (M4 slice 4; the decoy's open always fails, so no connection
-;;; of it reaches a load).
+;;; with every count zero, and, from the call log, that nothing of SQLite's is
+;;; called (the decoy's open always fails, so no connection of it reaches a
+;;; load).
 ;;;
 ;;; Why eval, and no import of (chez-sqlite3 private native): Chez runs the
 ;;; libraries a program imports before the program's body, so a guard in the
-;;; body never sees a raise from an imported library's body (AGENTS.md).
+;;; body never sees a raise from an imported library's body.
 ;;; Native's body is the load. So this program evaluates (loaded-libsqlite3)
 ;;; in native's environment inside the guard, and the load runs within it.
 ;;; The libraries it imports load nothing: conditions and libsqlite3-info

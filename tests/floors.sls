@@ -75,7 +75,7 @@
 ;;;     reads text, line by line, and fails closed;
 ;;;   - an odd number of double quotes: a double-quoted string left open at
 ;;;     the line's end goes on over the lines after it, where an escape is no
-;;;     longer after a quote on its own line (M0 slice 4's review).
+;;;     longer after a quote on its own line.
 ;;;
 ;;;   - the SQLite floor's two numeric forms, each as a whole run of digits:
 ;;;     SQLITE_VERSION_NUMBER, the version as X*1000000 + Y*1000 + Z
@@ -94,7 +94,7 @@
 ;;; are not here either, but they are not dropped: they protect rules about
 ;;; keys, and this project has two, the uses key check-action-pins.sh reads
 ;;; and the keys of the workflow's shape. tests/check-ci.sh holds both, and
-;;; carries those rules (M0 slice 4's review found them first left out).
+;;; carries those rules.
 ;;;
 ;;; What the docs must be. A page names a floor by a link to README.org's
 ;;; Requirements, so a floor moves in one place. Every file under the docs

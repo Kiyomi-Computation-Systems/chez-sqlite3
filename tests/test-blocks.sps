@@ -6,16 +6,16 @@
 ;;;
 ;;; Memory never loads libsqlite3, so this suite imports it, as it imports the
 ;;; counters. A refusal names a caller's value by shown-value: a number as
-;;; itself, a string as (kind string), never its text (ADR-0013, decision 7).
+;;; itself, a string as (kind string), never its text (ADR-0013).
 ;;;
 ;;; The dead-address row runs a child Chez: a free that ran anyway would make
 ;;; glibc abort, and a child's abort fails that row by name, not the whole
 ;;; suite with SIGABRT. It reaches malloc and free only: it never loads
 ;;; libsqlite3. It runs through gated-command, so under make test-memory the
-;;; gate's own Valgrind runs it, with a log of its own (ADR-0005, amended). It
-;;; prints its counts, and this suite asserts them zero (ADR-0005, decision
-;;; 4); then whether it ran under memcheck, which this suite requires to be yes
-;;; exactly when the gate asked, so a child that escaped the gate fails its row.
+;;; gate's own Valgrind runs it, with a log of its own (ADR-0005). It
+;;; prints its counts, and this suite asserts them zero (ADR-0005); then
+;;; whether it ran under memcheck, which this suite requires to be yes exactly
+;;; when the gate asked, so a child that escaped the gate fails its row.
 ;;;
 ;;; Every refusal is raised after the critical section that decided it,
 ;;; never inside one: a with-exception-handler handler of it runs at depth 1,
@@ -68,7 +68,7 @@
     (list 'no-raise (thunk))))
 
 ;; A refusal is compared by its kind, who and irritants, never its message
-;; text (ADR-0013, decision 9).
+;; text (ADR-0013).
 
 (define zero-counts '((block . 0) (connection . 0) (statement . 0)))
 

@@ -3,9 +3,9 @@
 ;;; threaded, or is older than 10.4.0, by name (ADR-0001).
 ;;;
 ;;; chez-sqlite3 uses Chez's thread system: the counters' mutex (ADR-0005),
-;;; and later each connection's owning thread (the brief, §3c). Chez builds
-;;; it only into threaded builds. On a --nothreads Chez a library importing
-;;; those names dies at import with a bare "missing import for make-mutex".
+;;; and each connection's owning thread (ADR-0010). Chez builds it only into
+;;; threaded builds. On a --nothreads Chez a library importing those names
+;;; dies at import with a bare "missing import for make-mutex".
 ;;; The floor is Chez 10.4.0 (ADR-0001): an older Chez dies somewhere in the
 ;;; first library that needs something newer, with a message that does not
 ;;; say why. This library raises a message naming the requirement instead.
@@ -24,7 +24,7 @@
 ;;; Hence its one condition: every other library under src/ imports it first
 ;;; among its imports. Chez processes a library's imports in order, and a
 ;;; thread primitive imported ahead of it still fails with the bare message
-;;; (measured by chez-libuv on a --nothreads Chez 10.4.1).
+;;; (chez-libuv measured it on a --nothreads Chez 10.4.1).
 ;;; tests/test-require-threaded.sps holds that order, and expands copies of
 ;;; this library in which (threaded?) answers #f and (scheme-version-number)
 ;;; and (scheme-version #t) answer versions on each side of the floor. It

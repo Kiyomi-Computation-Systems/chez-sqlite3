@@ -1,20 +1,19 @@
 #!r6rs
-;;; The suite for the statement cache in its connection's record (ADR-0020;
-;;; the M3 plan, section 4.6), through M3's internals: (chez-sqlite3 private
-;;; connection)'s record and its close, the capacity set by the settings'
-;;; statement-cache, and (chez-sqlite3 private statement)'s checked-out and
-;;; returned. The pure table is slice 1's,
-;;; held by tests/test-statement-cache.sps; the raises' who and depth are
-;;; tests/test-statement-who.sps's.
+;;; The suite for the statement cache in its connection's record (ADR-0020),
+;;; through the internals: (chez-sqlite3 private connection)'s record and its
+;;; close, the capacity set by the settings' statement-cache, and
+;;; (chez-sqlite3 private statement)'s checked-out and returned. The pure
+;;; table is held by tests/test-statement-cache.sps; the raises' who and depth
+;;; are tests/test-statement-who.sps's.
 ;;;
 ;;;   the capacity  32 from open-database and call-with-database; their
 ;;;                 statement-cache setting takes 0, 1 and 1024 and refuses
 ;;;                 -1, 1025, 32.0, "32" and #t by the settings' rule, before
-;;;                 anything opens (M3 slice 5: tests/test-open-settings.sps
-;;;                 holds the list's every rule)
+;;;                 anything opens (tests/test-open-settings.sps holds the
+;;;                 list's every rule)
 ;;;   the flags     a miss prepares SQLITE_PREPARE_PERSISTENT while the
 ;;;                 capacity is above 0, and with no flags at 0, read through
-;;;                 lookaside (M3's research, single K1)
+;;;                 lookaside
 ;;;   reuse         a return files the statement reset, its bindings cleared;
 ;;;                 the next check-out of its SQL answers that very statement;
 ;;;                 at 0 every return finalizes; at 1 and 2 the least
@@ -39,12 +38,11 @@
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them. SQLite's answers here were measured
-;;; on 3.53.1 and 3.45.1 alike (.plans/research/m3-slice-3/) before a row
-;;; asserts them.
+;;; on 3.53.1 and 3.45.1 alike before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -343,9 +341,8 @@
           (list before (database-cache-count db)))))
 
 ;; --- the flags a miss prepares with -------------------------------------------------------------
-;; Measured (.plans/research/m3-slice-3/lookaside-tails.sps), on both
-;; libraries: ten held statements prepared with no flags take 70 lookaside
-;; slots, and SQLITE_PREPARE_PERSISTENT ones none.
+;; Measured on both libraries: ten held statements prepared with no flags take
+;; 70 lookaside slots, and SQLITE_PREPARE_PERSISTENT ones none.
 
 ;; held-lookaside : Natural -> Any
 ;; Ten statements of distinct SQL checked out and held on a connection of
@@ -529,8 +526,8 @@
          (c (close-database! db)))
     (list (statement-state a) (statement-state b) (database-cache-count db) (native-counts))))
 
-;; Measured (build/m2s3/probe-close.sps, M2 slice 3), on both libraries: a
-;; backup reading from the connection makes sqlite3_close answer 5.
+;; Measured on both libraries: a backup reading from the connection makes
+;; sqlite3_close answer 5.
 (test-equal "a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connection stays open, the cached statement is finalized, the cache holds none, and the next check-out of its SQL prepares afresh, ready"
   (list 'backup (list 'raised (list 'sqlite-error 'close-database! 'busy 'busy #f #f))
         'finalized 0 'another-statement 'ready 'closed zero-counts)

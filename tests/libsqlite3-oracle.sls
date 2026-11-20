@@ -12,7 +12,7 @@
 ;;;                      the header's SQLITE_TRANSIENT (its --transient mode)
 ;;;   libsqlite3-oracle-counters
 ;;;                      the four counters after each of a script's statements,
-;;;                      read in C (its --counters mode, M3 slice 2)
+;;;                      read in C (its --counters mode)
 ;;;   c-compiler         $CC as a command's words, for every compile
 ;;;   split-words        a string cut at whitespace
 ;;;
@@ -21,7 +21,7 @@
 ;;; exactly, and links no libsqlite3 (the program's header). It runs through
 ;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
 ;;; with a log of its own: the gate takes a child named libsqlite3-oracle, as
-;;; it takes Chez (ADR-0005, amended). Measured clean there: 0 errors, nothing
+;;; it takes Chez (ADR-0005). Measured clean there: 0 errors, nothing
 ;;; lost, 3,732 bytes still reachable from its dlopen.
 ;;;
 ;;; Test-only: it lives in tests/, which make test puts on Chez's library

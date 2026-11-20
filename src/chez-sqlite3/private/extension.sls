@@ -1,10 +1,9 @@
 #!r6rs
 ;;; (chez-sqlite3 private extension): load-extension!, the verb that loads
-;;; a SQLite extension into a connection that opted in at open (ADR-0021,
-;;; decisions 6 to 9; the M4 plan, section 4.4). (chez-sqlite3) exports
-;;; the verb; load-extension/with, its form that takes the load's binding
-;;; and the message's copy, is exported for the suites alone, as
-;;; interrupt-database/with takes its foreign call.
+;;; a SQLite extension into a connection that opted in at open (ADR-0021).
+;;; (chez-sqlite3) exports the verb; load-extension/with, its form that
+;;; takes the load's binding and the message's copy, is exported for the
+;;; suites alone, as interrupt-database/with takes its foreign call.
 ;;;
 ;;; Its checks, in order, before anything reaches C, each refusal naming
 ;;; load-extension!:
@@ -16,13 +15,11 @@
 ;;;                        U+0000, else path-holds-nul; absolute, its first
 ;;;                        character /, else path-not-absolute: no relative
 ;;;                        path, bare name or "", whose file the working
-;;;                        directory or the loader's own search would choose
-;;;                        (the maintainer's Q16, "An absolute path"). On
-;;;                        Linux the loader takes an absolute path as it is;
-;;;                        on macOS, DYLD_LIBRARY_PATH still sends dyld to a
-;;;                        file of the same leaf name in its folders first
-;;;                        (the M4 Mac run, dyld.txt; the maintainer's
-;;;                        "Document it", 2026-11-18)
+;;;                        directory or the loader's own search would
+;;;                        choose. On Linux the loader takes an absolute
+;;;                        path as it is; on macOS, DYLD_LIBRARY_PATH still
+;;;                        sends dyld to a file of the same leaf name in its
+;;;                        folders first
 ;;;   5. the entry point   when given, a string, else
 ;;;                        entry-point-not-a-string; holding no U+0000, else
 ;;;                        entry-point-holds-nul
@@ -30,35 +27,33 @@
 ;;;                        else an assertion violation,
 ;;;                        extension-loading-not-enabled, whose message
 ;;;                        names the fix, (enable-load-extension . #t)
-;;;                        (ADR-0021, decisions 5 and 6)
+;;;                        (ADR-0021)
 ;;;
 ;;; The first three are one call-with-open-handle, its procedure answering
 ;;; nothing, in a critical section of its own: its database and owner
 ;;; checks, then its open check inside its section. So the thread's refusal
 ;;; and the closed one come before the argument checks, and SQLite, which
-;;; loads from any thread (the research, L5), is never reached from another.
-;;; The load's own section goes through call-with-open-handle again, which
-;;; checks the owner and the open state there too. Each string is copied
-;;; first and the copy alone checked and handed to C, so another thread
-;;; cannot change it between the two (ADR-0011, decision 2). Every refusal
-;;; of a caller's mistake is an assertion violation whose irritants are a
-;;; symbol naming its rule, then the value by shown-value, never a string's
-;;; text (ADR-0013, decisions 7 and 9). On Ubuntu's library, whose every
-;;; connection opens with the C switch on, the sixth check is all that stops
-;;; a load (the M4 pre-work's Q3).
+;;; loads from any thread, is never reached from another. The load's own
+;;; section goes through call-with-open-handle again, which checks the owner
+;;; and the open state there too. Each string is copied first and the copy
+;;; alone checked and handed to C, so another thread cannot change it between
+;;; the two (ADR-0011). Every refusal of a caller's mistake is an assertion
+;;; violation whose irritants are a symbol naming its rule, then the value by
+;;; shown-value, never a string's text (ADR-0013). On Ubuntu's library, whose
+;;; every connection opens with the C switch on, the sixth check is all that
+;;; stops a load.
 ;;;
 ;;; One call, one load. Chez's engine remainders are multi-shot, and a
 ;;; timer's handler can capture a continuation between any two critical
 ;;; sections, so one call can have several runs pending at once. Every load
-;;; runs the extension's init again (the research, L4), so two runs that
-;;; both loaded would run it twice. The call holds a claim, made by its
-;;; first expression, (chez-sqlite3 private conveniences)' made-claim: the
-;;; load's one section claims position 0, the call's last, inside the
-;;; section, before anything else there. A run the call has passed is
-;;; refused: it touches nothing, and raises &sqlite-closed after it (the
-;;; maintainer's "Guard every call", ADR-0016, amended in M3 slice 3). A
-;;; remainder taken before the call's first expression is the caller's own:
-;;; resumed, it makes a whole new call, with a claim of its own.
+;;; runs the extension's init again, so two runs that both loaded would run
+;;; it twice. The call holds a claim, made by its first expression,
+;;; (chez-sqlite3 private conveniences)' made-claim: the load's one section
+;;; claims position 0, the call's last, inside the section, before anything
+;;; else there. A run the call has passed is refused: it touches nothing, and
+;;; raises &sqlite-closed after it (ADR-0016). A remainder taken before the
+;;; call's first expression is the caller's own: resumed, it makes a whole
+;;; new call, with a claim of its own.
 ;;;
 ;;; The one section, a critical section around call-with-open-handle, so no
 ;;; engine's expiry and no timer's handler falls inside either, holds:
@@ -69,7 +64,7 @@
 ;;;     call-with-c-string and call-with-out-pointer;
 ;;;   - the connection's extended code, read just before the call, and
 ;;;     again just after it;
-;;;   - the call, __collect_safe (ADR-0011, amended): a dlopen can wait,
+;;;   - the call, __collect_safe (ADR-0011): a dlopen can wait,
 ;;;     on a FIFO, and another thread's collection need not wait with it;
 ;;;   - when the slot holds a message, its copy under a guard, then its
 ;;;     sqlite3_free whatever the copy did, so no message is left unfreed
@@ -78,8 +73,8 @@
 ;;;     one that names an error, the connection's sqlite3_errmsg, copied;
 ;;;     and sqlite3_errstr's text for the code when the slot held none.
 ;;;
-;;; Every block lives whole in the section (ADR-0011, amended). It answers
-;;; data, and the raise comes after it (ADR-0012, amended):
+;;; Every block lives whole in the section (ADR-0011). It answers data, and
+;;; the raise comes after it (ADR-0012):
 ;;;
 ;;;   success   the call answered 0: nothing. The extension stays loaded
 ;;;             until the connection closes, and what it registers is the
@@ -87,27 +82,26 @@
 ;;;   failure   &sqlite-error from raise-sqlite-error, its code and extended
 ;;;             code the call's own answer, never the connection's, which an
 ;;;             init's failing call leaves at its own code, 5 where the call
-;;;             answered 1 (rv1, part B); no SQL and no offset. Its message:
-;;;             the slot's text, as SQLite wrote it, naming the path it
-;;;             tried last; or sqlite3_errstr's when the slot held none;
-;;;             followed, when the connection's extended code changed
-;;;             across the call to one that names an error, by the
-;;;             connection's message, which holds an init's reason where the
-;;;             slot says only "error during initialization: ". An init
-;;;             whose last call succeeded leaves the code at 0, which names
-;;;             no error, and its "not an error" is no reason: then the
-;;;             slot's text stands alone. The two join as they stand where the
-;;;             first ends in a space, as SQLite's "...: " does, and with
-;;;             ": " between them otherwise
+;;;             answered 1; no SQL and no offset. Its message: the slot's
+;;;             text, as SQLite wrote it, naming the path it tried last; or
+;;;             sqlite3_errstr's when the slot held none; followed, when the
+;;;             connection's extended code changed across the call to one that
+;;;             names an error, by the connection's message, which holds an
+;;;             init's reason where the slot says only "error during
+;;;             initialization: ". An init whose last call succeeded leaves
+;;;             the code at 0, which names no error, and its "not an error" is
+;;;             no reason: then the slot's text stands alone. The two join as
+;;;             they stand where the first ends in a space, as SQLite's "...:
+;;;             " does, and with ": " between them otherwise
 ;;;   no error  a code that names no error, its low byte 0, 100 or 101 but
 ;;;             not 0 itself, or no exact integer, which only a stand-in for
 ;;;             the binding answers: an assertion violation from the verb,
 ;;;             (not-an-error CODE), tested here before raise-sqlite-error,
 ;;;             whose own refusal would name it, as the open's db_config
-;;;             sets are (ADR-0021, amended in M4 slice 1)
+;;;             sets are (ADR-0021)
 ;;;
 ;;; A failed load leaves the connection as it was: SQLite's own failures set
-;;; no error on it (the research, L3; rv1, part A).
+;;; no error on it.
 (library (chez-sqlite3 private extension)
   (export load-extension! load-extension/with)
   (import (chez-sqlite3 private require-threaded)
@@ -181,7 +175,7 @@
   ;; database-extension-loading? reads after check-owned's two checks, from
   ;; load-extension!. The first three made them already, but a remainder
   ;; taken after them can be resumed on another thread, and the refusal
-  ;; there names this verb too (ADR-0013, decision 2).
+  ;; there names this verb too (ADR-0013).
   (define (checked-opt-in db)
     (unless (database-extension-loading? who db)
       (assertion-violation who

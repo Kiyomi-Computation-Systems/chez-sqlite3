@@ -350,7 +350,7 @@ check "T11a the default TEST_TIMEOUT is a positive whole number" positive_whole 
 # CHEZ goes through when it is set, as on CI's runner, whose Chez is on no
 # PATH. Without it, env -i would leave the Makefile's default, scheme on
 # PATH, and a runner without one fails at the prerequisites, for another
-# reason (M0 slice 4's second CI run).
+# reason.
 for bad_timeout in 0 007 1.5 ''; do
   ( if [ -n "${CHEZ:-}" ]; then
       exec env -i PATH="$PATH" CHEZ="$CHEZ" "$make_bin" --no-print-directory -C "$copy" test TEST_TIMEOUT="$bad_timeout"

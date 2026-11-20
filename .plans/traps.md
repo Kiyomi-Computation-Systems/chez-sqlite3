@@ -1040,6 +1040,23 @@ told in chez-curl's `.plans/traps.md`.
   by a glob. Reproduce: `touch "d/pages.yml$(printf '\nci.yml')"` beside `d/ci.yml` and
   `d/pages.yml`, then `ls -A d` prints four lines for three files (M5 slice 3's review; the lead's
   rerun agreed). (chez-sqlite3)
+- **A shell line that begins with `#` is a comment only outside a heredoc and a quoted string.**
+  Inside `cat <<'EOF'` or a `'…'` spanning lines it is the data's text: a `#;` added there turned
+  off a form of the Scheme program the heredoc writes, and a check that passes every changed `#`
+  line passed it. Track heredocs and quotes, and allow a `#` line in a heredoc only where the
+  heredoc's reader takes `#` as a comment, named. Reproduce: the plants `heredoc` and `squote`
+  of `research/m5-slice-5/` (the slice's log, round 2), refused by the hardened
+  `sweep-check.sh` and passed by its first form (M5 slice 5's review; the lead's own plants
+  agreed). Within double quotes, `$( … )` opens a context of its own, and that scanner doesn't
+  model it; bash's own reading, `__w() { <file> }; declare -f __w`, prints a file without its
+  comments, an oracle that does (M5 slice 5, the M4 session's check). (chez-sqlite3)
+- **`gcc -fpreprocessed -dD -E -P` strips comments but splices no backslash.** A `//` comment
+  ending in `\` swallows the next line in a real build, yet the stripped text shows that line
+  still there; and an object built for one set of `-D` values never sees a branch the others
+  compile. Refuse a changed line ending in `\`, and build every variant the suites build.
+  Reproduce: the slice's plant `cslash`, a `// … \` above `return registered(...)` in
+  `tests/extension.c`'s `EXT_NAMED` branch, passed the first form and fails the hardened one
+  (M5 slice 5's review). (chez-sqlite3)
 
 ## Editing the records
 

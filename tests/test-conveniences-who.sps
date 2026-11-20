@@ -1,10 +1,11 @@
 #!r6rs
-;;; The suite for the conveniences' raises (ADR-0013, decision 2; ADR-0016,
-;;; decision 9; the M3 plan, section 5, slice 3): at every raise site of each
-;;; of (chez-sqlite3 private conveniences)'s five verbs, the raise names the
-;;; convenience the caller called, never one of M2's verbs or part A's
-;;; internals, and reaches a with-exception-handler handler at depth 1, after
-;;; every critical section, against a no-raise sentinel.
+;;; The suite for the conveniences' raises (ADR-0013; ADR-0016): at every
+;;; raise site of each of (chez-sqlite3 private conveniences)'s five verbs,
+;;; the raise names the convenience the caller called, never one of the
+;;; statement tier's verbs or the who-taking internals beneath them
+;;; (step!/who, bind-each!/who, column-value/who), and reaches a
+;;; with-exception-handler handler at depth 1, after every critical section,
+;;; against a no-raise sentinel.
 ;;;
 ;;;   the sites     for execute!, query, query-row and query-fold: the
 ;;;                 check-out's refusals, no database, the wrong thread, no
@@ -34,13 +35,11 @@
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
 ;;; tests/test-statement.sps reaches them. SQLite's answers here were measured
-;;; on 3.53.1 and 3.45.1 alike (.plans/research/m3-slice-3/, conveniences-answers.sps
-;;; and busy-reset.sps; .plans/research/m2-slice-3/probe-block.sps) before a row
-;;; asserts them.
+;;; on 3.53.1 and 3.45.1 alike before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
-;;; order, through let* and named lets, never map (AGENTS.md).
+;;; order, through let* and named lets, never map.
 (import (rnrs)
         (rnrs eval)
         (srfi :64)
@@ -413,10 +412,8 @@
         (at-depth-1 (invalid 'query-fold 0 0)))
   (list (read-site 'query) (read-site 'query-row) (read-site 'query-fold)))
 
-;; Measured (.plans/research/m3-slice-3/busy-reset.sps;
-;; .plans/research/m2-slice-3/probe-block.sps), on both libraries: the reset
-;; of an insert ... returning stepped once, and its finalize, answer busy
-;; under another's read.
+;; Measured on both libraries: the reset of an insert ... returning stepped
+;; once, and its finalize, answer busy under another's read.
 (test-equal "query-row's reset on return names it, at depth 1: an insert ... returning under another's read answers busy at the reset that commits it"
   (at-depth-1 (sqlite-failure 'query-row 'busy 'busy returning-sql #f))
   (with-file-db 32
