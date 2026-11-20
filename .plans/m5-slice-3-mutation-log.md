@@ -245,3 +245,182 @@ three lines, on `/usr/bin/scheme`; its steps are unchanged since, and `make test
 - **After the merge** (the maintainer's, §5): branch protection gains `site`; then Pages is turned
   on, built from GitHub Actions, and its `github-pages` environment takes `main` and `v*`, read
   back by the lead. The PR's CI run's `site` job is read for the download branch on a runner.
+
+## Round 2: the review's findings
+
+The slice was committed as `3f68b33`, PR #55. Its read-only Opus review found no blocker, one
+major and three minors; the lead's brief added the wording. The same agent fixed them in the same
+worktree, the lead's own uncommitted edits to `tests/site-unit.sps`, `tests/site-render-unit.sps`
+and the records under `.plans/` left alone. The review's plants, mutants and tried fix are in its
+worktree's `build/rv/`, and were read there; this round's drivers are
+`review-plants-extra.py`, `review-plants-run.sh` and `mutants.sh`, extended.
+
+### What changed
+
+- **Major 1, a run block's comment and blank lines.** `pages.yml`'s reader skipped every line
+  that was blank or began with `#`, inside the install step's run block too, where each is the
+  script's text: `# a note` at column 0 there passed, and PyYAML could not parse the file. The
+  reader is now one awk file, `copy.awk`, that both checks run, and it holds a block scalar's
+  content whole. A line is content when the copy's next line is, so a line that cuts the copy's
+  block is held; or when it is blank or indented deeper than the key of a block the file holds
+  open, so a line after the block's last one, indented as its content, is held too. A blank line
+  there is held when content follows it, and dropped, as YAML drops it, when none does. The copy
+  gains the block's `# shellcheck disable=SC2086`.
+- **Minor 2, three survivors.** Rows for a run-block line changed (`exit 1` to `true`), a held
+  line's indent changed (`   contents: read`), and U+0085 and U+2028 in a comment line of
+  `ci.yml`'s run block.
+- **Minor 3, the site job's other steps.** Its install step, the second, is held from its first
+  line to the next step's, by the same reader, to `$tmp/install`, the one text `pages.yml`'s
+  copy also takes its install step from, so the two cannot drift. The job is held at six steps.
+- **Minor 4, a name holding a newline.** The directory is read by a glob, the review's, not by
+  lines of `ls`; a name is shown with a `?` for each byte that is not printable ASCII, so its
+  problem stays one line.
+- **The wording:** `check-ci.sh`'s "the names no line may hold" is "no line but a comment";
+  `debian-prereqs.txt` says the site's Chez is one it leaves out, since every job installing from
+  it builds its own; the Makefile's `check-ci` comment is plural and reflowed.
+- **Beyond the brief:**
+  - In `ci.yml`, a line of a block scalar's content that begins with `#` was freed from the
+    names, the gates and the `scripts/` rule, where the header said "a block scalar's content
+    included": the comment branch ran first. It is no comment, and GitHub expands its
+    expressions: `x-main-expr-in-block` put `${{ fromJSON(...) }}`, a string holding a newline
+    and `echo MAKEFLAGS=-n >> "$GITHUB_ENV"`, in main's runner-image block, and `3f68b33`'s check
+    passed it. Such a line now goes through every content rule, and the awk names a `scripts/` on
+    it, which the shell's grep, reading no line that begins with `#`, never saw.
+  - `debian-site-prereqs.txt` said "nothing else does" install from it, and that no other job
+    "may have" Ubuntu's Chez; neither is held. It now says what `check-ci` holds.
+  - The site job's comment in `ci.yml`, and `pages.yml`'s header, name the six steps and the run
+    block's lines.
+
+### Found on the way
+
+- **The review's tried fix holds a run block's comment line only while the copy expects more of
+  the block.** A comment line after the block's last line, indented as its content, passes it:
+  `x-pg-expr-after-block` adds the expression above there, the review's `fix/check-ci.sh` passed
+  it, and PyYAML reads it as the run script's last line. This round's reader refuses it.
+- **The six plants that still pass** are not this round's: `main-make-no-env`, main's make line
+  without `CHEZ`, which only floor, current and site hold, and which a runner with no `scheme`
+  would fail; `main-reads-site-list`, main's install step reading the site's list, which no rule
+  holds; `site-checkout-path` and `site-checkout-key`, a `with` key on the site's checkout, which
+  every job's checkout may carry; `site-timeout-0`, which `check-ci` holds to a whole number
+  only; and `site-name-changed`, a job's free name. `site-checkout-tag` passes `check-ci` and
+  fails `check-action-pins.sh`, as every unpinned action does.
+
+### The red runs
+
+- **The new rows on `3f68b33`'s `check-ci.sh`:** 568 passed, 35 failed, every one new or changed:
+  the twelve site rows that gain the count or the install step's problem; the nine new site rows;
+  the row that held the hole, now a refusal, and eight of the twelve new `pages.yml` rows; the
+  three `ci.yml` rows that name a gate, `scripts/` and the expression's names; and the two newline
+  names. Of the new rows, those that passed are the four controls, and the four that kill a
+  survivor (`exit 1`, the indent, U+0085 and U+2028), whose rules `3f68b33`'s check already had.
+  No row's construction raised.
+
+### The mutants (`mutants.sh`, 36 of 36 killed, the control passing 603 rows)
+
+Round 1's 22, retargeted where the reader they mutated is now `copy.awk`'s (`pages-no-compare`,
+`-no-early`, `-no-extra`, `-every-line`, `-any-hash`, and `ci-comment-skipped`), each killed by
+its row again. The new 14, each run against the final check:
+
+| Mutant | What it loosens | Rows failed |
+|---|---|---|
+| `run-block-free` | a block's line is never compared (the review's) | 12 |
+| `indent-free` | leading spaces ignored (the review's) | 1, the indent row |
+| `content-comment-free` | a block's `#` line skips every rule (the review's) | 6 |
+| `content-names-free` | a block's `#` line skips the names, as at `3f68b33` | 4 |
+| `content-scripts-free` | a block's `#` line may name `scripts/` | 1 |
+| `block-by-copy-only` | a block held only where the copy's runs (the review's fix) | 2 |
+| `block-by-file-only` | a block held only where the file's YAML runs | 2 |
+| `blanks-never-held` | a blank line in a block never held | 1 |
+| `blanks-always-held` | a blank line after a block held too | 577 |
+| `literal-blind` | `|` opens no block | 597 |
+| `site-any-count` | `site` at any number of steps | 13 |
+| `site-install-free` | the site's install step not held | 9 |
+| `name-raw` | a stray name shown raw, its newline splitting the line | 2 |
+| `dir-ls` | the directory read by lines of `ls`, as at `3f68b33` | 2, the newline rows |
+
+The review's fourth, `dir-glob`, was its proposed fix, and is the code now: `dir-ls` is it
+reverted.
+
+### The plants, under two awks
+
+The review's builder, its `tools/plant.py`, run on the final workflows (35), and
+`review-plants-extra.py` (5), each run by `review-plants-run.sh` under the container's gawk 5.3.0
+and mawk 1.3.4 in `ubuntu:24.04`: the two answered the same bytes for all 40.
+
+| Plant | Now caught by |
+|---|---|
+| `pg-run-comment-col0`, `-col8`, `-expr` | `pages.yml differs ...`, at the line planted |
+| `pg-run-first-deep-comment`, `-deep-blank` | `pages.yml differs ...`, expected the block's first |
+| `x-pg-expr-after-block` | `pages.yml differs ...`, expected the next step's first line |
+| `p2-run-exit-true`, `pg-indent-only` | `pages.yml differs ...`, at the line |
+| `site-install-drift`, `-reads-main-list`, `-chez-env-install` | `job site's install step ...` |
+| `site-run-comment-expr` | `names GITHUB_ENV ...`, `names MAKEFLAGS ...`, then the install step |
+| `site-true-chez`, `site-second-checkout` | `job site has 7 steps, not six: ...` |
+| `x-main-expr-in-block` | `names GITHUB_ENV ...`, `names MAKEFLAGS ...` |
+| `p3-nel-content-comment`, `-last` | `holds a character beyond ASCII ...` (as at `3f68b33`) |
+| `dir-newline-name`, `-name2` | `pages.yml?ci.yml is neither ...`, `ci.yml?pages.yml ...` |
+
+The others failed as at `3f68b33`, by its rules: the NUL plants and the held lines of `pages.yml`,
+and the site job's refused keys. Round 1's `awk-plants.sh`, rerun on the final check: every
+plant failed, the control passed, and gawk and mawk agreed, all 15; `site-cache` now names the
+seventh step before the action.
+
+### PyYAML
+
+PyYAML 5.4.1 on the host loads both real workflows: `ci.yml`'s seven jobs, `site` with 6 steps;
+`pages.yml`'s `build` with 6 and `deploy` with 1; and the two install steps load as equal
+objects. The review's `pg-run-comment-col0` fails to parse, a `ParserError` at its line 53.
+
+### Green (round 2)
+
+| Check | Where | Last line |
+|---|---|---|
+| `make test` | container | `test: ran 93, passed 93, failed 0, hung 0` |
+| `test-check-ci`, in it | container | `# of expected passes 603` |
+| `make check-ci` | container | `check-ci: .../ci.yml has the one shape check-ci reads` |
+| `make check-test-fails` | container | `... failed, as it must, in all 18 cases` |
+| `make check-floors`, in `make test` | container | `... (ci.yml, pages.yml) ... hold the floors` |
+| `check-action-pins.sh .github/workflows` | host | `... all 28 lines with a uses key ...` |
+| `test-check-ci` under mawk | host | `# of expected passes 603` |
+| the red run under mawk | host | 568 passed, 35 failed: the same rows as under gawk |
+| `mutants.sh` under gawk | container | `mutants: 36 killed, 0 survived; control ok` |
+| `mutants.sh` under mawk | host | the same: 36 killed, each failing the same rows |
+| the review's plants and the extra | both awks | the two `out-` trees equal, all 40 |
+| `awk-plants.sh compare` | container | `... the control passed, gawk and mawk agree` |
+| P5, `p5-site-job.sh` | host, Docker | `=== p5: 9 steps run, 0 failed` |
+
+`test-check-ci` and the mutants ran under mawk on the host, with Guix's Chez 10.4.0 (threaded),
+since the suite needs a Chez at the floor and the container has no mawk; the lead's brief allowed
+the host's mawk. P5 ran again on the final tree: the same nine steps, envs and links; its copy took
+the working tree, the lead's uncommitted site suites among it (`site-unit` 90 rows).
+
+### For the records (round 2)
+
+- **The global constraints,** "CI's workflow has one shape…": the site job is held at six steps,
+  its install step line for line to the text `pages.yml`'s install step is held to; a block
+  scalar's lines are held whole in `pages.yml`, a comment's and a blank one's among them; in
+  `ci.yml` a block's line that begins with `#` keeps every content rule; and the directory is
+  read by a glob.
+- **traps.md:**
+  - A line of a YAML block scalar that begins with `#` is the script's text, not a comment:
+    GitHub expands its `${{ }}`, and a string holding a newline puts a command on a line of its
+    own. `3f68b33`'s check passed `x-main-expr-in-block`; reproduce, from the repository root,
+    with the plants built as above, `git show` on the host and the run in the container:
+
+    ```
+    git show 3f68b33:tests/check-ci.sh >build/m5s3/r2/old.sh
+    scripts/guix-env sh -c '(cd build/m5s3/r2/rvp/p &&
+      CHECK_CI_ROOT=$OLDPWD sh "$OLDPWD/build/m5s3/r2/old.sh" x-main-expr-in-block)'
+    ```
+
+    It printed the pass line, exit 0.
+  - A block held to a copy only where the copy's block runs frees the lines after it that YAML
+    still reads as the block's: the review's tried fix passed `x-pg-expr-after-block`. The same
+    run, with the review's `fix/check-ci.sh` as `old.sh` and that plant, printed the pass line;
+    the final check names its line 63.
+  - A directory read by lines of `ls` splits a name that holds a newline: `pages.yml`, a
+    newline, `ci.yml`, passed as two allowed names.
+- **AGENTS.md:** nothing new beyond round 1's bullet.
+- **The ledger:** round 2's close-out lines: the four findings and the wording fixed, the
+  review's tried fix and the case it missed, the content-line rule beyond the brief, the six
+  plants left with their reasons, the counts below.

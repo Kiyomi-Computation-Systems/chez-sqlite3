@@ -6,9 +6,9 @@
 # `apt-get install -y --no-install-recommends`, and fails when the file
 # yields no package. A package a job needs and this file lacks fails that
 # job: add it here. The site job, and pages.yml, install from
-# packaging/debian-site-prereqs.txt by the same step: the site runs on
-# Ubuntu's Chez, which no job installing from this file may have beside the
-# Chez it builds.
+# packaging/debian-site-prereqs.txt instead, by the same step: the site runs
+# on Ubuntu's Chez, which this file leaves out, since every job that installs
+# from it builds a Chez of its own.
 #
 # ONE copy, deliberately: the workflow installs from this file instead of
 # restating the list in a step, so a list in two places cannot drift.

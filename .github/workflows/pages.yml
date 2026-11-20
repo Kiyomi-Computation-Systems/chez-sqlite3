@@ -16,9 +16,10 @@ name: Pages
 # suites.
 #
 # Every action is pinned to a full commit SHA, with its tag in a comment, as in
-# ci.yml. `make check-ci` (tests/check-ci.sh) holds every line of this file
-# but its comments and blank lines to a copy of its own, line for line and in
-# order: a change to this file changes tests/check-ci.sh with it.
+# ci.yml. `make check-ci` (tests/check-ci.sh) holds every line of this file to
+# a copy of its own, line for line and in order, but its comments and blank
+# lines outside the run block, where every line is the script's: a change to
+# this file changes tests/check-ci.sh with it.
 
 on:
   push:

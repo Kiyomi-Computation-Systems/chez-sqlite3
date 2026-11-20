@@ -631,7 +631,9 @@ jobs:
   # holds the script that fetches it to its offline test. The submodules are
   # check-site's: make deps links SRFI-64 for the generator's suites. It has
   # no cache, so no if:, and no SITE_REF: it builds the site for main, whose
-  # links to repository files name main. check-ci holds its four checks, each
+  # links to repository files name main. check-ci holds the job at these six
+  # steps: the checkout; the install step, line for line, to the text it
+  # holds pages.yml's to, so the two cannot drift; and the four checks, each
   # a step's whole run line, in this order, each with CHEZ chezscheme. Only
   # check-ci sees a CHEZ lost: Ubuntu's package makes /usr/bin/scheme an
   # alternative for chezscheme, and make's own default CHEZ finds it.

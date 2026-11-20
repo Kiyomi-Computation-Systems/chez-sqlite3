@@ -70,17 +70,17 @@ mutant pages-link "pages.yml is a link" \
 mutant pages-missing "pages.yml is missing" \
   'note "$pages: is not a regular file: a link, a directory or nothing there"' ':'
 
-# --- pages.yml's lines ---
+# --- pages.yml's lines (the copy reader, which job site's install step shares) ---
 mutant pages-no-compare "pages.yml: a line changed, the trigger widened to every tag" \
-  '} else if ($0 != want[held]) {' '} else if (0) {'
+  'if (s != cpc[cp_held]) {' 'if (0) {'
 mutant pages-no-early "pages.yml: the last line dropped" \
-  'if (!done && held < nwant) prob(' 'if (0) prob('
+  'if (cp_held < nc) {' 'if (0) {'
 mutant pages-no-extra "pages.yml: a line added at the end" \
-  'if (held > nwant) {' 'if (0) {'
+  'if (cp_held > cp_nc) {' 'if (0) {'
 mutant pages-every-line "pages.yml: a line dropped, the deploy job's needs" \
-  'if ($0 ~ /^ *$/ || $0 ~ /^ *#/ || done) next' 'if ($0 ~ /^ *$/ || $0 ~ /^ *#/) next'
+  'if (!cpline(s, cpfl[i])) return 1' 'cpline(s, cpfl[i])'
 mutant pages-any-hash "the unedited file passes" \
-  'if ($0 ~ /^ *$/ || $0 ~ /^ *#/ || done) next' 'if ($0 ~ /^ *$/ || $0 ~ /#/ || done) next'
+  '(blank || (!inb && s ~ /^ *#/))' '(blank || (!inb && s ~ /#/))'
 mutant pages-comment-tab "pages.yml: a tab in a comment" \
   'if (index($0, "\t") > 0) prob(FNR,' 'if (index($0, "\t") > 0 && $0 !~ /^ *#/) prob(FNR,'
 mutant pages-comment-odd "pages.yml: a line separator, U+2028, in a comment" \
@@ -90,7 +90,8 @@ mutant pages-no-odd "pages.yml: a character beyond ASCII in a held line" \
 
 # --- ci.yml's comments ---
 mutant ci-comment-skipped "a line separator, U+2028, in a comment" \
-  'if (substr(raw, ind + 1, 1) == "#") {' 'if (substr(raw, ind + 1, 1) == "#") { next'
+  'if (!content && substr(raw, ind + 1, 1) == "#") {' \
+  'if (!content && substr(raw, ind + 1, 1) == "#") { next'
 
 # --- the site job ---
 mutant site-not-missed "site: the job deleted" \
@@ -117,6 +118,44 @@ mutant site-key-held "site: a Chez cache restored before the install step" \
   '!isl(job) && job != "site" && !cachekey_ok(val)' '!isl(job) && !cachekey_ok(val)'
 mutant site-names-free "site: make site with SITE_REF on its run line" \
   ' SITE_REF CHEZ_CMARK_GFM_LIBS", bw, " ")' '", bw, " ")'
+
+# --- round 2: the review's three survivors, its glob reverted, and the new rules ---
+mutant run-block-free "pages.yml: a line of the run block changed, exit 1 to true" \
+  'if (s != cpc[cp_held]) {' 'if (!cpb[cp_held] && s != cpc[cp_held]) {'
+mutant indent-free "pages.yml: a held line's indent changed" \
+  'if (s != cpc[cp_held]) {' \
+  'w1 = cpc[cp_held]; s1 = s; sub(/^ +/, "", w1); sub(/^ +/, "", s1); if (s1 != w1) {'
+mutant content-comment-free "a character beyond ASCII, U+0085, in a comment line of a run block" \
+  'if (!content && substr(raw, ind + 1, 1) == "#") {' \
+  'if (content && substr(raw, ind + 1, 1) == "#") next; if (substr(raw, ind + 1, 1) == "#") {'
+mutant content-names-free \
+  "an expression in a comment line of a run block names GITHUB_ENV and MAKEFLAGS" \
+  'if (!content && substr(raw, ind + 1, 1) == "#") {' 'if (substr(raw, ind + 1, 1) == "#") {'
+mutant content-scripts-free "a comment line of a run block names scripts/" \
+  'if (content && substr(raw, ind + 1, 1) == "#" && index(raw, "scripts/") > 0)' \
+  'if (0)'
+mutant block-by-copy-only \
+  "pages.yml: an expression in a comment line after the run block's last line" \
+  'if (!cpb[cp_held] && opens(s)) { inb = 1; col = keycol(s) }' 'if (0) { inb = 1 }'
+mutant block-by-file-only "pages.yml: a comment at column 0 inside the run block" \
+  'if (!(cp_held < nc && cpb[cp_held + 1]) && (blank' 'if ((blank'
+mutant blanks-never-held \
+  "pages.yml: a blank line, then a comment line, after the run block's last line" \
+  'for (j = 1; j <= np; j++) if (!cpline' 'for (j = 1; j <= 0; j++) if (!cpline'
+mutant blanks-always-held "pages.yml: blank lines between the run block and the next step pass" \
+  'if (inb && !blank && indent(s) <= col) { inb = 0; np = 0 }' \
+  'if (inb && !blank && indent(s) <= col) { inb = 0 }'
+mutant literal-blind "the unedited file passes" \
+  's ~ /: [|>][-+0-9]*( +#.*)?$/' 's ~ /: [>][-+0-9]*( +#.*)?$/'
+mutant site-any-count "site: a seventh step links /bin/true over chezscheme" \
+  'if (n != 6) prob(' 'if (0) prob('
+mutant site-install-free "site: the install line gains a package" \
+  'cpcheck(k, ninst, "job site' '0 && cpcheck(k, ninst, "job site'
+mutant name-raw "a third file named pages.yml, a newline, ci.yml" \
+  'shown=$(printf' 'shown=$name; : $(printf'
+mutant dir-ls "a third file named ci.yml, a newline, pages.yml" \
+  'for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do' \
+  'ls -A -- "$dir" | while IFS= read -r e; do entry=$dir/$e'
 
 # --- the control: the copy unmutated ---
 control=bad

@@ -415,11 +415,14 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `floor`'s three, and `current`'s five, its `--no-load` build's check and `make test` among them;
   `main`, the job that tests discovery, refuses both (M1 slices 3 and 5; ADR-0005, amended in M4's
   closing review).
-  Since M5 slice 3, `site` is the seventh job, on Ubuntu's Chez, each of its checks with
-  `env: CHEZ: chezscheme`, and `.github/workflows` holds a second workflow, `pages.yml`, whose
-  every line but a comment or a blank one `check-ci` holds to its own copy. The banned names
-  gain `SITE_REF` and `CHEZ_CMARK_GFM_LIBS`, and the text rules, a tab or a character beyond
-  ASCII, hold every line of both files, `ci.yml`'s comments among them (ADR-0005, amended).
+  Since M5 slice 3, `site` is the seventh job, on Ubuntu's Chez, held at six steps: its checkout,
+  its install step, held line for line to the text `pages.yml`'s install step is held to, and its
+  four checks, each with `env: CHEZ: chezscheme`. `.github/workflows`, read by a glob, holds a
+  second workflow, `pages.yml`, which `check-ci` holds to its own copy line for line, but for
+  comments and blank lines outside a run block: a block's lines are script, held whole. In
+  `ci.yml`, a block's line that begins with `#` keeps every content rule; the banned names gain
+  `SITE_REF` and `CHEZ_CMARK_GFM_LIBS` there; and the text rules, a tab or a character beyond
+  ASCII, hold every line of both files (ADR-0005, amended; the M5 plan, amended in slice 3).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own

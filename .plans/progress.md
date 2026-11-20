@@ -125,9 +125,12 @@ newest first.
     maintainer accepted its plan amendment, the generator as built (2026-11-20, "Accept").
   - **M5 slice 4,** the docs, is building in the M4 session.
   - **M5 slice 3 is PR #55 on `m5-slice-3`:** the site in CI, the `site` job and `pages.yml`, by
-    the M3 session, checked read-only by the M4 session. As it merges, the maintainer adds `site`
-    to branch protection and turns Pages on, built from GitHub Actions, its `github-pages`
-    environment taking `main` and `v*`.
+    the M3 session, reviewed (Opus) and checked read-only by the M4 session; with it, the fixes
+    from slice 2's review. Its plan amendment, the site in CI as built, and slice 2's amendment's
+    three additions wait for the maintainer's acceptance. As it merges, the maintainer adds
+    `site (the docs site, on Ubuntu's Chez)`, the job's name, to branch protection, and turns
+    Pages on, built from GitHub Actions, its `github-pages` environment taking `main` and the tag
+    rule `v*`.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -223,9 +226,13 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
-  - **`check-ci` requires a step's `env: CHEZ` only in `floor`, `current` and `site`;** elsewhere it
-    checks the value when one is there. A lost `CHEZ` fails on a runner with no `scheme`, but not
-    where Ubuntu's `chezscheme` answers to `scheme` ([traps](traps.md); M5 slice 3).
+  - **`check-ci` requires a step's `env: CHEZ` only in `floor`, `current`, `site` and `main`'s
+    "Report the runner's SQLite" step;** elsewhere it checks the value when one is there. A lost
+    `CHEZ` fails on a runner with no `scheme`, but not where Ubuntu's `chezscheme` answers to
+    `scheme` ([traps](traps.md); M5 slice 3 and its review).
+  - **No tag ruleset limits who may push a `v*` tag,** so once the `github-pages` environment
+    takes `v*`, any such tag deploys the site. With one maintainer that stands; a ruleset would
+    close it (M5 slice 3's review).
   - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53). The
     runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up to 47
     min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`,
@@ -264,6 +271,29 @@ newest first.
   with no env, and all still passed: the trap below.
 - **One trap,** reproduced by the lead: Ubuntu's `chezscheme` answers to `scheme`, so a site step
   that lost its `env: CHEZ` passes there.
+- **Its CI run** (44783042003): the `site` job passed in 28 s, `make site-deps` downloading with
+  the image's curl, `update-alternatives` giving `scheme` to `chezscheme`, every check with
+  `CHEZ: chezscheme`.
+- **Reviewed** (Opus, read-only), on `3f68b33`: no blocker. **One major:** `check-ci` freed every
+  comment-like and blank line of `pages.yml`, inside its run block too, where such a line is
+  script; a `#` at column 0 there passed `check-ci` and broke the YAML, reproduced by the lead with
+  PyYAML. **Three minors:** three mutants of `check-ci.sh` surviving every row; the site job's
+  other steps free, so it could drift from the build `pages.yml` deploys; and the directory read
+  by `ls`, which splits a name holding a newline. Nits on the records and on branch protection's
+  context name.
+- **Round 2,** by the builder: `pages.yml`'s run blocks held whole, by the copy and by the file's
+  own indentation, where the review's tried fix missed a line after the block; the site job held
+  at six steps, its install step to the text `pages.yml`'s is held to; in `ci.yml`, a block's line
+  beginning `#` kept to every content rule, beyond the brief; the directory read by a glob; and
+  the wording. `test-check-ci` 573 rows to 603; 36 mutants killed and 40 plants alike under gawk
+  and mawk; P5 rerun, 9 steps passing. Six plants still pass, each argued in the log: a checkout's
+  tag (which `check-action-pins` refuses), its `with:` keys, `main`'s list or `CHEZ` on its make
+  step, a timeout of 0, and a job's name.
+- **The lead's verification of round 2:** `make test` 93 of 93, `check-ci`, `check-test-fails`,
+  `check-site` and the pins passing; both workflows parse, the site job at six steps; four plants
+  of its own caught by name: a column-0 comment in `pages.yml`'s block, `pandoc` on the site
+  job's install line, `CHEZ_SQLITE3_DECOY` in a comment-like line of `main`'s block, and a
+  seventh site step; and three traps reproduced.
 - **The lead's verification:** `make test` 93 of 93, `check-ci`, `check-test-fails` 18 cases and
   the action pins' 28 lines passing; four plants of its own, each caught by name: a line of
   `pages.yml` changed, a site step without `env: CHEZ`, `SITE_REF` in `ci.yml`, and a third file
@@ -273,6 +303,8 @@ newest first.
   | Agent | Model | Tokens | Tool calls | Time |
   |---|---|---|---|---|
   | Slice 3's builder | Opus | 431k | 144 | 37 min |
+  | Slice 3's review | Opus | 284k | 82 | 35 min |
+  | Slice 3's builder, round 2 | Opus | 597k | 89 | 58 min |
 
 ### 2026-11-20 — M5 slice 2: the site's generator and its dependency (PR #54)
 
@@ -298,6 +330,13 @@ newest first.
 - **P4:** both anchor rules gave GitHub's anchor for all 81 headings of `docs/reference.md`.
 - **Two traps,** reproduced by the lead: `(load-shared-object "")` loads nothing and answers as
   if it had, and the container has no downloader.
+- **Reviewed** (Opus, read-only), after the merge, on `8c18272`: the plan owes every slice a
+  review, and this one had had only the M4 session's check. No blocker. **One major,** fixed in
+  PR #55: every link, the nav, the footer and invariant 5 took a page's file from the procedure
+  they check, so pages written to one file passed; a `site-unit` row now holds the names to a rule
+  of its own, watched failing on two and three pages. **Two minors,** fixed there too: five more
+  plants one page hides, which slice 4 runs, and top-level calls outside a guard
+  ([the log](m5-slice-2-mutation-log.md), round 2).
 - **The lead's verification:** `make test` 93 of 93 on Guix's library and on the floor;
   `check-site`, `check-site-deps`, `check-test-fails` and `check-clean` passing; three plants of
   its own, the home written as `Index.html`, `.gitattributes` without its `AGENTS.md` line and
@@ -307,6 +346,7 @@ newest first.
   | Agent | Model | Tokens | Tool calls | Time |
   |---|---|---|---|---|
   | Slice 2's builder | Opus | 504k | 179 | 51 min |
+  | Slice 2's review, after the merge | Opus | 277k | 88 | 16 min |
 
 ### 2026-11-20 — M5 slice 1: the memory jobs' timeout (PR #53)
 

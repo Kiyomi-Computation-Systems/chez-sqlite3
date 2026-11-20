@@ -1,18 +1,20 @@
 # Debian/Ubuntu packages to build and check the docs site, on ubuntu-24.04
 # (ADR-0022, decision 4).
 #
-# Two workflows install from this file, and nothing else does: the site job
-# of .github/workflows/ci.yml, and the build job of
-# .github/workflows/pages.yml. Each reads every uncommented line with the
-# same step as the other jobs' (packaging/debian-prereqs.txt), installs them
-# together with `apt-get install -y --no-install-recommends`, and fails when
-# the file yields no package. A package the site needs and this file lacks
-# fails both: add it here.
+# Two workflows install from this file: the site job of
+# .github/workflows/ci.yml, and the build job of .github/workflows/pages.yml,
+# whose install step `make check-ci` holds, in both, to one text, line for
+# line. It reads every uncommented line with the same step as the other jobs'
+# (packaging/debian-prereqs.txt), installs them together with
+# `apt-get install -y --no-install-recommends`, and fails when the file
+# yields no package. A package the site needs and this file lacks fails both:
+# add it here.
 #
 # A list of its own, because the site runs on another toolchain: Ubuntu's
-# Chez, below chez-sqlite3's floor, which no other job may have beside the
-# Chez it builds. Nothing the site runs imports a library under src/, where
-# (chez-sqlite3 private require-threaded) refuses such a Chez.
+# Chez, below chez-sqlite3's floor, which packaging/debian-prereqs.txt leaves
+# out, since every job that installs from it builds a Chez of its own.
+# Nothing the site runs imports a library under src/, where (chez-sqlite3
+# private require-threaded) refuses such a Chez.
 #
 # Lines starting with # and blank lines are ignored, so the section headers
 # below are labels only: every uncommented line is installed together. Keep
