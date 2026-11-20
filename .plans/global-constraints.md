@@ -181,8 +181,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   runner before its shard.** The Makefile lists each shard's suites, and every `tests/test-*.sps`
   stands in exactly one; `make check-memory-shards`, which `make test` runs, holds it, so a new
   suite fails `make test` until it is placed (ADR-0005, amended in M3 slice 6).
-  Each takes `timeout-minutes: 120`, which bounds a shard's sum (ADR-0005, amended)
- .
+  Each takes `timeout-minutes: 120`, which bounds a shard's sum (ADR-0005, amended).
 
 ## Conveniences, transactions, settings and interrupt
 
@@ -373,8 +372,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **SRFI-64 comes from `vendor/chez-srfi` at `7879b52`,** pinned in `Akku.lock`. `make deps`
   never fetches (ADR-0007).
   chez-cmark-gfm, the docs site's alone, is a second `depends/dev`, from its locked archive,
-  which `make site-deps` fetches on the host or in CI, never in the container (ADR-0007, amended)
- .
+  which `make site-deps` fetches on the host or in CI, never in the container (ADR-0007, amended).
 - **Every suite ends with `(exit (suite-exit-status runner))`,** and exits early only with
   `(exit 1)`. `make check-suites` checks it (ADR-0007).
 - **`make test` runs every suite under `timeout`, even after a failure,** and fails on any failure,
