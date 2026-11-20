@@ -1,6 +1,6 @@
 # ADR-0004: Windows is not supported
 
-- **Status:** Accepted (AGENTS.md, 2026-11-13). Amended 2026-11-20 in M5's plan, proposed: what a
+- **Status:** Accepted (AGENTS.md, 2026-11-13). Amended 2026-11-20 in M5's plan, accepted: what a
   release claims ([amendment](#amendment-2026-11-20-what-a-release-claims-m5s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3, until a later decision record reverses this one
@@ -34,6 +34,7 @@ only so Windows could be added later.
 Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §2;
 [ADR-0022](0022-the-first-release.md), decision 8), by the maintainer's answer to M5's pre-work,
 Q6, "What ran" (2026-11-20).
+Accepted by the maintainer on 2026-11-20 ("Accept all").
 
 - **The consequences' "supported platforms" are the aim; a release claims what ran.** 0.1.0
   claims Linux on x86_64, in CI and in the Guix container, and macOS on arm64, by the

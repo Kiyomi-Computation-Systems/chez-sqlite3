@@ -41,7 +41,7 @@
   Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): the no-load lane, the loading suites split,
   and the sweeps' low passes
   ([amendment](#amendment-2026-11-18-the-no-load-lane-the-loading-suites-split-and-the-sweeps-low-passes-m4s-closing-review)).
-  Amended 2026-11-20 in M5's plan, proposed: the site's job, `pages.yml`, and the memory jobs'
+  Amended 2026-11-20 in M5's plan, accepted: the site's job, `pages.yml`, and the memory jobs'
   timeout
   ([amendment](#amendment-2026-11-20-the-sites-job-pagesyml-and-the-memory-jobs-timeout-m5s-plan)).
 - **Date:** 2026-11-13
@@ -829,6 +829,7 @@ Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closin
 Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.4;
 [ADR-0022](0022-the-first-release.md), decisions 4 and 10), by the maintainer's answers to M5's
 pre-work, Q1, "Site from v0.1.0", and Q9, "timeout-minutes 120" (2026-11-20).
+Accepted by the maintainer on 2026-11-20 ("Accept all").
 
 - **`memory-1` and `memory-2` take `timeout-minutes: 120`;** `main`, `nothreads`, `floor` and
   `current` keep 60, and the `site` job, below, takes 10. The M4 closing review's amendment left

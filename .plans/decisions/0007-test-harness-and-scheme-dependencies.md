@@ -3,7 +3,7 @@
 - **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
   built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)), and after M0's closing review
   ([amendment](#amendment-2026-11-13-check-ci-is-a-prerequisite-and-is-held-as-one-m0s-closing-review))
-  ; amended 2026-11-20 in M5's plan, proposed: the site's dependency, the clone lines and the
+  ; amended 2026-11-20 in M5's plan, accepted: the site's dependency, the clone lines and the
   archive
   ([amendment](#amendment-2026-11-20-the-sites-dependency-the-clone-lines-and-the-archive-m5s-plan))
 - **Date:** 2026-11-13
@@ -106,6 +106,7 @@ check. AGENTS.md carries those rules here.
 Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.2, §4.3, §4.5 and §4.6;
 [ADR-0022](0022-the-first-release.md), decisions 3, 4 and 6), by the maintainer's answers to M5's
 pre-work, Q1, "Site from v0.1.0", and Q3, "Exclude .plans/ and AGENTS.md" (2026-11-20).
+Accepted by the maintainer on 2026-11-20 ("Accept all").
 
 - **Decision 2's "chez-srfi as the only development dependency" gains a second:**
   chez-cmark-gfm, at `^2.0.0`, for the docs site alone, as chez-curl ADR-0042's decision 2 has

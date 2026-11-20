@@ -9,7 +9,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Linux and macOS, on amd64 and arm64. Never Windows.** No Windows code paths, no Windows CI,
   and no abstraction kept only so Windows could come later (ADR-0004).
   0.1.0 claims what ran: Linux on x86_64 and macOS on arm64. Linux on arm64, macOS on amd64, and
-  macOS 14 and 15 are named as not run (ADR-0004, amended; ADR-0022) *(provisional)*.
+  macOS 14 and 15 are named as not run (ADR-0004, amended; ADR-0022).
 - **CI is Linux only.** macOS is checked by hand on the maintainer's Mac, and any variadic binding
   is run there whenever it changes (ADR-0004, ADR-0001).
 - **SQLite and a threaded Chez, each at its floor in `packaging/floors.sexp`.**
@@ -24,7 +24,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   itself is accepted and the version below it refused (ADR-0008, amended). No other house
   document restates a floor.
   `check-floors` reads `docs/` too, and README.org beyond its Requirements' list lines
-  (ADR-0008, amended) *(provisional)*.
+  (ADR-0008, amended).
 
 ## Native code
 
@@ -182,7 +182,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   stands in exactly one; `make check-memory-shards`, which `make test` runs, holds it, so a new
   suite fails `make test` until it is placed (ADR-0005, amended in M3 slice 6).
   Each takes `timeout-minutes: 120`, which bounds a shard's sum (ADR-0005, amended)
-  *(provisional)*.
+ .
 
 ## Conveniences, transactions, settings and interrupt
 
@@ -339,7 +339,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
 - **Each defect the assessment lists becomes a test,** watched failing against a planted copy of
   that defect (ADR-0009).
 
-## The release *(provisional)*
+## The release
 
 - **`docs/` holds four pages, a quick start, finding SQLite, what varies by library and the
   reference, each linked from README.org;** README.org's one Scheme block equals a `scheme run`
@@ -367,14 +367,14 @@ Proposed record is marked *(provisional)* until that record is accepted.
   but loopback, and no git. It exports `CHEZ`, `CC` and `CHEZ_SQLITE3_LIBRARY`, and sets no
   `LD_LIBRARY_PATH` (ADR-0006).
   From M5 slice 2 it holds cmark-gfm, tar and xz, and exports `CHEZ_CMARK_GFM_LIBS` (ADR-0006,
-  amended) *(provisional)*.
+  amended).
 - **Network and git work runs on the host:** submodules, `make check-pins`, downloads (ADR-0006,
   ADR-0007).
 - **SRFI-64 comes from `vendor/chez-srfi` at `7879b52`,** pinned in `Akku.lock`. `make deps`
   never fetches (ADR-0007).
   chez-cmark-gfm, the docs site's alone, is a second `depends/dev`, from its locked archive,
   which `make site-deps` fetches on the host or in CI, never in the container (ADR-0007, amended)
-  *(provisional)*.
+ .
 - **Every suite ends with `(exit (suite-exit-status runner))`,** and exits early only with
   `(exit 1)`. `make check-suites` checks it (ADR-0007).
 - **`make test` runs every suite under `timeout`, even after a failure,** and fails on any failure,
@@ -419,7 +419,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   closing review).
   From M5 slice 3, `ci.yml` has seven jobs, `site` the seventh, on Ubuntu's Chez, and
   `.github/workflows` holds a second workflow, `pages.yml`, whose every line but a comment or a
-  blank one `check-ci` holds to its own copy (ADR-0005, amended) *(provisional)*.
+  blank one `check-ci` holds to its own copy (ADR-0005, amended).
 - **`make check-nothreads` refuses every library under `src/` by name** on CI's `--nothreads`
   Chez (ADR-0001, amended).
 - **Every child that reaches native code runs through `gated-command`,** under the gate's own

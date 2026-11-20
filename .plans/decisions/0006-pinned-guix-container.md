@@ -6,7 +6,7 @@
   ([amendment](#amendment-2026-11-13-the-self-test-after-the-slices-review)), and with the
   version reports held by `check-ci` after M0's closing review
   ([amendment](#amendment-2026-11-13-the-version-reports-are-held-m0s-closing-review));
-  amended 2026-11-20 in M5's plan, proposed: cmark-gfm for the site
+  amended 2026-11-20 in M5's plan, accepted: cmark-gfm for the site
   ([amendment](#amendment-2026-11-20-cmark-gfm-for-the-site-m5s-plan))
 - **Date:** 2026-11-13
 - **Scope:** development tooling; no library change
@@ -145,6 +145,7 @@ chez-curl's scripts share each of these gaps; this repository's copies now diffe
 Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.5;
 [ADR-0022](0022-the-first-release.md), decision 4), by the maintainer's answer to M5's pre-work,
 Q1, "Site from v0.1.0" (2026-11-20), as chez-curl ADR-0042, decision 3, has it.
+Accepted by the maintainer on 2026-11-20 ("Accept all").
 
 - **The manifest gains `cmark-gfm`, `tar` and `xz`.** chez-cmark-gfm renders the docs site
   through the cmark-gfm library; `tar` and `xz` unpack its locked archive, and build the ones

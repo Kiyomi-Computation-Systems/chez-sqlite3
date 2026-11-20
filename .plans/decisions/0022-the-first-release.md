@@ -1,6 +1,7 @@
 # ADR-0022: The first release: four pages and a site, a signed tag and its Release, what ran
 
-- **Status:** Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4). Built on the
+- **Status:** Accepted (the maintainer, 2026-11-20, "Accept all"), proposed in M5 slice 0
+  ([the M5 plan](../2026-11-20-m5-plan.md), §4). Built on the
   maintainer's answers of 2026-11-20 to the pre-work's ten questions, each the recommended option
   ([research/m5-prework/](../research/m5-prework/README.md#the-maintainers-answers-2026-11-20)):
   decision 4's site, "Site from v0.1.0" (Q1); decision 5's Releases, "Every tag from v0.1.0"

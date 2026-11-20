@@ -108,15 +108,15 @@ newest first.
   v0.1.0, a Release for every tag, `.plans/` and AGENTS.md left out of the archive, no Akku at
   0.1.0, four pages, the platforms that ran, a comment sweep, a README fragment held to a docs
   twin, `timeout-minutes: 120` for the memory jobs, and the tag signed with chez-curl's key.
-  **M5 slice 0 is PR #52 on `m5-plan`:** the M5 plan, ADR-0022, and the plan's amendments to
-  the brief, ADR-0004, ADR-0005, ADR-0006, ADR-0007 and ADR-0008, the global constraints,
-  AGENTS.md and the traps, written by the M3 session and checked read-only by the M4 session (the
-  maintainer, 2026-11-20: "This session: answers, then plan"). The plan's one question, Q11, the
-  site's home page, is answered: "The quick start is home" (2026-11-20). The records wait for the
-  maintainer's acceptance. The maintainer allowed the two sessions to split M5's parallel slices,
-  and chose the split in the M4 session's own session (2026-11-20): the M4 session builds slices 1
-  and 4, the M3 session slices 2, 3, 5 and 6 and the ledger, each checking the other's
-  read-only.
+  **M5 slice 0 is PR #52 on `m5-plan`:** the M5 plan, ADR-0022, and the plan's amendments to the
+  brief, ADR-0004, ADR-0005, ADR-0006, ADR-0007 and ADR-0008, the global constraints, AGENTS.md and
+  the traps, written by the M3 session and checked read-only by the M4 session (the maintainer,
+  2026-11-20: "This session: answers, then plan"). The plan's one question, Q11, the site's home
+  page, is answered: "The quick start is home" (2026-11-20). The maintainer accepted ADR-0022 and
+  every amendment the same day ("Accept all"). The maintainer allowed the two sessions to split M5's
+  parallel slices, and chose the split in the M4 session's own session (2026-11-20): the M4 session
+  builds slices 1 and 4, the M3 session slices 2, 3, 5 and 6 and the ledger, each checking the
+  other's read-only.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -261,6 +261,10 @@ newest first.
   `packaging/debian-prereqs.txt`'s header; §11's ledger line; and the Makefile's sharing between
   slices 3 and 4. Two more of its notes are in: slice 5 compares C objects built without `-g`, and
   ADR-0008's amendment says a page names Chez's version by a link too.
+- **The records accepted:** the maintainer accepted ADR-0022, the plan and its amendments to the
+  brief and ADR-0004 to ADR-0008 on 2026-11-20 ("Accept all"), with the two beyond the answers,
+  `check-floors` reading `docs/` and the comment rule binding now. Each record's Status says
+  so, and the constraints' M5 rules lose their *(provisional)* marks.
 - **The lead's verification:** `make test` passed 92 of 92 on the final tree. The five ADR
   amendments matched §10's text exactly, by script. P1 reproduced in a scratch repository, P3
   matched `test-docs`' run environment, and the citation check stood at the line the planner

@@ -8,7 +8,7 @@ settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 
 by the maintainer (§5). §3f is ADR-0015, accepted. Amended 2026-11-15 with the M3 plan: D3's leaning
 settled (§5), and what M3's research measured of §2.7 and §3d. Amended 2026-11-17 with the M4 plan, and accepted by the maintainer that day:
 where §2.5's guarantee lives, §2.6's FTS5 on the `current` lane alone, and §2.8's options as
-settings. Amended 2026-11-20 with the M5 plan, proposed: §6's M5, as the maintainer's
+settings. Amended 2026-11-20 with the M5 plan, accepted: §6's M5, as the maintainer's
 answers to its pre-work shape it. Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
