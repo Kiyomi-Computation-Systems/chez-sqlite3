@@ -74,7 +74,7 @@ newest first.
     again about Q14 and Q15 together, from a user's side, the answer was "Yes, as shown".
   - **The records:** the maintainer accepted ADR-0021 and the plan's amendments the same day
     ("Accept all").
-- **Now: M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
+- **M4,** extensions and `db_config`, its slices led by the M3 session (the maintainer,
   2026-11-17: "This session leads"). Slices 1, 2 and 5 were built side by side, each in a worktree
   of its own ("1, 2 and 5 together"); slice 3 follows 1 and 2, and slice 4 follows 3.
   - **M4 slice 1 is done:** the pure core of the four `db_config` settings and
@@ -88,7 +88,10 @@ newest first.
     four settings at open and the opt-in's check, is done, as PR #44, `c92d397`, below. **Slice
     4,** `load-extension!`, is done, as PR #45, `a795fa2`, below. **The maintainer's Mac run for
     slices 3 to 5** ran on 2026-11-18, below, and its one fault, a row of the suites, is fixed in
-    PR #47, `34721b4`. **M4's closing review** is PR #48, below.
+    PR #47, `34721b4`. **M4's closing review is done,** the last of M4's done conditions
+    ([the M4 plan](2026-11-17-m4-plan.md), §6), as PR #48, `79fa1ac`, by the M3 session,
+    squash-merged with CI passing in every job, and the Mac run after it passed, PR #49, below.
+    **M4 is done.**
   - **M5's pre-work** is merged, by the M4 session, as PR #41, `2102131`: the release's facts and
     the maintainer's questions.
   - **The close fix is done,** as PR #36, `3488963`, below: slice 5's FTS5 suite found
@@ -97,6 +100,9 @@ newest first.
     before slice 5, then "Document it, with a row" and "Vouch only for ours" (2026-11-17), and
     accepted its amendments to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept
     all").
+- **Now: M5,** the release. Its pre-work is merged, as PR #41, `2102131`, by the M4 session
+  ([research/m5-prework/](research/m5-prework/README.md)): its eight questions, Q1 to Q8, wait on
+  the maintainer before the M5 plan is written.
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.

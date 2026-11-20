@@ -1,5 +1,6 @@
 #!/bin/sh
-# tc-field-missing.sh OUT: from the worktree's root, inside scripts/guix-env, a Chez whose
+# tc-field-missing.sh OUT: from the worktree's root, inside scripts/guix-env, with OUT under the
+# worktree, such as build/tcfm, since the container sees nothing else: a Chez whose
 # $tc-field can't be reached, stood in on Linux. tests/ is copied to OUT/tests, and in each of
 # the seven files that define tc-field, `(string->symbol "$tc-field")` names
 # `$tc-field-missing`, so the suite's guard answers #f, as it would on a Chez without the
