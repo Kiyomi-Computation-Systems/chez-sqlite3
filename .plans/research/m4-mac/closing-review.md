@@ -12,6 +12,10 @@ M4's closing review (PR #48) added rows no Mac has run. Its ledger's Open list o
 - **The owner compared inside the section,** in `call-with-open-handle` and `close-database!`
   (ADR-0010, amended in M4's closing review), on Apple's `THREADSAFE=2` build.
 
+It ran on 2026-11-19: both libraries passed 92 of 92 on Chez 10.4.1, the probes printed what
+Linux's did, and every figure below held. The results are in [README.md](README.md), "The
+closing review's Mac run", and the files in [out/closing-review/](out/closing-review/).
+
 These are its commands, for zsh, in your chez-sqlite3 clone, on `main`, which has PR #48. They
 carry no comments, and they write only under `build/m4cr-mac/`, which git ignores. Each
 `make test` runs every suite: one took 164 s on the 18-core Linux machine these steps were

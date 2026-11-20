@@ -122,6 +122,15 @@ newest first.
     passed with Apple's 3.51.0 and with Homebrew's 3.54.1. `test-connection` passed 63, its
     re-entry rows included, and `test-check-ci` passed 397, so BSD grep reads the new rules as
     GNU grep does.
+- **The maintainer's Mac run after M4's closing review** (arm64, Chez 10.4.1, 2026-11-19), on
+  `main` at `79fa1ac` by [research/m4-mac/closing-review.md](research/m4-mac/closing-review.md),
+  the maintainer's "Write it up now": `make test` passed 92 of 92 with Apple's 3.51.0 and with
+  Homebrew's 3.54.1.
+  - The timer's probes printed what Chez 10.4.0 printed, so `$tc-field` reads the same there.
+  - Homebrew's run read all 32 low-trip tallies, as Linux does. Apple's read the 19 that need no
+    `sqlite3_auto_extension`, through the forcing VFS and the trace, and named the rest
+    unavailable, matching a Linux stand-in for its refusal suite by suite but one, explained.
+  - A missing `$tc-field`, stood in on Linux, failed exactly the 29 low rows by name.
 - **The maintainer's Mac run for M4's slices 3 to 5** (macOS 26.7.1, arm64, 2026-11-18), on
   `main` at `ec48a9d`, by the M4 session's
   [research/m4-mac/slices-3-5.md](research/m4-mac/slices-3-5.md)
@@ -178,12 +187,6 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
-  - **The next Mac run** is the first on Chez 10.4.1 for the low passes' timer, read through
-    `$tc-field`, and for the forcing VFS on Apple's and Homebrew's libraries. A missing timer fails
-    every low row by name (ADR-0016, amended in M4's closing review). Its steps are
-    [research/m4-mac/closing-review.md](research/m4-mac/closing-review.md), the maintainer's
-    choice "Write it up now" (2026-11-19). A stand-in for Apple's refused `sqlite3_auto_extension`
-    passed the 14 suites that reach it on Linux, each row that reads the tell UNAVAILABLE.
   - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
     suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
     `memory-2` before calling it safe.
