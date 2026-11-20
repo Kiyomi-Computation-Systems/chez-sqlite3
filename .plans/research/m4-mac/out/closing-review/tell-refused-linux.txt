@@ -1,0 +1,16 @@
+tell-refused.py's copy, each suite run against src/ on Guix's 3.53.1, 2026-11-19, at main 79fa1ac:
+suite, exit code, FAIL lines, UNAVAILABLE lines, lines naming the refused sqlite3_auto_extension
+test-conveniences-pending-execute rc=0 fail=0 unavail=5 refusedtell=5
+test-conveniences-pending-fold-low rc=0 fail=0 unavail=2 refusedtell=2
+test-conveniences-pending-fold rc=0 fail=0 unavail=4 refusedtell=4
+test-conveniences-pending-query rc=0 fail=0 unavail=8 refusedtell=8
+test-conveniences-pending-query-row rc=0 fail=0 unavail=6 refusedtell=6
+test-conveniences-pending-script-even rc=0 fail=0 unavail=3 refusedtell=3
+test-conveniences-pending-script-low-0 rc=0 fail=0 unavail=2 refusedtell=2
+test-conveniences-pending-script-low-1 rc=0 fail=0 unavail=2 refusedtell=2
+test-conveniences-pending-script-low-2 rc=0 fail=0 unavail=2 refusedtell=2
+test-conveniences-pending-script-low-3 rc=0 fail=0 unavail=2 refusedtell=2
+test-conveniences-pending-script-odd rc=0 fail=0 unavail=4 refusedtell=4
+test-load-extension rc=0 fail=0 unavail=1 refusedtell=1
+test-open-db-config rc=0 fail=0 unavail=6 refusedtell=6
+test-open-interleave rc=0 fail=0 unavail=11 refusedtell=11

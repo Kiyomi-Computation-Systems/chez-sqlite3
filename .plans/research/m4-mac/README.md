@@ -14,12 +14,15 @@ Mac before slice 4 is written, where the plan left them to the hand run after sl
 | [mac.md](mac.md) | The maintainer's steps on the Mac, for zsh |
 | [slice-2.md](slice-2.md) | Slice 2's own Mac step, `make test` and `make check-variadic` with both libraries, once PR #37 has merged |
 | [slices-3-5.md](slices-3-5.md) | The plan's Mac run after slice 5: `make test` with both libraries, and the redirect probe, once PR #45 has merged |
+| [closing-review.md](closing-review.md) | The Mac run after M4's closing review: the timer's three probes, then `make test` with both libraries, once PR #48 has merged |
+| [tell-refused.py](tell-refused.py) | Apple's refusal of `sqlite3_auto_extension` stood in on Linux, in a copy of the tests, for the closing review's run |
 | [run-mac.sh](run-mac.sh) | Builds the plan's extensions with the Mac's flags, and runs `l1-load-extension.c`, `x1-ffi-load.sps` and `fifo.c` against one library |
 | [fifo.c](fifo.c) | `dlopen` and the load on a FIFO, each in a child process and bounded, with no writer and with one; and `dlopen`'s own reasons for a directory and an empty file. Added after run 1 |
 | [run-dyld.sh](run-dyld.sh), [dyld.sps](dyld.sps) | Whether `DYLD_LIBRARY_PATH` or `DYLD_FALLBACK_LIBRARY_PATH` redirects an absolute path: the library chez-sqlite3 loads, and an extension `load-extension!` loads, each case in a Chez of its own; `LD_LIBRARY_PATH` on Linux as the control |
 | [out/run-1/](out/run-1/), [out/run-2/](out/run-2/) | Each run's files, as `run-mac.sh` wrote them |
 | [out/slice-2/](out/slice-2/) | Slice 2's Mac step: `make test` and `make check-variadic`, with each library, as `tee` wrote them |
 | [out/slices-3-5/](out/slices-3-5/) | The Mac run after slice 5: `make test` with each library, and `run-dyld.sh`'s `dyld.txt` |
+| [out/closing-review/](out/closing-review/) | The closing review's run: `tell-refused.py`'s stand-in on Linux, before the Mac |
 
 The probes are the plan's own, [l1-load-extension.c](../m4-plan/l1-load-extension.c) and
 [x1-ffi-load.sps](../m4-plan/x1-ffi-load.sps), with [ext.c](../m4-plan/ext.c) and

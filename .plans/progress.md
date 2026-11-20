@@ -180,7 +180,10 @@ newest first.
     grows past it. The gate's `SLOW` line is the only bound.
   - **The next Mac run** is the first on Chez 10.4.1 for the low passes' timer, read through
     `$tc-field`, and for the forcing VFS on Apple's and Homebrew's libraries. A missing timer fails
-    every low row by name (ADR-0016, amended in M4's closing review).
+    every low row by name (ADR-0016, amended in M4's closing review). Its steps are
+    [research/m4-mac/closing-review.md](research/m4-mac/closing-review.md), the maintainer's
+    choice "Write it up now" (2026-11-19). A stand-in for Apple's refused `sqlite3_auto_extension`
+    passed the 14 suites that reach it on Linux, each row that reads the tell UNAVAILABLE.
   - **The memory jobs' margin:** with the low passes and the split, each shard projects at about 30
     suite-minutes a run against its 60-minute timeout. Read the first runs of `memory-1` and
     `memory-2` before calling it safe.
