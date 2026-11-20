@@ -113,8 +113,10 @@ newest first.
   AGENTS.md and the traps, written by the M3 session and checked read-only by the M4 session (the
   maintainer, 2026-11-20: "This session: answers, then plan"). The plan's one question, Q11, the
   site's home page, is answered: "The quick start is home" (2026-11-20). The records wait for the
-  maintainer's acceptance. The maintainer allowed the two sessions to split M5's parallel slices
-  (2026-11-20), the M4 session building one only on the maintainer's word in its own session.
+  maintainer's acceptance. The maintainer allowed the two sessions to split M5's parallel slices,
+  and chose the split in the M4 session's own session (2026-11-20): the M4 session builds slices 1
+  and 4, the M3 session slices 2, 3, 5 and 6 and the ledger, each checking the other's
+  read-only.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -251,6 +253,14 @@ newest first.
   and not 86; one imprecise, where `test-conventions` checks citations; and one count covered
   `tests/`' top level alone. Each is corrected in the note. Its file counts, 1,218 and 791, were
   true at `79fa1ac`, as it says, and are 1,229 and 802 now.
+- **Checked by the M4 session** at `ad3fdbb`, read-only: no blocker, seven fixes, each verified
+  and made: `pages.yml` uses two actions beside the checkout, not three; the site-suite rule names
+  `tests/site-*.sps`, since `tests/test-site-testing.sps` imports both testing libraries;
+  AGENTS.md's release bullet says `test-manifest` holds the clone lines only from slice 4; the
+  comment rule binds new comments now, slice 5 sweeping the older; slice 3's files gain
+  `packaging/debian-prereqs.txt`'s header; §11's ledger line; and the Makefile's sharing between
+  slices 3 and 4. Two more of its notes are in: slice 5 compares C objects built without `-g`, and
+  ADR-0008's amendment says a page names Chez's version by a link too.
 - **The lead's verification:** `make test` passed 92 of 92 on the final tree. The five ADR
   amendments matched §10's text exactly, by script. P1 reproduced in a scratch repository, P3
   matched `test-docs`' run environment, and the citation check stood at the line the planner

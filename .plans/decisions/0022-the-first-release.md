@@ -80,8 +80,9 @@ Read on `main` at `79fa1ac`, after M4, by the pre-work, and at `95d0cc1` by the 
 4. **A docs site on GitHub Pages from v0.1.0** (Q1), copied from chez-curl's, itself circuit's:
    - the generator, `build-site.sps` and `site/`, its suites and `check-site`, and four targets,
      `site-deps`, `site`, `check-site` and `check-site-deps`. The generator imports nothing under
-     `src/`, and its suites import `(site-testing)`, so both run on Ubuntu's Chez, below the
-     floor;
+     `src/`, and its suites, `tests/site-*.sps`, import `(site-testing)`, so both run on
+     Ubuntu's Chez, below the floor; `tests/test-site-testing.sps`, which `make test` runs on
+     the floor's Chez, imports both;
    - chez-cmark-gfm, a second `depends/dev`, from its locked archive (ADR-0007, amended); and
      cmark-gfm in the container (ADR-0006, amended);
    - a seventh CI job, `site`, and a second workflow, `pages.yml`, which deploys on a `v*` tag's
@@ -111,9 +112,11 @@ Read on `main` at `79fa1ac`, after M4, by the pre-work, and at `95d0cc1` by the 
    - strings and data stay, test names and messages among them; so do the signature comments
      `test-reference` holds, character for character, and the convention table's citations,
      which are strings;
+   - the rule binds every comment written from M5 slice 0 on, and the sweep takes the older ones;
    - `tests/fixtures/` isn't swept: a fixture's comment can be a row's input;
    - every edited Scheme file reads as the same datums as before; every changed line of a shell
-     file is a whole-line comment; every C file compiles to the same code. Each check is watched
+     file is a whole-line comment; every C file compiles, without `-g`, to the same object code,
+     since debug information records line numbers. Each check is watched
      failing first.
 10. **`memory-1` and `memory-2` take `timeout-minutes: 120`** (Q9). Each suite keeps its own
     bounds, and `check-ci` holds a whole number there (ADR-0005, amended).

@@ -180,7 +180,8 @@ Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §2 and §4.1;
 
   A page names the floor by a link to README.org's Requirements, as chez-curl's quick start
   does. A library whose version is a floor's text is named by whose it is: "Ubuntu 24.04's
-  library".
+  library". Chez's floor is also the one Chez the suites run, so a page names Chez's version by
+  that link too.
 - **CHANGELOG.md isn't read.** A release's entry records what that release needed, and stays true
   when the floor moves.
 - **Tests:** `test-check-floors` holds each form at every position in a page and in README.org's

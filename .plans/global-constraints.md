@@ -349,8 +349,9 @@ Proposed record is marked *(provisional)* until that record is accepted.
   0.0.0, so a release moves the manifest, CHANGELOG.md and the clone lines together
   (ADR-0007, amended; ADR-0022, decision 3).
 - **The site renders `docs/` through chez-cmark-gfm, and imports nothing under `src/`;** its
-  suites import `(site-testing)`, never `(chez-sqlite3-testing)`, since they run on Ubuntu's Chez,
-  below the floor (ADR-0022, decision 4).
+  suites, `tests/site-*.sps`, import `(site-testing)`, never `(chez-sqlite3-testing)`, since they
+  run on Ubuntu's Chez, below the floor; `tests/test-site-testing.sps`, which `make test` runs on
+  the floor's Chez, imports both (ADR-0022, decision 4).
 - **A release archive leaves out `.plans/` and `AGENTS.md`,** by `.gitattributes`, which
   `test-manifest` holds; it is no test tree (ADR-0022, decision 6).
 - **The maintainer makes, signs and pushes each tag** with the release key, `git tag -v` read
@@ -358,7 +359,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   byte for byte. Nothing is published to Akku (ADR-0022, decisions 1, 5 and 7).
 - **A comment in `src/` or `tests/` is for a developer reading the code:** no milestone, slice,
   plan section, research path, date or "the maintainer"; a bare `ADR-NNNN` points to why
-  (ADR-0022, decision 9; from M5 slice 5).
+  (ADR-0022, decision 9). It binds every new comment now, and M5 slice 5 sweeps the older ones.
 
 ## Environment and tests
 

@@ -854,7 +854,7 @@ pre-work, Q1, "Site from v0.1.0", and Q9, "timeout-minutes 120" (2026-11-20).
 - **A second workflow, `pages.yml`,** deploys the site on a `v*` tag's push, or by hand. Its
   actions are pinned by commit, as `check-action-pins.sh` holds every file of the directory, and
   `check-floors` reads it as it reads `ci.yml`. Its two jobs need what `check-ci` refuses in
-  `ci.yml`: `needs:`, a job's own `permissions:` and `environment:`, and three actions beside the
+  `ci.yml`: `needs:`, a job's own `permissions:` and `environment:`, and two actions beside the
   checkout. So `check-ci` holds it to a copy of its own:
   - the directory holds `ci.yml` and `pages.yml` alone, each a regular file and no link;
   - every line of `pages.yml` but a comment or a blank line equals `check-ci.sh`'s copy, line
