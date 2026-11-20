@@ -525,12 +525,12 @@ session checking each read-only.
 
 | Q | Answer | What it means for M5 |
 |---|---|---|
-| 1 | "Site from v0.1.0" | A `site` job and `pages.yml`, copied from chez-curl's, with chez-cmark-gfm and cmark-gfm a second development dependency, and Pages set before the tag, so v0.1.0 deploys its own site. The M5 record amends ADR-0005 (the workflow's shape, which `check-ci` holds), ADR-0006 (the container) and ADR-0007. |
+| 1 | "Site from v0.1.0" | A `site` job and `pages.yml`, copied from chez-curl's; chez-cmark-gfm a second `depends/dev`, from its locked archive (ADR-0007; `test-manifest` holds `depends/dev` and `Akku.lock` to chez-srfi alone today); cmark-gfm in the container (ADR-0006); and Pages set before the tag, so v0.1.0 deploys its own site. The M5 record amends ADR-0005 (the workflow's shape, which `check-ci` holds), ADR-0006 and ADR-0007. |
 | 2 | "Every tag from v0.1.0" | A GitHub Release for each tag, made on the host with `gh` after the tag is pushed, its notes the tag's CHANGELOG entry, read back byte for byte. Nothing in the tree changes. |
 | 3 | "Exclude .plans/ and AGENTS.md" | A `.gitattributes` marks both `export-ignore` before the tag, so v0.1.0's archive holds the library, its docs and its tests. |
 | 4 | "Not at 0.1.0" | No Akku publish. Installing is a clone of the tag; `Akku.manifest`'s 0.1.0 is for `test-manifest`, and publishing stays a later decision. |
 | 5 | "Four pages" | `docs/` holds a quick start, finding SQLite, what varies by library, and the reference, each linked from README.org, as `test-docs` requires. |
-| 6 | "What ran" | 0.1.0 claims Linux x86_64 and macOS arm64, with their SQLites. Linux arm64, macOS amd64, and macOS 14 and 15 are named as not run in the README and the changelog's Known limitations. ADR-0004's aim stands, and CI is unchanged. |
+| 6 | "What ran" | 0.1.0 claims Linux x86_64 and macOS arm64, with their SQLites. Linux arm64, macOS amd64, and macOS 14 and 15 are named as not run in the README and the changelog's Known limitations. ADR-0004's aim stands, and no job is added for the platforms not run. |
 | 7 | "Sweep src/ and tests/" | One PR before the tag rewrites the comments that carry the build's history, checked by reading each Scheme file's datums before and after. The signature comments `test-reference` holds, and the ADR citations `test-conventions` checks, stay character for character. |
 | 8 | "Fragment held to a docs twin" | README.org shows an example fragment, and one new `test-docs` rule holds it equal to a `scheme run` block in `docs/`, watched failing. |
 | 9 | "timeout-minutes 120" | `memory-1` and `memory-2` get `timeout-minutes: 120` in `ci.yml`; `check-ci.sh` holds only a whole number, so its suite stands. ADR-0005 is amended. #50's own run, a fifth, took 42 min 38 s and 41 min 53 s. |
