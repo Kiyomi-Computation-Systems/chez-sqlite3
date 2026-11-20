@@ -121,8 +121,8 @@ newest first.
   - **M5 slice 1 is done,** the memory jobs' `timeout-minutes: 120`, as PR #53, `d23cfc5`, by the
     M4 session, checked by the M3 session, squash-merged with CI passing in every job.
   - **M5 slice 2 is PR #54 on `m5-slice-2`:** the site's generator and its dependency, by the M3
-    session, checked read-only by the M4 session. Its plan amendment, the generator as built, waits
-    for the maintainer's acceptance.
+    session, checked read-only by the M4 session. The maintainer accepted its plan amendment, the
+    generator as built (2026-11-20, "Accept").
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
