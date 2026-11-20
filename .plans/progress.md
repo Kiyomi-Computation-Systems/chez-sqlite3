@@ -102,8 +102,14 @@ newest first.
     all").
 - **Now: M5,** the release. Its pre-work is merged, as PR #41, `2102131`, by the M4 session
   ([research/m5-prework/](research/m5-prework/README.md)), and refreshed at M4's end as PR #50,
-  the maintainer's "Refresh + audit, one PR" (2026-11-19). Its ten questions, Q1 to Q10, wait on
-  the maintainer before the M5 plan is written.
+  the maintainer's "Refresh + audit, one PR" (2026-11-19). **Its ten questions are answered**
+  (the maintainer, 2026-11-20), each the recommendation
+  ([the answers](research/m5-prework/README.md#the-maintainers-answers-2026-11-20)): a site from
+  v0.1.0, a Release for every tag, `.plans/` and AGENTS.md left out of the archive, no Akku at
+  0.1.0, four pages, the platforms that ran, a comment sweep, a README fragment held to a docs
+  twin, `timeout-minutes: 120` for the memory jobs, and the tag signed with chez-curl's key.
+  **M5's plan is next,** written by the M3 session and checked read-only by the M4 session (the
+  maintainer, 2026-11-20: "This session: answers, then plan").
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).

@@ -407,7 +407,8 @@ No M4 commit touched README.org, CHANGELOG.md, `Akku.manifest` or `tests/test-ma
 ## 7. Questions for the maintainer
 
 Each is one decision, its recommended option first. "The M5 record" is a new ADR of M5's scope,
-as chez-curl ADR-0038 and ADR-0042 are for chez-curl.
+as chez-curl ADR-0038 and ADR-0042 are for chez-curl. The maintainer answered all ten on
+2026-11-20: [the answers](#the-maintainers-answers-2026-11-20).
 
 **Q1. A docs site at 0.1.0.** chez-curl cut 0.1.2 to deploy one, since an older tag couldn't (§3,
 §4 item 4). Settles: the M5 record, amending ADR-0005 (the workflow's shape), ADR-0006 (the
@@ -515,6 +516,26 @@ record here names a key. Settles: the M5 record's release steps.
 - **Annotated, unsigned:** no key is needed, and a signature can't be added to a tag once it is
   pushed without moving the tag.
 
+## The maintainer's answers, 2026-11-20
+
+Each was chosen from a picker whose first option was the recommendation, and each answer is that
+option. M5's plan builds on them, and the M5 record writes them into the records each one names.
+The maintainer chose this session, the M3 session, to record them and write the plan, the M4
+session checking each read-only.
+
+| Q | Answer | What it means for M5 |
+|---|---|---|
+| 1 | "Site from v0.1.0" | A `site` job and `pages.yml`, copied from chez-curl's; chez-cmark-gfm a second `depends/dev`, from its locked archive (ADR-0007; `test-manifest` holds `depends/dev` and `Akku.lock` to chez-srfi alone today); cmark-gfm in the container (ADR-0006); and Pages set before the tag, so v0.1.0 deploys its own site. The M5 record amends ADR-0005 (the workflow's shape, which `check-ci` holds), ADR-0006 and ADR-0007. |
+| 2 | "Every tag from v0.1.0" | A GitHub Release for each tag, made on the host with `gh` after the tag is pushed, its notes the tag's CHANGELOG entry, read back byte for byte. Nothing in the tree changes. |
+| 3 | "Exclude .plans/ and AGENTS.md" | A `.gitattributes` marks both `export-ignore` before the tag, so v0.1.0's archive holds the library, its docs and its tests. |
+| 4 | "Not at 0.1.0" | No Akku publish. Installing is a clone of the tag; `Akku.manifest`'s 0.1.0 is for `test-manifest`, and publishing stays a later decision. |
+| 5 | "Four pages" | `docs/` holds a quick start, finding SQLite, what varies by library, and the reference, each linked from README.org, as `test-docs` requires. |
+| 6 | "What ran" | 0.1.0 claims Linux x86_64 and macOS arm64, with their SQLites. Linux arm64, macOS amd64, and macOS 14 and 15 are named as not run in the README and the changelog's Known limitations. ADR-0004's aim stands, and no job is added for the platforms not run. |
+| 7 | "Sweep src/ and tests/" | One PR before the tag rewrites the comments that carry the build's history, checked by reading each Scheme file's datums before and after. The signature comments `test-reference` holds, and the ADR citations `test-conventions` checks, stay character for character. |
+| 8 | "Fragment held to a docs twin" | README.org shows an example fragment, and one new `test-docs` rule holds it equal to a `scheme run` block in `docs/`, watched failing. |
+| 9 | "timeout-minutes 120" | `memory-1` and `memory-2` get `timeout-minutes: 120` in `ci.yml`; `check-ci.sh` holds only a whole number, so its suite stands. ADR-0005 is amended. #50's own run, a fifth, took 42 min 38 s and 41 min 53 s. |
+| 10 | "Signed with chez-curl's key" | The maintainer makes, signs and pushes the tag with the key that signs chez-curl's tags; `git tag -v v0.1.0` is read before the push. |
+
 ## 8. What the refresh ran
 
 On 2026-11-19, at `main` `79fa1ac`, on Guix's 3.53.1 and Chez 10.4.0, inside `scripts/guix-env`.
@@ -615,8 +636,8 @@ true of the code wasn't asked: that is M5's docs review.
   app.sps`, as chez-curl's does: it runs from a bare archive of `main` on Linux, needing no build
   (§8). A real tag's clone, and the Mac, wait for §4's walk as a reader. `make dev` is no install
   step: it puts the suites' libraries on the path too, after `make build` (`Makefile:275`).
-- **The release key.** chez-curl's tags are signed "by the release key"; no record here names one
-  (Q10).
+- **The release key.** chez-curl's tags are signed "by the release key"; no record here names one.
+  The maintainer signs v0.1.0 with that key (Q10, answered 2026-11-20).
 - **Whether each of the 36 reference promises is kept** (§1): 32 are, 3 partly, and 1 was
   superseded, its replacement kept (§9). **Whether our changelog reader takes link references**
   (§3): it does (§8).
