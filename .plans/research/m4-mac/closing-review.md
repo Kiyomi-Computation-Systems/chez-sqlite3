@@ -20,13 +20,13 @@ written on.
 ## 1. Get `main`, with the closing review in it
 
 Start from a clean tree: `git status --short` should print nothing that git tracks. The
-`git log` command should print one line, the review's merge, ending `(#48)`.
+`git merge-base` command should print `has-48`: the review's merge, `79fa1ac`, is in your tree.
 
 ```
 git status --short
 git switch main
 git pull --ff-only
-git log --oneline --grep='(#48)'
+git merge-base --is-ancestor 79fa1ac HEAD && echo has-48
 mkdir -p build/m4cr-mac
 ```
 
