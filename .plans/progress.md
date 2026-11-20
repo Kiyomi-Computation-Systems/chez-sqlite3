@@ -218,10 +218,11 @@ newest first.
     `34721b4` too, so it predates the no-load lane. A save without its `if:` only saves again.
   - **"At most 11 children" a loading suite is a count, not a check:** nothing fails a suite that
     grows past it. The gate's `SLOW` line is the only bound.
-  - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53).
-    The runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up
-    to 47 min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`, has crept from
-    161 s to 221 s, under half the gate's 450 s `SLOW` line; read it again as suites are added.
+  - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53). The
+    runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up to 47
+    min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`,
+    has crept from 161 s to 221 s, under half the gate's 450 s `SLOW` line; read it again as suites
+    are added.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
