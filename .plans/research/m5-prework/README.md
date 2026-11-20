@@ -1,8 +1,11 @@
 # Research: M5's pre-work, the release
 
-Written 2026-11-17, before M5 has a plan, on `main` at `fa7a222`, while M4's slices 2 to 5 are
-unmerged. Nothing was built, run or fetched: every fact below is read from the file named beside
-it. chez-curl was read at `fa9750d`, its `main` after v0.1.2's close-outs. Nothing here ships.
+Written 2026-11-17, before M5 has a plan, on `main` at `fa7a222`, while M4's slices 2 to 5 were
+unmerged; every fact then was read from the file named beside it. **Refreshed 2026-11-19, on
+`main` at `79fa1ac`, once M4 was done:** each figure re-read there, §6 rewritten as what M4
+settled, §8 for what the refresh ran, §9 for an audit of the records' promises to the reference,
+and Q9 and Q10 added. chez-curl was read at `fa9750d`, its `main` after v0.1.2's close-outs, and
+still its head on GitHub on 2026-11-19. Nothing here ships.
 
 M5 is "the release" ([the brief](../../2026-11-13-chez-sqlite3-project-brief.md), §6). This note
 gathers what its plan will need: what our records ask of it, what the tree holds today, what
@@ -31,7 +34,7 @@ designs no slice.
   comment (lines 82–85).
 - **The records' promises to the reference.** 36 lines in ADR-0012 and ADR-0014 to ADR-0021 name
   `docs/reference.md`, most as "`docs/reference.md` says so". ADR-0019 adds "The docs give each
-  busy case's remedy" (line 313). Whether each is kept today wasn't checked here.
+  busy case's remedy" (line 313). §9 audits each against the reference.
 - **What a reader must be told, by the records:**
   - how SQLite is found: `CHEZ_SQLITE3_LIBRARY`, else one candidate list per world. On macOS the
     one candidate is `/usr/lib/libsqlite3.dylib`, and Homebrew's is reached by the override
@@ -48,6 +51,10 @@ designs no slice.
 
 ## 2. What exists today
 
+At `79fa1ac`. No M4 commit touched README.org, CHANGELOG.md, `Akku.manifest`, `Akku.lock` or
+`tests/test-manifest.sps` (`git log fa7a222..79fa1ac` on them lists none), so their rows stand as
+first written.
+
 | Path | Size | What it holds |
 |---|---|---|
 | `README.org` | 15 lines | A title; "It is in development" (line 5); a link to the reference (line 10); `** Requirements`, the two floor lines (12–15). No status, platforms, install, example or licence. |
@@ -56,7 +63,7 @@ designs no slice.
 | `Akku.lock` | 9 lines | chez-srfi alone. |
 | `docs/` | 1 page | `reference.md`. |
 | `packaging/` | 2 files | `floors.sexp`, 4 lines, Chez 10.4.0 and SQLite 3.45.1; `debian-prereqs.txt`, 51 lines, CI's packages. Nothing about a release. |
-| `.github/workflows/` | 1 file | `ci.yml`, 569 lines. |
+| `.github/workflows/` | 1 file | `ci.yml`, 617 lines. |
 | `.gitattributes`, `.akkuignore` | none | |
 | Tags | none | `git tag -l` lists none. |
 
@@ -75,7 +82,7 @@ designs no slice.
   `docs/`, fails the suite, "no clone-line check exists yet, so none may be written" (555–580).
   M5's install steps trip it, so M5 replaces it with the check the harness plan owes.
 
-**`tests/test-reference.sps`,** 515 lines (header, lines 1–48): `docs/reference.md` has one `###`
+**`tests/test-reference.sps`,** 525 lines (header, lines 1–48): `docs/reference.md` has one `###`
 entry per export of `(chez-sqlite3)`, as Chez's `library-exports` lists them, and no other. Each
 holds one `text` block, `NAME : TYPE`, equal character for character to that export's signature
 comment in `src/chez-sqlite3.sls`. A procedure's type holds `->`, and a value's doesn't.
@@ -94,74 +101,86 @@ comment in `src/chez-sqlite3.sls`. A procedure's type holds `->`, and a value's 
   written `YYYY-MM-DD`;
 - a code span that is one name beginning `sqlite-` or `chez-sqlite3-` is an export.
 
-**`docs/reference.md`,** 1,503 lines: an intro (1–40) with the import, the contents and the type
-names; then seven `##` sections and 68 `###` entries. `src/chez-sqlite3.sls` has 68 signature
-comments.
+**`docs/reference.md`,** 1,707 lines: an intro (1–41) with the import, the contents and the type
+names; then eight `##` sections and 70 `###` entries, one per export, which `test-reference`
+holds to `src/chez-sqlite3.sls`'s 70 signature comments. M4 added the Extensions section and two
+exports, `load-extension!` and `sqlite-extensions-unavailable?`.
 
 | Section | Line | Entries |
 |---|---|---|
-| Connections | 41 | 5, and `#### Settings` at line 109 |
-| Conveniences and counters | 327 | 9 |
-| Transactions | 563 | 2 |
-| Statements | 701 | 9 |
-| Values | 873 | 8 |
-| The library | 1083 | 7 |
-| Conditions | 1171 | 28 |
+| Connections | 42 | 5, and `#### Settings` at line 110 |
+| Extensions | 379 | 1 |
+| Conveniences and counters | 467 | 9 |
+| Transactions | 703 | 2 |
+| Statements | 841 | 9 |
+| Values | 1013 | 8 |
+| The library | 1223 | 7, and `#### Which SQLite` at line 1243 |
+| Conditions | 1362 | 29 |
 
-- 39 Scheme blocks, 35 of them `scheme run`.
-- It says nothing of installing. It names `CHEZ_SQLITE3_LIBRARY` twice, as a source and as a
-  reason's detail (lines 1145 and 1311), and says nothing else of how SQLite is found. A search
-  for Apple, macOS, Homebrew, Ubuntu, Guix and Linux finds none of them.
+- 46 Scheme blocks, 38 of them `scheme run`.
+- It says nothing of installing. How SQLite is found is now `#### Which SQLite` (1243):
+  `CHEZ_SQLITE3_LIBRARY` first, then discovery's candidates for Guix's C library, other Linux and
+  a Mac (1253–1259). `CHEZ_SQLITE3_LIBRARY` is on 4 lines. Apple's library is named where it
+  differs: `defensive` starts on (163), and it has no extension loading (193, 463 and 1704).
+  `DYLD_LIBRARY_PATH`'s redirect, the maintainer's "Document it" (ADR-0002, amended), is told for
+  extensions (420 and 462) and for the library (1269–1276 and 1313). Homebrew and Ubuntu are
+  named nowhere.
 
-**The Makefile,** 818 lines: 21 targets on its `.PHONY` line (156), each listed by `make help`
-(161), and `check-help` holds the two equal. None renders docs or makes a release. The docs are
-two suites that `make test` runs, `test-docs` and `test-reference` (`SUITES`, line 32). The
-nearest to a release are `check-floors` (368), `check-ci` (395) and `check-pins` (279, on the host
-alone). chez-curl's docs survey found no release target in any sibling either (its
-`.plans/research/m8/surveys/docs.md`, §4).
+**The Makefile,** 858 lines: 22 targets on its `.PHONY` line (179), M4 slice 2 adding
+`check-variadic`, each listed by `make help` (184), and `check-help` holds the two equal. None
+renders docs or makes a release. The docs are two suites that `make test` runs, `test-docs` and
+`test-reference` (`SUITES`, line 32). The nearest to a release are `check-floors` (392),
+`check-ci` (419) and `check-pins` (303, on the host alone). chez-curl's docs survey found no
+release target in any sibling either (its `.plans/research/m8/surveys/docs.md`, §4).
 
 **`.github/workflows/ci.yml`:**
 
-- it runs on a push to `main` or to a `v*` tag, on every pull request, and by hand (lines 51–56),
+- it runs on a push to `main` or to a `v*` tag, on every pull request, and by hand (lines 53–58),
   so a tag's push runs every job;
-- `permissions: contents: read` (58–59);
-- six jobs, each on `ubuntu-24.04`: `main` (84), `memory-1` (191), `memory-2` (253), `nothreads`
-  (315), `floor` (375) and `current` (476). Branch protection requires all six (progress.md,
-  line 38);
-- `tests/check-ci.sh`, 741 lines, holds it. The directory must hold `ci.yml` alone (lines 6 and
-  118–121), its `on`, `permissions` and `concurrency` blocks line for line (125–137), and its six
-  jobs by name. `check-floors` reads every file in the directory too. So a second workflow, such as
-  one for Pages, changes `check-ci.sh` first (AGENTS.md, lines 16–18);
+- `permissions: contents: read` (60–61);
+- six jobs, each on `ubuntu-24.04` with `timeout-minutes: 60`: `main` (86), `memory-1` (195),
+  `memory-2` (257), `nothreads` (319), `floor` (379) and `current` (490). Since M4's closing
+  review, `current` builds a second 3.54.1 without extension loading, as Apple's has none, and
+  runs the whole `make test` again against it (482–489, 586–616). Branch protection requires all
+  six (progress.md, line 38);
+- `tests/check-ci.sh`, 858 lines, holds it. The directory must hold `ci.yml` alone (lines 6 and
+  127–130), its `on`, `permissions` and `concurrency` blocks line for line (133–146), and its
+  six jobs by name, each with a whole-number `timeout-minutes` (581–582 and 784). `check-floors`
+  reads every file in the directory too. So a second workflow, such as one for Pages, changes
+  `check-ci.sh` first (AGENTS.md, lines 16–18);
 - no CI file names an architecture: a search of `scripts/ci/`, `ci.yml` and `check-ci.sh` for
   `ta6le`, `x86_64`, `amd64`, `arm64` and `aarch64` found none.
 
-**What a source archive would carry:** 1,082 tracked files, 687 of them under `.plans/`, and
+**What a source archive would carry:** 1,218 tracked files, 791 of them under `.plans/`, and
 `AGENTS.md` (`git ls-files`). An archive is no test tree: its `vendor/chez-srfi` is empty, which
 `make deps` refuses (ADR-0007, decision 3), and `tests/test-conventions.sps` reads
-`.plans/decisions` (line 249).
+`.plans/decisions` (lines 321–323). It is a library, though: §8 ran a program against one.
 
 **Comments written for the build, not a reader.** A crude search of `src/` for "slice", a
-milestone (`M` and a digit), `research/`, `traps.md` and "the maintainer" matches 137 lines in 17
-of its 29 files; of `tests/` (`.sps`, `.sls`, `.sh`, `.c`), 589 lines in 78 files. It counts
-comments and strings alike.
+milestone (`M` and a digit), `research/`, `traps.md` and "the maintainer" matches 165 lines in 22
+of its 30 files, 162 of them lines that begin as a comment; of `tests/` (`.sps`, `.sls`, `.sh`,
+`.c`), 1,048 lines in 94 of 120 files, 773 of them comment lines. It was 137 in 17 and 589 in 78
+at `fa7a222`: M4 nearly doubled the tests' share. It counts comments and strings alike.
 
 **Stale at 0.1.0, outside `test-docs`' reach:** `Akku.manifest:17` ("until the first release") and
 `tests/test-manifest.sps:19–22` (the tripwire's "yet"). README.org's "It is in development" passes
 `test-docs`.
 
 **What the suites need besides Chez and SQLite:** a C compiler and `sqlite3.h`, whose absence
-fails a suite (global constraints, Native code); GNU `timeout` (`Makefile:328`); Valgrind, for
-`make test-memory`; and, from M4 slice 4, `sqlite3ext.h` (ADR-0021's consequences). README.org's
-Requirements can't list them as list lines: `check-floors` compares that section's list lines with
-the two floor lines, whole (`tests/floors.sls`, lines 44–50 and 354–358). Prose there, or a list
+fails a suite (global constraints, Native code); GNU `timeout`, or Homebrew's `gtimeout` on the
+Mac (`Makefile:40`); Valgrind, for `make test-memory`; and, from M4 slice 4, `sqlite3ext.h`
+(ADR-0021's consequences). README.org's Requirements can't list them as list lines:
+`check-floors` compares that section's list lines with the two floor lines, whole
+(`tests/floors.sls`, lines 44–50 and 353–357). Prose there, or a list
 under another heading, isn't compared.
 
-**What varies by library, measured, and in no page today:**
+**What varies by library, measured.** At `fa7a222` no page told any of it. M4 put three items in
+the reference, marked "(the reference)" below; the rest is still in no page.
 
 - Apple's 3.51.0 is `THREADSAFE=2`, keeps no memory count (`DEFAULT_MEMSTATUS=0`), and has no
-  extension loading (`OMIT_LOAD_EXTENSION`) ([mac-d7](../mac-d7/README.md)). It starts `defensive`
-  on, where the six other libraries measured start it off ([m4-prework](../m4-prework/README.md),
-  the Mac step).
+  extension loading (`OMIT_LOAD_EXTENSION`) ([mac-d7](../mac-d7/README.md)); the last is in the
+  reference (193, 463, 1704). It starts `defensive` on, where the six other libraries measured
+  start it off ([m4-prework](../m4-prework/README.md), the Mac step) (the reference, 163).
 - SQLite's default build has no FTS5, and a table using it fails at step, "no such module: fts5".
   Guix's, Ubuntu's, Apple's and Homebrew's have it (m4-prework).
 - Ubuntu's 3.45.1 opens every connection with the C call that loads extensions already on
@@ -174,6 +193,9 @@ under another heading, isn't compared.
   libraries waited in milliseconds (m3-mac, P4).
 - On the Mac a load retries a path with `.dylib` appended, and its failure messages are dyld's, cut
   at the path's length plus 298 bytes ([m4-mac](../m4-mac/README.md)).
+- On the Mac, `DYLD_LIBRARY_PATH` redirects an absolute path by its leaf name, the library's and an
+  extension's alike, where Linux's `LD_LIBRARY_PATH` redirected neither (m4-mac, the run after
+  slice 5) (the reference, 420, 462 and 1269–1276).
 
 ## 3. What chez-curl did
 
@@ -298,8 +320,9 @@ Each follow-up fixed something its tag had fixed in place. Done before our tag, 
    each newline renders as a line break, so the entry renders as wrapped (chez-curl ADR-0042,
    decision 8).
 7. **Expect the gate's timing to break on slow runners, with no code changed.** 0.1.1's CI took
-   three attempts. Ours has one open: `test-transaction-interrupt` took 318 s on `memory-1` once
-   (progress.md, Open). Read it on more runs before the release.
+   three attempts. `test-transaction-interrupt`'s 318 s, open when this note was written, is
+   settled (progress.md). The memory jobs' totals are not: `memory-1` took 42, then 44, of its
+   60 minutes on the last two runs (§8, Q9).
 8. **Hold the changelog to the suites, not to the docs it sums up** ("a summary inherits its
    sources' overreach", the 0.1.0 close-out), and date a record by the commits' local day, never
    CI's UTC day.
@@ -314,7 +337,8 @@ Each follow-up fixed something its tag had fixed in place. Done before our tag, 
   - Ubuntu 24.04's 3.45.1, found by discovery, in `main`, and under Valgrind in `memory-1` and
     `memory-2`;
   - 3.45.1 built from SQLite's source with its defaults, in `floor`;
-  - 3.54.1 built from source, in `current` (`scripts/ci/build-sqlite.sh`, line 86);
+  - 3.54.1 built from source, in `current` (`scripts/ci/build-sqlite.sh`, line 86), and, since
+    M4's closing review, 3.54.1 built again without extension loading, in the same job;
   - and `nothreads` holds that a Chez built without threads is refused.
 - **Linux x86_64, the Guix container:** Chez 10.4.0 and Guix's SQLite 3.53.1, in every slice's
   `make test` (ADR-0006; m4-prework's header).
@@ -325,9 +349,11 @@ Each follow-up fixed something its tag had fixed in place. Done before our tag, 
     131–145);
   - M3's whole `make test`, its eight failing suites faults in the tests, fixed in PR #30 and
     passing on a rerun ([m3-mac](../m3-mac/README.md));
-  - M4's pre-work Mac step and two load runs (m4-prework; [m4-mac](../m4-mac/README.md)).
-
-  M4's slices 2 to 5 haven't run there: their two Mac runs are owed (the M4 plan, §5 and §6).
+  - M4's pre-work Mac step and two load runs (m4-prework; [m4-mac](../m4-mac/README.md));
+  - M4's three `make test` runs, each with both libraries: after slice 2, 75 of 75 (PR #43);
+    after slice 5, Homebrew's 81 of 81 and Apple's 80, its one fault a row of the suites, fixed in
+    PR #47; and after the closing review, 92 of 92 with each (PR #49), the timer's probes printing
+    what Linux's Chez 10.4.0 prints (m4-mac).
 
 **Not measured:**
 
@@ -350,31 +376,33 @@ So the README can say what chez-curl's says: the suites run on Linux x86_64 and 
 naming the SQLites on each; Linux arm64 and macOS amd64 haven't run them; Windows isn't
 supported. "Supported" stays ADR-0004's aim (Q6).
 
-## 6. What waits for M4
+## 6. What M4 settled
 
-M4's slice 2 is PR #37, and slices 3 to 5 are unmerged. M4 is done only once they merge, its two
-Mac runs pass and its closing review has run (the M4 plan, §6). The M5 plan waits for them, since
-they set:
+This section first listed what the M5 plan had to wait for. M4 is done: its five slices, the
+close fix, its three Mac runs with the one fix they needed, and its closing review are merged,
+the last as PR #48, `79fa1ac` (the M4 plan, §6; progress.md). What each wait came to:
 
-- **The exports:** 68 today, 70 after M4, adding `sqlite-extensions-unavailable?` (slice 3) and
-  `load-extension!` (slice 4) (the M4 plan, §1 and §4.8). The reference's entries and the
-  changelog's Added follow them.
-- **The reference's text:** the four settings and their starts by library (slice 3), an
-  Extensions section (slice 4), the new condition (slice 3), and checking for FTS5 in The library
-  (slice 5, whose branch adds 9 lines) (the M4 plan, §4.8; ADR-0021's consequences).
-- **The Makefile and the workflow:** slice 2 adds `check-variadic`, its help, its step in `main`
-  and `check-ci.sh`'s run line; slice 5 edits `current`'s comment; slices 3 to 5 add suites to the
-  shard lists. Slice 2's branch changes `ci.yml`, the Makefile and `check-ci.sh`, and slice 5's
-  `ci.yml`, the Makefile and the reference (each branch's diff against `main`). A site or a Linux
-  arm64 job would follow them.
-- **Where FTS5 is:** on the `current` lane, not on `floor` (slice 5; ADR-0003, amended), which
-  the README and the changelog can then state.
-- **The Mac's facts for the docs:** Apple's library refusing the opt-in by the named condition,
-  for real, and loads through Homebrew's, owed by the run after slice 5 (the M4 plan, §5).
-- **The closing review,** whose amendments may move any record the docs rest on.
+- **The exports:** 70, adding `load-extension!` (slice 4) and `sqlite-extensions-unavailable?`
+  (slice 3). The reference holds one entry each (§2), and the changelog's Added follows them.
+- **The reference's text:** the four settings and their starts by library, under `#### Settings`
+  (110), Apple's `defensive` among them; the Extensions section (379); the new condition (1697);
+  and checking for FTS5 in The library (1344–1350).
+- **The Makefile and the workflow:** `check-variadic` runs in `main`'s step (`ci.yml`, 168–174);
+  `current` builds and runs a library without extension loading (§2); the new suites are in the
+  shard lists (`MEMORY_SUITES_1` at `Makefile:78`, `MEMORY_SUITES_2` at 127). Still six jobs, and
+  still `ci.yml` alone, so a site or a Linux arm64 job changes `check-ci.sh` first.
+- **Where FTS5 is:** on the `current` lane, not on `floor` (slice 5; ADR-0003, amended
+  2026-11-17). Both Mac libraries have it: `test-fts5` passed 19 with each (m4-mac).
+- **The Mac's facts for the docs,** from the run after slice 5 (m4-mac): Apple's library refused
+  the opt-in by `&sqlite-extensions-unavailable`, `test-load-extension` asserting it in place of
+  the load rows; Homebrew's loaded the suites' extension as a `.dylib`; and `DYLD_LIBRARY_PATH`
+  redirects a load by its leaf name, which the maintainer chose to document ("Document it",
+  ADR-0002, amended), and the reference now does (§2).
+- **The closing review** amended ADR-0002, ADR-0005, ADR-0010, ADR-0016 and ADR-0021
+  (`git show --stat 79fa1ac`). §9 reads the reference against the records as they now stand.
 
-None of M4's slices touches README.org, CHANGELOG.md, `Akku.manifest` or
-`tests/test-manifest.sps` (the M4 plan, §5's file lists).
+No M4 commit touched README.org, CHANGELOG.md, `Akku.manifest` or `tests/test-manifest.sps`
+(§2), as the M4 plan's file lists said.
 
 ## 7. Questions for the maintainer
 
@@ -400,7 +428,7 @@ ADR-0042, decision 8). Settles: the M5 record.
 - **The tag alone:** the Releases page stays empty, and a later change of mind makes Releases for
   old tags.
 
-**Q3. What a release archive leaves out.** 687 of the 1,082 tracked files are under `.plans/`, and
+**Q3. What a release archive leaves out.** 791 of the 1,218 tracked files are under `.plans/`, and
 a tag fixes its archive (§2). Settles: the M5 record.
 
 - **`.plans/` and `AGENTS.md`, by `.gitattributes`, from v0.1.0 (recommended):** the archive holds
@@ -427,7 +455,7 @@ nothing of installing, of finding SQLite, or of any library by name (§2). Settl
 - **The reference alone:** README.org tells installing and finding SQLite, and what varies by
   library has no page.
 - **chez-curl's shape, a page per topic beside the reference:** about a dozen pages, much of them
-  restating the reference's 1,503 lines, each to be held and reviewed.
+  restating the reference's 1,707 lines, each to be held and reviewed.
 
 **Q6. The platforms 0.1.0 claims.** Linux arm64, macOS amd64, and macOS 14 and 15 have never run
 the suites (§5). Settles: the M5 record, as chez-curl ADR-0038's decision 5, and ADR-0005 if a job
@@ -441,9 +469,9 @@ is added.
 - **A hand run on a Linux arm64 machine:** the claim rests on one run, as the Mac's do; no record
   names such a machine.
 
-**Q7. A comment sweep before the tag.** 137 lines in 17 of `src/`'s 29 files carry the build's
-history, by a crude search (§2). Settles: the M5 record; chez-curl recorded its sweep in its ledger
-alone.
+**Q7. A comment sweep before the tag.** 165 lines in 22 of `src/`'s 30 files carry the build's
+history, by a crude search, and 1,048 lines in 94 of `tests/`' 120 (§2). Settles: the M5
+record; chez-curl recorded its sweep in its ledger alone.
 
 - **The comments of `src/` and `tests/`, before the tag (recommended):** one PR, checked by
   reading each Scheme file's datums before and after, as chez-curl's PR #56 was; the signature
@@ -460,19 +488,144 @@ Scheme block in README.org is read, never run (§2). Settles: the M5 record.
 - **`examples/*.sps`, run by a new suite, as chez-curl's:** a suite, a wrapper for the native
   counts and expected outputs, for programs that need no server.
 
-## What the files can't settle
+**Q9. The memory jobs' margin.** A tag's push runs every job, and on the last two runs
+`memory-1` took 42 and 44 of its 60 minutes (§8). Each suite is bounded already: `test-memory`
+fails one past 450 s as `SLOW`, and stops one at `MEMORY_TIMEOUT`'s 600 s (ADR-0005, amended).
+Only the job's `timeout-minutes` bounds a shard's sum. Settles: ADR-0005, amended, which left
+the margin to be read from the first runs (line 822).
+
+- **A longer `timeout-minutes` for `memory-1` and `memory-2`, such as 120 (recommended):** two
+  lines of `ci.yml`. `check-ci.sh` holds only that the value is a whole number (581–582 and 784),
+  so its suite stands. Each suite keeps its own bounds, so a hang still ends as `HUNG`, inside the
+  job. A slow runner's run takes longer to read.
+- **A third shard, `memory-3`:** each shard about two thirds of today's. A seventh job, so
+  `check-ci.sh`'s six-job shape, `check-memory-shards`, the Makefile's shard lists and branch
+  protection's required checks all change, and M3 slice 6's split is redone for three.
+- **Split the heaviest suites:** it moves time between the shards, never their sum, and which
+  shard was heavier changed between the three runs (§8).
+- **Leave it:** a job that times out is rerun by hand. chez-curl's 0.1.1 took three attempts on
+  CI with no code changed (§4).
+
+**Q10. The tag's signature.** chez-curl's three tags are each annotated and signed with a PGP key
+(`git cat-file -p v0.1.0` in its clone, read 2026-11-19), "by the release key" in its records. No
+record here names a key. Settles: the M5 record's release steps.
+
+- **Signed with the key that signs chez-curl's tags (recommended):** the maintainer makes and
+  pushes the tag, as chez-curl's were; `git tag -v v0.1.0` is read before the push.
+- **Annotated, unsigned:** no key is needed, and a signature can't be added to a tag once it is
+  pushed without moving the tag.
+
+## 8. What the refresh ran
+
+On 2026-11-19, at `main` `79fa1ac`, on Guix's 3.53.1 and Chez 10.4.0, inside `scripts/guix-env`.
+Each folder was under `build/` of the checkout, since the container sees nothing else, and was
+removed afterwards.
+
+**A program runs against a bare archive's `src`.** `git archive` of `79fa1ac`, unpacked into an
+empty folder, its `vendor/chez-srfi` empty, nothing built. In another folder, this program:
+
+```scheme
+(import (rnrs) (chez-sqlite3))
+(call-with-database ":memory:"
+  (lambda (db)
+    (execute! db "create table t (x)")
+    (execute! db "insert into t values (42)")
+    (write (query-row db "select x from t"))
+    (newline)))
+```
+
+`$CHEZ --libdirs ARCHIVE/src --program app.sps` printed `#(42)` and exited 0, with
+`CHEZ_SQLITE3_LIBRARY` unset and with it set. Unset, discovery found the profile's library, its
+source `guix-environment`; set, the source was `override`. So installing needs no `make`, no
+submodule and no build: the library is its `src`. Not run: a clone of a real tag (none exists),
+Ubuntu's discovery outside CI, and the Mac. §4's item 3, the walk as a reader, still owes those.
+
+**The changelog reader takes link references.** In that archive, CHANGELOG.md was given a
+`## [0.1.0] - 2026-11-20` entry and two link references closing the file, `[Unreleased]: …` and
+`[0.1.0]: …`, and `Akku.manifest` 0.1.0. `test-manifest` passed 79 of 79. With the manifest left
+at 0.0.0, it failed one row, by name: "Akku.manifest's version is CHANGELOG.md's latest release, or
+0.0.0 with none", expected `"0.1.0"`, actual `"0.0.0"`. A link reference begins `[`, and
+`section-headings` judges only lines that begin `#` (`tests/test-manifest.sps`, 247–262).
+
+**The memory jobs' times on CI,** the first four runs with M4's closing review's suites and
+shards. A job's time is the API's start to end; its suites' time is the sum of its log's
+`time: Ns under the gate` lines.
+
+| Run | At | `memory-1` | its suites | `memory-2` | its suites | Slowest suite |
+|---|---|---|---|---|---|---|
+| 44460844478 | `a323224`, PR #48 | 31 min | 1,507 s | 35 min | 1,763 s | 161 s |
+| 44544215035 | `3090e3e`, PR #48 | 28 min | 1,408 s | 36 min | 1,714 s | 151 s |
+| 44555738428 | `79fa1ac`, `main`'s push | 42 min | 2,117 s | 32 min | 1,605 s | 177 s |
+| 44658201510 | `02429fc`, PR #49 | 44 min | 2,237 s | 33 min | 1,612 s | 195 s |
+
+- The slowest suite was `test-open-db-config-engines` or `test-conveniences-pending-script-odd`,
+  each under half the 450 s `SLOW` line.
+- A job spent about 5 to 8 minutes beyond its suites, 285 to 457 s.
+- `memory-1`'s suites took 1,408 to 2,237 s, 1.6 to one, over the same suites: `3090e3e`'s and
+  `79fa1ac`'s trees are the same (`git rev-parse` of each `^{tree}`), and `02429fc` changed only
+  `.plans/`. The heavier shard changed between runs.
+- CI's runners differ about two to one (AGENTS.md). `memory-1` at twice its fastest sum here takes
+  about 54 minutes, and at twice its slowest about 81, past its 60-minute timeout (Q9).
+
+**chez-curl** was still at `fa9750d` on GitHub, its tags `v0.1.0` to `v0.1.2`, each annotated and
+signed with a PGP key (Q10).
+
+## 9. The records' promises to the reference
+
+Each of the 36 lines of §1, and every other line of `.plans/decisions/` that promises what the
+reference says, was read against `docs/reference.md` at `79fa1ac`, by an Opus reviewer, read-only.
+The lead read each verdict that isn't plainly kept against both files. Whether the reference is
+true of the code wasn't asked: that is M5's docs review.
+
+- **Of the 36:** 32 kept; 3 partly kept; 1 superseded, its replacement kept (ADR-0017's deferred
+  write, which now fails at once "once it has read", reference 719).
+- **Beyond the 36:** 5 more kept. ADR-0019's busy remedies (line 313), ADR-0002's
+  `DYLD_LIBRARY_PATH` under Which SQLite (304), ADR-0021's load message (467–468), an extension's
+  leftover statement refusing the close (329), and an extension's path redirect (460). None names
+  the file, so a grep for it misses them: they say "the docs", "the reference" (once split
+  across a line), "Extensions entry" or "Document it".
+
+**The three partly kept,** each a gap M5's docs slice closes:
+
+- **ADR-0014, line 301:** the reference says a read's out-of-memory can end a transaction, at the
+  next reset or finalize (1141–1144). It never says a step's can. Its list of failures that end a
+  transaction (753–756) names `insert or rollback`, a full disk and an interrupted write.
+- **ADR-0016, line 349:** of three things the per-call guard doesn't cover, the reference tells
+  two (502–504). The third, an expiry past the fold's last step whose resume answers the fold, is
+  missing, and the reference's "the resumed fold raises a closed condition" (595–597) reads as if
+  every expiry raises.
+- **ADR-0018, line 175:** "a list that sets `journal-mode` can't open `:memory:`". The reference
+  shows `wal` alone, with its reason (142–143). All four values the list takes mismatch there:
+  `delete`, `truncate`, `persist` and `wal` each read back `memory`, run for this note.
+
+**Wording to check against the code in M5's review,** each outside a promise's verdict:
+
+- ADR-0012 (306–310) says a failed close at an expiry leaves the caller "no engine active" and the
+  connection open; the reference (295–297) says the error "is raised out of the engine, and the
+  engine is lost".
+- ADR-0017 (422) says a failed rollback at an expiry gives the caller an assertion violation; the
+  reference (808–812) says Chez's own error, "no engine active".
+- ADR-0018 (71 and 167) says `journal_mode = wal` fails at once "under a reserved lock"; the
+  reference's table (204–212) says when the other connection "is in `begin immediate` and has
+  written".
+
+## What the files couldn't settle, and where it stands
 
 - **Whether the install line runs from a fresh clone of a tag,** `scheme --libdirs …/src --program
-  app.sps`, as chez-curl's does. No record measures it; `make dev` puts `src` and the suites'
-  libraries on the path, after `make build` (`Makefile:251`).
-- **The release key.** chez-curl's tags are signed "by the release key"; no record here names one.
-- **Whether each of the 36 reference promises is kept** (§1), and **whether our changelog reader
-  takes link references** (§3). Neither was checked.
+  app.sps`, as chez-curl's does: it runs from a bare archive of `main` on Linux, needing no build
+  (§8). A real tag's clone, and the Mac, wait for §4's walk as a reader. `make dev` is no install
+  step: it puts the suites' libraries on the path too, after `make build` (`Makefile:275`).
+- **The release key.** chez-curl's tags are signed "by the release key"; no record here names one
+  (Q10).
+- **Whether each of the 36 reference promises is kept** (§1): 32 are, 3 partly, and 1 was
+  superseded, its replacement kept (§9). **Whether our changelog reader takes link references**
+  (§3): it does (§8).
 
 ## Not done
 
-- No command but reading ran: no build, no suite, no fetch.
+- At first no command but reading ran. The refresh ran §8's commands, read CI's logs and
+  chez-curl's head through `gh`, and changed no file outside this note and the ledger.
 - No M5 slice is designed. By what they would cover, the likely ones are: the docs (the pages,
-  README.org and the records' promises); the release (the changelog's entry, the manifest, the
-  clone-line check, the tag, and what Q2 to Q4 add); and, by the answers, a site, a comment sweep
-  or a Linux arm64 job, each a PR of its own.
+  README.org, and §9's three gaps); the release (the changelog's entry, the manifest, the
+  clone-line check, the tag, and what Q2 to Q4 and Q10 add); and, by the answers, a site, a
+  comment sweep, a Linux arm64 job or Q9's remedy, each a PR of its own.

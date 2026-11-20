@@ -101,8 +101,14 @@ newest first.
     accepted its amendments to ADR-0005, ADR-0012, ADR-0014 and ADR-0019 to ADR-0021 ("Accept
     all").
 - **Now: M5,** the release. Its pre-work is merged, as PR #41, `2102131`, by the M4 session
-  ([research/m5-prework/](research/m5-prework/README.md)): its eight questions, Q1 to Q8, wait on
+  ([research/m5-prework/](research/m5-prework/README.md)), and refreshed at M4's end as PR #50,
+  the maintainer's "Refresh + audit, one PR" (2026-11-19). Its ten questions, Q1 to Q10, wait on
   the maintainer before the M5 plan is written.
+  - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
+    changelog reader on link references, with a control that fails by name; and four CI runs'
+    memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
+  - **The records' 36 promises to the reference:** 32 kept, 3 partly and 1 superseded, its
+    replacement kept. The three gaps are the docs slice's (the note, §9).
 - **The maintainer's hand runs on the Mac** (macOS 26.7.1, 2026-11-14):
   - **On slice 4's tree:**
     - The first runs failed six `check-chez.sh` rows that assumed `…/bin/scheme`.
