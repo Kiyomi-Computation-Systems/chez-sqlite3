@@ -108,8 +108,13 @@ newest first.
   v0.1.0, a Release for every tag, `.plans/` and AGENTS.md left out of the archive, no Akku at
   0.1.0, four pages, the platforms that ran, a comment sweep, a README fragment held to a docs
   twin, `timeout-minutes: 120` for the memory jobs, and the tag signed with chez-curl's key.
-  **M5's plan is next,** written by the M3 session and checked read-only by the M4 session (the
-  maintainer, 2026-11-20: "This session: answers, then plan").
+  **M5 slice 0 is PR #52 on `m5-plan`:** the M5 plan, ADR-0022, and the plan's amendments to
+  the brief, ADR-0004, ADR-0005, ADR-0006, ADR-0007 and ADR-0008, the global constraints,
+  AGENTS.md and the traps, written by the M3 session and checked read-only by the M4 session (the
+  maintainer, 2026-11-20: "This session: answers, then plan"). The plan's one question, Q11, the
+  site's home page, is answered: "The quick start is home" (2026-11-20). The records wait for the
+  maintainer's acceptance. The maintainer allowed the two sessions to split M5's parallel slices
+  (2026-11-20), the M4 session building one only on the maintainer's word in its own session.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -217,6 +222,44 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5 slice 0: the plan and the records (PR #52)
+
+- **What it wrote:**
+  - [the M5 plan](2026-11-20-m5-plan.md): what M5 adds, the ten answers and eight points the
+    records settle, Q11, the decisions that bind every slice, six slices and the release's steps,
+    Done, Open, the probes, the sessions, and every owed amendment's full text;
+  - [ADR-0022](decisions/0022-the-first-release.md), the first release, Proposed: twelve
+    decisions, the answers' other options and the plan's own rejected, and the consequences;
+  - the amendments, each proposed: the brief's §6, ADR-0004 (what a release claims), ADR-0005
+    (the `site` job, `pages.yml`, and the memory jobs' 120 minutes), ADR-0006 (cmark-gfm),
+    ADR-0007 (the site's dependency, the clone lines and the archive) and ADR-0008 (`check-floors`
+    reads `docs/`);
+  - the global constraints' rules, each *(provisional)*, with a new section, "The release";
+    AGENTS.md's three rules that bind from now, the rest going in with slices 2 and 3; and one
+    trap, `git archive`'s attributes.
+- **Q11, the site's home page:** "The quick start is home", the recommendation (the maintainer,
+  2026-11-20). The plan and ADR-0022 were written to fork on it, and now say the one answer.
+- **What it measured:**
+  - P1, `git archive` takes `export-ignore` from the archived tree's `.gitattributes`, the
+    working tree's only with `--worktree-attributes`;
+  - P2, `check-pins`' `sed` reads `7879b52` from a two-project `Akku.lock`, so it needs no change;
+  - P3, `import` is unbound where `test-docs` runs a block, the body of a `let` in `(rnrs)` and
+    `(chez-sqlite3)`, so the README's fragment is a program's body;
+  - `make test` passed 92 of 92 at `95d0cc1`, in 2 min 45 s.
+- **The pre-work's facts it checked:** one was wrong, `build-sqlite.sh`'s line for 3.54.1, 104
+  and not 86; one imprecise, where `test-conventions` checks citations; and one count covered
+  `tests/`' top level alone. Each is corrected in the note. Its file counts, 1,218 and 791, were
+  true at `79fa1ac`, as it says, and are 1,229 and 802 now.
+- **The lead's verification:** `make test` passed 92 of 92 on the final tree. The five ADR
+  amendments matched §10's text exactly, by script. P1 reproduced in a scratch repository, P3
+  matched `test-docs`' run environment, and the citation check stood at the line the planner
+  named.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | The planner | Opus | 472k | 176 | 36 min |
 
 ### 2026-11-18 — M4's closing review and its fixes (PR #48)
 

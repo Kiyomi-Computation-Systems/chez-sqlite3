@@ -60,6 +60,13 @@
   before starting slice work. `/.superpowers/` is git-ignored plugin scratch,
   not the ledger.
 * Add entries to `CHANGELOG.md` for each release
+* A release bumps `Akku.manifest`, CHANGELOG.md and the clone lines of
+  README.org and `docs/` together: `test-manifest` holds them. The
+  maintainer signs and pushes each tag; its GitHub Release takes the tag's
+  CHANGELOG entry as its notes (ADR-0022).
+* A comment in `src/` or `tests/` is for a developer reading the code: no
+  milestone, slice, research path, date or "the maintainer". A bare
+  `ADR-NNNN` may point to why (ADR-0022, from M5 slice 5).
 * `/docs` is for user facing documentation only.
 * Documentation should be very concise, focused, to the point, ELI5 style.
 * `Makefile` should have a `help` command which lists all of its commands
@@ -182,6 +189,9 @@
   slipped to 256 KiB every low row fails by name and no other row does,
   and each plant is caught in 20 runs of 20, 10 at once and 10 one after
   another (ADR-0016, amended in M4's closing review).
+* A docs site's suite imports `(site-testing)`, never
+  `(chez-sqlite3-testing)`: the site runs on Ubuntu's Chez, below the floor,
+  which `(chez-sqlite3 private require-threaded)` refuses at import.
 
 **Chez and the FFI**
 

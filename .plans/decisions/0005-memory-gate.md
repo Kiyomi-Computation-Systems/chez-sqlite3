@@ -41,6 +41,9 @@
   Amended 2026-11-18 in M4's closing review, and accepted by the maintainer on 2026-11-19 ("Accept all"): the no-load lane, the loading suites split,
   and the sweeps' low passes
   ([amendment](#amendment-2026-11-18-the-no-load-lane-the-loading-suites-split-and-the-sweeps-low-passes-m4s-closing-review)).
+  Amended 2026-11-20 in M5's plan, proposed: the site's job, `pages.yml`, and the memory jobs'
+  timeout
+  ([amendment](#amendment-2026-11-20-the-sites-job-pagesyml-and-the-memory-jobs-timeout-m5s-plan)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -820,3 +823,44 @@ Accepted by the maintainer on 2026-11-19 ("Accept all"), proposed in M4's closin
   `-script-low-0` to `-3`, the script's dealt by fuel mod 4, about 90 s each, so none nears half
   the bound on a slow runner. Each memory job then runs about 30 suite-minutes, under its
   60-minute timeout; read the first runs' times before calling the margin safe.
+
+## Amendment, 2026-11-20: the site's job, `pages.yml`, and the memory jobs' timeout (M5's plan)
+
+Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.4;
+[ADR-0022](0022-the-first-release.md), decisions 4 and 10), by the maintainer's answers to M5's
+pre-work, Q1, "Site from v0.1.0", and Q9, "timeout-minutes 120" (2026-11-20).
+
+- **`memory-1` and `memory-2` take `timeout-minutes: 120`;** `main`, `nothreads`, `floor` and
+  `current` keep 60, and the `site` job, below, takes 10. The M4 closing review's amendment left
+  the margin to be read from the first runs: `memory-1` took 42 and 44 of its 60 minutes on two
+  of them, and 42 min 38 s on PR #50's, its suites' sum 1.6 to one over the same tree (M5's
+  pre-work, §8). CI's runners differ about two to one, and at twice its slowest sum seen the job
+  would take about 81 minutes. Each suite keeps its own bounds, `SLOW` past 450 s and `HUNG` at
+  `MEMORY_TIMEOUT`'s 600 s, so a hang still ends by name inside the job: only the job's limit
+  bounds a shard's sum. `check-ci` holds a whole number there, so its suite is unchanged, and
+  nothing holds the 120 itself.
+- **A seventh job, `site`,** builds and checks the docs site as `pages.yml` builds it to deploy,
+  on every event, as every job runs. It is chez-curl's `site` job (chez-curl ADR-0042, decision
+  5), in this record's shape:
+  - Ubuntu's Chez, `chezscheme`, 9.5.8 on `ubuntu-24.04`, below the floor: nothing the site runs
+    imports a library under `src/`;
+  - its packages from a list of their own, `packaging/debian-site-prereqs.txt`, by the install
+    step's form, since Ubuntu's Chez is no package the other jobs may have;
+  - its checks, each a step's whole run line, in order: `make check-site-deps`,
+    `make site-deps`, `make check-site` and `make site`, each with `CHEZ` held to `chezscheme`;
+  - no cache and no `if:`.
+
+  `check-ci` holds seven jobs, and branch protection requires `site`, as it requires each.
+- **A second workflow, `pages.yml`,** deploys the site on a `v*` tag's push, or by hand. Its
+  actions are pinned by commit, as `check-action-pins.sh` holds every file of the directory, and
+  `check-floors` reads it as it reads `ci.yml`. Its two jobs need what `check-ci` refuses in
+  `ci.yml`: `needs:`, a job's own `permissions:` and `environment:`, and three actions beside the
+  checkout. So `check-ci` holds it to a copy of its own:
+  - the directory holds `ci.yml` and `pages.yml` alone, each a regular file and no link;
+  - every line of `pages.yml` but a comment or a blank line equals `check-ci.sh`'s copy, line
+    for line and in order;
+  - the text rules, a tab or a character beyond ASCII, hold on every line of both.
+
+  A change to `pages.yml` changes `check-ci.sh` with it, as a change to `ci.yml` does.
+- **`pages.yml` runs on no pull request,** so no required check names it; `ci.yml`'s `site` job
+  runs its build on each.

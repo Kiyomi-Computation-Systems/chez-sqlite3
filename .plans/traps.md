@@ -990,6 +990,14 @@ told in chez-curl's `.plans/traps.md`.
   so the probe sets each variable on Chez's own command line and prints what Chez saw.
   Reproduce: `research/m4-mac/run-dyld.sh`, cases `L1` and `E1`. (M4's Mac run after slice 5,
   chez-sqlite3)
+- **`git archive` reads `export-ignore` from the tree it archives, unless asked for the working
+  tree's.** In a scratch repository whose committed `.gitattributes` marked `/.plans` and
+  `/AGENTS.md`, `git archive HEAD` left both out, with the working tree's file deleted as with
+  it there. With `--worktree-attributes`, the working tree's file stood in for the committed
+  one: deleted, nothing was left out; holding the first line alone, `AGENTS.md` came back. So a
+  plant in the working tree changes what that flag archives, and never what a tag's archive
+  holds (M5's plan, P1, git 2.54.0; the lead's rerun agreed, the working tree's file emptied).
+  (chez-sqlite3)
 
 ## Editing the records
 

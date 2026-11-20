@@ -8,7 +8,8 @@ settings list moved to M3 (§2.7, §6). Amended 2026-11-14 with the M2 plan: D3 
 by the maintainer (§5). §3f is ADR-0015, accepted. Amended 2026-11-15 with the M3 plan: D3's leaning
 settled (§5), and what M3's research measured of §2.7 and §3d. Amended 2026-11-17 with the M4 plan, and accepted by the maintainer that day:
 where §2.5's guarantee lives, §2.6's FTS5 on the `current` lane alone, and §2.8's options as
-settings. Where a record and this brief disagree, the record wins.
+settings. Amended 2026-11-20 with the M5 plan, proposed: §6's M5, as the maintainer's
+answers to its pre-work shape it. Where a record and this brief disagree, the record wins.
 Background: [the Thunderchez assessment](chez-sqlite-thunderchez-assessment.org), which
 audited Thunderchez's `sqlite3.sls` and recommended a project-owned library.
 Consumers: Chez applications that want an embedded database, used the way the maintainer uses
@@ -193,6 +194,11 @@ Out of v1:
   [The M4 plan](2026-11-17-m4-plan.md).
 - **M5, the release.** `/docs` finished, README, CHANGELOG, 0.1.0. `docs/reference.md` grows
   from M1's first export on (the harness plan, §4).
+  The maintainer's answers to its pre-work (2026-11-20) add a docs site from v0.1.0, a GitHub
+  Release for every tag, release archives without `.plans/` and `AGENTS.md`, and a comment sweep
+  before the tag; four pages in `/docs`; no Akku publish; and a claim of the platforms that ran,
+  Linux x86_64 and macOS arm64 ([ADR-0022](decisions/0022-the-first-release.md)).
+  [The M5 plan](2026-11-20-m5-plan.md).
 
 ## 7. The test instrument
 
