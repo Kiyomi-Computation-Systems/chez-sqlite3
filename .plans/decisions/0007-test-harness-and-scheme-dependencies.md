@@ -3,6 +3,9 @@
 - **Status:** Accepted (the harness plan, 2026-11-13); amended 2026-11-13 with what M0 slice 2
   built ([amendment](#amendment-2026-11-13-what-m0-slice-2-built)), and after M0's closing review
   ([amendment](#amendment-2026-11-13-check-ci-is-a-prerequisite-and-is-held-as-one-m0s-closing-review))
+  ; amended 2026-11-20 in M5's plan, accepted: the site's dependency, the clone lines and the
+  archive
+  ([amendment](#amendment-2026-11-20-the-sites-dependency-the-clone-lines-and-the-archive-m5s-plan))
 - **Date:** 2026-11-13
 - **Scope:** chez-sqlite3's suites and Scheme dependencies
 - **Related:** chez-curl ADR-0015, which this copies · [ADR-0006](0006-pinned-guix-container.md)
@@ -97,3 +100,45 @@ check. AGENTS.md carries those rules here.
 - **Temporary files go in a directory of the process's own, under `$TMPDIR`,** not at fixed
   paths under `build/` (this record's slice 2 amendment). The brief's §7 said `build/`; it now
   follows this record.
+
+## Amendment, 2026-11-20: the site's dependency, the clone lines and the archive (M5's plan)
+
+Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.2, §4.3, §4.5 and §4.6;
+[ADR-0022](0022-the-first-release.md), decisions 3, 4 and 6), by the maintainer's answers to M5's
+pre-work, Q1, "Site from v0.1.0", and Q3, "Exclude .plans/ and AGENTS.md" (2026-11-20).
+Accepted by the maintainer on 2026-11-20 ("Accept all").
+
+- **Decision 2's "chez-srfi as the only development dependency" gains a second:**
+  chez-cmark-gfm, at `^2.0.0`, for the docs site alone, as chez-curl ADR-0042's decision 2 has
+  it. Its `Akku.lock` entry is chez-curl's, byte for byte, which `akku lock` wrote for a sibling;
+  `akku` isn't installed here. Nothing under `src/`, nor any `tests/test-*.sps`, imports it, so
+  `make test` needs none of it.
+- **`make site-deps` gets it as the lock pins it,** through `scripts/fetch-akku-lock`, which
+  downloads the locked archive, checks its sha256 and unpacks it under `build/`. Like the
+  submodule's checkout, it runs on the host or in CI, never in the container, and decision 3's
+  `make deps` still never fetches. `make check-site-deps` holds the script to an offline test of
+  its own.
+- **`check-pins` still reads chez-srfi's line alone:** its `sed` read `7879b52` from chez-curl's
+  lock of two projects (the M5 plan, P2).
+- **`tests/test-manifest.sps` holds the new shape:** `depends/dev` exactly chez-srfi and
+  chez-cmark-gfm, each in its pinned range; `Akku.lock` exactly those two projects, each url
+  naming its version and each carrying a sha256. Watched failing on the old manifest and lock.
+- **The site's suites, `tests/site-*.sps`, exit through `(site-testing)`'s `site-exit-form`,**
+  and `make check-suites` holds each to it, as it holds each `tests/test-*.sps` to the shared
+  form. They run on Ubuntu's Chez, below the floor, so they import nothing under `src/`:
+  `(chez-sqlite3-testing)` reads the counters, which import
+  `(chez-sqlite3 private require-threaded)`. `make check-site` runs them; `make test` doesn't.
+- **The tripwire becomes the check the harness plan owed** (its §6, slice 2): every line of
+  README.org, or of any file under `docs/`, that holds `git clone` is, after its leading spaces,
+  exactly
+  `git clone --branch vX.Y.Z https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git`,
+  X.Y.Z the manifest's version; while the manifest says 0.0.0, with no release, the same line
+  without `--branch vX.Y.Z`. README.org and the quick start hold one each. So a release bumps
+  the manifest, the changelog and the clone lines together, or fails.
+- **`tests/test-manifest.sps` holds `.gitattributes`:** its lines, comments and blank lines
+  aside, are `/.plans export-ignore` and `/AGENTS.md export-ignore`, each as its two words, in
+  that order. `git archive` reads the archived tree's file, so the tag's archive follows the
+  tag's (the M5 plan, P1).
+- **A release archive is no test tree:** its `vendor/chez-srfi` is empty, which decision 3's
+  `make deps` refuses, and it holds no `.plans/`, which `test-conventions` reads. The suites run
+  from a clone, after the consequences' `git submodule update`.

@@ -159,7 +159,8 @@ release target in any sibling either (its `.plans/research/m8/surveys/docs.md`, 
 **Comments written for the build, not a reader.** A crude search of `src/` for "slice", a
 milestone (`M` and a digit), `research/`, `traps.md` and "the maintainer" matches 165 lines in 22
 of its 30 files, 162 of them lines that begin as a comment; of `tests/` (`.sps`, `.sls`, `.sh`,
-`.c`), 1,048 lines in 94 of 120 files, 773 of them comment lines. It was 137 in 17 and 589 in 78
+`.c`), 1,048 lines in 94 of 120 files at its top level, 773 of them comment lines, and one
+more in `tests/fixtures/` (M5's plan). It was 137 in 17 and 589 in 78
 at `fa7a222`: M4 nearly doubled the tests' share. It counts comments and strings alike.
 
 **Stale at 0.1.0, outside `test-docs`' reach:** `Akku.manifest:17` ("until the first release") and
@@ -337,8 +338,9 @@ Each follow-up fixed something its tag had fixed in place. Done before our tag, 
   - Ubuntu 24.04's 3.45.1, found by discovery, in `main`, and under Valgrind in `memory-1` and
     `memory-2`;
   - 3.45.1 built from SQLite's source with its defaults, in `floor`;
-  - 3.54.1 built from source, in `current` (`scripts/ci/build-sqlite.sh`, line 86), and, since
-    M4's closing review, 3.54.1 built again without extension loading, in the same job;
+  - 3.54.1 built from source, in `current` (`scripts/ci/build-sqlite.sh`, line 104, corrected in
+    M5's plan), and, since M4's closing review, 3.54.1 built again without extension loading, in
+    the same job;
   - and `nothreads` holds that a Chez built without threads is refused.
 - **Linux x86_64, the Guix container:** Chez 10.4.0 and Guix's SQLite 3.53.1, in every slice's
   `make test` (ADR-0006; m4-prework's header).
@@ -477,7 +479,9 @@ record; chez-curl recorded its sweep in its ledger alone.
 - **The comments of `src/` and `tests/`, before the tag (recommended):** one PR, checked by
   reading each Scheme file's datums before and after, as chez-curl's PR #56 was; the signature
   comments `test-reference` holds stay character for character, and so do the ADR citations
-  `test-conventions` checks (`tests/test-conventions.sps`, from line 246).
+  `test-conventions` checks (`tests/test-conventions.sps`, lines 321 to 339; the citations are
+  strings in `tests/foreign-conventions.sls`'s table, so the datum check holds them too,
+  corrected in M5's plan).
 - **No sweep:** the release's comments keep the build's history, and nothing else changes.
 
 **Q8. An example in README.org.** `test-docs` runs Markdown's `scheme run` blocks alone, so a

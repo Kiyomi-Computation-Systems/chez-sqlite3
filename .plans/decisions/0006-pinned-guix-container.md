@@ -5,7 +5,9 @@
   with the self-test after the slice's review
   ([amendment](#amendment-2026-11-13-the-self-test-after-the-slices-review)), and with the
   version reports held by `check-ci` after M0's closing review
-  ([amendment](#amendment-2026-11-13-the-version-reports-are-held-m0s-closing-review))
+  ([amendment](#amendment-2026-11-13-the-version-reports-are-held-m0s-closing-review));
+  amended 2026-11-20 in M5's plan, accepted: cmark-gfm for the site
+  ([amendment](#amendment-2026-11-20-cmark-gfm-for-the-site-m5s-plan))
 - **Date:** 2026-11-13
 - **Scope:** development tooling; no library change
 - **Related:** chez-curl ADR-0006, which this copies · [ADR-0002](0002-runtime-libsqlite3-discovery.md)
@@ -137,3 +139,25 @@ chez-curl's scripts share each of these gaps; this repository's copies now diffe
 - **What `scripts/ci/report-sqlite.sh` prints is not held.** Replaced by `exit 0`, it passed
   `check-ci`, and nothing under `tests/` runs it. It reports and checks nothing, and was left out
   of slice 4's mutations for that reason; its output is read by eye on each run.
+
+## Amendment, 2026-11-20: cmark-gfm for the site (M5's plan)
+
+Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §4.5;
+[ADR-0022](0022-the-first-release.md), decision 4), by the maintainer's answer to M5's pre-work,
+Q1, "Site from v0.1.0" (2026-11-20), as chez-curl ADR-0042, decision 3, has it.
+Accepted by the maintainer on 2026-11-20 ("Accept all").
+
+- **The manifest gains `cmark-gfm`, `tar` and `xz`.** chez-cmark-gfm renders the docs site
+  through the cmark-gfm library; `tar` and `xz` unpack its locked archive, and build the ones
+  `fetch-akku-lock`'s offline test makes. Each entry's comment names its need. The pin stays:
+  chez-curl's container takes all three at the same pin.
+- **`scripts/guix-env-enter` exports `CHEZ_CMARK_GFM_LIBS`,** the profile's
+  `lib/libcmark-gfm.so` and `lib/libcmark-gfm-extensions.so`, by absolute path. chez-cmark-gfm
+  otherwise searches `/usr/lib` and the like, which only `--emulate-fhs` gives, and decision 4
+  and the Rejected refuse that.
+- **The self-test gains two assertions:** the variable names exactly those two files, and Chez
+  loads both by those paths, the core first. Each is watched failing with the variable naming no
+  file.
+- **Fetching stays on the host,** with the network. `make site-deps` downloads the locked archive
+  and checks its sha256 there, or in CI; the container renders and checks the site from what it
+  fetched, under `build/`. `make check-site-deps` runs offline, in the container too.

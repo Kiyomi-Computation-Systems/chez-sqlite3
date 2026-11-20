@@ -5,7 +5,9 @@
   ([amendment](#amendment-2026-11-13-the-workflow-rules-m0-slice-4)), and the SQLite floor's numeric
   forms ([amendment](#amendment-2026-11-13-the-sqlite-floors-numeric-forms-m0s-closing-review));
   amended 2026-11-14, and accepted by the maintainer that day: `check-floors` reads `scripts/ci/`
-  (M1 slice 5, [amendment](#amendment-2026-11-14-check-floors-reads-scriptsci-m1-slice-5))
+  (M1 slice 5, [amendment](#amendment-2026-11-14-check-floors-reads-scriptsci-m1-slice-5));
+  amended 2026-11-20 in M5's plan, accepted: no page restates a floor
+  ([amendment](#amendment-2026-11-20-no-page-restates-a-floor-m5s-plan))
 - **Date:** 2026-11-13
 - **Scope:** every statement of the Chez and SQLite floors
 - **Related:** chez-curl ADR-0016, which this copies · [ADR-0001](0001-bind-libsqlite3-directly.md)
@@ -162,3 +164,28 @@ redefine a floor that CI wrote as a variable, and a text check couldn't see it.
   - `check-test-fails`' `floors-script` case.
 
   See [the log](../m1-slice-5-mutation-log.md).
+
+## Amendment, 2026-11-20: no page restates a floor (M5's plan)
+
+Proposed in M5 slice 0 ([the M5 plan](../2026-11-20-m5-plan.md), §2 and §4.1;
+[ADR-0022](0022-the-first-release.md), decision 2).
+Accepted by the maintainer on 2026-11-20 ("Accept all").
+
+- **The global constraints' "No other house document restates a floor" gains a check,** as M5
+  writes three pages and a README that tell versions. `make check-floors` takes `docs` as a fifth
+  argument, and requires:
+  - no line of a file under `docs/`, a code block's lines among them, to hold either floor's
+    dotted text, or the SQLite floor's version number or amalgamation number as a whole run of
+    digits, with the workflows' boundary;
+  - no line of README.org to hold them but the Requirements' list lines that decision 2 holds.
+
+  A page names the floor by a link to README.org's Requirements, as chez-curl's quick start
+  does. A library whose version is a floor's text is named by whose it is: "Ubuntu 24.04's
+  library". Chez's floor is also the one Chez the suites run, so a page names Chez's version by
+  that link too.
+- **CHANGELOG.md isn't read.** A release's entry records what that release needed, and stays true
+  when the floor moves.
+- **Tests:** `test-check-floors` holds each form at every position in a page and in README.org's
+  other sections, beside each kind of neighbour, and passes the docs' own pages; watched failing
+  on a page that names the SQLite floor and on a README whose Status names the Chez floor.
+  `check-test-fails`' floors case stands.
