@@ -926,8 +926,7 @@
 
 ;; counting? : Boolean
 ;; Whether this libsqlite3 keeps a memory count: the plant's open raised it.
-;; Apple's does not (ADR-0005), and there every check below is
-;; unavailable.
+;; Apple's does not (ADR-0005), and there every check below is unavailable.
 (define counting? (and plant-read? (> (cadr plant-read) (car plant-read))))
 
 (test-equal "SQLite memory held past the end through a raw open, never closed: exit 1, the check's line naming the count and the baseline, and no count of ours, which never saw the open; or, where the library keeps no count, unavailable and exit 0"

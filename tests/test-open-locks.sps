@@ -1,9 +1,9 @@
 #!r6rs
-;;; The suite for the settings list under another connection's lock
-;;; (ADR-0018 and its consequences), through open-database and call-with-database.
-;;; Each row has two connections on a file: the holder, which takes a lock,
-;;; and the open, a fresh connection that holds no read of its own.
-;;; busy-timeout runs first wherever the list puts it.
+;;; The suite for the settings list under another connection's lock (ADR-0018
+;;; and its consequences), through open-database and call-with-database. Each
+;;; row has two connections on a file: the holder, which takes a lock, and the
+;;; open, a fresh connection that holds no read of its own. busy-timeout runs
+;;; first wherever the list puts it.
 ;;;
 ;;;   waits        rollback journal, under another's exclusive lock:
 ;;;                journal-mode, wal or delete, waits out a busy timeout of
@@ -42,21 +42,19 @@
 ;;; wait takes. Each timed open's busy timeout is 1500 ms. A build that
 ;;; sleeps in milliseconds waits 1500 of it, and a retry in Scheme 3000; one
 ;;; without nanosleep sleeps whole seconds, so waits 1000 of it, and a retry
-;;; 2000 (ADR-0019, no retry in Scheme). So the
-;;; suite reads the build's grain first, as test-contention's P4 row does: a
-;;; 250 ms busy timeout answers busy after about 250 ms on the first, and at
-;;; once on the second. A wait is too long from 3000 ms on the first, and
-;;; from 2000 on the second. Each timed case prints its milliseconds, for a
-;;; reader of the run. File descriptors are read only once
-;;; the holder has closed: SQLite's unix VFS keeps a closed connection's
-;;; descriptor while another connection of the process holds a POSIX lock on
-;;; the file.
+;;; 2000 (ADR-0019, no retry in Scheme). So the suite reads the build's grain
+;;; first, as test-contention's probe P4 row does: a 250 ms busy timeout
+;;; answers busy after about 250 ms on the first, and at once on the second. A
+;;; wait is too long from 3000 ms on the first, and from 2000 on the second.
+;;; Each timed case prints its milliseconds, for a reader of the run. File
+;;; descriptors are read only once the holder has closed: SQLite's unix VFS
+;;; keeps a closed connection's descriptor while another connection of the
+;;; process holds a POSIX lock on the file.
 ;;;
 ;;; A holder on a thread of its own answers whatever it raises, and every wait
-;;; for it is bounded. The loading procedures are reached through
-;;; eval, under a guard, as tests/test-open-settings.sps reaches them. SQLite's
-;;; answers here were measured on 3.53.1 and 3.45.1 alike before a row asserts
-;;; them.
+;;; for it is bounded. The loading procedures are reached through eval, under
+;;; a guard, as tests/test-open-settings.sps reaches them. SQLite's answers
+;;; here were measured on 3.53.1 and 3.45.1 alike before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
@@ -232,7 +230,8 @@
 
 ;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
 ;; The build's busy-wait grain, read once, before any row: milliseconds from
-;; 125 ms, half the timeout, as test-contention's P4 row tells them apart.
+;; 125 ms, half the timeout, as test-contention's probe P4 row tells them
+;; apart.
 (define grain
   (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
     (cond ((not (integer? ms)) (list 'unread ms))

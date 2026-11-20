@@ -23,11 +23,10 @@
 ;;;                    and the comparison over every expected value against
 ;;;                    every read-back
 ;;;   db_config        the four sqlite3_db_config settings
-;;;                    (ADR-0021; ADR-0018): the table, its
-;;;                    names against every other op's and the list's, each
-;;;                    domain against the universe, each step written out,
-;;;                    the sentinel, and the set's verdict over codes, cells
-;;;                    and values
+;;;                    (ADR-0021; ADR-0018): the table, its names against
+;;;                    every other op's and the list's, each domain against
+;;;                    the universe, each step written out, the sentinel, and
+;;;                    the set's verdict over codes, cells and values
 ;;;   the join         the four in setting-names, after the
 ;;;                    seven, and in settings-plan, their ops constants.sls's;
 ;;;                    each step in the list's order beside the PRAGMAs',
@@ -174,8 +173,8 @@
 (define names '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema
                 statement-cache))
 
-;; The eleven, the seven then db_config's four in table order,
-;; written out: what the join makes setting-names.
+;; The eleven, the seven then db_config's four in table order, written out:
+;; what the join makes setting-names.
 (define all-names
   '(busy-timeout foreign-keys journal-mode synchronous temp-store trusted-schema statement-cache
     enable-load-extension defensive dqs-dml dqs-ddl))
@@ -855,9 +854,11 @@
                                      p)))))
               read-back-table)))
 
-;; --- db_config's four (ADR-0021) --------------------
-;; These are built beside setting-names: open.sls runs every step
-;; settings-plan answers as SQL, so the join adds them, with the open's calls.
+;; --- db_config's four (ADR-0021) --------------------------------------------------------
+;; The four have a table of their own, db-config-settings, beside the
+;; PRAGMAs': setting-names holds their names after the seven, settings-plan
+;; plans each by db-config-step, and the open makes each step a
+;; sqlite3_db_config call, not SQL (ADR-0021).
 
 ;; dc-step : Any Any -> Any
 ;; db-config-step's answer, or (raised TEXT).
@@ -869,7 +870,8 @@
 (define (dc-verdict name value code cell)
   (guard (e (#t (list 'raised (describe e)))) (db-config-verdict name value code cell)))
 
-;; The four, written out from ADR-0021: each setting's name, its op's value in C, and its domain.
+;; The four, written out from ADR-0021: each setting's name, its op's value in
+;; C, and its domain.
 (define db-config-written
   '((enable-load-extension 1005 (#t #f)) (defensive 1010 (#t #f)) (dqs-dml 1013 (#t #f))
     (dqs-ddl 1014 (#t #f))))
@@ -896,10 +898,9 @@
   (filter (lambda (p) (not (memq (car p) db-config-names-written))) dbconfig-ops))
 
 ;; step-expected : Symbol Any -> Any
-;; The step for one of the four and VALUE, written out from ADR-0021:
-;; #t is (name op 1 #t); #f is (name op 0 #f), but
-;; enable-load-extension's #f makes no call, no-call; any other value
-;; is outside the domain.
+;; The step for one of the four and VALUE, written out from ADR-0021: #t is
+;; (name op 1 #t); #f is (name op 0 #f), but enable-load-extension's #f makes
+;; no call, no-call; any other value is outside the domain.
 (define (step-expected name value)
   (let ((op (cdr (assq name dbconfig-ops))))
     (cond ((eq? value #t) (list name op 1 #t))
@@ -924,9 +925,9 @@
                            dbconfig-ops))
         (filter (lambda (p) (memq (car p) db-config-names-written)) dbconfig-ops)))
 
-;; The four are in the
-;; live list, and settings-plan plans each by db-config-step, its step
-;; written out here, enable-load-extension's #f making none.
+;; The four are in the live list, and settings-plan plans each by
+;; db-config-step, its step written out here, enable-load-extension's #f
+;; making none.
 (test-equal "the four are in the live list, after the seven: setting-names holds each, and settings-plan plans each, #t and #f, alone, as its step written out, enable-load-extension's #f as no step at all (Q15)"
   (list db-config-names-written
         '((settings 32 ((enable-load-extension 1005 1 #t))) (settings 32 ())
@@ -1080,10 +1081,10 @@
         0.0 1.0 #t #f '() 'x "1"))
 
 ;; verdict-expected : Symbol Boolean Any Any -> Any
-;; ADR-0021, written out: any code but 0 is an error with that
-;; code, whatever the cell; code 0 and the cell the value written, 1 for #t,
-;; 0 for #f, match; code 0 and any other cell mismatch, the value read ()
-;; for the sentinel, #t for 1, #f for 0, and anything else as itself.
+;; ADR-0021, written out: any code but 0 is an error with that code, whatever
+;; the cell; code 0 and the cell the value written, 1 for #t, 0 for #f, match;
+;; code 0 and any other cell mismatch, the value read () for the sentinel, #t
+;; for 1, #f for 0, and anything else as itself.
 (define (verdict-expected name value code cell)
   (cond ((not (eqv? code 0)) (list 'error code))
         ((eqv? cell (if value 1 0)) 'match)
@@ -1121,7 +1122,7 @@
                               (dc-verdict 'dqs-ddl #t v 1) (dc-verdict v #f 0 0)))
                       (append universe (list cyclic))))))
 
-;; --- the join (ADR-0018) ------------------------------------
+;; --- the join (ADR-0018) ----------------------------------------------------------------
 ;; settings-plan plans the four beside the PRAGMAs: a step of
 ;; db-config-step's shape, (name op written expected), in the list's order,
 ;; busy-timeout's first; enable-load-extension's #f no step, yet a name seen.

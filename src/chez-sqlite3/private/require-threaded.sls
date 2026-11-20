@@ -3,9 +3,9 @@
 ;;; threaded, or is older than 10.4.0, by name (ADR-0001).
 ;;;
 ;;; chez-sqlite3 uses Chez's thread system: the counters' mutex (ADR-0005),
-;;; and each connection's owning thread (ADR-0010). Chez builds
-;;; it only into threaded builds. On a --nothreads Chez a library importing
-;;; those names dies at import with a bare "missing import for make-mutex".
+;;; and each connection's owning thread (ADR-0010). Chez builds it only into
+;;; threaded builds. On a --nothreads Chez a library importing those names
+;;; dies at import with a bare "missing import for make-mutex".
 ;;; The floor is Chez 10.4.0 (ADR-0001): an older Chez dies somewhere in the
 ;;; first library that needs something newer, with a message that does not
 ;;; say why. This library raises a message naming the requirement instead.

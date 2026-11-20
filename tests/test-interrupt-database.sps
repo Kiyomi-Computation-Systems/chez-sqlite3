@@ -643,14 +643,15 @@
     (list closes left-open)))
 
 ;; --- engines: the call inside the latch -----------------------------------------------------
-;; interrupt-latch-interrupt!'s one critical section holds the flag's read and the call
-;; together (ADR-0019), and an engine spends no ticks inside a section. So an expiry comes
-;; before the section, and a close then clears the flag, so the remainder calls nothing; or
-;; after the call, which the close then follows. How the record hands its call to the latch is
-;; these rows' to hold: tests/test-interrupt.sps holds the latch alone, on stand-ins. A call
-;; made after the latch returns, the handle read inside it, can expire between the two with the
-;; live handle in hand, and its remainder, resumed after the close, calls on a freed
-;; connection.
+;; interrupt-latch-interrupt!'s one critical section holds the flag's read and
+;; the call together (ADR-0019), and an engine spends no ticks inside a
+;; section. So an expiry comes before the section, and a close then clears the
+;; flag, so the remainder calls nothing; or after the call, which the close
+;; then follows. How the record hands its call to the latch is these rows' to
+;; hold: tests/test-interrupt.sps holds the latch alone, on stand-ins. A call
+;; made after the latch returns, the handle read inside it, can expire between
+;; the two with the live handle in hand, and its remainder, resumed after the
+;; close, calls on a freed connection.
 ;;
 ;; Each trial takes a fresh connection and a fresh engine, closes the
 ;; connection at the engine's first expiry, and resumes the remainder to its
@@ -769,10 +770,11 @@
 ;; call: called-live when it is handed LIVE, else (called HANDLE). It calls
 ;; nothing. The spin gives an engine ticks to stop it at: a stand-in that
 ;; only notes its call may cost none, and then no fuel stops a call made
-;; after the latch returns before its note. Against that, a probe with such
-;; a stand-in expired after the latch at no fuel, and this suite's at one
-;; fuel of 14; with the spin, the probe at 20 fuels of 26 and this suite at
-;; 21 of 34. Inside the latch's section the spin costs no tick.
+;; after the latch returns before its note. Against a verb that calls after
+;; the latch returns, a stand-in that only notes lets an expiry fall
+;; between the two at no fuel of a separate sweep's and at one fuel of this
+;; suite's 14; with the spin, at 20 fuels of 26 there and 21 of 34 here, as
+;; measured. Inside the latch's section the spin costs no tick.
 (define (stand-in live note!)
   (lambda (h)
     (spin 20)
@@ -816,13 +818,14 @@
                      (equal? (notes-of trial) '(closed))))))
 
 ;; --- two threads: the call under the latch's mutex ------------------------------------------
-;; A critical section keeps out only its own thread's engines and interrupts; between threads
-;; the latch's mutex is the exclusion (ADR-0019). A call made inside a section of the record's
-;; own, after the latch has let its mutex go, passes the engine rows, since no expiry splits
-;; the section, and the rows inside the close, where the flag reads clear;
-;; tests/test-interrupt.sps's race holds the latch alone. This row holds a stand-in in flight
-;; on another thread while the owner closes, and the close's first finalize, an entry of this
-;; suite's own, notes when the work starts.
+;; A critical section keeps out only its own thread's engines and interrupts;
+;; between threads the latch's mutex is the exclusion (ADR-0019). A call made
+;; inside a section of the record's own, after the latch has let its mutex go,
+;; passes the engine rows, since no expiry splits the section, and the rows
+;; inside the close, where the flag reads clear; tests/test-interrupt.sps's
+;; race holds the latch alone. This row holds a stand-in in flight on another
+;; thread while the owner closes, and the close's first finalize, an entry of
+;; this suite's own, notes when the work starts.
 
 ;; The waits: in-flight-ms, the stand-in's wait for the close's work to
 ;; start, elapses whole when the record is right, so it is short; the other
@@ -900,8 +903,8 @@
 ;; interrupt-database! sent while one runs is dropped; its COMMIT, and the
 ;; RELEASE that commits a savepoint, stay interruptible, and an interrupted
 ;; commit is rolled back under the shut. The flag the shut found is put back
-;; after. Before, a watchdog that kept interrupting stopped the ROLLBACK as
-;; it started, and the transaction outlived the call.
+;; after. Without the shut, a watchdog that keeps interrupting stops the
+;; ROLLBACK as it starts, and the transaction outlives the call.
 ;;
 ;; SQLite's statement trace, SQLITE_TRACE_STMT, calls this suite's callback
 ;; as each statement starts its program, after SQLite has cleared any

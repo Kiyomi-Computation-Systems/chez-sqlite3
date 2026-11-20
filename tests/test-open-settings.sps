@@ -1,11 +1,10 @@
 #!r6rs
-;;; The suite for the settings list at open (ADR-0018), in
-;;; (chez-sqlite3 private open):
-;;; open-database's and call-with-database's settings, checked before
-;;; anything is allocated, then applied on the open connection.
+;;; The suite for the settings list at open (ADR-0018), in (chez-sqlite3
+;;; private open): open-database's and call-with-database's settings, checked
+;;; before anything is allocated, then applied on the open connection.
 ;;;
-;;;   refusals     every rule of ADR-0018, through both verbs,
-;;;                each before anything is allocated: the counts at the raise
+;;;   refusals     every refusal rule of ADR-0018, through both verbs, each
+;;;                before anything is allocated: the counts at the raise
 ;;;                and after are zero, and no file is made. '() is accepted,
 ;;;                and a list of options, '(read-only), refused as
 ;;;                not-an-association-list
@@ -23,9 +22,9 @@
 ;;;                by what it refuses; all six at once
 ;;;   mismatches   journal-mode on :memory: at each of its values reads
 ;;;                memory, and wal on a temporary database delete, through
-;;;                both verbs; each of the six
-;;;                read back as other than asked, through applied-settings!
-;;;                with steps no list makes; the three fields whole
+;;;                both verbs; each of the six read back as other than asked,
+;;;                through applied-settings! with steps no list makes; the
+;;;                three fields whole
 ;;;   a failure    closes: a mismatch, a set that fails, a read that fails,
 ;;;   closes       each leaves no connection counted and no file descriptor
 ;;;                open; call-with-database's procedure is never called; a
@@ -310,7 +309,7 @@
 
 ;; refusal-cases : (Listof (Pairof (Listof Any) (Listof Any)))
 ;; Each case's arguments after the filename, and the irritants its refusal
-;; names: every rule of ADR-0018, each setting's domain.
+;; names: every refusal rule of ADR-0018, each setting's domain.
 (define refusal-cases
   (list
    (cons '(() ()) '(second-settings-list))
@@ -379,9 +378,9 @@
          (d (attempt (lambda () (call-with-database ":memory:" '(read-only) database-cache-capacity)))))
     (list a b c d (native-counts))))
 
-;; The four db_config settings (ADR-0021) are in the live list:
-;; each is accepted, and opens. Their sets,
-;; each read back, are tests/test-open-db-config.sps's.
+;; The four db_config settings (ADR-0021) are in the live list: each is
+;; accepted, and opens. Their sets, each read back, are
+;; tests/test-open-db-config.sps's.
 (define db-config-cases
   '((enable-load-extension . #t) (enable-load-extension . #f) (defensive . #t) (defensive . #f)
     (dqs-dml . #t) (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f)))
@@ -805,8 +804,7 @@
 ;; answer busy, under another connection's reserved lock on a fresh file,
 ;; both on this thread: about 250 where the build sleeps in milliseconds, 0
 ;; where it sleeps whole seconds, whose first sleep would pass the timeout
-;; (test-contention's P4 row). Else what it answered, or
-;; raised.
+;; (test-contention's probe P4 row). Else what it answered, or raised.
 (define (grain-ms)
   (in-dir
    (lambda (dir)
@@ -833,8 +831,8 @@
 
 ;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
 ;; The build's busy-wait grain, read once, before the timed row:
-;; milliseconds from 125 ms, half the timeout, as test-contention's P4 row
-;; tells them apart.
+;; milliseconds from 125 ms, half the timeout, as test-contention's probe
+;; P4 row tells them apart.
 (define grain
   (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
     (cond ((not (integer? ms)) (list 'unread ms))

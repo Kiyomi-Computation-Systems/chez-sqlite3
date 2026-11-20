@@ -393,9 +393,8 @@
 
 ;; --- raised after the section, and engines ----------------------------------------------------
 ;; A raise made inside a critical section reaches a with-exception-handler
-;; handler with interrupts still disabled (an engine never expires
-;; there). The handler reads its depth, as depth-N: 1 outside any
-;; section.
+;; handler with interrupts still disabled (an engine never expires there). The
+;; handler reads its depth, as depth-N: 1 outside any section.
 
 ;; interrupt-depth : -> Positive-Integer
 ;; How many critical sections this thread is inside, plus one: what
@@ -468,11 +467,11 @@
 
 ;; An engine's expiry unwinds every dynamic-wind it is inside, and its resume
 ;; rewinds them: an expiry inside the C string's extent would free its block,
-;; and the resume would find it freed. Before sqlite-compile-option? held the
-;; string in a critical section, the two calls here were refused at every
-;; fuel from 1 to 40 ticks a slice (measured on Chez 10.4.0). An engine spends
-;; no ticks inside a critical section (measured), so they now expire only
-;; outside it: at 1 tick a slice they still expire.
+;; and the resume would find it freed. sqlite-compile-option? holds the
+;; string in a critical section, where an engine spends no ticks (measured),
+;; so the two calls here expire only outside it: at 1 tick a slice they
+;; still expire. With the string outside a section, they are refused at
+;; every fuel from 1 to 40 ticks a slice (measured on Chez 10.4.0).
 (test-equal "sqlite-compile-option? under an engine of every fuel from 1 to 40 ticks a slice: yes for the first option listed and no for a name no build has, the engine of 1 tick expired, and every count is zero after"
   (list (map (lambda (fuel) (list fuel '(yes no))) (fuels 40)) 'expired zero-counts)
   (let loop ((rest (fuels 40)) (found '()))

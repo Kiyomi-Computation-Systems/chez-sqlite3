@@ -1,10 +1,10 @@
 #!r6rs
-;;; The tail scan against SQLite's own prepare, the oracle (ADR-0014).
-;;; For each SQL: prepare-statement refuses it as more
-;;; than one statement exactly when SQLite, preparing the SQL alone, leaves a
-;;; tail whose own prepare, alone, gives a statement or an error. SQLite is
-;;; asked live, on the library loaded, through native's sqlite3_prepare_v3,
-;;; never through (chez-sqlite3 private statement).
+;;; The tail scan against SQLite's own prepare, the oracle (ADR-0014). For
+;;; each SQL: prepare-statement refuses it as more than one statement exactly
+;;; when SQLite, preparing the SQL alone, leaves a tail whose own prepare,
+;;; alone, gives a statement or an error. SQLite is asked live, on the library
+;;; loaded, through native's sqlite3_prepare_v3, never through (chez-sqlite3
+;;; private statement).
 ;;;
 ;;; The SQL is "select 1;" and a tail, the tail being:
 ;;;   - every character of one byte, U+0001 to U+007F;

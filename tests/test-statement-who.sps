@@ -785,10 +785,9 @@
        (list a b c d e f g h i j k l m n o p q)))))
 
 ;; --- prepared-at: one statement from an offset, as data -------------------------------------------
-;; Measured on 3.53.1 and 3.45.1 alike
-;;: the tail of select 1;
-;; select 2 is 9; of ;; select 2 is 11, one statement holding the semicolons
-;; before it; of -- c alone 5, with no statement.
+;; Measured on 3.53.1 and 3.45.1 alike: the tail of select 1; select 2 is 9;
+;; of ;; select 2 is 11, one statement holding the semicolons before it; of
+;; -- c alone 5, with no statement.
 
 ;; script-run : Database String -> (Listof Any)
 ;; Every statement of SQL in turn, by prepared-at from each one's tail, each

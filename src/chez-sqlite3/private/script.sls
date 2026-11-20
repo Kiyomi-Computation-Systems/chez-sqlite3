@@ -49,12 +49,12 @@
   ;; byte at a character's start, or the end, is that character's index, and
   ;; a continuation byte the index of the character it continues
   ;; (utf8-offset->index). For -1, which points at no token, SQLite answers
-  ;; it for an error at the end of the SQL, and for a missing table, a
-  ;; missing collation and a busy prepare (ADR-0013): the failing
-  ;; statement's first token, exactly what (script-step-offset BYTES START)
-  ;; answers (ADR-0016), #f when the statement has none. #f for anything else
-  ;; outside the script: a START below 0 or past the end, an OFFSET below -1
-  ;; or past the end, or an argument of another type.
+  ;; it for an error at the end of the SQL, and for a missing table, a missing
+  ;; collation and a busy prepare (ADR-0013): the failing statement's first
+  ;; token, exactly what (script-step-offset BYTES START) answers (ADR-0016),
+  ;; #f when the statement has none. #f for anything else outside the script:
+  ;; a START below 0 or past the end, an OFFSET below -1 or past the end, or
+  ;; an argument of another type.
   (define (script-prepare-offset bytes start offset)
     (and (start-within? bytes start)
          (exact-integer? offset)

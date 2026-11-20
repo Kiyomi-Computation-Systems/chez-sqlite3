@@ -31,9 +31,9 @@
 ;;; tables, from the create on, and finalizes them only when its table is
 ;;; disconnected: by a drop, or by sqlite3_close. close-database! finalizes
 ;;; its own statements and calls sqlite3_close before it counts any, and
-;;; counts only when SQLite refuses (ADR-0012), so every row here closes
-;;; with its FTS5 tables in place. One row closes, outside
-;;; call-with-database, a connection that made, filled and queried one.
+;;; counts only when SQLite refuses (ADR-0012), so every row here closes with
+;;; its FTS5 tables in place. One row closes, outside call-with-database, a
+;;; connection that made, filled and queried one.
 ;;;
 ;;; Every value a row asserts was measured, the same on Guix's 3.53.1 and the
 ;;; FTS5 build of 3.54.1, and the refusal the same on 3.45.1 and the plain

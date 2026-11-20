@@ -2,7 +2,8 @@
 ;;; The suite for the conveniences' raises (ADR-0013; ADR-0016): at every
 ;;; raise site of each of (chez-sqlite3 private conveniences)'s five verbs,
 ;;; the raise names the convenience the caller called, never one of the
-;;; statement tier's verbs or the conveniences' own internals, and reaches a
+;;; statement tier's verbs or the who-taking internals beneath them
+;;; (step!/who, bind-each!/who, column-value/who), and reaches a
 ;;; with-exception-handler handler at depth 1, after every critical section,
 ;;; against a no-raise sentinel.
 ;;;
@@ -33,8 +34,8 @@
 ;;;                 busy under another connection's read
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
-;;; tests/test-statement.sps reaches them. SQLite's answers here were measured on
-;;; 3.53.1 and 3.45.1 alike before a row asserts them.
+;;; tests/test-statement.sps reaches them. SQLite's answers here were measured
+;;; on 3.53.1 and 3.45.1 alike before a row asserts them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in

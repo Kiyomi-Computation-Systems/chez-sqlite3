@@ -19,7 +19,8 @@
 ;;;                         actual, for the open to raise
 ;;;
 ;;; The four sqlite3_db_config settings (ADR-0021; ADR-0018) are in
-;;; setting-names and settings-plan too, run by the open's calls (open.sls):
+;;; setting-names and settings-plan too, run by the open's calls (open.sls),
+;;; and these procedures serve them:
 ;;;
 ;;;   db-config-settings       the four: each name, its op and its domain
 ;;;   db-config-setting-names  their names
@@ -32,9 +33,8 @@
 ;;;   steps-opt-in?            whether a plan's steps hold the opt-in's step,
 ;;;                            which the record's opt-in is read from
 ;;;
-;;; The table (ADR-0018), each value written as canonical SQL from
-;;; the words below and decimal integers alone, so no text of the caller's
-;;; reaches SQL:
+;;; The table (ADR-0018), each value written as canonical SQL from the words
+;;; below and decimal integers alone, so no text of the caller's reaches SQL:
 ;;;
 ;;;   setting          Scheme value                 written   read back
 ;;;   busy-timeout     exact integer, 0 to 2^31-1   decimal   INTEGER
@@ -46,9 +46,9 @@
 ;;;   statement-cache  exact integer, 0 to 1024;    never: the library's own,
 ;;;                    32 when absent               the cache's capacity
 ;;;
-;;; and db_config's four (ADR-0018), each written to its op,
-;;; constants.sls's sqlite-dbconfig-*, by one sqlite3_db_config call, and read
-;;; back from that call's own cell: never SQL.
+;;; and db_config's four (ADR-0018), each written to its op, constants.sls's
+;;; sqlite-dbconfig-*, by one sqlite3_db_config call, and read back from that
+;;; call's own cell: never SQL.
 ;;;
 ;;;   enable-load-extension  #t or #f   1 to its op, for #t alone: #f makes
 ;;;                                     no call
@@ -121,14 +121,14 @@
   ;; split-open-arguments : (Listof Any) -> (U (List 'split (Listof Any) Any) Setting-Refusal)
   ;; ARGS, open's arguments after the filename, split in one pass: every
   ;; argument that is a pair or () is a settings list, and every other goes to
-  ;; the options, in its order, for parse-open-options to read. So a string,
-  ;; a number or a boolean is an unknown option, and an improper pair is a
-  ;; settings list for settings-plan to refuse. The
-  ;; settings list is the caller's own, not a copy; with none, (). A second
-  ;; list is refused. ARGS is never changed, and is read more than once: the
-  ;; open verbs call it inside the one critical section that holds their
-  ;; checks (open.sls's checked), on a list no other thread changes, so no
-  ;; handler of this thread runs between the reads either.
+  ;; the options, in its order, for parse-open-options to read. So a string, a
+  ;; number or a boolean is an unknown option, and an improper pair is a
+  ;; settings list for settings-plan to refuse. The settings list is the
+  ;; caller's own, not a copy; with none, (). A second list is refused. ARGS
+  ;; is never changed, and is read more than once: the open verbs call it
+  ;; inside the one critical section that holds their checks (open.sls's
+  ;; checked), on a list no other thread changes, so no handler of this thread
+  ;; runs between the reads either.
   (define (split-open-arguments args)
     (let loop ((rest args) (options '()) (settings #f))
       (cond ((not (pair? rest)) (list 'split (reverse options) (if settings (car settings) '())))
@@ -311,7 +311,7 @@
           'match
           (list 'mismatch name expected actual))))
 
-  ;; --- db_config's four (ADR-0021; ADR-0018) ------------------------------------------------
+  ;; --- db_config's four (ADR-0021; ADR-0018) ----------------------------------------------
 
   ;; db-config-settings : (Listof (List Symbol Natural (Listof Boolean)))
   ;; The four: each setting's name, its op's C name with SQLITE_DBCONFIG_
@@ -358,12 +358,12 @@
   ;;                     -> (U 'match (List 'mismatch Any Any Any) (List 'error Any))
   ;; What a set's call answered, CODE, and left in its cell, CELL, say of
   ;; NAME's set to EXPECTED, #t or #f (ADR-0021): any CODE but an exact 0 is
-  ;; (error CODE), whatever CELL holds, for the open to raise as
-  ;; &sqlite-error of that code; code 0 and CELL the value written, 1 for
-  ;; #t, 0 for #f, is match; code 0 and any other CELL is (mismatch NAME
-  ;; EXPECTED ACTUAL), the fields of &sqlite-setting-mismatch, ACTUAL () for a
-  ;; cell left at db-config-sentinel, nothing read, #t for 1, #f for 0, and
-  ;; anything else as itself. An EXPECTED that is no boolean matches no cell.
+  ;; (error CODE), whatever CELL holds, for the open to raise as &sqlite-error
+  ;; of that code; code 0 and CELL the value written, 1 for #t, 0 for #f, is
+  ;; match; code 0 and any other CELL is (mismatch NAME EXPECTED ACTUAL), the
+  ;; fields of &sqlite-setting-mismatch, ACTUAL () for a cell left at
+  ;; db-config-sentinel, nothing read, #t for 1, #f for 0, and anything else
+  ;; as itself. An EXPECTED that is no boolean matches no cell.
   ;; Total.
   (define (db-config-verdict name expected code cell)
     (cond ((not (eqv? code 0)) (list 'error code))
@@ -375,7 +375,7 @@
                        ((eqv? cell 0) #f)
                        (else cell))))))
 
-  ;; --- two readers of a plan's steps ----------------------------------------------------
+  ;; --- two readers of a plan's steps ---------------------------------------------------
 
   ;; db-config-step? : Any -> Boolean
   ;; Whether STEP, one of a plan's, is a db_config call's, db-config-step's
@@ -397,8 +397,8 @@
   ;; steps-opt-in? : Any -> Boolean
   ;; Whether STEPS, a plan's steps, hold the opt-in's step, equal? to
   ;; opt-in-step: the connection's opt-in to extension loading, which the
-  ;; record holds, fixed when it is made (ADR-0012). Read from
-  ;; the step, never the name, so (enable-load-extension . #f), which plans
-  ;; no step, holds none. #f for anything that is no proper list. Total.
+  ;; record holds, fixed when it is made (ADR-0012). Read from the step, never
+  ;; the name, so (enable-load-extension . #f), which plans no step, holds
+  ;; none. #f for anything that is no proper list. Total.
   (define (steps-opt-in? steps)
     (and (list? steps) (member opt-in-step steps) #t)))

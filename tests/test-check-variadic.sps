@@ -1,10 +1,9 @@
 #!r6rs
 ;;; The suite for tests/check-variadic.sh, the check behind `make
-;;; check-variadic`, which CI's main job runs as a step and make test does
-;;; not (ADR-0001). The real
-;;; script's real run is make check-variadic's own: this suite holds each of
-;;; its branches, every failure among them, so that a check loosened to pass
-;;; leaves this suite red.
+;;; check-variadic`, which CI's main job runs as a step and make test does not
+;;; (ADR-0001). The real script's real run is make check-variadic's own: this
+;;; suite holds each of its branches, every failure among them, so that a
+;;; check loosened to pass leaves this suite red.
 ;;;
 ;;; Every row runs the real script, copied into a tree of the row's own,
 ;;; since the script works on the tree it sits in: a native.sls written here,

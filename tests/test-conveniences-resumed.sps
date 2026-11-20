@@ -49,9 +49,9 @@
 ;;;                   taken at a section's exit too, past the call's last
 ;;;                   section among them: a claim advanced just after its
 ;;;                   section, not inside it, stepped a statement twice there.
-;;;                   SQLite's trace
-;;;                   allocates 32 KiB inside each section that steps a row
-;;;                   or finishes a statement, so a request falls due there.
+;;;                   SQLite's trace allocates 32 KiB inside each section that
+;;;                   steps a row or finishes a statement, so a request falls
+;;;                   due there.
 ;;;                   Each low row fails by name unless collect requests fell
 ;;;                   in its trials, unless each such section met its request
 ;;;                   before the next, which a trip slipped to 256 KiB does
@@ -299,14 +299,15 @@
   (collect-trip-bytes (expt 2 27))
   (collect))
 
-;; Pass = (U 'high 'low) Each trial of the two passes begins with begun!:
-;; quieted!'s collection, then PASS's trip. In the high pass it stays at
-;; 2^27. In the low pass it is 256 bytes, below what one call allocates,
-;; until the trial ends: a request then falls due all through it, and one
-;; due inside a critical section is handled at the section's exit, where
-;; it costs the engine ticks, so an expiry can fall at a section's exit,
-;; past the call's last among them, where no procedure call follows. Every
-;; request the trials meet goes through counted-request, which counts it.
+;; Pass = (U 'high 'low)
+;; Each trial of the two passes begins with begun!: quieted!'s collection,
+;; then PASS's trip. In the high pass it stays at 2^27. In the low pass it is
+;; 256 bytes, below what one call allocates, until the trial ends: a request
+;; then falls due all through it, and one due inside a critical section is
+;; handled at the section's exit, where it costs the engine ticks, so an
+;; expiry can fall at a section's exit, past the call's last among them, where
+;; no procedure call follows. Every request the trials meet goes through
+;; counted-request, which counts it.
 
 (define low-trip 256)
 
@@ -323,20 +324,24 @@
   (exit-noted!))
 
 ;; --- where a remainder lies: at a forced section's exit ----------------------------------------
-;; SQLite's trace calls back inside one of the library's critical sections, once a section: each
-;; step that answers a row, the step that finishes a statement, and query-row's return (the
-;; profile trace, above). In the low pass force! allocates 32 KiB there, so a collect request
-;; falls due inside the section and is handled at its exit, the first event check once the section
-;; enables interrupts again. The handler's own work costs the engine ticks. Where they run out in
-;; it, the engine's timer reads #f at its end, and the engine expires as the handler returns: the
-;; remainder lies at that section's exit, before anything after it. A probe's marker, set inside a
-;; section and overwritten just after it, read the section's at exactly those fuels, three a
-;; section, at the low trip, and at none at the high trip or at 256 KiB. So a low row fails by
-;; name unless every forced section met its request before the next forced section or its slice's
-;; end, which a trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
-;; time in eight; and unless some first slice expired at a forced section's exit, which the high
-;; pass, forcing none, never does. Each first slice numbers the forced sections it passes, from 1,
-;; and the row shows whose exits were met. The timer is read through Chez's own $tc-field, reached
+;; SQLite's trace calls back inside one of the library's critical sections,
+;; once a section: each step that answers a row, the step that finishes a
+;; statement, and query-row's return (the profile trace, above).
+;; In the low pass force! allocates 32 KiB there, so a collect request falls
+;; due inside the section and is handled at its exit, the first event check
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
 ;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
@@ -425,7 +430,7 @@
 ;; section forced there is no exit a remainder was taken at. The request
 ;; handled is the forced section's own, at its exit: a 32 KiB allocation
 ;; always met a request inside its section at a trip of 256 bytes, 100
-;; times of 100 (chunk-probe.sps), so it is due as the section ends.
+;; times of 100, so it is due as the section ends.
 (define (exit-noted!)
   (when forced-pending
     (set! forced-pending #f)
@@ -607,11 +612,12 @@
         (if (> (caddr run) 0) 'held-at-some-fuel 'never-held)))
 
 ;; --- the claim, pure -------------------------------------------------------------------------
-;; execute!, query and query-row each hold a claim, made-claim's, made by the call's first
-;; expression. The sweeps below and (conveniences-pending)'s hold it through the calls; a claim
-;; taken again once its call has ended, position 0 above all, which any remainder taken before
-;; the check-out carries, passed them all: execute!'s remainder at fuels 8 to 14, resumed twice,
-;; inserted twice. So these rows hold it whole.
+;; execute!, query and query-row each hold a claim, made-claim's, made by the
+;; call's first expression. The sweeps below and (conveniences-pending)'s hold
+;; it through the calls; a claim taken again once its call has ended, position
+;; 0 above all, which any remainder taken before the check-out carries, passed
+;; them all: execute!'s remainder at fuels 8 to 14, resumed twice, inserted
+;; twice. So these rows hold it whole.
 
 ;; claimed : (Listof (List (U Natural #f) Boolean)) -> (Listof Boolean)
 ;; A fresh claim given each of STEPS, a position and LAST?, in order: what
@@ -759,10 +765,9 @@
 ;; request fell in its first slice; and how many of those. Each trial is
 ;; judged by itself: a claim taken again once its call had ended, by a
 ;; remainder between the call's first expression and its check-out, answered
-;; again there, and passed every row of this suite.
-;; A bound across fuels, the last at which the call held
-;; its statement, failed correct code under a low trip, which orders no
-;; fuels.
+;; again there, and passed every row of this suite. A bound across fuels, the
+;; last at which the call held its statement, failed correct code under a low
+;; trip, which orders no fuels.
 (define (twice-sweep check)
   (let loop ((fuel 1) (deviations '()) (kinds '()) (held 0) (refused-at #f) (moved 0))
     (let* ((r (check fuel))

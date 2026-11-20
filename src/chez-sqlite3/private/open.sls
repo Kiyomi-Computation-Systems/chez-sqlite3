@@ -44,27 +44,26 @@
 ;;; step, each fixed in the record when it is made, before any setting runs
 ;;; (ADR-0018; ADR-0020; ADR-0012). Then each of SQLite's settings the list
 ;;; gives, busy-timeout first, then the rest in the list's order. A PRAGMA is
-;;; set by one statement, then read back by a second, PRAGMA and its name,
-;;; and compared by settings' read-back-comparison. Each statement is
-;;; prepared with no flags through the statement tier, never the cache
-;;; (ADR-0020), run, and finalized before the next is prepared. One of
-;;; db_config's four is one sqlite3_db_config call, in a critical section of
-;;; its own (ADR-0021): through call-with-open-handle, its cell native's
-;;; call-with-int-cell, filled with the core's db-config-sentinel, never a
-;;; literal; the call made; and the core's db-config-verdict read from its
-;;; own answer and cell, never a second call. A mismatch raises
-;;; &sqlite-setting-mismatch, its setting, the value asked for and the value
-;;; read; a statement's failure raises its own condition, &sqlite-busy under
-;;; another's lock among them; a set's code but 0 raises &sqlite-error of
-;;; that code, the call's own, never the connection's, which a refused set
-;;; leaves at another call's or at 0, and its message sqlite3_errstr's, read
-;;; in the set's section, since db_config sets no error on its connection;
-;;; but a code that names no error, its low byte 0, 100 or 101, or no exact
-;;; integer, is an assertion violation from the verb, (not-an-error CODE),
-;;; tested here before raise-sqlite-error, whose own refusal would name it
-;;; (ADR-0021). Either way the connection is closed first, then the
-;;; condition raised. A close that fails then is not raised over it: the
-;;; setting's condition reaches the caller, and the
+;;; set by one statement, then read back by a second, PRAGMA and its name, and
+;;; compared by settings' read-back-comparison. Each statement is prepared
+;;; with no flags through the statement tier, never the cache (ADR-0020), run,
+;;; and finalized before the next is prepared. One of db_config's four is one
+;;; sqlite3_db_config call, in a critical section of its own (ADR-0021):
+;;; through call-with-open-handle, its cell native's call-with-int-cell,
+;;; filled with the core's db-config-sentinel, never a literal; the call made;
+;;; and the core's db-config-verdict read from its own answer and cell, never
+;;; a second call. A mismatch raises &sqlite-setting-mismatch, its setting,
+;;; the value asked for and the value read; a statement's failure raises its
+;;; own condition, &sqlite-busy under another's lock among them; a set's code
+;;; but 0 raises &sqlite-error of that code, the call's own, never the
+;;; connection's, which a refused set leaves at another call's or at 0, and
+;;; its message sqlite3_errstr's, read in the set's section, since db_config
+;;; sets no error on its connection; but a code that names no error, its low
+;;; byte 0, 100 or 101, or no exact integer, is an assertion violation from
+;;; the verb, (not-an-error CODE), tested here before raise-sqlite-error,
+;;; whose own refusal would name it (ADR-0021). Either way the connection is
+;;; closed first, then the condition raised. A close that fails then is not
+;;; raised over it: the setting's condition reaches the caller, and the
 ;;; connection stays open and counted, for the gate to see, as
 ;;; call-with-database's close is not raised over its procedure's raise
 ;;; (ADR-0012). call-with-database runs the settings inside its wind's body,
@@ -241,13 +240,12 @@
 
   ;; ran : Symbol Database String Claim Natural Boolean -> Run
   ;; SQL, one statement of the library's own, prepared on DB for WHO by the
-  ;; statement tier, with no flags, never through the cache (ADR-0020), in
-  ;; the section at N; then stepped to done, when READ? is #f, or once and
-  ;; read, when READ? is #t; then finalized, in a section of its own. Each
-  ;; its own section, in order. A raise or a refusal ends the
-  ;; run's work there, the statement left tracked, for the close to
-  ;; finalize: a refused run's twin, which claimed what it was refused, holds
-  ;; it.
+  ;; statement tier, with no flags, never through the cache (ADR-0020), in the
+  ;; section at N; then stepped to done, when READ? is #f, or once and read,
+  ;; when READ? is #t; then finalized, in a section of its own. Each its own
+  ;; section, in order. A raise or a refusal ends the run's work there, the
+  ;; statement left tracked, for the close to finalize: a refused run's twin,
+  ;; which claimed what it was refused, holds it.
   (define (ran who db sql claim n read?)
     (let ((made (in-section claim n (lambda () (prepared who db sql #f)))))
       (if (not (eq? (car made) 'answered))
@@ -278,16 +276,15 @@
 
   ;; configured : Symbol Database Db-Config-Step Claim Natural DbConfig -> Run
   ;; Db-Config-Step = (List Symbol Integer (U 0 1) Boolean), settings-plan's
-  ;; STEP's set made on DB for WHO by one DB-CONFIG call, in the section at
-  ;; N (ADR-0021): through call-with-open-handle, the one way to
-  ;; the handle; its cell native's call-with-int-cell, a counted int block
-  ;; filled with db-config-sentinel, the core's, so the fill and the
-  ;; verdict's reading are one value, read and freed in this section; the
-  ;; call given STEP's op and value; then db-config-verdict of its answer and
-  ;; cell. For a code that names an error, its message, sqlite3_errstr's,
-  ;; copied in the section too. Answers done, match; a mismatch; failed, the
-  ;; code and the message; not-an-error, the code; what a call raised; or
-  ;; refused.
+  ;; STEP's set made on DB for WHO by one DB-CONFIG call, in the section at N
+  ;; (ADR-0021): through call-with-open-handle, the one way to the handle; its
+  ;; cell native's call-with-int-cell, a counted int block filled with
+  ;; db-config-sentinel, the core's, so the fill and the verdict's reading are
+  ;; one value, read and freed in this section; the call given STEP's op and
+  ;; value; then db-config-verdict of its answer and cell. For a code that
+  ;; names an error, its message, sqlite3_errstr's, copied in the section too.
+  ;; Answers done, match; a mismatch; failed, the code and the message;
+  ;; not-an-error, the code; what a call raised; or refused.
   (define (configured who db step claim n db-config)
     (let ((s (in-section claim n
                (lambda ()
@@ -396,9 +393,9 @@
   ;; open-database : String (U Symbol Settings) ... -> Database
   ;; Settings = (Listof (Pairof Symbol Any))
   ;; FILENAME opened with the options among ARGUMENTS (open-options' table;
-  ;; ADR-0012), owned by the calling thread, its statement cache
-  ;; of the settings list's statement-cache, 32 when it gives none; then the
-  ;; list's settings applied, busy-timeout first, each read back (ADR-0018).
+  ;; ADR-0012), owned by the calling thread, its statement cache of the
+  ;; settings list's statement-cache, 32 when it gives none; then the list's
+  ;; settings applied, busy-timeout first, each read back (ADR-0018).
   ;; The call's claim is its first expression; the open is its section 0,
   ;; the settings' from 1 (the library's header).
   (define (open-database filename . arguments)
@@ -422,8 +419,8 @@
   ;; call-with-database : String (U Symbol Settings) ... (Database -> A ...) -> A ...
   ;; PROC's answers, PROC given FILENAME opened with the options before it,
   ;; and the settings list among them applied (ADR-0012; ADR-0018). Every
-  ;; check comes before anything opens: that PROC, the last
-  ;; argument, is a procedure, then open-database's. Then:
+  ;; check comes before anything opens: that PROC, the last argument, is a
+  ;; procedure, then open-database's. Then:
   ;;   - a setting fails, or mismatches: the connection is closed, then the
   ;;     setting's condition raised, and PROC is never called;
   ;;   - PROC returns, or leaves through a continuation: the connection is

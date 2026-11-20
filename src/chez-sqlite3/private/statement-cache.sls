@@ -2,13 +2,12 @@
 ;;; (chez-sqlite3 private statement-cache): the statement cache's table
 ;;; (ADR-0020). Pure Scheme: no foreign code, and nothing here loads
 ;;; libsqlite3. A table of string keys, the SQL's exact text (ADR-0020),
-;;; matched by string=? and hashed by string-hash, and opaque
-;;; statements, with a capacity fixed when it is made. The caller passes a
-;;; string it has copied and checked: a key that is no string is outside the
-;;; table's domain, and string-hash raises on it; a string changed after it
-;;; is filed is the caller's to avoid. It finalizes nothing: each change
-;;; answers what its caller must finalize, and the caller does, after its
-;;; critical section.
+;;; matched by string=? and hashed by string-hash, and opaque statements, with
+;;; a capacity fixed when it is made. The caller passes a string it has copied
+;;; and checked: a key that is no string is outside the table's domain, and
+;;; string-hash raises on it; a string changed after it is filed is the
+;;; caller's to avoid. It finalizes nothing: each change answers what its
+;;; caller must finalize, and the caller does, after its critical section.
 ;;;
 ;;;   make-statement-cache         a table of capacity N, 0 to 1024
 ;;;   statement-cache-check-out!   the statement filed under a key, removed,
@@ -23,10 +22,13 @@
 ;;;
 ;;; The table only reads and changes itself: it calls nothing of its caller's,
 ;;; neither a key nor a statement, and it raises nothing for a table, a string
-;;; key and any statement, so the connection calls it inside a critical section.
-;;; It holds no state of a statement's: a finalized statement is a miss by the
-;;; connection's check of the statement's own state, made after a check-out
-;;; answers it and before a return, in the same section (ADR-0020), never here.
+;;; key and any statement, so its callers call it inside a critical section:
+;;; the statement tier, through the connection's database-cache procedures,
+;;; and the connection's close. It holds no state of a statement's: a
+;;; finalized statement is a miss by (chez-sqlite3 private statement)'s check
+;;; of the statement's own state, in checked-out and returned, made after a
+;;; check-out answers it and before a return, in the same section (ADR-0020),
+;;; never here.
 ;;;
 ;;; The table is a hashtable from key to entry, for a lookup in constant time,
 ;;; and the entries a doubly linked list, newest to oldest, for an eviction in

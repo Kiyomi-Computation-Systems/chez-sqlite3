@@ -7,8 +7,8 @@
 ;;; to -3.sps deal the fuels by their remainder by 4: each runs every G at its
 ;;; own, and G = 1 alone at the rest, which tells where the call completes.
 ;;; The high row's two halves took 119 to 196 s on CI under the memory gate,
-;;; and two low halves 167 and 169 s here, half again as costly. The schedule,
-;;; the tell, the bound, the judge and the two passes are
+;;; and two low halves 167 and 169 s under a local gate, half again as costly.
+;;; The schedule, the tell, the bound, the judge and the two passes are
 ;;; (conveniences-pending)'s, tests/conveniences-pending.sls.
 ;;;
 ;;;   interleaved  the high row, its trials at those fuels, each under a

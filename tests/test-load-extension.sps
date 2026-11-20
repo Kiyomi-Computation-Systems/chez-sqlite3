@@ -326,8 +326,8 @@
 ;; counts-memory? : Boolean
 ;; Whether the library keeps a count of its memory: sqlite3_memory_used
 ;; higher while a connection of the suite's is open than before it, as the
-;; memory check's own control asks (ADR-0005). Apple's
-;; DEFAULT_MEMSTATUS=0 build keeps none.
+;; memory check's own control asks (ADR-0005). Apple's DEFAULT_MEMSTATUS=0
+;; build keeps none.
 (define counts-memory?
   (guard (e (#t #f))
     (let* ((before (sqlite3-memory-used))
@@ -687,16 +687,18 @@
       (let ((m (message-of (lambda () (load-extension! db ext)))))
         (if (and (string? m) (contains? m "(enable-load-extension . #t)")) 'names-the-fix m)))))
 
-;; --- the opt-in judged with the C switch on
-;; -------------------------------------------------------- Ubuntu's library opens every connection
-;; with ENABLE_LOAD_EXTENSION's C switch on, and there the verb's own check is all that stops a
-;; load. Every other library this suite meets starts it at 0, where SQLite itself refuses a load,
-;; "not authorized", so a verb that dropped its check would show only on the main lane. Here an
-;; entry point sqlite3_auto_extension runs at every open turns the switch on, through native's
-;; binding, so every lane is Ubuntu's: a raw sqlite3_load_extension through native then loads on
-;; that connection, where the verb refuses. A libsqlite3 can refuse the registration, Apple's 3.51.0
-;; answering 21, and then the row is printed unavailable and the refusal, 21, asserted in its place
-;; (ADR-0005). It is unregistered by sqlite3_reset_auto_extension, and unlocked once.
+;; --- the opt-in judged with the C switch on --------------------------------------------------------
+;; Ubuntu's library opens every connection with ENABLE_LOAD_EXTENSION's C
+;; switch on, and there the verb's own check is all that stops a load. Every
+;; other library this suite meets starts it at 0, where SQLite itself refuses
+;; a load, "not authorized", so a verb that dropped its check would show only
+;; on the main lane. Here an entry point sqlite3_auto_extension runs at every
+;; open turns the switch on, through native's binding, so every lane is
+;; Ubuntu's: a raw sqlite3_load_extension through native then loads on that
+;; connection, where the verb refuses. A libsqlite3 can refuse the
+;; registration, Apple's 3.51.0 answering 21, and then the row is printed
+;; unavailable and the refusal, 21, asserted in its place (ADR-0005). It is
+;; unregistered by sqlite3_reset_auto_extension, and unlocked once.
 
 (define-syntax bound
   (syntax-rules ()
@@ -1301,13 +1303,15 @@
         (list 'not-opened db))))
 
 ;; --- a remainder finished on another thread ------------------------------------------------------
-;; Chez resumes an engine's remainder on whichever thread calls it, so the call's checks can pass on
-;; the owner's thread, and the call go on on another. Each check after the expiry refuses that
-;; thread, and every refusal names load-extension!, the opt-in's read among them (ADR-0013). When
-;; the opt-in's read named itself, 99 of 109 refusals named database-extension-loading? instead of
-;; load-extension!. Each sweep runs the call at every fuel from 1 until it completes without
-;; expiring, a fresh connection for every trial, and finishes each remainder on a thread of its own,
-;; by in-thread, whose wait is bounded.
+;; Chez resumes an engine's remainder on whichever thread calls it, so the
+;; call's checks can pass on the owner's thread, and the call go on on
+;; another. Each check after the expiry refuses that thread, and every
+;; refusal names load-extension!, the opt-in's read among them (ADR-0013).
+;; With an opt-in's read that names itself, 99 of 109 refusals name
+;; database-extension-loading? instead, as measured. Each sweep runs the
+;; call at every fuel from 1 until it completes without expiring, a fresh
+;; connection for every trial, and finishes each remainder on a thread of
+;; its own, by in-thread, whose wait is bounded.
 
 ;; load-answer : Database String -> Any
 ;; load-extension! of PATH on DB, and the thread it ran on: (loaded ID), or

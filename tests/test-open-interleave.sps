@@ -1,9 +1,9 @@
 #!r6rs
-;;; The suite for one open's runs interleaved (ADR-0018, consequences; ADR-0016), in
-;;; (chez-sqlite3 private open). Chez's engine remainders are multi-shot: R,
-;;; one remainder of a call, resumed until it expires again, is R1, and R
-;;; can then be resumed again while R1 is pending. Each run of the call goes
-;;; on from where its remainder was taken.
+;;; The suite for one open's runs interleaved (ADR-0018, consequences;
+;;; ADR-0016), in (chez-sqlite3 private open). Chez's engine remainders are
+;;; multi-shot: R, one remainder of a call, resumed until it expires again, is
+;;; R1, and R can then be resumed again while R1 is pending. Each run of the
+;;; call goes on from where its remainder was taken.
 ;;;
 ;;;   interleaved  open-database, then call-with-database, with two settings
 ;;;                on :memory:, as an engine: R taken at every fuel from 1
@@ -50,48 +50,47 @@
 ;;;   an escape    call-with-database, SIGINT raised inside each of its
 ;;;                sections in turn, from the callbacks: Chez handles a
 ;;;                keyboard interrupt that came pending inside a critical
-;;;                section as the section ends, before the next expression, and the
-;;;                handler leaves the call: the extent closes the connection
-;;;                each time, no later section runs, and nothing is counted. An engine and a
-;;;                timer spend no ticks inside a section, so only such an
-;;;                interrupt reaches the end of the open's section before the
-;;;                connection is recorded
+;;;                section as the section ends, before the next expression,
+;;;                and the handler leaves the call: the extent closes the
+;;;                connection each time, no later section runs, and nothing is
+;;;                counted. An engine and a timer spend no ticks inside a
+;;;                section, so only such an interrupt reaches the end of the
+;;;                open's section before the connection is recorded
 ;;;   two passes   the interleaved and failing rows twice: with no collect
 ;;;                request in a trial, and under a collect trip of 256 bytes,
 ;;;                where a request due inside a critical section is handled at
 ;;;                its exit and costs the engine ticks there, so a remainder is
 ;;;                taken at a section's exit too, before anything after it: a
 ;;;                claim advanced just after its section, not inside it,
-;;;                applied a setting twice there.
-;;;                The tell's callbacks allocate 32 KiB inside the
-;;;                open's section and each setting's prepare, so a request
-;;;                falls due there. The low pass fails by name unless collect
-;;;                requests fell in its trials, unless each forced section met
-;;;                its request before the next, which a trip slipped to
-;;;                256 KiB does not, and unless some first slice expired at a
-;;;                forced section's exit, which the high pass never does; and
-;;;                each interleaved low row unless some trial had R before the
-;;;                call's last section and R1 past it
+;;;                applied a setting twice there. The tell's callbacks
+;;;                allocate 32 KiB inside the open's section and each
+;;;                setting's prepare, so a request falls due there. The low
+;;;                pass fails by name unless collect requests fell in its
+;;;                trials, unless each forced section met its request before
+;;;                the next, which a trip slipped to 256 KiB does not, and
+;;;                unless some first slice expired at a forced section's exit,
+;;;                which the high pass never does; and each interleaved low
+;;;                row unless some trial had R before the call's last section
+;;;                and R1 past it
 ;;;
 ;;; The tell: sqlite3_auto_extension runs an entry point of this suite at
 ;;; every open, which notes the open and sets an authorizer on the new
 ;;; connection. SQLite calls the authorizer at every prepare, and a setting
-;;; takes effect at its prepare, so each PRAGMA
-;;; prepared is noted, its connection, its name and its value, none for a
-;;; read. Both callbacks are __collect_safe: SQLite calls them inside
-;;; sqlite3_open_v2 and sqlite3_prepare_v3, which are. They answer data and
-;;; raise nothing. The entry point is unregistered, and both unlocked, at
-;;; the end. A libsqlite3 can refuse the registration: Apple's 3.51.0
-;;; answers 21, SQLITE_MISUSE, for an entry point upstream takes. With no
-;;; tell, nothing is noted, and nothing is unavailable silently (ADR-0005):
-;;; a row whose every check needs the tell, or that raises SIGINT
-;;; from the callbacks, goes through tell-available!, which prints
-;;; UNAVAILABLE and skips it; a row with checks that read the notes goes
-;;; through tell-kept?, which prints UNAVAILABLE for them, and the row runs
-;;; its others. The gate is held by an independent reading: before the tell
-;;; registers, an entry point that does nothing is registered straight
-;;; through the FFI and the list reset, and a row requires the gate to refuse
-;;; exactly when that answered 21.
+;;; takes effect at its prepare, so each PRAGMA prepared is noted, its
+;;; connection, its name and its value, none for a read. Both callbacks are
+;;; __collect_safe: SQLite calls them inside sqlite3_open_v2 and
+;;; sqlite3_prepare_v3, which are. They answer data and raise nothing. The
+;;; entry point is unregistered, and both unlocked, at the end. A libsqlite3
+;;; can refuse the registration: Apple's 3.51.0 answers 21, SQLITE_MISUSE, for
+;;; an entry point upstream takes. With no tell, nothing is noted, and nothing
+;;; is unavailable silently (ADR-0005): a row whose every check needs the
+;;; tell, or that raises SIGINT from the callbacks, goes through
+;;; tell-available!, which prints UNAVAILABLE and skips it; a row with checks
+;;; that read the notes goes through tell-kept?, which prints UNAVAILABLE for
+;;; them, and the row runs its others. The gate is held by an independent
+;;; reading: before the tell registers, an entry point that does nothing is
+;;; registered straight through the FFI and the list reset, and a row requires
+;;; the gate to refuse exactly when that answered 21.
 ;;;
 ;;; Which fuels lie before the call's first expression is measured, not
 ;;; assumed, and by the sweep itself: a remainder taken past the call's first
@@ -101,17 +100,18 @@
 ;;; least, and make every whole new call, two connections opened, below the
 ;;; first fuel at which it met one. A refused call's completing fuel is no
 ;;; bound: an open's sections spend no ticks, so the open and its settings
-;;; span fewer fuels than the refusal's raise. Each trial begins with a collection, so its first
-;;; slice runs as every trial's at that fuel does, unless a collect request falls in it, which
-;;; the bound sets aside (below), and a remainder lies further into the
-;;; call's first expressions at each fuel than at the one before. A bound
-;;; from a control run on the code under test, the same call run at its fuel,
-;;; would move with the low trip: each trial is judged by what it saw itself.
+;;; span fewer fuels than the refusal's raise. Each trial begins with a
+;;; collection, so its first slice runs as every trial's at that fuel does,
+;;; unless a collect request falls in it, which the bound sets aside (below),
+;;; and a remainder lies further into the call's first expressions at each
+;;; fuel than at the one before. A bound from a control run on the code under
+;;; test, the same call run at its fuel, would move with the low trip: each
+;;; trial is judged by what it saw itself.
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
-;;; the Scheme work between the open's sections. The
-;;; loading procedures are reached through eval, under a guard, as
-;;; tests/test-statement.sps reaches them.
+;;; the Scheme work between the open's sections. The loading procedures are
+;;; reached through eval, under a guard, as tests/test-statement.sps reaches
+;;; them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
@@ -308,9 +308,8 @@
 
 ;; unavailable! : Any String (U String #f) -> Boolean
 ;; Whether ANSWER, registered's, is the refusal; then the row NAME, or its
-;; CHECK, the one part that reads the tell, is printed unavailable, so it
-;; is never passed unseen (ADR-0005). The one place both gates
-;; below decide.
+;; CHECK, the one part that reads the tell, is printed unavailable, so it is
+;; never passed unseen (ADR-0005). The one place both gates below decide.
 (define (unavailable! answer name check)
   (let ((refused (tell-refused? answer)))
     (when refused
@@ -413,9 +412,9 @@
 ;; until the trial ends: a request then falls due all through it, and one
 ;; due inside a critical section is handled at the section's exit, where it
 ;; costs the engine ticks, so an expiry can fall at a section's exit, before
-;; anything after it. Every request the trials meet goes
-;; through counted-request, which counts it, and the low rows judge where
-;; they fell (where a remainder lies, below).
+;; anything after it. Every request the trials meet goes through
+;; counted-request, which counts it, and the low rows judge where they fell
+;; (where a remainder lies, below).
 
 (define low-trip 256)
 
@@ -428,12 +427,12 @@
 
 ;; A request in a run before its expiry costs the engine ticks there, so
 ;; that run's remainder lies earlier in the call than its fuel says: a whole
-;; new call came at the fuel at which a trial was refused, R before the
-;; open, where a request fell in its first slice. So each trial notes whether a request fell in its
-;; first slice, and the sweep's bound on a whole new call reads only the trials
-;; where none did; a whole new call where one did is counted and printed,
-;; and judged by its other evidence. The bound's refusal may come from any
-;; trial: a request moves a remainder earlier, never later.
+;; new call came at the fuel at which a trial was refused, R before the open,
+;; where a request fell in its first slice. So each trial notes whether a
+;; request fell in its first slice, and the sweep's bound on a whole new call
+;; reads only the trials where none did; a whole new call where one did is
+;; counted and printed, and judged by its other evidence. The bound's refusal
+;; may come from any trial: a request moves a remainder earlier, never later.
 
 (define (counted-request)
   (set! requests (+ requests 1))
@@ -441,27 +440,27 @@
   (exit-noted!))
 
 ;; --- where a remainder lies: at a forced section's exit ----------------------------------------
-;; The tell's callbacks run inside the library's critical sections: the
-;; entry point inside sqlite3_open_v2, the open's section, and the
-;; authorizer inside each setting's prepare (the tell, above). Where the
-;; tell is refused, nothing is forced, and the failing low rows print their
-;; forced checks unavailable through tell-kept?.
+;; The tell's callbacks run inside the library's critical sections: the entry
+;; point inside sqlite3_open_v2, the open's section, and the authorizer inside
+;; each setting's prepare (the tell, above). Where the tell is refused,
+;; nothing is forced, and the failing low rows print their forced checks
+;; unavailable through tell-kept?.
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field

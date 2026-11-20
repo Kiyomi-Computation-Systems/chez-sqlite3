@@ -136,6 +136,9 @@ newest first.
     (Opus) and checked by the M3 session, squash-merged with CI passing in every job. The
     maintainer accepted its plan amendment, the docs as built, and ADR-0016's, an expiry past the
     fold's last step (2026-11-20, "Accept both"), and its walk passed on Linux and on the Mac.
+  - **M5 slice 5 is PR #57 on `m5-slice-5`:** the comment sweep of `src/` and `tests/`, by the M3
+    session's four sweepers, reviewed (Opus) and checked read-only by the M4 session. M5's closing
+    review comes after it, then the release.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -257,6 +260,51 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5 slice 5: the comment sweep (PR #57)
+
+- **What it swept** ([the log](m5-slice-5-mutation-log.md)): the comments of `src/` and of
+  `tests/`' `.sps`, `.sls`, `.sh` and `.c` files, but `tests/fixtures/`, 156 files; 135 changed,
+  every change a comment. Milestones, slices, plan sections, reviews as provenance, research and
+  build paths, pointers to the records, dates, "the maintainer", the Mac as a machine, and
+  "amended" or "decision N" after an ADR went; a real reason stayed, in the present tense.
+  `src/chez-sqlite3.sls` is unchanged, and every signature comment of the base stands word for
+  word.
+- **Four sweepers,** each in a worktree of its own on disjoint files: `src/`, and `tests/` in three
+  alphabetical thirds. Their diffs applied to one tree with no file in two.
+- **The checker,** `research/m5-slice-5/sweep-check.sh`, holds the tree to the base:
+  - Scheme files read as the same datums, and no changed line holds `#!` or `#;`;
+  - a shell file's changed lines are whole-line comments, outside heredocs and quoted strings
+    but for `check-ci.sh`'s awk heredoc, not line 1, and after no continuation;
+  - a C file matches with its comments stripped and in its object code, built for each of the
+    55 variants the suites build, with no changed line ending in `\`;
+  - every file keeps its mode.
+
+  Each rule was watched failing on a plant, and comment-only edits pass.
+- **Reviewed** (Opus, read-only, with three sub-reviewers), on the combined sweep: no blocker.
+  **Fourteen majors,** each a comment made false, inverted or broken: a check credited to the
+  wrong library, the `&sqlite-error` fields misstated, a fact inverted, two headings folded into
+  prose, three type lines merged, and provenance left. **Minors:** the entry-point groups named
+  four ways, now one; the P4 row named two ways; the launcher's case labels stripped as if
+  milestones; meaning lost, punctuation lost, history left. **The checker passed seven kinds of
+  change that weren't comments,** none of which the sweep made. All fixed in a second round,
+  which also found an eighth, a `#` line inside a quoted string spanning lines.
+- **The lead's verification:** `make test` 93 of 93, `check-test-fails`, `check-variadic`,
+  `check-dev`, `check-clean` and `check-memory-gate` passing on the final tree; four plants of
+  its own against the hardened checker, each refused by name: a heredoc's code line, a heredoc's
+  data line, a string in the decoy's `DECOY_LACKS_` branch, and a comment line in a Scheme
+  heredoc; and two traps, the heredoc's `#` and `-fpreprocessed`'s backslash.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Sweeper G1, `src/` | Opus | 433k | 112 | 21 min |
+  | Sweeper G2, `tests/`, first third | Sonnet | 133k | 56 | 4 min |
+  | Sweeper G3, second third | Sonnet | 177k | 52 | 7 min |
+  | Sweeper G4, last third | Sonnet | 187k | 56 | 6 min |
+  | The review | Opus | 334k | 97 | 17 min |
+  | Its three sub-reviewers | Opus | 212k, 240k, 219k | 63, 77, 59 | 10, 12, 10 min |
+  | Round 2, the fixes | Opus | 468k | 289 | 44 min |
 
 ### 2026-11-20 — M5 slice 4: the docs (PR #56)
 

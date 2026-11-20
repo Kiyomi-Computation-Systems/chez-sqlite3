@@ -7,13 +7,13 @@
 ;;; to 0 however the read ends, and then sqlite3_soft_heap_limit64, bound
 ;;; here too, to 0: the hard limit sets the soft one with it, and its lift
 ;;; alone leaves SQLite's memory pressure on for the process, so a later
-;;; second connection's read beside a write transaction answered BUSY. Only the peer row below holds
-;;; the soft lift: the check that both limits read 0 can't tell the hard lift alone, since
-;;; sqlite3_hard_heap_limit64(0) zeroes the soft limit too. A 100,000-byte
-;;; TEXT, bigger than SQLite's lookaside, bound with its length and read
-;;; back through select ?1, makes sqlite3_column_text allocate a
-;;; NUL-terminated copy, and that allocation answers NOMEM (measured on
-;;; both libraries).
+;;; second connection's read beside a write transaction answered BUSY. Only
+;;; the peer row below holds the soft lift: the check that both limits read 0
+;;; can't tell the hard lift alone, since sqlite3_hard_heap_limit64(0) zeroes
+;;; the soft limit too. A 100,000-byte TEXT, bigger than SQLite's lookaside,
+;;; bound with its length and read back through select ?1, makes
+;;; sqlite3_column_text allocate a NUL-terminated copy, and that allocation
+;;; answers NOMEM (measured on both libraries).
 ;;;
 ;;;   the read       column-value and column-bytevector raise &sqlite-error
 ;;;                  nomem once, with the SQL and no offset; the statement is
@@ -34,8 +34,8 @@
 ;;;
 ;;; Where SQLite keeps no memory count, as on a build with
 ;;; SQLITE_DEFAULT_MEMSTATUS=0 like Apple's, the limit is kept but not
-;;; enforced, so each row here is named unavailable and
-;;; skipped, as the memory check is: never a pass.
+;;; enforced, so each row here is named unavailable and skipped, as the memory
+;;; check is: never a pass.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. Effects run in order, through let* and named lets.
@@ -490,8 +490,8 @@
        (finalize-statement! named)
        (list a b c)))))
 
-;; The who-taking internals: a convenience reads
-;; and binds through them, so their NOMEM names the convenience.
+;; The who-taking internals: a convenience reads and binds through them, so
+;; their NOMEM names the convenience.
 (define column-value/who (reach values-library 'column-value/who))
 (define column-bytevector/who (reach values-library 'column-bytevector/who))
 (define column-name/who (reach values-library 'column-name/who))

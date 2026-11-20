@@ -36,33 +36,32 @@
 ;;; The handshake. An interrupt stops a call only from inside it: SQLite
 ;;; clears a connection's interrupt at a statement's start, and at the start
 ;;; of a prepare's parse, when no other statement is active; and a prepare
-;;; reads it only while its tokenizer runs, not in the code it generates
-;;; after the last token (3.45.1's and 3.54.1's source). An earlier first
-;;; round slept 1 ms holding the mutex, then interrupted: while the owner
-;;; was still copying the 3 MB of SQL in Scheme, that interrupt came before
-;;; the parse's clear and was lost, and a later round had to win the CPU
-;;; from Valgrind inside the parse. The long prepare ran unstopped once on
-;;; CI, in 1 of 27 gate runs here, and in 6 of 20 with the prepare called
-;;; 200 ms late. So the first round, holding the mutex, interrupts before
-;;; the call starts; reads the flag each 1 ms until it reads clear, which
-;;; only the call's own start or parse does, the owner then held at its next
-;;; allocation from SQLite's heap, which the parse of a million items and
-;;; every row of the step make; interrupts again, inside the call; and lets
-;;; the mutex go. Each later round takes the mutex, sleeps 1 ms holding it,
-;;; calls the verb, lets it go, and sleeps 1 ms. The watchdog repeats until
-;;; the call has returned, or a deadline 120 s away has passed, which bounds
-;;; its life and never fails a row by itself. The handshake holds the mutex
-;;; through the owner's whole way into its call, so each call the owner
-;;; makes while the watchdog may hold the mutex takes nothing of SQLite's
-;;; memory, as a bind of an integer over a NULL does, or is __collect_safe,
-;;; as the step, the prepare and the finalize are: so the owner never blocks
-;;; on the mutex in a call that keeps another thread's collection waiting,
-;;; which the watchdog, holding it, might start. The hold is no critical
-;;; section: inside one, a collection the owner starts waits for the
-;;; section's end, so the watchdog lets the mutex go before the owner's call
-;;; begins, and the long prepare ran unstopped under the gate, four runs of
-;;; four. The busy wait's watchdog takes no mutex: the owner sleeps in the
-;;; busy handler, which lets it run.
+;;; reads it only while its tokenizer runs, not in the code it generates after
+;;; the last token (3.45.1's and 3.54.1's source). A first round that sleeps 1
+;;; ms holding the mutex, then interrupts, loses its interrupt: while the
+;;; owner is still copying the 3 MB of SQL in Scheme, it comes before the
+;;; parse's clear, and a later round must win the CPU from Valgrind inside the
+;;; parse. With that round the long prepare ran unstopped once on CI, in 1 of
+;;; 27 local gate runs, and in 6 of 20 with the prepare called 200 ms late. So
+;;; the first round, holding the mutex, interrupts before the call starts;
+;;; reads the flag each 1 ms until it reads clear, which only the call's own
+;;; start or parse does, the owner then held at its next allocation from
+;;; SQLite's heap, which the parse of a million items and every row of the
+;;; step make; interrupts again, inside the call; and lets the mutex go. Each
+;;; later round takes the mutex, sleeps 1 ms holding it, calls the verb, lets
+;;; it go, and sleeps 1 ms. The watchdog repeats until the call has returned,
+;;; or a deadline 120 s away has passed, which bounds its life and never fails
+;;; a row by itself. The handshake holds the mutex through the owner's whole
+;;; way into its call, so each call the owner makes while the watchdog may
+;;; hold the mutex takes nothing of SQLite's memory, as a bind of an integer
+;;; over a NULL does, or is __collect_safe, as the step, the prepare and the
+;;; finalize are: so the owner never blocks on the mutex in a call that keeps
+;;; another thread's collection waiting, which the watchdog, holding it, might
+;;; start. The hold is no critical section: inside one, a collection the owner
+;;; starts waits for the section's end, so the watchdog lets the mutex go
+;;; before the owner's call begins, and the long prepare ran unstopped under
+;;; the gate, four runs of four. The busy wait's watchdog takes no mutex: the
+;;; owner sleeps in the busy handler, which lets it run.
 ;;;
 ;;; The probe. sqlite3_is_interrupted, bound here after the load, reads 1
 ;;; once an interrupt reached SQLite, until the next statement starts: the
@@ -489,7 +488,8 @@
 ;; The milliseconds a BEGIN IMMEDIATE with a 250 ms busy timeout takes to
 ;; answer busy, under another connection's BEGIN IMMEDIATE and write, both
 ;; on this thread, with no watchdog: about 250 where the build sleeps in
-;; milliseconds, 0 where it sleeps whole seconds (test-contention's grain row).
+;; milliseconds, 0 where it sleeps whole seconds (test-contention's probe P4
+;; row).
 ;; Else what it answered, or raised.
 (define (grain-ms)
   (let ((path (string-append (or temp-dir "/nonexistent") "/grain.db"))
@@ -514,8 +514,8 @@
 
 ;; grain : (U 'milliseconds 'whole-seconds (List 'unread Any))
 ;; The build's busy-wait grain, read once, before the busy row: milliseconds
-;; from 125 ms, half the timeout, as test-contention's grain row tells them
-;; apart.
+;; from 125 ms, half the timeout, as test-contention's probe P4 row tells
+;; them apart.
 (define grain
   (let ((ms (guard (e (#t (list 'raised (describe e)))) (grain-ms))))
     (cond ((not (integer? ms)) (list 'unread ms))
@@ -562,9 +562,10 @@
 ;; interrupt that lands after that, before the statement reaches its busy
 ;; wait, stops the statement at once: plain, the watchdog's first interrupt,
 ;; sent as the step began, did so in 2 runs of 30, BEGIN IMMEDIATE raising
-;; &sqlite-interrupt at 0 ms. That is the interrupt stopping a statement, as it should;
-;; this row holds the wait, which no interrupt stops, so its interrupts start
-;; well inside it, and during-the-wait still requires one from 250 ms.
+;; &sqlite-interrupt at 0 ms. That is the interrupt stopping a statement, as
+;; it should; this row holds the wait, which no interrupt stops, so its
+;; interrupts start well inside it, and during-the-wait still requires one
+;; from 250 ms.
 (define quiet-ms 200)
 
 (test-equal "a busy wait it doesn't stop: under another connection's BEGIN IMMEDIATE, with a busy timeout of 1500 ms and interrupts from 200 ms into the wait to its end, which reach SQLite, BEGIN IMMEDIATE waits at least 1000 ms and under 3000, or 2000 on a whole-second build, then step! raises &sqlite-busy, busy and busy"

@@ -10,9 +10,9 @@
 ;;; record, never closed. The record holds the sqlite3* as an integer, which a
 ;;; Chez fixnum holds shifted, so Valgrind finds no pointer to the connection:
 ;;; it is definitely lost, one block, and what it points to indirectly lost.
-;;; Measured: 840 bytes direct and 61,288 indirect on Guix's
-;;; 3.53.1, 792 and 56,640 on 3.45.1, the same with the record dropped, held
-;;; by a top-level variable, or collected first. A plain run exits 0:
+;;; Measured: 840 bytes direct and 61,288 indirect on Guix's 3.53.1, 792 and
+;;; 56,640 on 3.45.1, the same with the record dropped, held by a top-level
+;;; variable, or collected first. A plain run exits 0:
 ;;; check-memory-gate requires that first, so a red gate can only mean
 ;;; Valgrind saw the leak. It never reaches suite-exit-status, which would
 ;;; name the connection too: check-test-fails' leaks plant holds that.

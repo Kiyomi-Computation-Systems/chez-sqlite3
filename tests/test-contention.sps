@@ -7,8 +7,8 @@
 ;;;   waits out      BEGIN IMMEDIATE, under the other's BEGIN IMMEDIATE and
 ;;;                  write, waits out the 1500 ms timeout, at least 1000 ms
 ;;;                  and under 3000, or 2000 on a whole-second build, then
-;;;                  raises &sqlite-busy, busy and busy,
-;;;                  and leaves the waiter in autocommit
+;;;                  raises &sqlite-busy, busy and busy, and leaves the waiter
+;;;                  in autocommit
 ;;;   the default    the same through with-transaction with no mode, so
 ;;;   waits out      BEGIN IMMEDIATE: it waits the timeout out once, raises
 ;;;                  &sqlite-busy from with-transaction, begins nothing, the
@@ -31,10 +31,10 @@
 ;;;                  and both commit. With 'deferred the same bodies both
 ;;;                  read, the first commits, and the second's write raises
 ;;;                  &sqlite-busy, busy-snapshot (ADR-0017)
-;;;   the grain      BEGIN IMMEDIATE with a 250 ms timeout raises
-;;;                  &sqlite-busy, busy and busy, under 500 ms, and the row
-;;;                  prints whether the library sleeps in milliseconds or in
-;;;                  whole seconds
+;;;   the grain      the row named probe P4: BEGIN IMMEDIATE with a 250 ms
+;;;                  timeout raises &sqlite-busy, busy and busy, under
+;;;                  500 ms, and the row prints whether the library sleeps
+;;;                  in milliseconds or in whole seconds
 ;;;
 ;;; A wait is told from none by 1000 ms, and from a retry by twice what one
 ;;; wait of its 1500 ms timeout takes: 3000 ms on a build that sleeps in
@@ -45,9 +45,10 @@
 ;;; short wait asserts only what holds on either grain: busy, under twice its
 ;;; timeout, which a whole-second build answers at once and a millisecond one
 ;;; after about 250 ms. Each timed wait prints its milliseconds for a reader
-;;; of the run, CI's main lane among them. Every wait SQLite times is a sleep
-;;; in its busy handler, which under Valgrind lets the other threads run:
-;;; 1500 ms waits ran 1509 to 1526 ms there.
+;;; of the run, CI's main lane among them, whose log is where probe P4's
+;;; grain is read. Every wait SQLite times is a sleep in its busy handler,
+;;; which under Valgrind lets the other threads run: 1500 ms waits ran 1509
+;;; to 1526 ms there.
 ;;;
 ;;; No connection that waits on a lock holds a read of its own: each of its
 ;;; statements has finished before the wait.
@@ -553,8 +554,8 @@
 ;; for the second's read, then writes, answering the rows and whether it saw
 ;; that read. The window starts where the second says it acts, so it holds no
 ;; thread's wake-up: a second woken late, its window started on the first's
-;; read, met a deferred default only once the first had committed, and read
-;; and wrote as immediate's does. Each says its premise, and its mode as its
+;; read, meets a deferred default only once the first has committed, and reads
+;; and writes as immediate's does. Each says its premise, and its mode as its
 ;; RUN unwinds. Answers each thread's answer; each premise and mode; and the
 ;; milliseconds from the second's RUN to its read.
 (define (contended path run)

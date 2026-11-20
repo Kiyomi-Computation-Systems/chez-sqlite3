@@ -2,8 +2,8 @@
 ;;; The suite for tests/check-memory-shards.sh, the check behind `make
 ;;; check-memory-shards`, which make test runs: it holds the memory gate's two
 ;;; shards, the Makefile's MEMORY_SUITES_1 and MEMORY_SUITES_2, to every suite
-;;; once between them (ADR-0005). Without this suite,
-;;; loosening a rule would leave `make test` green: the real lists break none.
+;;; once between them (ADR-0005). Without this suite, loosening a rule would
+;;; leave `make test` green: the real lists break none.
 ;;;
 ;;; Every row runs the script on three lists written here, the suites and the
 ;;; two shards, and asserts its exit status, its whole stdout and its whole

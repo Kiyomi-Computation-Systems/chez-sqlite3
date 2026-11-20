@@ -21,12 +21,12 @@
 ;;;   completeness the result-code macros of $CC -dM -E must be exactly the
 ;;;                table's names when the header is the floor's, and the
 ;;;                table's names must be a subset of them when it is newer
-;;;                (ADR-0013). A newer header may name more codes
-;;;                than the floor's; the suite says so, by line, when it
-;;;                could check only a subset. A header older than the floor
-;;;                fails. What counts as a result code macro (result-code-
-;;;                macros), the choice of plan, and the problems each plan
-;;;                finds are tested on synthetic text.
+;;;                (ADR-0013). A newer header may name more codes than the
+;;;                floor's; the suite says so, by line, when it could check
+;;;                only a subset. A header older than the floor fails. What
+;;;                counts as a result code macro (result-code- macros), the
+;;;                choice of plan, and the problems each plan finds are tested
+;;;                on synthetic text.
 ;;;   procedures   sqlite-result-code-name and sqlite-primary-code-name, by
 ;;;                their answers on every row and on codes outside the table.
 ;;;   prototypes   each row of the convention table (tests/foreign-conventions.sls)
@@ -47,14 +47,13 @@
 ;;;                sqlite3_uint64, double, unsigned char, and any pointer, a
 ;;;                destructor among them, to uptr), holds the row's Chez
 ;;;                types to its C types. A prototype that ends "..." is a
-;;;                variadic function's: its named parameters map to the
-;;;                row's leading arguments, at least one argument follows
-;;;                them, its row's convention must be variadic, and the
-;;;                count that convention-forms writes for variadic must be
-;;;                the named parameters' count; a row that is variadic must
-;;;                have such a prototype (ADR-0001). A
-;;;                wrong row fails by name, and each kind of wrong row is
-;;;                planted in the suite.
+;;;                variadic function's: its named parameters map to the row's
+;;;                leading arguments, at least one argument follows them, its
+;;;                row's convention must be variadic, and the count that
+;;;                convention-forms writes for variadic must be the named
+;;;                parameters' count; a row that is variadic must have such a
+;;;                prototype (ADR-0001). A wrong row fails by name, and each
+;;;                kind of wrong row is planted in the suite.
 ;;;
 ;;; The C program is compiled with $CC and no -I flag: the compiler's own
 ;;; search path must find sqlite3.h. A missing compiler or header fails a
@@ -1197,7 +1196,8 @@
           (list "sqlite3_get_autocommit" '("int" ("sqlite3 *")) '(uptr) 'int 'plain '())
           (list "sqlite3_interrupt" '("void" ("sqlite3 *")) '(uptr) 'void 'plain '())))))
 
-;; The two required variadic-group entry points near their misses: a variadic prototype is no other.
+;; The two required of the settings and extension calls, sqlite3_db_config
+;; and sqlite3_free, near their misses: a variadic prototype is no other.
 ;; The optional sqlite3_load_extension's near miss is asked in its own
 ;; compile, above.
 (test-equal "the prototype check refuses each of M4's two required entry points written as its near miss: sqlite3_db_config without its \"...\", its variadic tail's int and int* written in its place, and with one named parameter fewer; sqlite3_free's void* as const void*, each by name; and answers 1 for each written right"

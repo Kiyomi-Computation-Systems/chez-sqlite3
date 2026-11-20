@@ -1,13 +1,14 @@
 #!r6rs
 ;;; One of the nine suites that load libsqlite3 end to end, through
 ;;; (chez-sqlite3 private native), tests/refusal-probe.sps and a decoy
-;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the rows on
-;;; the decoy, where it has sqlite3_load_extension and where it lacks it.
+;;; (ADR-0002, ADR-0003, ADR-0010, ADR-0013): this one holds the optional
+;;; sqlite3_load_extension's rows, the opt-in's check and load-extension!,
+;;; on the decoy, where it has the entry point and where it lacks it.
 ;;;
-;;; The nine were one suite until it passed 450 s under the memory gate on
-;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005); now each runs at most 11
-;;; children, and (library-loading) holds what all nine use.
+;;; Under the memory gate each child runs under a Valgrind of its own, so
+;;; the rows are split among nine suites, each running at most 11 children,
+;;; to keep each well under MEMORY_TIMEOUT (ADR-0005); (library-loading)
+;;; holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -32,12 +33,12 @@
 ;;; from packaging/floors.sexp (ADR-0008).
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005). Each runs through
-;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
-;;; with a log of its own that the gate reads. Every child here is the probe,
-;;; which says whether it ran under Valgrind (memcheck's preload in
-;;; /proc/self/maps), and a row requires yes exactly when the gate asked. A
-;;; child that escaped the gate fails its row (ADR-0005).
+;;; requires them zero (ADR-0005). Each runs through gated-command, so under
+;;; make test-memory the gate's own Valgrind runs it, with a log of its own
+;;; that the gate reads. Every child here is the probe, which says whether it
+;;; ran under Valgrind (memcheck's preload in /proc/self/maps), and a row
+;;; requires yes exactly when the gate asked. A child that escaped the gate
+;;; fails its row (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
@@ -175,8 +176,8 @@
 
 ;; lacking-cases : (Listof (Pairof (Listof Any) (Symbol -> Any)))
 ;; Each case's arguments, the filename first, and its refusal from a verb:
-;; the opt-in alone and among the other three, the fifth step; then the
-;; list's own rules, the split's and the open's, each with the opt-in in the list,
+;; the opt-in alone and among the other three, the fifth step; then the list's
+;; own rules, the split's and the open's, each with the opt-in in the list,
 ;; which raise their own refusal first, wherever the opt-in stands.
 (define lacking-cases
   (list
@@ -229,7 +230,7 @@
                                         (cons 'opens (list (both cantopen-from)))))
                         '() '() (append (loaded-calls "control") (open-calls) (open-calls)))))
 
-;; --- load-extension! on the decoy -------------------------------------------------------
+;; --- load-extension! on the decoy ----------------------------------------------------
 ;; The decoy's open always fails, so no connection of it reaches a load:
 ;; what a row sees is the verb itself, where the library lacks
 ;; sqlite3_load_extension and where it has it. On both, load-extension! is

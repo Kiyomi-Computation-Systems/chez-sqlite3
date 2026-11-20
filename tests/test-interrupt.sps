@@ -16,8 +16,8 @@
 ;;;
 ;;;   one thread     the flag's life: a fresh latch, the open, a close that
 ;;;                  closed, a close that left the connection open, on both
-;;;                  paths; the flag clear while the work runs;
-;;;                  the close's answer and its calls
+;;;                  paths; the flag clear while the work runs; the close's
+;;;                  answer and its calls
 ;;;   raises         a stand-in's raise, a work's and a predicate's, each
 ;;;                  raised after the section, the very object, to a handler
 ;;;                  at interrupt depth 1, and never resumed
@@ -29,13 +29,12 @@
 ;;;                  starts, an interrupt tried during the work calls
 ;;;                  nothing and does not wait for the work to end
 ;;;   the shut       with-transaction's, around its own ROLLBACK and the
-;;;                  savepoint exits of its failure path:
-;;;                  the flag clear
-;;;                  while its work runs, then put back as the shut found
-;;;                  it, after a raise too; the work's answer; a raise after
-;;;                  the section, at depth 1, never resumed; at every fuel,
-;;;                  never left clear by an expiry; and across threads, the
-;;;                  close's race
+;;;                  savepoint exits of its failure path: the flag clear while
+;;;                  its work runs, then put back as the shut found it, after
+;;;                  a raise too; the work's answer; a raise after the
+;;;                  section, at depth 1, never resumed; at every fuel, never
+;;;                  left clear by an expiry; and across threads, the close's
+;;;                  race
 ;;;
 ;;; Every wait is bounded: condition-wait with a timeout against a deadline,
 ;;; and a thread is joined only once it has answered. A thread's raise is its
@@ -316,16 +315,16 @@
      (list closed reopened (interrupt-depth)))))
 
 ;; --- engines: an expiry splits nothing ------------------------------------------------------
-;; An engine spends no ticks inside a critical section, and an expiry runs a dynamic-wind's
-;; after thunk, so it lets go of a mutex that with-mutex holds, and the resume takes it again.
-;; So each outcome is asserted at every fuel, never an expiry at a given one.
+;; An engine spends no ticks inside a critical section, and an expiry runs a
+;; dynamic-wind's after thunk, so it lets go of a mutex that with-mutex holds,
+;; and the resume takes it again. So each outcome is asserted at every fuel,
+;; never an expiry at a given one.
 ;;
 ;; The fuels are 1 to 10. On Chez 10.4.0 the correct code expires before its
 ;; section up to fuel 3 and completes from fuel 4, and the mutants without a
-;; section fail from fuel 4 and 5; the rest is
-;; margin for a build whose calls cost other ticks. Each row also asserts
-;; that both outcomes are seen, so a boundary that moved past 10 fails the
-;; row rather than leaving it vacuous.
+;; section fail from fuel 4 and 5; the rest is margin for a build whose calls
+;; cost other ticks. Each row also asserts that both outcomes are seen, so a
+;; boundary that moved past 10 fails the row rather than leaving it vacuous.
 
 ;; interrupt-split-at : Positive-Integer -> (Listof Symbol)
 ;; An interrupt of an opened latch run in an engine of FUEL ticks, its

@@ -26,8 +26,7 @@
 ;;;
 ;;; Autocommit is read as C reads sqlite3_get_autocommit's int: 0 is a
 ;;; transaction open, every other value none. It is the one test of whether a
-;;; level is still there (ADR-0017), for a savepoint as for the
-;;; outer level.
+;;; level is still there (ADR-0017), for a savepoint as for the outer level.
 ;;;
 ;;; Each procedure but raise-transaction-refusal answers data for any argument
 ;;; of its stated type and raises nothing, so with-transaction may call any of
@@ -102,10 +101,10 @@
   ;; exit-plan : Any Any Any Any Level -> Exit-Plan
   ;; Exit-Plan = (U (List 'commit String) Rollback (List 'nothing) (List 'transaction-ended))
   ;; Rollback = (Pairof 'rollback (Listof String))
-  ;; What an exit from LEVEL's extent does (ADR-0017). HOW
-  ;; is return for a normal return, and anything else, raise or escape, is a
-  ;; raise or an escape: only a return commits. BEGUN and ENDED are the flags,
-  ;; set when not #f; AUTOCOMMIT is read after the body.
+  ;; What an exit from LEVEL's extent does (ADR-0017). HOW is return for a
+  ;; normal return, and anything else, raise or escape, is a raise or an
+  ;; escape: only a return commits. BEGUN and ENDED are the flags, set when
+  ;; not #f; AUTOCOMMIT is read after the body.
   ;;   - ENDED set, a later exit: a return is (transaction-ended), raised with
   ;;     nothing issued, never a second COMMIT or RELEASE; any other exit is
   ;;     (nothing);

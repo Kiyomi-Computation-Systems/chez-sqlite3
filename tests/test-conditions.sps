@@ -1,6 +1,7 @@
 #!r6rs
 ;;; The suite for (chez-sqlite3 private conditions): the root every library
-;;; condition sits under, and its first four raises (ADR-0013, ADR-0002).
+;;; condition sits under, the conditions beneath it, and the procedures that
+;;; raise them (ADR-0013, ADR-0002).
 ;;;
 ;;;   &chez-sqlite3-error           the fieldless root, under &error
 ;;;   &sqlite-library-unavailable   libsqlite3 was refused: six reasons, what
@@ -477,7 +478,7 @@
     (assertion-violation libsqlite3-info-path ((kind other))))
   (map (lambda (v) (raised (lambda () (libsqlite3-info-path v)))) shown-values))
 
-;; --- &sqlite-error, &sqlite-wrong-thread and &sqlite-closed ---------------------------------
+;; --- &sqlite-error, &sqlite-wrong-thread and &sqlite-closed -----------------------------------
 ;; Each fixture field holds a value no other field holds. Every refusal names
 ;; the field or the rule it broke first among its irritants, so two refusals
 ;; from one who are told apart without their message (ADR-0013).
@@ -682,7 +683,7 @@
              (lambda () (raise-wrong-thread 'w 1 2))
              (lambda () (raise-closed 'w)))))
 
-;; --- the subtypes of &sqlite-error, and &sqlite-invalid-text -----------------------------------
+;; --- the subtypes of &sqlite-error, and &sqlite-invalid-text --------------------------------
 
 ;; none-if-false : Any -> Any
 ;; An answer of #f as the symbol none: no row here expects #f.
@@ -1070,7 +1071,7 @@
     (with-exception-handler (lambda (c) 'handled) (lambda () (raise-invalid-text 'w 1 2)))
     'returned-normally))
 
-;; --- &sqlite-setting-mismatch and &sqlite-transaction-ended ---------------------------------
+;; --- &sqlite-setting-mismatch and &sqlite-transaction-ended -------------------------------
 ;; The interrupt's class is held above, with the other classes of
 ;; &sqlite-error, over every primary code.
 
@@ -1207,7 +1208,7 @@
        (list (lambda () (raise-setting-mismatch 'w 'busy-timeout 1 0))
              (lambda () (raise-transaction-ended 'w)))))
 
-;; --- &sqlite-extensions-unavailable (ADR-0021) ---------------------------------------------
+;; --- &sqlite-extensions-unavailable (ADR-0021) --------------------------------------------
 ;; Its kinds against every other type are held in the matrix above, and its
 ;; parent and its fields with the other types'.
 

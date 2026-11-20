@@ -5,7 +5,7 @@
 ;;; that fuel. An engine spends no ticks inside a critical section, so each
 ;;; expiry falls between sections.
 ;;;
-;;;   the sweeps    execute!, query and query-row, at every fuel, complete
+;;;   every fuel    execute!, query and query-row, at every fuel, complete
 ;;;                 with their answer, resumed after each expiry, and leave
 ;;;                 their statement cached, ready, none at a row: they hold no
 ;;;                 dynamic-wind, and nothing but the convenience reaches its
@@ -13,10 +13,10 @@
 ;;;                 connection, cold, a miss, then warm, a hit, so every fuel
 ;;;                 sweeps both, never a state an earlier fuel left
 ;;;   one value a   each value bound in a section of its own, and each read
-;;;   section       of its own: what is bound, by
-;;;                 sqlite3_expanded_sql, and what is read, by the lookaside
-;;;                 a UTF-16 TEXT read takes, seen at every tick by a timer's
-;;;                 handler, a count at a time; and the expiries' count
+;;;   section       of its own: what is bound, by sqlite3_expanded_sql, and
+;;;                 what is read, by the lookaside a UTF-16 TEXT read takes,
+;;;                 seen at every tick by a timer's handler, a count at a
+;;;                 time; and the expiries' count
 ;;;   query-fold    does not survive a preemption: an expiry inside its wind
 ;;;                 finalizes its statement, and the resumed loop raises
 ;;;                 &sqlite-closed. At every fuel it answers its fold or that,
@@ -288,16 +288,19 @@
                          after)))))))
 
 ;; --- one value a section -------------------------------------------------------------------
-;; An engine spends no ticks inside a critical section, so at fuel 1 every tick outside one
-;; expires. Each value's plan and checks, and each read's finish, run outside any section, so
-;; 50 values cost ticks the one value does not, however they are bound or read: bind-all!,
-;; which binds every value in one section, expired 249 times more for 50 values than for 1. So
-;; the expiries' count holds only that no section holds every value's work, checks and all;
-;; what each expiry sees bound holds the binds' sections: SQLite's sqlite3_expanded_sql shows
-;; each parameter bound or NULL, and at fuel 1 a call that binds one value a section shows
-;; each count from 1 to 49 at some expiry, where one that binds all in one section shows none.
-;; A timer's handler, run at every tick, reads it, as an expiry would, between the same
-;; sections, unwinding nothing, so query-fold is read too.
+;; An engine spends no ticks inside a critical section, so at fuel 1 every
+;; tick outside one expires. Each value's plan and checks, and each read's
+;; finish, run outside any section, so 50 values cost ticks the one value
+;; does not, however they are bound or read: bind-all!, which binds every
+;; value in one section, expires 249 times more for 50 values than for 1,
+;; as measured. So the expiries' count holds only that no section holds
+;; every value's work, checks and all; what each expiry sees bound holds the
+;; binds' sections: SQLite's sqlite3_expanded_sql shows each parameter bound
+;; or NULL, and at fuel 1 a call that binds one value a section shows each
+;; count from 1 to 49 at some expiry, where one that binds all in one
+;; section shows none. A timer's handler, run at every tick, reads it, as an
+;; expiry would, between the same sections, unwinding nothing, so query-fold
+;; is read too.
 
 ;; expiries : (-> Any) -> (List Any Natural)
 ;; THUNK's answer at fuel 1, resumed after each expiry, and how many there

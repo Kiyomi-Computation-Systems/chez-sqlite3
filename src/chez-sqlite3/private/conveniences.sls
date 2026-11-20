@@ -88,8 +88,8 @@
 ;;; SQLITE_PREPARE_PERSISTENT on a miss above a capacity of 0, and give it
 ;;; back by returned: reset, its bindings cleared and filed; or finalized,
 ;;; when it failed, the capacity is 0, its SQL is held already, or its reset
-;;; failed (ADR-0020). Only a statement checked-out answered is
-;;; given back. execute-script! uses no cache, and prepares with no flags.
+;;; failed (ADR-0020). Only a statement checked-out answered is given back.
+;;; execute-script! uses no cache, and prepares with no flags.
 ;;;
 ;;;   execute!, query, query-row
 ;;;       call no procedure of the caller's and hold no dynamic-wind: a raise
@@ -114,11 +114,11 @@
 ;;;       call-with-c-string, whose before thunk refuses a re-entry; so
 ;;;       nothing raises out of the block's extent, and everything raised in
 ;;;       it is caught there and raised after call-with-c-string returns
-;;;       (ADR-0016). Its claim is the byte offset of the last
-;;;       statement the call prepared, each prepare's section claiming its
-;;;       own, past it, before it prepares: so a call re-entered before its
-;;;       block, or jumped back inside it, refuses, &sqlite-closed, rather
-;;;       than running a statement again. Below.
+;;;       (ADR-0016). Its claim is the byte offset of the last statement the
+;;;       call prepared, each prepare's section claiming its own, past it,
+;;;       before it prepares: so a call re-entered before its block, or jumped
+;;;       back inside it, refuses, &sqlite-closed, rather than running a
+;;;       statement again. Below.
 ;;;
 ;;; code-number is exported for the suites, which hold its branches, and
 ;;; made-claim, which they hold whole: once a call has ended, no position is
@@ -316,11 +316,11 @@
 
   ;; query-row : Database String Value ... -> (U Row #f)
   ;; The first row SQL answers on DB, GIVEN bound to its parameters, or #f
-  ;; when it answers none; a second row is never stepped to, and the
-  ;; statement is reset after the first. The reset that
-  ;; commits a multi-row insert ... returning in autocommit can fail, BUSY
-  ;; under another's read, rolling the insert back, and that raises
-  ;; (ADR-0016). The call's claim is its first expression.
+  ;; when it answers none; a second row is never stepped to, and the statement
+  ;; is reset after the first. The reset that commits a multi-row insert ...
+  ;; returning in autocommit can fail, BUSY under another's read, rolling the
+  ;; insert back, and that raises (ADR-0016). The call's claim is its first
+  ;; expression.
   (define (query-row db sql . given)
     (let ((claim (made-claim)))
       (with-checked-out 'query-row claim db sql
@@ -458,12 +458,12 @@
 
   ;; execute-script! : Database String -> Void
   ;; SQL, a script, run on DB statement by statement, with no parameters
-  ;; (ADR-0016). The checks first: DB a
-  ;; database, on its owning thread; SQL by checked-sql, a string holding no
-  ;; U+0000, refused before anything is allocated; DB open, at the first
-  ;; prepare's section. Then a loop of prepares, never sqlite3_exec, each
-  ;; from the tail of the statement before it, through prepared-at, with no
-  ;; flags and no cache, from one block holding the whole script's C string:
+  ;; (ADR-0016). The checks first: DB a database, on its owning thread; SQL by
+  ;; checked-sql, a string holding no U+0000, refused before anything is
+  ;; allocated; DB open, at the first prepare's section. Then a loop of
+  ;; prepares, never sqlite3_exec, each from the tail of the statement before
+  ;; it, through prepared-at, with no flags and no cache, from one block
+  ;; holding the whole script's C string:
   ;; each statement is prepared only once the one before it has run, since
   ;; preparing a PRAGMA applies it, stepped to done, its rows dropped, and
   ;; finalized. The loop ends at the script's end, or at a NULL statement,
@@ -497,10 +497,10 @@
   ;;     same call, jumps back within the block's extent and crosses no
   ;;     winder, so call-with-block never sees it: the next prepare is
   ;;     refused, at an offset the call has passed, where a flag read by the
-  ;;     first prepare alone would let it run a statement again. One inside
-  ;;     a statement's own extent meets that statement's
-  ;;     state: a step at done is refused by the statement tier, an
-  ;;     assertion violation, and a finalized statement's by &sqlite-closed.
+  ;;     first prepare alone would let it run a statement again. One inside a
+  ;;     statement's own extent meets that statement's state: a step at done
+  ;;     is refused by the statement tier, an assertion violation, and a
+  ;;     finalized statement's by &sqlite-closed.
   ;; A re-entry after an engine's expiry has freed the block is refused by
   ;; call-with-block first.
   ;;

@@ -1,9 +1,8 @@
 #!r6rs
 ;;; The suite for db_config's four settings at open under engines (ADR-0018,
-;;; ADR-0021), in
-;;; (chez-sqlite3 private open). Each set is one more critical section of the
-;;; call, at the next position of its claim, claimed inside it: a run the call
-;;; has passed is refused there, touching nothing.
+;;; ADR-0021), in (chez-sqlite3 private open). Each set is one more critical
+;;; section of the call, at the next position of its claim, claimed inside it:
+;;; a run the call has passed is refused there, touching nothing.
 ;;;
 ;;;   clean          the open with the three ops and the opt-in among the six
 ;;;                  PRAGMAs and statement-cache, through both verbs, with no
@@ -50,24 +49,23 @@
 ;;;                  there, so a remainder or a continuation is taken at a
 ;;;                  set's exit too, before anything after it: a claim
 ;;;                  advanced just after its section, not inside it, set an op
-;;;                  twice there. A
-;;;                  forcing VFS, SQLite's default with xAccess and
-;;;                  xFullPathname wrapped, allocates 32 KiB inside the open's
-;;;                  section and each setting's that begins a read, so a
-;;;                  request falls due there. The low pass fails by name unless
-;;;                  collect requests fell in its trials, unless each forced
-;;;                  section met its request before the next, which a trip
-;;;                  slipped to 256 KiB does not, and unless some first slice,
-;;;                  or capture, ran out at a forced section's exit, which the
-;;;                  high pass never does; and the once-a-call low row unless some trial had
-;;;                  R before the call's last set and R1 past it, which no
-;;;                  trial of the high pass has: no tick falls after the last
-;;;                  set's section before the call returns. Its stand-in
-;;;                  allocates inside each set's section, so a request falls
-;;;                  due there; the forcing VFS forces none of open-database's
-;;;                  sets, where the straddle came by chance, 150 trials on
-;;;                  Guix's library and 4 on the no-load build, so its row
-;;;                  does not ask it
+;;;                  twice there. A forcing VFS, SQLite's default with xAccess
+;;;                  and xFullPathname wrapped, allocates 32 KiB inside the
+;;;                  open's section and each setting's that begins a read, so
+;;;                  a request falls due there. The low pass fails by name
+;;;                  unless collect requests fell in its trials, unless each
+;;;                  forced section met its request before the next, which a
+;;;                  trip slipped to 256 KiB does not, and unless some first
+;;;                  slice, or capture, ran out at a forced section's exit,
+;;;                  which the high pass never does; and the once-a-call low
+;;;                  row unless some trial had R before the call's last set
+;;;                  and R1 past it, which no trial of the high pass has: no
+;;;                  tick falls after the last set's section before the call
+;;;                  returns. Its stand-in allocates inside each set's
+;;;                  section, so a request falls due there; the forcing VFS
+;;;                  forces none of open-database's sets, where the straddle
+;;;                  came by chance, 150 trials on Guix's library and 4 on the
+;;;                  no-load build, so its row does not ask it
 ;;;   a failing set  applied-settings/with whose stand-in fails the second
 ;;;   twice          set, resumed to its end twice at every fuel: the first
 ;;;                  raises its &sqlite-error, the connection closed; the second
@@ -76,19 +74,18 @@
 ;;;
 ;;; Where the library lacks sqlite3_load_extension, as Apple's does, the
 ;;; opt-in would refuse every open, so its list leaves the opt-in out, and a
-;;; line names it unavailable (ADR-0005); the rest run. An engine
-;;; spends no ticks inside a critical section, so the fuels measure the Scheme
-;;; work between the call's sections. Each trial begins with
-;;; a collection, so its first slice runs as every trial's at that fuel
-;;; does, unless a collect request falls in it (below), whichever pass; in
-;;; the high pass collect-trip-bytes is then raised
-;;; far above what its runs allocate, so no collect request falls in them.
-;;; Each trial is judged by what
-;;; it saw itself, and each bound on a whole new call is a refusal the sweep
-;;; saw itself, R taken before the call's first section: never a refused
-;;; call's fuel, a control run on the code under test, or a caller's count.
-;;; The interleaved rows judge a trial by what it saw itself: a control run
-;;; at its fuel would be moved from the trial by a low trip.
+;;; line names it unavailable (ADR-0005); the rest run. An engine spends no
+;;; ticks inside a critical section, so the fuels measure the Scheme work
+;;; between the call's sections. Each trial begins with a collection, so its
+;;; first slice runs as every trial's at that fuel does, unless a collect
+;;; request falls in it (below), whichever pass; in the high pass
+;;; collect-trip-bytes is then raised far above what its runs allocate, so no
+;;; collect request falls in them. Each trial is judged by what it saw itself,
+;;; and each bound on a whole new call is a refusal the sweep saw itself, R
+;;; taken before the call's first section: never a refused call's fuel, a
+;;; control run on the code under test, or a caller's count. The interleaved
+;;; rows judge a trial by what it saw itself: a control run at its fuel would
+;;; be moved from the trial by a low trip.
 
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
@@ -507,12 +504,11 @@
 ;; the engine ticks there, so that run's remainder lies earlier in the call
 ;; than its fuel or tick says: a whole new call came at a fuel at or past
 ;; one a trial was refused at, R before the call's first section, where a
-;; request fell. So each trial notes
-;; whether a request fell before its remainder was taken, and the sweep's
-;; bound on a whole new call reads only the trials where none did; a whole
-;; new call where one did is counted and printed, and judged by its other
-;; evidence. The bound's refusal may come from any trial: a request moves a
-;; remainder earlier, never later.
+;; request fell. So each trial notes whether a request fell before its
+;; remainder was taken, and the sweep's bound on a whole new call reads only
+;; the trials where none did; a whole new call where one did is counted and
+;; printed, and judged by its other evidence. The bound's refusal may come
+;; from any trial: a request moves a remainder earlier, never later.
 
 (define (counted-request)
   (set! requests (+ requests 1))
@@ -524,24 +520,24 @@
 ;; open's, through xFullPathname, and each setting's that begins a read
 ;; transaction, through xAccess (the forcing VFS, above); once-trial's
 ;; stand-in, inside each set's section. The re-entered row's timer fires at
-;; every tick, so its ticks run out in every forced request's handler, and
-;; it fires at that section's exit.
+;; every tick, so its ticks run out in every forced request's handler, and it
+;; fires at that section's exit.
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field
@@ -1344,9 +1340,9 @@
 
 ;; mem-settings : Settings
 ;; A PRAGMA, busy-timeout listed last so it runs first, and the three ops,
-;; with the opt-in where the library has it. They are opened on a file, not on :memory:, which
-;; no VFS method sees: on a file, the open's section calls xFullPathname, so
-;; the forcing VFS forces it.
+;; with the opt-in where the library has it. They are opened on a file, not on
+;; :memory:, which no VFS method sees: on a file, the open's section calls
+;; xFullPathname, so the forcing VFS forces it.
 (define mem-settings
   (append '((defensive . #t) (foreign-keys . #t))
           (if (eq? available #t) '((enable-load-extension . #t)) '())

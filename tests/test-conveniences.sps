@@ -18,13 +18,13 @@
 ;;;   the binds     every value checked before any is bound
 ;;;   the cache     the statement count after each convenience at the
 ;;;                 default, at 0 and at 1, set by the statement-cache
-;;;                 setting; the very statement
-;;;                 reused; a PRAGMA cached as any other;
+;;;                 setting; the very statement reused; a PRAGMA cached as any
+;;;                 other;
 ;;;                 foreign_keys = 1 re-preparing the rest,
-;;;                 and trusted_schema = 0 and = 1 each; a
-;;;                 return into a full cache evicting the least recently used;
-;;;                 a failed step never kept; a reset's failure on return
-;;;                 raised, through query-row on a multi-row insert ...
+;;;                 and trusted_schema = 0 and = 1 each; a return into a full
+;;;                 cache evicting the least recently used; a failed step
+;;;                 never kept; a reset's failure on return raised, through
+;;;                 query-row on a multi-row insert ...
 ;;;                 returning under another's read
 ;;;   every path    after a refused bind, a failed step and a failed read, no
 ;;;                 statement is left at a row: it is cached and ready, or

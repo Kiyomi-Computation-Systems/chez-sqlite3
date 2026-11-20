@@ -48,16 +48,15 @@
 ;;;     after thunk raises that failure, unless a raise is under way.
 ;;;
 ;;; The two flags are with-transaction's own. BEGUN is set in the section of
-;;; the step that answered the BEGIN or SAVEPOINT; ENDED in the section of
-;;; the step that commits, or of a rollback's last step taken, whatever it
-;;; answered, or in the section that plans nothing more. Each step that
-;;; could end the level, and the begin's, reads ENDED in its own section
-;;; before it steps, and with it set steps nothing; the begin's takes the
-;;; claim first. The flags are made after the claim, so a run that makes
-;;; flags of its own never passes the BEGIN's section, and every run past it
-;;; shares the one that took the claim's. A later
-;;; exit issues nothing: a later return raises &sqlite-transaction-ended,
-;;; and a later raise or escape does nothing more.
+;;; the step that answered the BEGIN or SAVEPOINT; ENDED in the section of the
+;;; step that commits, or of a rollback's last step taken, whatever it
+;;; answered, or in the section that plans nothing more. Each step that could
+;;; end the level, and the begin's, reads ENDED in its own section before it
+;;; steps, and with it set steps nothing; the begin's takes the claim first.
+;;; The flags are made after the claim, so a run that makes flags of its own
+;;; never passes the BEGIN's section, and every run past it shares the one
+;;; that took the claim's. A later exit issues nothing: a later return raises
+;;; &sqlite-transaction-ended, and a later raise or escape does nothing more.
 ;;;
 ;;; The rollback, ROLLBACK, or ROLLBACK TO then RELEASE, a raise's or a
 ;;; failed commit's, runs with the connection's interrupt latch shut, by
@@ -66,11 +65,10 @@
 ;;; with none active, and checks it after: without the shut, a watchdog that
 ;;; kept interrupting would stop the ROLLBACK, and the transaction would
 ;;; outlive the call. The COMMIT, and the RELEASE that commits a savepoint,
-;;; stay interruptible, and an interrupted one is rolled back under the
-;;; shut. One case stays: an
-;;; interrupt sent before the shut while a statement of the connection is at
-;;; a row still stops the rollback, since SQLite keeps it while a statement
-;;; is active: the sticky interrupt (ADR-0017).
+;;; stay interruptible, and an interrupted one is rolled back under the shut.
+;;; One case stays: an interrupt sent before the shut while a statement of the
+;;; connection is at a row still stops the rollback, since SQLite keeps it
+;;; while a statement is active: the sticky interrupt (ADR-0017).
 ;;;
 ;;; Each statement goes through the conveniences' path and the cache, taken
 ;;; from the cache, stepped and given back in one critical section, so no

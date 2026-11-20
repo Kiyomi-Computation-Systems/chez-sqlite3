@@ -1,9 +1,9 @@
 #!r6rs
-;;; The suite for with-transaction under engines (ADR-0017), in
-;;; (chez-sqlite3 private transaction). An engine spends no ticks inside a
-;;; critical section, so each expiry falls between
-;;; sections; each is an escape, which runs with-transaction's after thunks,
-;;; and the resume runs the before thunks again.
+;;; The suite for with-transaction under engines (ADR-0017), in (chez-sqlite3
+;;; private transaction). An engine spends no ticks inside a critical section,
+;;; so each expiry falls between sections; each is an escape, which runs
+;;; with-transaction's after thunks, and the resume runs the before thunks
+;;; again.
 ;;;
 ;;;   the sweeps     an engine around with-transaction, at the outer level
 ;;;                  and nested, at every fuel from 1 until the call
@@ -26,8 +26,8 @@
 ;;;                  of with-transaction's statements, read between every
 ;;;                  slice by the cache's count and the statements' states
 ;;;                  and runs, and at its end by the extended code. This is
-;;;                  the row that settles ADR-0017's open question:
-;;;                  ENDED is checked-out's check
+;;;                  the row that settles ADR-0017's open question: ENDED is
+;;;                  checked-out's check
 ;;;   no cut SQL     every fuel's first remainder resumed to its end, then
 ;;;                  again: the connection tracks no SQL but the allowed, its
 ;;;                  savepoints named in full, and the extended code is 0. A
@@ -56,16 +56,15 @@
 ;;;                  critical section is handled at its exit and costs the
 ;;;                  engine ticks there, so a remainder, or a timer's
 ;;;                  continuation, is taken at the BEGIN's exit too, where a
-;;;                  claim taken just after the section, not inside it, passed
-;;;                  both rows. Each low
-;;;                  row fails by name unless collect requests fell in its
-;;;                  trials, unless each section the trace forces met its
-;;;                  request before the next, which a trip slipped to 256 KiB
-;;;                  does not, and unless some first slice, or timer, ran out
-;;;                  at such a section's exit, which the high pass never
-;;;                  does. A whole-suite
-;;;                  trip of 256 bytes fails four rows on correct code, so
-;;;                  the low passes are built row by row
+;;;                  claim taken just after the section, not inside it,
+;;;                  passes both rows. Each low row fails by name unless
+;;;                  collect requests fell in its trials, unless each section
+;;;                  the trace forces met its request before the next, which
+;;;                  a trip slipped to 256 KiB does not, and unless some
+;;;                  first slice, or timer, ran out at such a section's exit,
+;;;                  which the high pass never does. A whole-suite trip of
+;;;                  256 bytes fails four rows on correct code, so the low
+;;;                  passes are built row by row
 ;;;   the plan       another engine's BEGIN at the call's first expiry: the
 ;;;                  resumed call plans its level in the BEGIN's own section,
 ;;;                  so it makes a savepoint, never a refused BEGIN that takes
@@ -155,8 +154,9 @@
 ;; chez-sqlite3; SQLITE_STMTSTATUS_RUN is 6, at the floor and since. It
 ;; counts a run when a step starts the statement's program, the first step
 ;; after a prepare or a reset. A step that fails at its entry, as an
-;; interrupted one does beside a held row, starts none and counts none, so no row reads runs where
-;; an interrupt may land, and none here is interrupted.
+;; interrupted one does beside a held row, starts none and counts none, so
+;; no row reads runs where an interrupt may land, and none here is
+;; interrupted.
 (define stmt-status (bound 'sqlite3_stmt_status (foreign-procedure "sqlite3_stmt_status" (uptr int int) int)))
 (define stmtstatus-run 6)
 
@@ -392,20 +392,20 @@
 ;; statement, the BEGIN's among them (the low passes, above).
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field
@@ -664,8 +664,7 @@
 ;; rolled-back, &sqlite-transaction-ended with the row absent; or
 ;; ended-after-a-later-write, &sqlite-transaction-ended with the row present,
 ;; the expiry's rollback having fallen before the body's insert, which then
-;; autocommitted (single L1's shape; ADR-0017's consequences). Anything else
-;; is no kind.
+;; autocommitted (ADR-0017's consequences). Anything else is no kind.
 (define (outcome-kind answer seen)
   (cond ((and (eqv? answer 42) (eqv? seen 1)) 'committed)
         ((and (equal? answer '(raised (transaction-ended with-transaction))) (eqv? seen 0)) 'rolled-back)
@@ -980,11 +979,11 @@
 ;; --- no cut or wrong SQL reaches SQLite -----------------------------------------------------
 ;;
 ;; On Chez 10.4.0 an engine's remainder resumed a second time from inside
-;; number->string answers "". with-transaction
-;; builds its savepoints' names from N, so its plans, which build them, are
-;; made inside call-with-open-handle's sections, where no expiry lands. This
-;; row holds that: no statement but the allowed ones is ever tracked, and the
-;; extended code stays 0, after either resume.
+;; number->string answers "". with-transaction builds its savepoints' names
+;; from N, so its plans, which build them, are made inside
+;; call-with-open-handle's sections, where no expiry lands. This row holds
+;; that: no statement but the allowed ones is ever tracked, and the extended
+;; code stays 0, after either resume.
 
 ;; sql-texts : Database -> (Listof String)
 ;; The SQL of every statement DB tracks, the cache's among them, each once,
@@ -1072,14 +1071,14 @@
 ;;
 ;; O7 nested: the inner level's RELEASE answers busy beside the body's own
 ;; insert ... returning held at its row, so the failed commit is rolled back,
-;; ROLLBACK TO answering done, then RELEASE busy again. An
-;; engine whose ticks run out inside that rollback escapes, and its exit
-;; must not issue again what the rollback already issued. Counted through the
-;; statements the connection tracks and the extended code, and the runs of the
-;; tracked ROLLBACK TO, the one thing they cannot show: a
-;; ROLLBACK TO the rollback took and the exit's own are two tracked
-;; statements, the first left at done, or left ready when its step never
-;; came; one cached and stepped again is one, which only the runs would show.
+;; ROLLBACK TO answering done, then RELEASE busy again. An engine whose ticks
+;; run out inside that rollback escapes, and its exit must not issue again
+;; what the rollback already issued. Counted through the statements the
+;; connection tracks and the extended code, and the runs of the tracked
+;; ROLLBACK TO, the one thing they cannot show: a ROLLBACK TO the rollback
+;; took and the exit's own are two tracked statements, the first left at done,
+;; or left ready when its step never came; one cached and stepped again is
+;; one, which only the runs would show.
 
 (define release-1 "RELEASE chez_sqlite3_1")
 (define rollback-to-1 "ROLLBACK TO chez_sqlite3_1")
@@ -1332,15 +1331,15 @@
 ;; --- a nested begin that fails ------------------------------------------------------------------
 ;;
 ;; Inside an outer with-transaction, a timer interrupt at T1 ticks steps the
-;; caller's select to a row and calls sqlite3_interrupt, which stays while
-;; the select is held, and a second at T2 ticks later finalizes it. The
-;; refusal's pass and the BEGIN share one section,
-;; so a select the connection tracks, stepped before the inner call's
-;; BEGIN, is refused there, and one stepped after cannot reach the BEGIN:
-;; no timer falls between the two. A select prepared outside the library,
-;; which the connection does not track and the refusal cannot see, still
-;; makes the SAVEPOINT fail, and so tests what a row tests with a
-;; tracked one: a begin that failed rolls nothing back.
+;; caller's select to a row and calls sqlite3_interrupt, which stays while the
+;; select is held, and a second at T2 ticks later finalizes it. The refusal's
+;; pass and the BEGIN share one section, so a select the connection tracks,
+;; stepped before the inner call's BEGIN, is refused there, and one stepped
+;; after cannot reach the BEGIN: no timer falls between the two. A select
+;; prepared outside the library, which the connection does not track and the
+;; refusal cannot see, still makes the SAVEPOINT fail, and so tests,
+;; untracked, what a tracked select can no longer reach: a begin that failed
+;; rolls nothing back.
 
 ;; raw-prepare! : Database String -> Positive-Integer
 ;; A statement of SQL on DB, made with the raw sqlite3_prepare_v2, so the
@@ -1500,14 +1499,15 @@
 ;; pending. Swept over F from 1 until the call completes unexpired, and over
 ;; G from 1 until R completes within G, at the outer level and nested, inside
 ;; an outer with-transaction whose body runs the engines. A flag set only
-;; when a call ends breaks under that schedule. After both runs: the depth is restored,
-;; in-transaction? is #f once the outer level is over, a later with-transaction commits, and
-;; none of with-transaction's own statements is tracked other than ready, or
-;; outside the cache; nor is any statement, the body's included, tracked
-;; outside the cache. The body's execute! holds a claim on its call a
-;; claim made at the call's start. A flag set when the call ends left the body's
-;; insert tracked outside the cache from F 29, G 46: this row failed 960 of
-;; 8,210 trials at the outer level and 959 nested.
+;; when a call ends breaks under that schedule. After both runs: the depth
+;; is restored, in-transaction? is #f once the outer level is over, a later
+;; with-transaction commits, and none of with-transaction's own statements
+;; is tracked other than ready, or outside the cache; nor is any statement,
+;; the body's included, tracked outside the cache. The body's execute! holds
+;; a claim on its call, made by its first expression. With a flag set when
+;; the call ends in its place, the body's insert is left tracked outside the
+;; cache from F 29, G 46: measured, this row failed 960 of 8,210 trials at
+;; the outer level and 959 nested.
 
 ;; cached? : Database String -> Boolean
 ;; Whether DB's cache holds a statement under SQL, read by taking it out and
@@ -1539,8 +1539,8 @@
 ;; What each run of a pending trial may answer: the body's 42; the ended
 ;; condition; &sqlite-closed from the body's execute!, its claim refusing a
 ;; second run's section; or with-transaction's refusal of a re-entry. A
-;; second run that stepped the body's statement again, its claim's advance
-;; split from its section, answered the statement tier's refusal of a step
+;; second run that steps the body's statement again, its claim's advance
+;; split from its section, answers the statement tier's refusal of a step
 ;; at done.
 (define pending-answers
   (list 42 '(raised (transaction-ended with-transaction)) '(raised (closed execute!))
@@ -1648,10 +1648,9 @@
         (ended!)))))
 
 ;; pending-stride : Positive-Integer
-;; G steps by this, from 1: every G. Sweeping every fourth took
-;; 100 s under the memory gate for 16,420 trials; the call now completes at
-;; fuel 58, and every G costs less. An engine's
-;; fuel names no fixed point in the code, so every G is swept.
+;; G steps by this, from 1: every G, since an engine's fuel names no fixed
+;; point in the code. The sweep of F ends where the call completes unexpired,
+;; a fuel the suite prints.
 (define pending-stride 1)
 
 ;; pending : Pass Boolean -> (Listof Any)
@@ -1711,29 +1710,29 @@
 ;; Each with-transaction call holds a claim, made by its first expression,
 ;; which the BEGIN's section takes, first in that section: a run of the call
 ;; that reaches it once another has taken it begins nothing and raises
-;; &sqlite-transaction-ended. If the flags were
-;; made after the plan's section, so a remainder taken between the call's
-;; first expression and them, resumed a second time once the call had
-;; ended, made flags of its own, began again, ran the body and committed
-;; again: at fuels 9 to 11, 15 and 16.
+;; &sqlite-transaction-ended. With the flags made after the plan's section,
+;; a remainder taken between the call's first expression and them, resumed
+;; a second time once the call has ended, makes flags of its own, begins
+;; again, runs the body and commits again: measured at fuels 9 to 11, 15
+;; and 16.
 ;;
 ;; At fuel F, on a fresh connection: an engine whose thunk counts its own
 ;; entries, then calls with-transaction, whose body inserts F and answers
 ;; 42; its first remainder R resumed to its end, then again. A remainder
-;; taken before the call's first expression makes a whole new call,
-;; which begins and commits again: one taken before the
-;; thunk's count re-runs that count, and so is told by it. One taken after
-;; the count but before the claim cannot be told from outside the call: the
-;; entries of with-transaction and of its work, two procedure calls, lie
-;; between, and an engine can expire at each, a count of ticks that moves
-;; with the code: a whole new call is never bounded by a caller's
-;; own count. So a second level is allowed only where the first slice began
-;; nothing, and R re-ran the count, or lay below the first fuel at which the
-;; sweep saw R refused by the claim, which a remainder taken past the
-;; claim's making meets. A window of two fuels
-;; past the count would be too loose: C-tx-unclaimed, a claim that never
-;; refuses, passes this bound, its own first refusal moved past its extra
-;; level by the flags' check, and the claim's re-entry row catches it.
+;; taken before the call's first expression makes a whole new call, which
+;; begins and commits again: one taken before the thunk's count re-runs
+;; that count, and so is told by it. One taken after the count but before
+;; the claim cannot be told from outside the call: the entries of
+;; with-transaction and of its work, two procedure calls, lie between, and
+;; an engine can expire at each, a count of ticks that moves with the code:
+;; a whole new call is never bounded by a caller's own count. So a second
+;; level is allowed only where the first slice began nothing, and R re-ran
+;; the count, or lay below the first fuel at which the sweep saw R refused
+;; by the claim, which a remainder taken past the claim's making meets. A
+;; claim that never refuses passes this bound: the flags' check moves its
+;; own first refusal past its extra level, and the claim's re-entry row
+;; catches it. A window of two fuels past the count saw it, but a window is
+;; a caller's own count.
 
 ;; claim-trial : Pass Boolean Positive-Integer -> (U 'completed (List Any ...))
 ;; One trial at FUEL, in PASS, on a fresh in-memory connection, nested
@@ -2042,12 +2041,12 @@
 ;; --- the BEGIN's plan, read in the BEGIN's section --------------------------------------------
 ;;
 ;; Autocommit, the depth and the refusal's pass are read in the BEGIN's own
-;; section, so no expiry splits the plan from the step: an expiry between them would let
-;; another engine begin a transaction on the connection, and the resumed call
-;; would step BEGIN IMMEDIATE inside it, which SQLite refused, "cannot start a transaction within a
-;; transaction", after taking its lock: a second connection's BEGIN IMMEDIATE answered
-;; busy (ADR-0017, "no BEGIN is ever issued inside a
-;; transaction").
+;; section, so no expiry splits the plan from the step. An expiry between
+;; them would let another engine begin a transaction on the connection, and
+;; the resumed call step BEGIN IMMEDIATE inside it, which SQLite refuses,
+;; "cannot start a transaction within a transaction", after taking its lock:
+;; a second connection's BEGIN IMMEDIATE answers busy (ADR-0017, "no BEGIN
+;; is ever issued inside a transaction").
 
 ;; stale-trial : Positive-Integer -> (U 'completed (List Any ...))
 ;; At FUEL, on a fresh file and two connections to it, the second with no
@@ -2103,10 +2102,9 @@
 ;;
 ;; Inside an outer W, an engine runs a nested level A for one slice; then
 ;; W's body runs a sibling B, and inside B's body resumes A to its end.
-;; Chez runs B's after thunk, then its before thunk, on the resume, as for
-;; any continuation taken outside B: B's
-;; level is rolled back as the resume leaves it, and B's return raises the
-;; ended condition.
+;; Chez runs B's after thunk, then its before thunk, on the resume, as for any
+;; continuation taken outside B: B's level is rolled back as the resume leaves
+;; it, and B's return raises the ended condition.
 
 ;; siblings : Database Positive-Integer -> (List Any ...)
 ;; At FUEL: whether A's first slice expired, or its answer; A's answer once

@@ -546,7 +546,7 @@
                      (c (with-db (lambda () (open-database path 'no-mutex list-of)) op-reads)))
                 (list (list a) (list b) (list c) (native-counts)))))))
 
-;; --- each start unasked -----------------------------
+;; --- each start unasked --------------------------------------------------------------------
 
 ;; starts-on : (-> Database) -> Any
 (define (starts-on open) (with-db open op-reads))
@@ -596,9 +596,9 @@
           '((enable-load-extension . #f) (defensive . #t) (defensive . #f) (dqs-dml . #t)
             (dqs-dml . #f) (dqs-ddl . #t) (dqs-ddl . #f))))
 
-;; A set of defensive to 1 beside the opt-in, unasked, once passed when the
-;; opt-in's list stood outside this row; so every list of one op is
-;; here, each judged by the other three against the library's start.
+;; A set of defensive to 1 beside the opt-in, unasked, passes a row that
+;; leaves the opt-in's list out; so every list of one op is here, each
+;; judged by the other three against the library's start.
 (test-equal "a list naming one op leaves the other three at the library's start: each of the four at #t and at #f, the opt-in's #t where the library has sqlite3_load_extension, each list's other three compared with the suite's own connection's"
   (let ((s (raw-starts ":memory:")))
     (let loop ((rest single-lists) (expected '()))
@@ -611,19 +611,19 @@
         (let ((r (starts-on (lambda () (open-database ":memory:" (list (car rest)))))))
           (loop (cdr rest) (cons (list (car rest) (others-than (car (car rest)) r)) found))))))
 
-;; --- the opt-in's #f beside a C switch that starts on ---------------------------------
+;; --- the opt-in's #f beside a C switch that starts on ---------------------------------------
 ;; Ubuntu's library starts ENABLE_LOAD_EXTENSION at 1, every other this suite
-;; meets at 0, so the start rows see a call of 0
-;; for the opt-in's #f, which must never be made (ADR-0021), on
-;; Ubuntu's alone. Here an entry point that sqlite3_auto_extension runs at
-;; every open sets the op to 1 on each new connection, through native's
-;; binding: a start of 1 on every lane, read first on the suite's own
-;; connection. The entry point is __collect_safe, as sqlite3_open_v2, which
-;; calls it, is, and raises nothing. A libsqlite3 can refuse the
-;; registration: Apple's 3.51.0 answers 21, SQLITE_MISUSE, as
+;; meets at 0, so the start rows see a call of 0 for the opt-in's #f, which
+;; must never be made (ADR-0021), on Ubuntu's alone. Here an entry point that
+;; sqlite3_auto_extension runs at every open sets the op to 1 on each new
+;; connection, through native's binding: a start of 1 on every lane, read
+;; first on the suite's own connection. The entry point is __collect_safe, as
+;; sqlite3_open_v2, which calls it, is, and raises nothing. A libsqlite3 can
+;; refuse the registration: Apple's 3.51.0 answers 21, SQLITE_MISUSE, as
 ;; test-open-interleave records; then the row is printed unavailable, and the
-;; refusal, 21 and no other code, is asserted in its place (ADR-0005). It is unregistered by
-;; sqlite3_reset_auto_extension, which frees SQLite's list, and unlocked once.
+;; refusal, 21 and no other code, is asserted in its place (ADR-0005). It is
+;; unregistered by sqlite3_reset_auto_extension, which frees SQLite's list,
+;; and unlocked once.
 
 ;; int sqlite3_auto_extension(void (*xEntryPoint)(void))
 (define auto-extension
@@ -720,20 +720,20 @@
             (list (if (null? switch-answers) 'no-calls (all-answered switch-answers '(0 1)))))))
 
 ;; --- each set and each start, over moved starts --------------------------------------------
-;; The start rows above hold each start where nothing moves it, so they
-;; cannot see a set that writes the library's own start value: defensive
-;; set to 0 at every open and dqs-dml set to 1 passed every row on Guix's
-;; library, and so did defensive's #f skipped and answered as a match, since c-held's #f reads 0
-;; either way. Here an entry point sqlite3_auto_extension runs at every open moves each of the
-;; four ops off this library's start, read by raw-starts first, through
-;; native's binding, so a value written unasked, or a set not made, shows on
-;; any library, whatever its starts: the moved value is 1 less the start's
-;; cell. open-database's sets run after the entry point, inside its open. The
-;; entry point is __collect_safe, as sqlite3_open_v2, which calls it, is, and
-;; raises nothing. Where the library refuses the registration, Apple's 21,
-;; each row is printed unavailable, and 21 is asserted in its place, as
-;; c-switch-on does. It is unregistered by sqlite3_reset_auto_extension, and
-;; unlocked once.
+;; The start rows above hold each start where nothing moves it, so they cannot
+;; see a set that writes the library's own start value: defensive set to 0 at
+;; every open and dqs-dml set to 1 pass every row on Guix's library, and so
+;; does defensive's #f skipped and answered as a match, since c-held's #f
+;; reads 0 either way. Here an entry point sqlite3_auto_extension runs at
+;; every open moves each of the four ops off this library's start, read by
+;; raw-starts first, through native's binding, so a value written unasked, or
+;; a set not made, shows on any library, whatever its starts: the moved value
+;; is 1 less the start's cell. open-database's sets run after the entry point,
+;; inside its open. The entry point is __collect_safe, as sqlite3_open_v2,
+;; which calls it, is, and raises nothing. Where the library refuses the
+;; registration, Apple's 21, each row is printed unavailable, and 21 is
+;; asserted in its place, as c-switch-on does. It is unregistered by
+;; sqlite3_reset_auto_extension, and unlocked once.
 
 ;; start-cells : Any
 ;; The library's starts, as raw-starts reads them, before any entry point.
@@ -1014,7 +1014,7 @@
               (list (car files) (cadr files) (full-reads (caddr files)))
               files)))))
 
-;; --- defensive's writable_schema ------------------------------------------------------
+;; --- defensive's writable_schema -----------------------------------------------------------
 
 ;; writable : Database -> Any
 ;; PRAGMA writable_schema = 1 prepared and stepped on DB: what the step
@@ -1218,12 +1218,12 @@
                                            found))))
               reads)))))
 
-;; --- the order across PRAGMAs and sets (ADR-0018) -------------------------------
-;; busy-timeout first, then the rest in the list's order, PRAGMAs and the
-;; four alike. Two PRAGMAs set flags that
-;; sqlite3_db_config reads too: foreign_keys SQLITE_DBCONFIG_ENABLE_FKEY's,
-;; 1002, and trusted_schema SQLITE_DBCONFIG_TRUSTED_SCHEMA's, 1017, as the
-;; ops of 3.45.1's and 3.54.1's headers are listed in tests/test-settings.sps.
+;; --- the order across PRAGMAs and sets (ADR-0018) -------------------------------------------
+;; busy-timeout first, then the rest in the list's order, PRAGMAs and the four
+;; alike. Two PRAGMAs set flags that sqlite3_db_config reads too: foreign_keys
+;; SQLITE_DBCONFIG_ENABLE_FKEY's, 1002, and trusted_schema
+;; SQLITE_DBCONFIG_TRUSTED_SCHEMA's, 1017, as the ops of 3.45.1's and 3.54.1's
+;; headers are listed in tests/test-settings.sps.
 ;; So a stand-in for the binding, at each set, reads both by a -1 read
 ;; through native's binding on the handle it is given, notes them, and
 ;; passes the call on: each note shows which of the two PRAGMAs had applied

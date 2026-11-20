@@ -5,14 +5,13 @@
 ;;; SQLite's prepare is the full oracle, in tests/test-statement-tail.sps.
 ;;;
 ;;;   the oracle     every NUL-free input of 1 and of 2 bytes (65,280) against
-;;;                  SQLite's own list of the ones it leaves empty, generated
-;;;                  by SQLite's prepare on Guix's
-;;;                  library and pasted here as a literal; the 798 inputs of 3
-;;;                  bytes SQLite leaves empty, also a literal, which the
-;;;                  scanner accepts, and every 3-byte input over a 14-byte
-;;;                  alphabet (2,744), accepted exactly when listed; the inputs
-;;;                  holding a NUL against our rule, which refuses them before
-;;;                  a scan
+;;;                  SQLite's own list of the ones it leaves empty, measured
+;;;                  by preparing each on Guix's library and pasted here as a
+;;;                  literal; the 798 inputs of 3 bytes SQLite leaves empty,
+;;;                  also a literal, which the scanner accepts, and every
+;;;                  3-byte input over a 14-byte alphabet (2,744), accepted
+;;;                  exactly when listed; the inputs holding a NUL against our
+;;;                  rule, which refuses them before a scan
 ;;;   the edges      each rule's edges at chosen inputs and offsets: -, --,
 ;;;                  /*, /**/, /*/, EF BB (BF), a vertical tab after ; after
 ;;;                  */ and after a comment's newline, and a NUL
@@ -78,9 +77,8 @@
 
 ;; --- SQLite's own list ---------------------------------------------------------------------
 ;; The NUL-free inputs of 1 and 2 bytes that SQLite's prepare leaves empty
-;; (SQLITE_OK, a NULL statement), as printed by
-;; SQLite's prepare on Guix's libsqlite3, 3.53.1:
-;; 6 of 1 byte and 42 of 2 bytes.
+;; (SQLITE_OK, a NULL statement), measured by preparing each such input on
+;; Guix's libsqlite3, 3.53.1: 6 of 1 byte and 42 of 2 bytes.
 (define sqlite-accepted
   '(
     (#x09)
@@ -133,11 +131,10 @@
     (#x3B #x3B)
     ))
 
-;; The NUL-free inputs of 3 bytes that SQLite's prepare leaves empty, as printed
-;; by the 3-byte pass on
-;; Guix's libsqlite3, 3.53.1, and identical on the floor's, 3.45.1: 798, 1 of
-;; them EF BB BF and 255 of them 2F 2A x (a /* with one byte after it). The
-;; scanner counts the same 798.
+;; The NUL-free inputs of 3 bytes that SQLite's prepare leaves empty, measured
+;; by preparing each such input on Guix's libsqlite3, 3.53.1, and identical on
+;; the floor's, 3.45.1: 798, 1 of them EF BB BF and 255 of them 2F 2A x (a /*
+;; with one byte after it). The scanner counts the same 798.
 (define sqlite-accepted-3
   '(
     (#x09 #x09 #x09)
@@ -998,8 +995,7 @@
   '()
   (filter (lambda (i) (not (eq? (scan (u8-list->bytevector i) 0) 'none))) sqlite-accepted-3))
 
-;; The 14-byte alphabet: the bytes the
-;; scanner's rules name, and a letter.
+;; The 14-byte alphabet: the bytes the scanner's rules name, and a letter.
 (define alphabet '(#x20 #x09 #x0a #x0b #x0c #x0d #x3b #x2d #x2f #x2a #xef #xbb #xbf #x41))
 
 (define accepted-3 (make-eqv-hashtable))

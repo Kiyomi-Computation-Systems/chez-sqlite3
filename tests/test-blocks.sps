@@ -13,9 +13,9 @@
 ;;; suite with SIGABRT. It reaches malloc and free only: it never loads
 ;;; libsqlite3. It runs through gated-command, so under make test-memory the
 ;;; gate's own Valgrind runs it, with a log of its own (ADR-0005). It
-;;; prints its counts, and this suite asserts them zero (ADR-0005, decision
-;;; 4); then whether it ran under memcheck, which this suite requires to be yes
-;;; exactly when the gate asked, so a child that escaped the gate fails its row.
+;;; prints its counts, and this suite asserts them zero (ADR-0005); then
+;;; whether it ran under memcheck, which this suite requires to be yes exactly
+;;; when the gate asked, so a child that escaped the gate fails its row.
 ;;;
 ;;; Every refusal is raised after the critical section that decided it,
 ;;; never inside one: a with-exception-handler handler of it runs at depth 1,

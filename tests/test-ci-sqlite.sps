@@ -2,8 +2,7 @@
 ;;; The suite for scripts/ci/check-sqlite.sh and scripts/ci/build-sqlite.sh,
 ;;; the two scripts behind CI's floor and current lanes and the current job's
 ;;; no-load build: they build SQLite from sqlite.org's source, and check what
-;;; was built before any suite runs on it (ADR-0003; ADR-0005;
-;;; ADR-0008).
+;;; was built before any suite runs on it (ADR-0003; ADR-0005; ADR-0008).
 ;;;
 ;;; Both scripts find packaging/floors.sexp from their own place, through
 ;;; scripts/ci/floor.sh, so every row runs a copy of scripts/ci in a fresh
@@ -21,11 +20,10 @@
 ;;;     written in the script fails it. Its options are the floor's 37 lines,
 ;;;     the current release's 39, ENABLE_FTS5 among them, and the no-load
 ;;;     build's 40, OMIT_LOAD_EXTENSION too, written here as a reviewed copy
-;;;     of what SQLite, built with build-sqlite.sh's flags by role, lists, measured
-;;;     through the FFI, with the COMPILER=
-;;;     entry this suite computes from $CC's own macros, by another route
-;;;     than the script's. Every other row is one edit of a passing row, and
-;;;     names what it breaks;
+;;;     of what SQLite, built with build-sqlite.sh's flags by role, lists,
+;;;     measured through the FFI, with the COMPILER= entry this suite computes
+;;;     from $CC's own macros, by another route than the script's. Every other
+;;;     row is one edit of a passing row, and names what it breaks;
 ;;;   - build-sqlite.sh: each row puts a shim/ directory first on PATH,
 ;;;     whose curl, openssl and tar are POSIX sh scripts that log each call,
 ;;;     and a CC that logs its own and builds nothing. PATH holds nothing
@@ -217,10 +215,9 @@
 ;;
 ;; What SQLite's release logs publish for the two builds the lanes make
 ;; (https://sqlite.org/releaselog/X_Y_Z.html), and the compile options each
-;; lists when built with build-sqlite.sh's flags, in SQLite's order, as measured
-;; through the FFI: the current release's with
-;; ENABLE_FTS5 after DIRECT_OVERFLOW_READ,
-;; since the current lane compiles FTS5 in (ADR-0003).
+;; lists when built with build-sqlite.sh's flags, in SQLite's order, as
+;; measured through the FFI: the current release's with ENABLE_FTS5 after
+;; DIRECT_OVERFLOW_READ, since the current lane compiles FTS5 in (ADR-0003).
 
 (define floor-source-id
   "2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257cc467a")
@@ -314,8 +311,8 @@
 
 ;; The no-load build: the current release's flags and -DSQLITE_OMIT_LOAD_EXTENSION,
 ;; so FTS5 is kept and the list is the current one's with OMIT_LOAD_EXTENSION
-;; between MUTEX_PTHREADS and SYSTEM_MALLOC, as measured
-;; through the FFI on the pinned release built so.
+;; between MUTEX_PTHREADS and SYSTEM_MALLOC, as measured through the FFI on
+;; the pinned release built so.
 (define no-load-options
   (with-compiler
    '("ATOMIC_INTRINSICS=1"
@@ -987,10 +984,10 @@
                   (#\- . "MAX_SCHEMA=10000000")))))
   current-role)
 
-;; The current release's list without ENABLE_FTS5, as build-sqlite.sh built
-;; it before the current lane compiled FTS5 in (ADR-0003): refused,
-;; naming the one line. The refusal also holds the other way round,
-;; the FTS5 build against the old list.
+;; The current release's list without ENABLE_FTS5, a build of it without
+;; the FTS5 the current lane compiles in (ADR-0003): refused, naming the one
+;; line. Measured the other way round, the FTS5 build against the list
+;; without it, the check refuses too.
 (options-row "--current: the pinned release built without FTS5, its 38 options, is refused, naming ENABLE_FTS5"
   current-spec
   (lambda () (dropped current-options "ENABLE_FTS5"))
@@ -1007,10 +1004,9 @@
 
 ;; --- check-sqlite.sh: --no-load ---------------------------------------------------------
 ;;
-;; The current job's second build: the pinned release with the current
-;; lane's flags and -DSQLITE_OMIT_LOAD_EXTENSION, so its
-;; identity is the current release's and its options are the current ones
-;; with OMIT_LOAD_EXTENSION.
+;; The current job's second build: the pinned release with the current lane's
+;; flags and -DSQLITE_OMIT_LOAD_EXTENSION, so its identity is the current
+;; release's and its options are the current ones with OMIT_LOAD_EXTENSION.
 
 (test-equal "the no-load copy is the current copy with OMIT_LOAD_EXTENSION, and the only difference"
   '(returned #t)
@@ -1031,9 +1027,9 @@
   (lambda () (dropped no-load-options "OMIT_LOAD_EXTENSION"))
   no-load-role)
 
-;; A no-load build of SQLite's defaults, without FTS5, as one measured
-;; through the FFI: refused, naming FTS5, which the current job's two
-;; builds both compile.
+;; A no-load build of SQLite's defaults, without FTS5, its list measured
+;; through the FFI: refused, naming FTS5, which the current job's two builds
+;; both compile.
 (options-row "--no-load: a no-load build without FTS5, its 39 options, is refused, naming ENABLE_FTS5"
   no-load-spec
   (lambda () (dropped no-load-options "ENABLE_FTS5"))
@@ -1427,10 +1423,9 @@
 (define (source-digest-call number)
   (string-append "openssl dgst -sha3-256 -r WORK/" (archive-name number) "/sqlite3.c"))
 
-;; One compile, by role (ADR-0003): the
-;; floor's is SQLite's defaults with THREADSAFE written, the current
-;; release's adds FTS5, and the no-load build's omits extension loading
-;; besides; an unresolved symbol is an error.
+;; One compile, by role (ADR-0003): the floor's is SQLite's defaults with
+;; THREADSAFE written, the current release's adds FTS5, and the no-load
+;; build's omits extension loading besides; an unresolved symbol is an error.
 (define floor-flags "-DSQLITE_THREADSAFE=1")
 (define current-flags "-DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5")
 (define no-load-flags "-DSQLITE_THREADSAFE=1 -DSQLITE_ENABLE_FTS5 -DSQLITE_OMIT_LOAD_EXTENSION")

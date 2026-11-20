@@ -1,8 +1,8 @@
 #!r6rs
-;;; The suite for with-transaction (ADR-0017), in (chez-sqlite3 private transaction). Its
-;;; NOMEM rows are tests/test-transaction-nomem.sps's, its engine rows
-;;; tests/test-transaction-engine.sps's, and its interrupted writes
-;;; tests/test-transaction-interrupt.sps's.
+;;; The suite for with-transaction (ADR-0017), in (chez-sqlite3 private
+;;; transaction). Its NOMEM rows are tests/test-transaction-nomem.sps's, its
+;;; engine rows tests/test-transaction-engine.sps's, and its interrupted
+;;; writes tests/test-transaction-interrupt.sps's.
 ;;;
 ;;;   the surface   the body, then the mode, then the database checked before
 ;;;                 anything reaches C; a BEGIN that fails, raised
@@ -119,9 +119,9 @@
 ;; chez-sqlite3. With SQLITE_STMTSTATUS_RUN, 6 in sqlite3.h at the floor and
 ;; since, it counts a run when a step starts the statement's program: the
 ;; first step after a prepare or a reset. A step that fails at its entry, as
-;; an interrupted one does beside a held row, starts none and counts none
-;; so the interrupted rows, [E]'s, read no runs. The
-;; runs row below holds its meaning by a control.
+;; an interrupted one does beside a held row, starts none and counts none,
+;; so the interrupted rows, [E]'s, read no runs. The runs row below holds its
+;; meaning by a control.
 (define stmt-status (bound 'sqlite3_stmt_status (foreign-procedure "sqlite3_stmt_status" (uptr int int) int)))
 (define stmtstatus-run 6)
 
@@ -731,7 +731,7 @@
             (c (execute! db "rollback")))
        (list (reverse seen) code (issued db))))))
 
-;; --- [C] a failed COMMIT rolled back -------------------------------------------------------
+;; --- [C] a failed COMMIT rolled back ------------------------------------------------------------
 
 (test-equal "[C] E13, outer: a child with a deferred foreign key; COMMIT answers 787, so with-transaction rolls back, ROLLBACK kept, the failed COMMIT finalized, and raises &sqlite-constraint from with-transaction, extended 787; in-transaction? #f; the marker gone"
   '((raised (sqlite-constraint with-transaction constraint constraint-foreignkey)) no "(none)" "(none)"
@@ -859,7 +859,7 @@
     yes)
   (o7-nested #f))
 
-;; --- [D] a body that returns after its transaction ended ----------------------------------
+;; --- [D] a body that returns after its transaction ended ---------------------------------------
 
 (test-equal "[D] L1, outer: the body catches insert or rollback's constraint-unique and writes again; that write autocommits, and db2 sees it at once; the body's return raises &sqlite-transaction-ended from with-transaction, no COMMIT issued, the extended code the later write's"
   '((raised (transaction-ended with-transaction)) "after" 0 no "after" (("BEGIN DEFERRED" . ready)))
@@ -1324,7 +1324,7 @@
                     (attempt (lambda () (execute! db "insert or rollback into u values (1)")))
                     'returned)))
 
-;; --- the primed cache ---------------------------------------------------------
+;; --- the primed cache ----------------------------------------------------------------------------
 
 ;; primed-case : (Database Database -> Any) -> Any
 ;; with-case, its cache holding with-transaction's statements from earlier
@@ -1482,12 +1482,11 @@
 ;;
 ;; A raise made inside a critical section reaches a with-exception-handler
 ;; handler with interrupts still disabled, where an engine never expires and
-;; another thread's collection waits. Each
-;; of with-transaction's raise sites is held here by the depth a handler of
-;; it runs at, 1 outside any section, as test-public's rows hold
-;; sqlite-compile-option?'s: each refusal, the BEGIN's failure, the
-;; commit's, the rollback's, the ended condition, and the body's own raise
-;; handed on. The claim's refusal of a second resume is
+;; another thread's collection waits. Each of with-transaction's raise sites
+;; is held here by the depth a handler of it runs at, 1 outside any section,
+;; as test-public's rows hold sqlite-compile-option?'s: each refusal, the
+;; BEGIN's failure, the commit's, the rollback's, the ended condition, and the
+;; body's own raise handed on. The claim's refusal of a second resume is
 ;; tests/test-transaction-engine.sps's.
 
 ;; interrupt-depth : -> Positive-Integer

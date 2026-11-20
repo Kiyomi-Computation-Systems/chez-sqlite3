@@ -15,8 +15,8 @@
 ;;;             (version-number . N) (source-id . STRING), the report's
 ;;;             fields; then (threadsafe . N), (chez-sqlite3 private
 ;;;             native)'s loaded-threadsafe; with --extension-loading,
-;;;             (load-extension-available? . BOOLEAN), native's record of
-;;;             the optional sqlite3_load_extension; with --opens,
+;;;             (load-extension-available? . BOOLEAN), native's record of the
+;;;             optional sqlite3_load_extension; with --opens,
 ;;;             (opens . RESULTS), below; with --loads, (loads . RESULTS),
 ;;;             below; and the exit status is 0
 ;;;   refused:  (reason . SYMBOL) (who . WHO) (path . P) (source . S)
@@ -88,10 +88,10 @@
 ;;;   (raised WHO TYPES)
 ;;;             anything else, as the first reference's line names it
 ;;;
-;;; Where the library lacks sqlite3_load_extension, as the
-;;; decoy built DECOY_LACKS_sqlite3_load_extension does, an open that opts in
-;;; is refused before anything opens, and the decoy's call log, which always
-;;; follows, shows whether sqlite3_open_v2 was called.
+;;; Where the library lacks sqlite3_load_extension, as the decoy built
+;;; DECOY_LACKS_sqlite3_load_extension does, an open that opts in is refused
+;;; before anything opens, and the decoy's call log, which always follows,
+;;; shows whether sqlite3_open_v2 was called.
 ;;;
 ;;; With --loads, CASES is one datum, a list of cases, each the arguments of
 ;;; a call of (chez-sqlite3)'s load-extension!, after the open's cases, in
@@ -99,9 +99,9 @@
 ;;; V) for an answer. A case is data, so no case holds a database: what a
 ;;; row on the decoy can see is that the verb's library loads where the
 ;;; library lacks sqlite3_load_extension, that its refusals come at depth 1
-;;; with every count zero, and, from the call log, that nothing of SQLite's
-;;; is called (the decoy's open always fails, so no connection
-;;; of it reaches a load).
+;;; with every count zero, and, from the call log, that nothing of SQLite's is
+;;; called (the decoy's open always fails, so no connection of it reaches a
+;;; load).
 ;;;
 ;;; Why eval, and no import of (chez-sqlite3 private native): Chez runs the
 ;;; libraries a program imports before the program's body, so a guard in the

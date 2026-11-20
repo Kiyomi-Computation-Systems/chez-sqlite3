@@ -2,8 +2,7 @@
 ;;; (chez-sqlite3 private constants): the SQLite constants chez-sqlite3 needs,
 ;;; each copied from sqlite3.h as of SQLite 3.45.1, the floor (ADR-0001,
 ;;; ADR-0003). SQLite never renumbers a result code or a flag. A later
-;;; release may add some: a code this table lacks stays an integer
-;;; (ADR-0013).
+;;; release may add some: a code this table lacks stays an integer (ADR-0013).
 ;;;
 ;;; tests/test-constants.sps holds every value here to the sqlite3.h the
 ;;; compiler finds, with a C program compiled at test time (ADR-0001).

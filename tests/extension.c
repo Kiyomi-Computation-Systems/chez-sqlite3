@@ -4,12 +4,12 @@
  * tests/decoy-libsqlite3.c is.
  *
  * The suites compile it at test time, once per variant below, with $CC
- * -Wall -Werror and -shared -fPIC, or -dynamiclib on a Mac, against the
+ * -Wall -Werror and -shared -fPIC, or -dynamiclib on macOS, against the
  * lane's own sqlite3ext.h, the header beside sqlite3.h that C_INCLUDE_PATH
  * or the compiler's own path finds. A missing compiler or header fails the
- * compile, and the suite with it, never a skip (ADR-0001). It
- * includes sqlite3ext.h, so it calls SQLite only through the routines the
- * loading library hands its entry point: it links no libsqlite3 of its own.
+ * compile, and the suite with it, never a skip (ADR-0001). It includes
+ * sqlite3ext.h, so it calls SQLite only through the routines the loading
+ * library hands its entry point: it links no libsqlite3 of its own.
  *
  * Variants, chosen at compile time:
  *
@@ -46,8 +46,7 @@
  * An init counts itself first, then registers both functions, answering the
  * first registration's failure: a load whose init replaces the functions an
  * earlier load registered fails while a statement of the connection is at a
- * row, SQLITE_BUSY from sqlite3_create_function, with no message of its own
- * (the research, L8 and rv1, part B).
+ * row, SQLITE_BUSY from sqlite3_create_function, with no message of its own.
  */
 #include <sqlite3ext.h>
 SQLITE_EXTENSION_INIT1

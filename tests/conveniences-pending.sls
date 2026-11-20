@@ -1,16 +1,16 @@
 #!r6rs
 ;;; (conveniences-pending): what the suites for one convenience's runs
-;;; interleaved share, tests/test-conveniences-pending-execute.sps, -query.sps,
-;;; -query-row.sps, -fold.sps and -script.sps, one a convenience, so each
-;;; stays well under the memory gate's limit (ADR-0005; ADR-0016). Chez's
-;;; engine remainders are multi-shot: R, one remainder of a call, resumed
-;;; until it expires again, is R1, and R can then be resumed again while R1
-;;; is pending. Each run of the call goes on from where its remainder was
-;;; taken.
+;;; interleaved share, tests/test-conveniences-pending-*.sps: -execute,
+;;; -query, -query-row, -fold and -script, one a convenience, the fold's and
+;;; the script's split further by pass and by fuel, so each stays well under
+;;; the memory gate's limit (ADR-0005; ADR-0016). Chez's engine remainders are
+;;; multi-shot: R, one remainder of a call, resumed until it expires again, is
+;;; R1, and R can then be resumed again while R1 is pending. Each run of the
+;;; call goes on from where its remainder was taken.
 ;;;
-;;; The schedule, each trial on a fresh :memory: connection holding t, its rows
-;;; 1, 2 and 3, made through the statement tier, so the cache starts empty and the call's SQL
-;;; is a miss:
+;;; The schedule, each trial on a fresh :memory: connection holding t, its
+;;; rows 1, 2 and 3, made through the statement tier, so the cache starts
+;;; empty and the call's SQL is a miss:
 ;;;   - at fuel F, a fresh engine's remainder R;
 ;;;   - R resumed at G until it expires again, as R1;
 ;;;   - R resumed again to its end, then R1 to its end;
@@ -44,16 +44,16 @@
 ;;; suite registers them first, through tell-registered, and unregisters
 ;;; them last, through tell-reset, as tests/test-open-interleave.sps does.
 ;;; A libsqlite3 can refuse the registration: Apple's 3.51.0 answers 21,
-;;; SQLITE_MISUSE, for an entry point upstream takes. With no tell, no
-;;; prepare is noted, and nothing is unavailable silently (ADR-0005):
-;;; a row whose every check needs the tell, or that raises
-;;; SIGINT from the authorizer, goes through tell-available!, which prints
-;;; UNAVAILABLE and skips it; a row with one check that reads the notes
-;;; goes through tell-kept?, which prints UNAVAILABLE for that check, and
-;;; the row runs its others. The gate itself is held by an independent
-;;; reading: before the tell registers, tell-direct registers an entry point
-;;; that does nothing, straight through the FFI, and resets the list; a row
-;;; requires the gate to refuse exactly when that registration answered 21.
+;;; SQLITE_MISUSE, for an entry point upstream takes. With no tell, no prepare
+;;; is noted, and nothing is unavailable silently (ADR-0005): a row whose
+;;; every check needs the tell, or that raises SIGINT from the authorizer,
+;;; goes through tell-available!, which prints UNAVAILABLE and skips it; a row
+;;; with one check that reads the notes goes through tell-kept?, which prints
+;;; UNAVAILABLE for that check, and the row runs its others. The gate itself
+;;; is held by an independent reading: before the tell registers, tell-direct
+;;; registers an entry point that does nothing, straight through the FFI, and
+;;; resets the list; a row requires the gate to refuse exactly when that
+;;; registration answered 21.
 ;;; A gate forced to refuse passed every suite, printing UNAVAILABLE, with
 ;;; nothing to say it was wrong.
 ;;;
@@ -74,31 +74,31 @@
 ;;; costs the engine ticks there, so that remainder lies earlier than its
 ;;; fuel says: the bound reads only the trials whose first slice met none.
 ;;; A claim taken again once its call had ended made the whole window new
-;;; calls, and passed the bound once used, the fuel at which the call
-;;; refused at its first check completes, 72 for execute!, past the whole
-;;; call's 42. A control, the same call run at its fuel on a
-;;; connection with no cache, is no bound for a trial: a low trip moved it
-;;; from the trial, and no bound may come from a control run on the code
-;;; under test.
+;;; calls, and passed the bound once used, the fuel at which the call refused
+;;; at its first check completes, 72 for execute!, past the whole call's 42. A
+;;; control, the same call run at its fuel on a connection with no cache, is
+;;; no bound for a trial: a low trip moved it from the trial, and no bound may
+;;; come from a control run on the code under test.
 ;;;
 ;;; Two passes: every sweep runs with no collect request in a trial, and
 ;;; under a collect trip of 256 bytes, where a request due inside a critical
 ;;; section is handled at its exit and costs the engine ticks there, so R1
-;;; is taken at a section's exit too: a claim advanced just after its
-;;; section, not inside it, inserted execute!'s row twice there. The low pass fails by name unless
-;;; collect requests fell in its trials, unless some trial had R before the
-;;; give-back and R1 past it, unless each section that SQLite's trace forces
-;;; met its request before the next, which a trip slipped to 256 KiB does
-;;; not, and unless some first slice expired at such a section's exit, which
-;;; the high pass never does. The tell's authorizer forces each prepare's
-;;; section too, and the script's low rows fail by name unless some trial
-;;; had R before the call's first section, R1 at the first prepare's exit
-;;; and R's second run refused there by the claim, which a claim set split
-;;; from its compare would let prepare the statement again. The fold's low pass is a suite of its own,
+;;; is taken at a section's exit too: a claim advanced just after its section,
+;;; not inside it, inserted execute!'s row twice there. The low pass fails by
+;;; name unless collect requests fell in its trials, unless some trial had R
+;;; before the give-back and R1 past it, unless each section that SQLite's
+;;; trace forces met its request before the next, which a trip slipped to 256
+;;; KiB does not, and unless some first slice expired at such a section's
+;;; exit, which the high pass never does. The tell's authorizer forces each
+;;; prepare's section too, and the script's low rows fail by name unless some
+;;; trial had R before the call's first section, R1 at the first prepare's
+;;; exit and R's second run refused there by the claim, which a claim set
+;;; split from its compare would let prepare the statement again. The fold's
+;;; low pass is a suite of its own,
 ;;; tests/test-conveniences-pending-fold-low.sps, and the script's four,
-;;; tests/test-conveniences-pending-script-low-0.sps to -3.sps, each a
-;;; quarter of its fuels: two halves took 167 and 169 s under the gate, past
-;;; half its limit on CI's slower runners.
+;;; tests/test-conveniences-pending-script-low-0.sps to -3.sps, each a quarter
+;;; of its fuels: two halves took 167 and 169 s under the gate, past half its
+;;; limit on CI's slower runners.
 ;;;
 ;;; Which trials count: a trial interleaves when R1 exists. It is past the
 ;;; first section when the call had made its first section, the check-out's
@@ -120,10 +120,10 @@
 ;;; is next, unless the call has ended (the conveniences' with-checked-out).
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
-;;; the Scheme work between a call's sections. The loading
-;;; procedures are reached through eval, under a guard, as
-;;; tests/test-statement.sps reaches them; the foreign bindings come after
-;;; the load, in the library's body, each under a guard of its own.
+;;; the Scheme work between a call's sections. The loading procedures are
+;;; reached through eval, under a guard, as tests/test-statement.sps reaches
+;;; them; the foreign bindings come after the load, in the library's body,
+;;; each under a guard of its own.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of
 ;;; its own. Effects run in order, through let* and named lets, never map.
@@ -361,8 +361,8 @@
   ;; unavailable! : Any String (U String #f) -> Boolean
   ;; Whether ANSWER, tell-registered's, is the refusal; then the row NAME,
   ;; or its CHECK, the one part that reads the tell, is printed unavailable,
-  ;; so it is never passed unseen (ADR-0005). The one place both
-  ;; gates below decide.
+  ;; so it is never passed unseen (ADR-0005). The one place both gates below
+  ;; decide.
   (define (unavailable! answer name check)
     (let ((refused (tell-refused? answer)))
       (when refused
@@ -648,16 +648,16 @@
   ;; until the trial ends: a request then falls due all through it, and one
   ;; due inside a critical section is handled at the section's exit, where it
   ;; costs the engine ticks, so an expiry can fall at a section's exit, past
-  ;; the call's give-back among them. A request fell only
-  ;; where the call's allocation crossed a chunk, the same point at every fuel
-  ;; once each trial collects first, so in the low pass each trial's
-  ;; connection also carries SQLite's trace, whose callback allocates 32 KiB
-  ;; as a step answers a row and as a statement finishes: inside the step,
-  ;; and inside query-row's return. The tell's authorizer allocates 32 KiB
-  ;; too, inside each prepare. Past 32 KiB a collect request always fell
-  ;; inside a critical section under the low trip. Every request the trials
-  ;; meet goes through counted-request, which counts it, and the low rows
-  ;; judge where they fell (where a remainder lies, below).
+  ;; the call's give-back among them. A request fell only where the call's
+  ;; allocation crossed a chunk, the same point at every fuel once each trial
+  ;; collects first, so in the low pass each trial's connection also carries
+  ;; SQLite's trace, whose callback allocates 32 KiB as a step answers a row
+  ;; and as a statement finishes: inside the step, and inside query-row's
+  ;; return. The tell's authorizer allocates 32 KiB too, inside each prepare.
+  ;; Past 32 KiB a collect request always fell inside a critical section under
+  ;; the low trip. Every request the trials meet goes through counted-request,
+  ;; which counts it, and the low rows judge where they fell (where a
+  ;; remainder lies, below).
 
   (define low-trip 256)
 
@@ -682,18 +682,17 @@
   ;; once the section enables interrupts again. The handler's own work costs
   ;; the engine ticks. Where they run out in it, the engine's timer reads #f
   ;; at its end, and the engine expires as the handler returns: the remainder
-  ;; lies at that section's exit, before anything after it. A probe's marker,
-  ;; set inside a section and overwritten just after it, read the section's
+  ;; lies at that section's exit, before anything after it. A marker set
+  ;; inside a section and overwritten just after it reads the section's value
   ;; at exactly those fuels, three a section, at the low trip, and at none at
   ;; the high trip or at 256 KiB. So a low row fails by name unless every
-  ;; forced section met
-  ;; its request before the next forced section or its slice's end, which a
-  ;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-  ;; about one time in eight; and unless some first slice expired at a forced
-  ;; section's exit, which the high pass, forcing none, never does. Each first
-  ;; slice numbers the forced sections it passes, from 1, and the row shows
-  ;; whose exits were met. The timer is read through Chez's own $tc-field,
-  ;; reached through eval.
+  ;; forced section met its request before the next forced section or its
+  ;; slice's end, which a trip slipped to 256 KiB breaks, a 32 KiB allocation
+  ;; then meeting one about one time in eight; and unless some first slice
+  ;; expired at a forced section's exit, which the high pass, forcing none,
+  ;; never does. Each first slice numbers the forced sections it passes, from
+  ;; 1, and the row shows whose exits were met. The timer is read through
+  ;; Chez's own $tc-field, reached through eval.
 
   ;; tc-field, tc : (U Procedure #f)
   (define tc-field
@@ -1108,10 +1107,10 @@
   ;; between them (the script's, which one suite could not hold well under
   ;; the memory gate's limit). With PARITY (mod M K), only the fuels whose
   ;; remainder by M is K run every G: the script's low pass, half again as
-  ;; costly as its high one, runs in four suites, K from 0 to 3. Each trial is judged by what it saw itself,
-  ;; and a whole new call is bounded by the sweep's own refusals, never by a
-  ;; control, the same call run at its fuel on a connection with no cache,
-  ;; which a low trip moved from the trial.
+  ;; costly as its high one, runs in four suites, K from 0 to 3. Each trial is
+  ;; judged by what it saw itself, and a whole new call is bounded by the
+  ;; sweep's own refusals, never by a control, the same call run at its fuel
+  ;; on a connection with no cache, which a low trip moved from the trial.
   (define (sweep verb parity pass)
     (let ((c (call-of verb)))
       (define (every-g? fuel)
@@ -1188,13 +1187,12 @@
   ;; section reached PAST-A-FUEL a fuel on average, and those both past it
   ;; BOTH-A-FUEL, or none at all where it is none, over the fuels up to the
   ;; one at which the call completes: a sweep that reused one R across every
-  ;; G, its every trial after G = 1 refused at once, makes at most one trial
-  ;; a fuel; refusals at half the fuels at
-  ;; least, a third for query-failing, whose runs past the give-back raise
-  ;; its failure again rather than be refused; every whole new call, of a
-  ;; trial whose first slice met no collect
-  ;; request, below the first fuel at which a trial was refused, R taken
-  ;; before the call's first section; in the low pass, R before the
+  ;; G, its every trial after G = 1 refused at once, makes at most one trial a
+  ;; fuel; refusals at half the fuels at least, a third for query-failing,
+  ;; whose runs past the give-back raise its failure again rather than be
+  ;; refused; every whole new call, of a trial whose first slice met no
+  ;; collect request, below the first fuel at which a trial was refused, R
+  ;; taken before the call's first section; in the low pass, R before the
   ;; give-back and R1 past it in some trial, and low-judged's three; and the
   ;; counts once it was done.
   (define (reported verb parity pass past-a-fuel both-a-fuel)
@@ -1441,13 +1439,12 @@
   ;;
   ;; No tick falls between a call's return section and its give-back's
   ;; guard, so no timer's handler runs there; a keyboard interrupt that came
-  ;; pending inside the section is handled as it ends, there.
-  ;; SQLite's profile trace
-  ;; fires as a statement finishes, which for query-row is the reset inside
-  ;; its return: raising SIGINT from it puts the keyboard handler just after
-  ;; the call's last section. The handler takes the statement the return has
-  ;; just filed, so the call's claim must have ended with the return: a raise
-  ;; there gives nothing back.
+  ;; pending inside the section is handled as it ends, there. SQLite's profile
+  ;; trace fires as a statement finishes, which for query-row is the reset
+  ;; inside its return: raising SIGINT from it puts the keyboard handler just
+  ;; after the call's last section. The handler takes the statement the return
+  ;; has just filed, so the call's claim must have ended with the return: a
+  ;; raise there gives nothing back.
 
 
   ;; int (*xCallback)(unsigned, void *pCtx, void *P, void *X)

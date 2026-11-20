@@ -11,9 +11,9 @@
 ;;; packaging/floors.sexp, the one file that writes it: sqlite-floor must
 ;;; equal that file's SQLite floor as sqlite3_libversion_number writes it,
 ;;; and check-version must accept it and refuse the number one below it
-;;; (ADR-0008). A file and a library that disagree fail here, by
-;;; name. The literal rows stay, so a floor changed in both places at once is
-;;; a decision a reader of this suite sees.
+;;; (ADR-0008). A file and a library that disagree fail here, by name. The
+;;; literal rows stay, so a floor changed in both places at once is a decision
+;;; a reader of this suite sees.
 ;;;
 ;;; Which check runs first is native's order, not verify's.
 ;;;

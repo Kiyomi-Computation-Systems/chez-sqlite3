@@ -1,10 +1,10 @@
 #!r6rs
 ;;; The suite for the statement cache in its connection's record (ADR-0020),
-;;; through the internals: (chez-sqlite3 private
-;;; connection)'s record and its close, the capacity set by the settings'
-;;; statement-cache, and (chez-sqlite3 private statement)'s checked-out and
-;;; returned. The pure table is held by tests/test-statement-cache.sps; the
-;;; raises' who and depth are tests/test-statement-who.sps's.
+;;; through the internals: (chez-sqlite3 private connection)'s record and its
+;;; close, the capacity set by the settings' statement-cache, and
+;;; (chez-sqlite3 private statement)'s checked-out and returned. The pure
+;;; table is held by tests/test-statement-cache.sps; the raises' who and depth
+;;; are tests/test-statement-who.sps's.
 ;;;
 ;;;   the capacity  32 from open-database and call-with-database; their
 ;;;                 statement-cache setting takes 0, 1 and 1024 and refuses
@@ -341,8 +341,8 @@
           (list before (database-cache-count db)))))
 
 ;; --- the flags a miss prepares with -------------------------------------------------------------
-;; Measured on both libraries: ten held statements prepared with no flags take 70 lookaside
-;; slots, and SQLITE_PREPARE_PERSISTENT ones none.
+;; Measured on both libraries: ten held statements prepared with no flags take
+;; 70 lookaside slots, and SQLITE_PREPARE_PERSISTENT ones none.
 
 ;; held-lookaside : Natural -> Any
 ;; Ten statements of distinct SQL checked out and held on a connection of
@@ -526,8 +526,8 @@
          (c (close-database! db)))
     (list (statement-state a) (statement-state b) (database-cache-count db) (native-counts))))
 
-;; Measured on both libraries: a
-;; backup reading from the connection makes sqlite3_close answer 5.
+;; Measured on both libraries: a backup reading from the connection makes
+;; sqlite3_close answer 5.
 (test-equal "a close that fails, held by a backup, empties the cache all the same: the close raises busy, the connection stays open, the cached statement is finalized, the cache holds none, and the next check-out of its SQL prepares afresh, ready"
   (list 'backup (list 'raised (list 'sqlite-error 'close-database! 'busy 'busy #f #f))
         'finalized 0 'another-statement 'ready 'closed zero-counts)

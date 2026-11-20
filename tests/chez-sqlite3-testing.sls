@@ -67,9 +67,9 @@
   ;;   suite-exit-status: the NAME check passed: TEXT
   ;;   suite-exit-status: exit 1 (the NAME check failed): TEXT
   ;;   suite-exit-status: the NAME check is unavailable: TEXT
-  ;; Unavailable fails nothing, and is never silent (ADR-0005). A
-  ;; check that raises, or answers anything else, has failed, and its line
-  ;; says what it raised or answered.
+  ;; Unavailable fails nothing, and is never silent (ADR-0005). A check that
+  ;; raises, or answers anything else, has failed, and its line says what it
+  ;; raised or answered.
   (define (suite-exit-status runner)
     (unless (test-runner? runner)
       (assertion-violation 'suite-exit-status "not a SRFI-64 test runner" runner))

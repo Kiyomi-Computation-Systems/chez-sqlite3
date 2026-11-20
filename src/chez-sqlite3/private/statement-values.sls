@@ -69,17 +69,16 @@
 ;;; and a value bind-plan refuses, by raise-bind-refusal's rule.
 ;;;
 ;;; The internals (ADR-0013; ADR-0016): each verb's work for a WHO, which
-;;; everything it raises names, the verb itself a thin wrapper passing its
-;;; own name: bind!/who, bind-all!/who, clear-bindings!/who,
-;;; column-value/who, column-bytevector/who and column-name/who. And
-;;; bind-each!/who, which the conveniences bind through: bind-all!'s rule,
-;;; every value checked before any is bound, with each value bound in a
-;;; critical section of its own, each of its sections reading the
-;;; convenience's call's flag first, through (chez-sqlite3 private
-;;; statement)'s while-held. And bind-each!/at, its work as data, each
-;;; section made by its caller's sectioner: execute!, query and query-row's
-;;; claim on their call, at the run's position (ADR-0016); bind-each!/who is
-;;; it, each section by while-held.
+;;; everything it raises names, the verb itself a thin wrapper passing its own
+;;; name: bind!/who, bind-all!/who, clear-bindings!/who, column-value/who,
+;;; column-bytevector/who and column-name/who. And bind-each!/who, which the
+;;; conveniences bind through: bind-all!'s rule, every value checked before
+;;; any is bound, with each value bound in a critical section of its own, each
+;;; of its sections reading the convenience's call's flag first, through
+;;; (chez-sqlite3 private statement)'s while-held. And bind-each!/at, its work
+;;; as data, each section made by its caller's sectioner: execute!, query and
+;;; query-row's claim on their call, at the run's position (ADR-0016);
+;;; bind-each!/who is it, each section by while-held.
 (library (chez-sqlite3 private statement-values)
   (export bind! bind-all! clear-bindings! column-value column-bytevector column-name
           bind!/who bind-all!/who bind-each!/who bind-each!/at clear-bindings!/who
@@ -262,11 +261,11 @@
 
   ;; bind! : Statement (U Positive-Integer String) Value -> Void
   ;; VALUE bound to ST's PARAMETER: an index from 1 to (parameter-count ST),
-  ;; or a name with its sigil, ":name", as the SQL writes it. Allowed in
-  ;; ready only (ADR-0014). A parameter or value refused is an
-  ;; assertion violation before C, by its rule; a bind SQLite refuses, such
-  ;; as TOOBIG over its length limit, raises &sqlite-error with ST's SQL,
-  ;; the parameter then NULL and the state ready (ADR-0015).
+  ;; or a name with its sigil, ":name", as the SQL writes it. Allowed in ready
+  ;; only (ADR-0014). A parameter or value refused is an assertion violation
+  ;; before C, by its rule; a bind SQLite refuses, such as TOOBIG over its
+  ;; length limit, raises &sqlite-error with ST's SQL, the parameter then NULL
+  ;; and the state ready (ADR-0015).
   (define (bind! st parameter value)
     (bind!/who 'bind! st parameter value))
 
@@ -497,8 +496,8 @@
   ;; FLOAT a flonum, TEXT a string decoded strictly, BLOB a fresh bytevector,
   ;; NULL sql-null. Allowed in row only. TEXT that is not well-formed UTF-8
   ;; raises &sqlite-invalid-text, and column-bytevector reads its bytes. A
-  ;; read SQLite answers with NOMEM leaves ST failed and raises
-  ;; &sqlite-error nomem, once (ADR-0015; ADR-0014).
+  ;; read SQLite answers with NOMEM leaves ST failed and raises &sqlite-error
+  ;; nomem, once (ADR-0015; ADR-0014).
   (define (column-value st column)
     (column-value/who 'column-value st column))
 

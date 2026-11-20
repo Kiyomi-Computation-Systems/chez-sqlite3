@@ -45,13 +45,12 @@
 ;;; loaded the extension first and stays open, keeps the file loaded, so the
 ;;; count reads across trials, each trial's inits the count's growth over
 ;;; it, read on the pin. An engine spends no ticks inside a critical
-;;; section, so the fuels measure the Scheme work between the call's
-;;; sections. Each fuel and tick begins with a collection,
-;;; collect-trip-bytes raised far above what its runs allocate, so no
-;;; collect request falls in them, but in the low pass, which lowers the
-;;; trip on purpose. Each bound on a whole new call is a refusal the sweep
-;;; sees itself, never a refused call's fuel, a control run on the code
-;;; under test, or a caller's count.
+;;; section, so the fuels measure the Scheme work between the call's sections.
+;;; Each fuel and tick begins with a collection, collect-trip-bytes raised far
+;;; above what its runs allocate, so no collect request falls in them, but in
+;;; the low pass, which lowers the trip on purpose. Each bound on a whole new
+;;; call is a refusal the sweep sees itself, never a refused call's fuel, a
+;;; control run on the code under test, or a caller's count.
 ;;;
 ;;; Where the library lacks sqlite3_load_extension, no connection can opt
 ;;; in: each row is printed unavailable, and the open's refusal asserted in
@@ -316,13 +315,16 @@
             (native-counts)))))
 
 ;; --- the two passes -----------------------------------------------------------------------------
-;; Pass = (U 'high 'low) Each trial begins with begun!: quieted!'s collection, then PASS's trip. In
-;; the high pass it stays at 2^27, so no collect request falls in a trial. In the low pass it is
-;; 256 bytes, below what one call allocates, until the trial ends: a request then falls due all
-;; through it, and one due inside a critical section is handled at the section's exit, where it
-;; costs the engine ticks. So an expiry can fall just past the load's section, the call's last
-;; work, which no procedure call follows: there alone are remainders taken past it. Each trial is
-;; judged by what it saw itself, and each bound is a refusal the sweep saw.
+;; Pass = (U 'high 'low)
+;; Each trial begins with begun!: quieted!'s collection, then PASS's trip. In
+;; the high pass it stays at 2^27, so no collect request falls in a trial. In
+;; the low pass it is 256 bytes, below what one call allocates, until the
+;; trial ends: a request then falls due all through it, and one due inside a
+;; critical section is handled at the section's exit, where it costs the
+;; engine ticks. So an expiry can fall just past the load's section, the
+;; call's last work, which no procedure call follows: there alone are
+;; remainders taken past it. Each trial is judged by what it saw itself, and
+;; each bound is a refusal the sweep saw.
 
 (define low-trip 256)
 

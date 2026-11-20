@@ -39,9 +39,9 @@
 ;;; process-wide, and the two-engine sweeps tests/test-statement-values-sections.sps's.
 ;;;
 ;;; The loading procedures are reached through eval, under a guard, as
-;;; tests/test-statement.sps reaches them: a refused library fails the rows
-;;; by name. SQLite's answers are
-;;; measured on both libraries before a row asserts them.
+;;; tests/test-statement.sps reaches them: a refused library fails the rows by
+;;; name. SQLite's answers are measured on both libraries before a row asserts
+;;; them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
@@ -700,9 +700,9 @@
 
 ;; --- a bind SQLite refuses -----------------------------------------------------------------------
 ;; SQLITE_LIMIT_LENGTH is lowered after the prepare, since it holds the
-;; statement's column names at prepare too, and to 30,
-;; the smallest 3.53.1 keeps; the floor keeps it too. 30 bytes then bind on
-;; both, and 31 answer SQLITE_TOOBIG.
+;; statement's column names at prepare too, and to 30, the smallest 3.53.1
+;; keeps; the floor keeps it too. 30 bytes then bind on both, and 31 answer
+;; SQLITE_TOOBIG.
 
 (define (text-of n) (make-string n #\a))
 (define (bytes-of n) (make-bytevector n 98))

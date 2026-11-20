@@ -1,9 +1,9 @@
 #!r6rs
 ;;; (foreign-conventions): the calling conventions and types chez-sqlite3's
 ;;; foreign procedures must carry, and a reader that finds the ones they do
-;;; (ADR-0011). Test-only: it lives in tests/, and
-;;; tests/test-conventions.sps is its suite. tests/test-constants.sps holds
-;;; each row's C prototype to sqlite3.h.
+;;; (ADR-0011). Test-only: it lives in tests/, and tests/test-conventions.sps
+;;; is its suite. tests/test-constants.sps holds each row's C prototype to
+;;; sqlite3.h.
 ;;;
 ;;;   conventions-table    one row per binding: its C name, its C prototype
 ;;;                        in sqlite3.h's own spelling, its Chez argument
@@ -34,10 +34,10 @@
 ;;; and allows these: the head of a form it reads; the entry of a library's
 ;;; (import (only (chezscheme) ...)) clause; and one (syntax
 ;;; foreign-procedure) in a fender of each binder's syntax-case,
-;;; (define-syntax bind-required ...)'s and (define-syntax
-;;; bind-optional ...)'s. Each other is a (stray-reference FILE). A form
-;;; bind-optional wraps is read as one bind-required wraps is: the scan reads
-;;; every form, whatever binds it.
+;;; (define-syntax bind-required ...)'s and (define-syntax bind-optional
+;;; ...)'s. Each other is a (stray-reference FILE). A form bind-optional wraps
+;;; is read as one bind-required wraps is: the scan reads every form, whatever
+;;; binds it.
 ;;;
 ;;; A convention is read from what precedes a form's entry, exactly
 ;;; (convention-forms): nothing is plain, __collect_safe alone is
@@ -66,20 +66,21 @@
   ;;   RESULT      Symbol: the Chez result type
   ;;   CONVENTION  collect-safe, plain or variadic (convention-forms)
   ;;   RECORDS     (Listof String): each begins with the record it cites
-  ;; In ADR-0002's order: the first 15, then 21, then five, then
-  ;; three, the required sqlite3_db_config and sqlite3_free, then the
-  ;; optional sqlite3_load_extension, whose records say it is optional.
+  ;; In ADR-0002's order: the load's 15, then the statement tier's 21, then
+  ;; the change counters, autocommit and interrupt, then the settings and
+  ;; extension calls, the required sqlite3_db_config and sqlite3_free, then
+  ;; the optional sqlite3_load_extension, whose records say it is optional.
   ;; Every call that can block is collect-safe: sqlite3_open_v2,
   ;; sqlite3_close, sqlite3_prepare_v3, sqlite3_step, sqlite3_reset,
-  ;; sqlite3_finalize and sqlite3_load_extension.
-  ;; sqlite3_db_config is variadic, and plain. Every other binding is plain,
-  ;; the five counter and interrupt entry points among them (ADR-0011). A
-  ;; prototype that ends "..." is a variadic function's: its named parameters are the row's
+  ;; sqlite3_finalize and sqlite3_load_extension. sqlite3_db_config is
+  ;; variadic, and plain. Every other binding is plain, the change counters,
+  ;; autocommit and interrupt among them (ADR-0011). A prototype that ends
+  ;; "..." is a variadic function's: its named parameters are the row's
   ;; leading arguments, and test-constants holds their count to the
-  ;; convention's (ADR-0001). No binding takes a Scheme object:
-  ;; every argument is an integer, a flonum or the address of a block we
-  ;; allocated, SQLITE_TRANSIENT is a pointer-width integer, and a string or
-  ;; blob SQLite returns is an address we read ourselves (ADR-0011).
+  ;; convention's (ADR-0001). No binding takes a Scheme object: every argument
+  ;; is an integer, a flonum or the address of a block we allocated,
+  ;; SQLITE_TRANSIENT is a pointer-width integer, and a string or blob SQLite
+  ;; returns is an address we read ourselves (ADR-0011).
   (define conventions-table
     '(("sqlite3_libversion_number" ("int" ()) () int plain
        ("ADR-0011 decision 5: it cannot block, so it is plain"

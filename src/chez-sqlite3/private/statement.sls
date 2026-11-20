@@ -3,8 +3,9 @@
 ;;; finalize, owned by their connection (ADR-0014; ADR-0010).
 ;;; (chez-sqlite3) exports its public verbs; call-with-statement-handle, the
 ;;; one way to a statement's handle, is (chez-sqlite3 private
-;;; statement-values)' too, and statement-state and sql-length-fits? are
-;;; exported for the suites.
+;;; statement-values)' too; statement-state is (chez-sqlite3 private
+;;; transaction)'s and the suites'; and sql-length-fits? is exported for the
+;;; suites.
 ;;;
 ;;; A statement is a statement record, opaque and sealed, holding the
 ;;; sqlite3_stmt* as an integer, #f once finalized; its database; a copy of
@@ -40,15 +41,15 @@
 ;;;
 ;;;   prepare   the SQL copied, then checked: a string; no U+0000, which C
 ;;;             would read as its end; at most 2^31-2 bytes of UTF-8, so its
-;;;             nByte, the bytes and their NUL, fits C's int (ADR-0011).
-;;;             Each before anything is allocated. Then
-;;;             sqlite3_prepare_v3, with no flags; a failure raises
-;;;             &sqlite-error with the SQL and the offset as a character
-;;;             index, #f for -1; a NULL statement is refused, no-statement;
-;;;             the tail is scanned (sql-tail-statement), never prepared, and
-;;;             anything there is refused, more-than-one-statement, at its
-;;;             character index, once the statement is finalized. Else the
-;;;             statement is counted, tracked by its connection, and ready.
+;;;             nByte, the bytes and their NUL, fits C's int (ADR-0011). Each
+;;;             before anything is allocated. Then sqlite3_prepare_v3, with no
+;;;             flags; a failure raises &sqlite-error with the SQL and the
+;;;             offset as a character index, #f for -1; a NULL statement is
+;;;             refused, no-statement; the tail is scanned
+;;;             (sql-tail-statement), never prepared, and anything there is
+;;;             refused, more-than-one-statement, at its character index, once
+;;;             the statement is finalized. Else the statement is counted,
+;;;             tracked by its connection, and ready.
 ;;;   step!     sqlite3_step: row gives #t, done #f, anything else failed and
 ;;;             &sqlite-error from the step's own code, which is extended,
 ;;;             with the statement's SQL and no offset
@@ -361,8 +362,7 @@
   ;; no string, a copy holding U+0000, and one of more than sql-max-bytes
   ;; bytes, are assertion violations from WHO, before anything is allocated.
   ;; The caller's string is copied first and the copy alone is checked and
-  ;; prepared, so another thread cannot change it between the two
-  ;; (ADR-0011).
+  ;; prepared, so another thread cannot change it between the two (ADR-0011).
   (define (checked-sql who sql)
     (unless (string? sql)
       (assertion-violation who "SQL is a string" 'not-a-string (shown-value sql)))
@@ -489,8 +489,8 @@
   ;;
   ;; A script's statements are prepared one at a time from one block, the
   ;; script's whole C string, which execute-script! holds for its loop
-  ;; (ADR-0016): so the script is copied once, not once a
-  ;; statement, and each prepare passes the address of its statement's start.
+  ;; (ADR-0016): so the script is copied once, not once a statement, and each
+  ;; prepare passes the address of its statement's start.
   ;; The script is checked once, by checked-sql, before its block is made.
 
   ;; check-on-made : Symbol Any -> Void
@@ -847,8 +847,8 @@
   ;; state, read in that section:
   ;;   - finalized, or its connection closed: nothing, a miss;
   ;;   - failed, by its step or a read: finalized there, never kept, so the
-  ;;     next prepare reads the schema afresh (ADR-0020); the
-  ;;     finalize repeats the failure's code, which raises nothing again;
+  ;;     next prepare reads the schema afresh (ADR-0020); the finalize repeats
+  ;;     the failure's code, which raises nothing again;
   ;;   - else reset, its bindings cleared, and filed as the cache's most
   ;;     recent, under its own SQL copy. The table answers what to finalize:
   ;;     the least recently used, evicted from a full cache; or ST itself,

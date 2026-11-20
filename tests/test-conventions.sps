@@ -1,8 +1,8 @@
 #!r6rs
-;;; The convention suite (ADR-0011): every foreign-procedure form
-;;; under src/, read as data, held to a table with one row per binding. It
-;;; never loads libsqlite3. tests/test-constants.sps holds each row's C
-;;; prototype to sqlite3.h, and the map from its C types to its Chez types.
+;;; The convention suite (ADR-0011): every foreign-procedure form under src/,
+;;; read as data, held to a table with one row per binding. It never loads
+;;; libsqlite3. tests/test-constants.sps holds each row's C prototype to
+;;; sqlite3.h, and the map from its C types to its Chez types.
 ;;;
 ;;;   the table      written-out names and conventions, so a table loosened
 ;;;                  with the binding it holds still fails; each row's shape;
@@ -73,10 +73,9 @@
 
 ;; expected-names : (Listof String)
 ;; ADR-0002's order: the report's three, the threadsafe answer,
-;; sqlite3_initialize, then the rest of the first required list, then the
-;; statement tier's 21, then the five of the change counters, autocommit and
-;; interrupt, then the two required and one optional of the settings and
-;; extension calls (ADR-0002).
+;; sqlite3_initialize, then the rest of the load's 15, then the statement
+;; tier's 21, then the change counters, autocommit and interrupt, then the
+;; settings and extension calls, two required and one optional.
 (define expected-names
   '("sqlite3_libversion_number" "sqlite3_libversion" "sqlite3_sourceid"
     "sqlite3_threadsafe" "sqlite3_initialize"
@@ -280,8 +279,8 @@
   (map row-convention table))
 
 ;; ADR-0002: the optional entry point's row says it is optional, and no
-;; required one's does. The words, not "optional" alone, which
-;; "bind-optional" holds too.
+;; required one's does. The words, not "optional" alone, which "bind-optional"
+;; holds too.
 (test-equal "table: the rows whose records say \"an optional entry point\" are exactly the optional entry points', sqlite3_load_extension's"
   optional-names
   (map row-name
@@ -593,10 +592,11 @@
                                                   (with-field (car (rows-named '("sqlite3_bind_int64")))
                                                               'arguments '(uptr int int))))))))
 
-;; The change counters, autocommit and interrupt calls, written out, so that a table
-;; loosened with the bindings it holds still fails. Each takes a handle, a uptr. The three
-;; counters answer sqlite3_int64, get_autocommit an int and the interrupt void, and none
-;; can block, so each is plain (ADR-0011).
+;; The change counters, autocommit and interrupt, written out, so that a
+;; table loosened with the bindings it holds still fails. Each takes a
+;; handle, a uptr. The three counters answer sqlite3_int64, get_autocommit an
+;; int and the interrupt void, and none can block, so each is plain
+;; (ADR-0011).
 (define m3-five
   '(("sqlite3_changes64" (uptr) integer-64 plain)
     ("sqlite3_total_changes64" (uptr) integer-64 plain)
@@ -642,10 +642,10 @@
          ("sqlite3_last_insert_rowid" . int) ("sqlite3_get_autocommit" . integer-64)
          ("sqlite3_interrupt" . int))))
 
-;; The last three, written out (ADR-0021): sqlite3_db_config in the shape (db
-;; op int int*), variadic and plain; sqlite3_free of a pointer, plain;
-;; sqlite3_load_extension of a handle, a path, an entry point and a message's
-;; slot, __collect_safe.
+;; The settings and extension calls, written out (ADR-0021):
+;; sqlite3_db_config in the shape (db op int int*), variadic and plain;
+;; sqlite3_free of a pointer, plain; sqlite3_load_extension of a handle, a
+;; path, an entry point and a message's slot, __collect_safe.
 (define m4-three
   '(("sqlite3_db_config" (uptr int int uptr) int variadic)
     ("sqlite3_free" (uptr) void plain)

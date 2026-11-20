@@ -1,17 +1,17 @@
 #!r6rs
-;;; The four statement calls that can block, held by behaviour: prepare,
-;;; step, reset and finalize are __collect_safe (ADR-0011), so
-;;; another thread's collection runs while one waits in SQLite's busy handler.
+;;; The four statement calls that can block, held by behaviour: prepare, step,
+;;; reset and finalize are __collect_safe (ADR-0011), so another thread's
+;;; collection runs while one waits in SQLite's busy handler.
 ;;;
 ;;; Each row makes the call block, on a thread of its own, with a busy
 ;;; timeout of 4000 ms and a second connection's lock: a prepare on a fresh
 ;;; connection, under another's begin exclusive; a plain insert's step, under
 ;;; another's read; and the reset and the finalize of an insert ... returning
 ;;; stepped once, under another's read. Measured on 3.53.1 and 3.45.1 alike
-;;; (at 1500 ms): each waited the timeout and
-;;; answered 5. Bound plain, another thread's collect-rendezvous took the
-;;; rest of the timeout, and ended after the call had returned; bound
-;;; __collect_safe, it took 0 or 1 ms, while the call was still blocked.
+;;; (at 1500 ms): each waited the timeout and answered 5. Bound plain, another
+;;; thread's collect-rendezvous took the rest of the timeout, and ended after
+;;; the call had returned; bound __collect_safe, it took 0 or 1 ms, while the
+;;; call was still blocked.
 ;;;
 ;;; So each row, 1000 ms into the block, collects on this thread, and asserts
 ;;; that the collection ended within 1500 ms: by 2500 ms into a block of

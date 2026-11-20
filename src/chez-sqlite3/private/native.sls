@@ -28,9 +28,10 @@
 ;;;                  with SQLITE_OMIT_AUTOINIT, where the application must. An
 ;;;                  answer but SQLITE_OK is load-failed
 ;;;   7. the rest    every other required entry point, eagerly, in ADR-0002's
-;;;                  order: sqlite3_compileoption_used and _get, the open and
-;;;                  the close, the error readers, sqlite3_next_stmt and
-;;;                  sqlite3_memory_used, then
+;;;                  order: the rest of the load's 15,
+;;;                  sqlite3_compileoption_used and _get, the open and the
+;;;                  close, the error readers, sqlite3_next_stmt and
+;;;                  sqlite3_memory_used; the statement tier's 21,
 ;;;                  sqlite3_prepare_v3, sqlite3_finalize, sqlite3_step,
 ;;;                  sqlite3_reset, sqlite3_clear_bindings,
 ;;;                  sqlite3_bind_parameter_count,
@@ -41,15 +42,15 @@
 ;;;                  sqlite3_column_type, sqlite3_column_int64,
 ;;;                  sqlite3_column_double, sqlite3_column_text,
 ;;;                  sqlite3_column_blob, sqlite3_column_bytes and
-;;;                  sqlite3_error_offset, then
-;;;                  sqlite3_changes64, sqlite3_total_changes64,
+;;;                  sqlite3_error_offset; the change counters, autocommit and
+;;;                  interrupt, sqlite3_changes64, sqlite3_total_changes64,
 ;;;                  sqlite3_last_insert_rowid, sqlite3_get_autocommit and
-;;;                  sqlite3_interrupt, then
-;;;                  sqlite3_db_config and sqlite3_free; then the one optional
-;;;                  entry point, sqlite3_load_extension, bound by
-;;;                  bind-optional where the library has it and #f where it
-;;;                  has not, never refused, and load-extension-available?,
-;;;                  native's record of it
+;;;                  sqlite3_interrupt; and the settings and extension calls'
+;;;                  two required, sqlite3_db_config and sqlite3_free; then
+;;;                  the one optional entry point, sqlite3_load_extension,
+;;;                  bound by bind-optional where the library has it and #f
+;;;                  where it has not, never refused, and
+;;;                  load-extension-available?, native's record of it
 ;;;   8. the check   sqlite3_memory_used read once, the baseline, and the
 ;;;                  check against it registered with the counters, for
 ;;;                  suite-exit-status (chez-sqlite3 private memory-check)
@@ -101,15 +102,14 @@
 ;;; sqlite3_finalize, measured waiting 1502 ms in the busy handler under
 ;;; another connection's read; and sqlite3_load_extension, whose dlopen waited
 ;;; on a FIFO for a writer. Every other binding is plain: no measurement or
-;;; documentation shows one waiting (ADR-0011). sqlite3_db_config is
-;;; variadic, int sqlite3_db_config(sqlite3*, int op, ...), and its binding
-;;; carries Chez's __varargs_after convention with the count of its named
-;;; parameters, two, before its entry: Apple arm64 passes variadic arguments
-;;; where named ones never go, and without it the call crashes there, where
-;;; x86-64 answers alike either way (ADR-0001). Its one shape is
-;;; (db op int int*), and it is plain: a set never waits (ADR-0021).
-;;; make check-variadic removes the convention in a copy and
-;;; watches test-conventions fail.
+;;; documentation shows one waiting (ADR-0011). sqlite3_db_config is variadic,
+;;; int sqlite3_db_config(sqlite3*, int op, ...), and its binding carries
+;;; Chez's __varargs_after convention with the count of its named parameters,
+;;; two, before its entry: Apple arm64 passes variadic arguments where named
+;;; ones never go, and without it the call crashes there, where x86-64 answers
+;;; alike either way (ADR-0001). Its one shape is (db op int int*), and it is
+;;; plain: no set waited in any measurement (ADR-0021). make check-variadic
+;;; removes the convention in a copy and watches test-conventions fail.
 ;;; sqlite-transient is SQLITE_TRANSIENT, the destructor that makes SQLite
 ;;; copy a bound value: a pointer whose bits are all ones, computed from the
 ;;; pointer's size (ADR-0001).
@@ -131,14 +131,14 @@
 ;;; library may read or write foreign memory (check-seam).
 ;;; Each block is freed when PROC returns, raises or escapes, and a PROC
 ;;; re-entered after that raises. Each helper that takes a WHO is given the
-;;; name of the public procedure it serves, so its refusals name that one
-;;; (ADR-0013), and names a refused value by shown-value, never a string's
-;;; text (ADR-0013). None raises inside the critical thunks that make and free
-;;; its block: a raise there would reach a with-exception-handler handler with
-;;; interrupts still disabled. An engine's expiry unwinds the extent and frees
-;;; the block, and its resume is a re-entry, so a caller under engines holds
-;;; the whole extent in one critical section, and raises what it caught there
-;;; after it: (chez-sqlite3 private connection)'s open, report's
+;;; name of the public procedure it serves, so its refusals name that one,
+;;; and names a refused value by shown-value, never a string's text
+;;; (ADR-0013). None raises inside the critical thunks that make and free its
+;;; block: a raise there would reach a with-exception-handler handler with
+;;; interrupts still disabled. An engine's expiry unwinds the extent and
+;;; frees the block, and its resume is a re-entry, so a caller under engines
+;;; holds the whole extent in one critical section, and raises what it
+;;; caught there after it: (chez-sqlite3 private connection)'s open, report's
 ;;; sqlite-compile-option?, and the statement verbs, inside
 ;;; call-with-statement-handle's section.
 ;;;
@@ -152,8 +152,8 @@
 ;;;                answered other than SQLITE_OK (detail: its code)
 ;;;   missing-api  a required entry point is absent (detail: its C name)
 ;;;
-;;; The handle, its thread and its count are (chez-sqlite3)'s:
-;;; the raw bindings here take any integer, and are private (ADR-0009).
+;;; The handle, its thread and its count are (chez-sqlite3)'s: the raw
+;;; bindings here take any integer, and are private (ADR-0009).
 (library (chez-sqlite3 private native)
   (export loaded-libsqlite3 loaded-threadsafe
           sqlite3-open-v2 sqlite3-close sqlite3-errmsg sqlite3-errstr sqlite3-errcode
@@ -253,11 +253,11 @@
   ;; (bind-optional (foreign-procedure CONVENTION ... ENTRY (ARG-TYPE ...) RESULT-TYPE))
   ;; The foreign-procedure form's value when the loaded library has ENTRY, by
   ;; foreign-entry?, and #f when it has not: an optional entry point, whose
-  ;; absence is recorded, never refused (ADR-0002). The
-  ;; form is evaluated only once ENTRY is found, so Chez's "no entry for"
-  ;; never fires. As bind-required, the form is the binding, literal at its
-  ;; use, the name checked the one it binds, and anything else in its place
-  ;; is a syntax violation. Internal, as bind-required is.
+  ;; absence is recorded, never refused (ADR-0002). The form is evaluated only
+  ;; once ENTRY is found, so Chez's "no entry for" never fires. As
+  ;; bind-required, the form is the binding, literal at its use, the name
+  ;; checked the one it binds, and anything else in its place is a syntax
+  ;; violation. Internal, as bind-required is.
   (define-syntax bind-optional
     (lambda (x)
       (syntax-case x ()
@@ -272,8 +272,8 @@
   ;; SQLITE_TRANSIENT, ((sqlite3_destructor_type)-1): a pointer whose bits are
   ;; all ones, as a uptr reads it. Given as the destructor of a bound TEXT or
   ;; BLOB, it makes SQLite copy the value before the bind returns, so the
-  ;; block can be freed after (ADR-0001, ADR-0015). Computed from
-  ;; the pointer's size, never written for one width.
+  ;; block can be freed after (ADR-0001, ADR-0015). Computed from the
+  ;; pointer's size, never written for one width.
   (define sqlite-transient
     (- (bitwise-arithmetic-shift-left 1 (* 8 (foreign-sizeof 'uptr))) 1))
 
@@ -428,11 +428,11 @@
   ;; foreign-bytes : Natural Natural -> Bytevector
   ;; The N bytes at ADDRESS, read with foreign-ref, in a fresh bytevector:
   ;; what sqlite3_column_text or _blob points to, for sqlite3_column_bytes'
-  ;; count (ADR-0011). N of 0 answers an empty one, and reads
-  ;; nothing, NULL included. An ADDRESS or an N that is no exact natural,
-  ;; and NULL with N above 0, are assertion violations from foreign-bytes,
-  ;; their irritants the field, address or count, then the value by
-  ;; shown-value, or null-address and N.
+  ;; count (ADR-0011). N of 0 answers an empty one, and reads nothing, NULL
+  ;; included. An ADDRESS or an N that is no exact natural, and NULL with N
+  ;; above 0, are assertion violations from foreign-bytes, their irritants the
+  ;; field, address or count, then the value by shown-value, or null-address
+  ;; and N.
   (define (foreign-bytes address n)
     (unless (exact-natural? address)
       (assertion-violation 'foreign-bytes "an address is an exact non-negative integer"
@@ -454,13 +454,13 @@
   ;; bytes holding BYTES' N bytes, written with foreign-set!, freed once PROC
   ;; returns, raises or escapes, by call-with-block: a bound TEXT's UTF-8, a
   ;; U+0000 kept, or a BLOB (ADR-0015). An empty BYTES gets a block of one
-  ;; byte, written 0, so the address is never NULL, which SQLite would bind
-  ;; as NULL (ADR-0011). BYTES is the caller's, and
-  ;; mutable, so it is copied first, and the copy alone written. A WHO that
-  ;; is no symbol is an assertion violation from call-with-bytes; a BYTES
-  ;; that is no bytevector, and a PROC that is no procedure, from WHO; each
-  ;; named by shown-value, before anything is allocated. Re-entering PROC
-  ;; after the free raises from WHO.
+  ;; byte, written 0, so the address is never NULL, which SQLite would bind as
+  ;; NULL (ADR-0011). BYTES is the caller's, and mutable, so it is copied
+  ;; first, and the copy alone written. A WHO that is no symbol is an
+  ;; assertion violation from call-with-bytes; a BYTES that is no bytevector,
+  ;; and a PROC that is no procedure, from WHO; each named by shown-value,
+  ;; before anything is allocated. Re-entering PROC after the free raises from
+  ;; WHO.
   (define (call-with-bytes who bytes proc)
     (check-who 'call-with-bytes who)
     (unless (bytevector? bytes)
@@ -511,14 +511,13 @@
   ;; PROC given the address of a counted block of an int's size, written FILL
   ;; first, so a call that writes nothing reads FILL back. The fill is the
   ;; caller's, a sentinel no call writes, for sqlite3_db_config's cell, which
-  ;; a set writes 0 or 1 (ADR-0021); the helper has no fill of
-  ;; its own. The cell is freed once PROC returns, raises or escapes, by
-  ;; call-with-block, and re-entering PROC after the free raises from WHO. A
-  ;; WHO that is no symbol is an assertion violation from call-with-int-cell;
-  ;; a FILL that no C int holds, and a PROC that is no procedure, from WHO,
-  ;; each named by shown-value, before anything is allocated. A caller under
-  ;; engines holds the whole extent in one critical section, as it holds a C
-  ;; string's.
+  ;; a set writes 0 or 1 (ADR-0021); the helper has no fill of its own. The
+  ;; cell is freed once PROC returns, raises or escapes, by call-with-block,
+  ;; and re-entering PROC after the free raises from WHO. A WHO that is no
+  ;; symbol is an assertion violation from call-with-int-cell; a FILL that no
+  ;; C int holds, and a PROC that is no procedure, from WHO, each named by
+  ;; shown-value, before anything is allocated. A caller under engines holds
+  ;; the whole extent in one critical section, as it holds a C string's.
   (define (call-with-int-cell who fill proc)
     (check-who 'call-with-int-cell who)
     (unless (c-int? fill)
@@ -942,7 +941,7 @@
      (bind-required report
        (foreign-procedure "sqlite3_interrupt" (uptr) void))))
 
-  ;; The settings' and the extensions': two required and one optional
+  ;; The settings and extension calls: two required and one optional
   ;; (ADR-0002; ADR-0021).
 
   ;; sqlite3-db-config : Positive-Integer Integer Integer Positive-Integer -> Integer
@@ -976,8 +975,8 @@
   ;; handle, the path's C string, the entry point's or 0 for SQLite's own
   ;; search, and an out-pointer's slot, which gets SQLite's message on a
   ;; failure, for sqlite3-free. The code. It can block, in dlopen's open of
-  ;; the file, so it is __collect_safe (ADR-0011). #f on
-  ;; a library without it, as Apple's is.
+  ;; the file, so it is __collect_safe (ADR-0011). #f on a library without it,
+  ;; as Apple's is.
   (define sqlite3-load-extension
     (load-step
      (bind-optional

@@ -27,9 +27,9 @@
 ;;;                handled at its exit and costs the engine ticks there, so R1
 ;;;                is taken at a section's exit too: a claim advanced just
 ;;;                after its section, not inside it, inserted execute!'s row
-;;;                twice there. SQLite's
-;;;                trace allocates 32 KiB inside each section that steps a
-;;;                row or finishes a statement, so a request falls due there.
+;;;                twice there. SQLite's trace allocates 32 KiB inside each
+;;;                section that steps a row or finishes a statement, so a
+;;;                request falls due there.
 ;;;                Each fails by name unless collect requests fell in its
 ;;;                trials, unless some trial had R before the give-back and R1
 ;;;                past it, unless each such section met its request before

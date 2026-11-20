@@ -6,10 +6,10 @@
 ;;; through preflight. tests/test-library-loading-real.sps holds preflight on
 ;;; the real libsqlite3.
 ;;;
-;;; The nine were one suite until it passed 450 s under the memory gate on
-;;; CI, three quarters of MEMORY_TIMEOUT, then three until -real took 264 s
-;;; there, over half of it (ADR-0005); now each runs at most 11
-;;; children, and (library-loading) holds what all nine use.
+;;; Under the memory gate each child runs under a Valgrind of its own, so
+;;; the rows are split among nine suites, each running at most 11 children,
+;;; to keep each well under MEMORY_TIMEOUT (ADR-0005); (library-loading)
+;;; holds what all nine use.
 ;;;
 ;;; Native loads libsqlite3 in its library body, once per process, and Chez
 ;;; runs that body before a program's own, so a refusal cannot be caught in
@@ -26,15 +26,14 @@
 ;;;     error, which the probe reports as a raise.
 ;;;
 ;;; Each child that reaches native code prints its counts, and every row
-;;; requires them zero (ADR-0005). Each runs through
-;;; gated-command, so under make test-memory the gate's own Valgrind runs it,
-;;; with a log of its own that the gate reads. Every child says whether it ran
-;;; under Valgrind, and a row requires yes exactly when the gate asked: the
-;;; probe prints a line saying so (memcheck's preload in /proc/self/maps);
-;;; preflight prints none, so (library-loading)'s preflight reads the one new
-;;; log in the gate's directory for it, and requires that log's Command: line
-;;; to be preflight's own, whole. A child that escaped the gate fails its row
-;;; (ADR-0005).
+;;; requires them zero (ADR-0005). Each runs through gated-command, so under
+;;; make test-memory the gate's own Valgrind runs it, with a log of its own
+;;; that the gate reads. Every child says whether it ran under Valgrind, and a
+;;; row requires yes exactly when the gate asked: the probe prints a line
+;;; saying so (memcheck's preload in /proc/self/maps); preflight prints none,
+;;; so (library-loading)'s preflight reads the one new log in the gate's
+;;; directory for it, and requires that log's Command: line to be preflight's
+;;; own, whole. A child that escaped the gate fails its row (ADR-0005).
 ;;;
 ;;; This process itself never loads libsqlite3, and requires as much at its
 ;;; end. Each expected value is one the code under test cannot produce by
@@ -246,9 +245,9 @@
   (exists (lambda (line) (string-prefix? "(reason " line)) (lines-of text)))
 
 ;; A raise that is no refusal is Chez's default handler's to print, and what
-;; it prints is its own text, never asserted here (ADR-0013): the
-;; row asserts the exit status, that nothing reached stdout, and that no
-;; refusal's reason line appeared.
+;; it prints is its own text, never asserted here (ADR-0013): the row asserts
+;; the exit status, that nothing reached stdout, and that no refusal's reason
+;; line appeared.
 (test-equal "preflight, a raise that is not a refusal: Chez's default handler, exit 255, nothing on stdout, and no reason line"
   (list 255 "" 'no-reason-line valgrind-line)
   (let ((answer (preflight-in raising-libdirs (switch-args #f))))

@@ -35,13 +35,13 @@
 ;;; and the closed one come before the argument checks, and SQLite, which
 ;;; loads from any thread, is never reached from another. The load's own
 ;;; section goes through call-with-open-handle again, which checks the owner
-;;; and the open state there too. Each string is copied
-;;; first and the copy alone checked and handed to C, so another thread
-;;; cannot change it between the two (ADR-0011). Every refusal of a caller's
-;;; mistake is an assertion violation whose irritants are a symbol naming its
-;;; rule, then the value by shown-value, never a string's text (ADR-0013). On
-;;; Ubuntu's library, whose every connection opens with the C switch on, the
-;;; sixth check is all that stops a load.
+;;; and the open state there too. Each string is copied first and the copy
+;;; alone checked and handed to C, so another thread cannot change it between
+;;; the two (ADR-0011). Every refusal of a caller's mistake is an assertion
+;;; violation whose irritants are a symbol naming its rule, then the value by
+;;; shown-value, never a string's text (ADR-0013). On Ubuntu's library, whose
+;;; every connection opens with the C switch on, the sixth check is all that
+;;; stops a load.
 ;;;
 ;;; One call, one load. Chez's engine remainders are multi-shot, and a
 ;;; timer's handler can capture a continuation between any two critical
@@ -84,16 +84,15 @@
 ;;;             init's failing call leaves at its own code, 5 where the call
 ;;;             answered 1; no SQL and no offset. Its message: the slot's
 ;;;             text, as SQLite wrote it, naming the path it tried last; or
-;;;             sqlite3_errstr's when the slot held none;
-;;;             followed, when the connection's extended code changed
-;;;             across the call to one that names an error, by the
-;;;             connection's message, which holds an init's reason where the
-;;;             slot says only "error during initialization: ". An init
-;;;             whose last call succeeded leaves the code at 0, which names
-;;;             no error, and its "not an error" is no reason: then the
-;;;             slot's text stands alone. The two join as they stand where the
-;;;             first ends in a space, as SQLite's "...: " does, and with
-;;;             ": " between them otherwise
+;;;             sqlite3_errstr's when the slot held none; followed, when the
+;;;             connection's extended code changed across the call to one that
+;;;             names an error, by the connection's message, which holds an
+;;;             init's reason where the slot says only "error during
+;;;             initialization: ". An init whose last call succeeded leaves
+;;;             the code at 0, which names no error, and its "not an error" is
+;;;             no reason: then the slot's text stands alone. The two join as
+;;;             they stand where the first ends in a space, as SQLite's "...:
+;;;             " does, and with ": " between them otherwise
 ;;;   no error  a code that names no error, its low byte 0, 100 or 101 but
 ;;;             not 0 itself, or no exact integer, which only a stand-in for
 ;;;             the binding answers: an assertion violation from the verb,

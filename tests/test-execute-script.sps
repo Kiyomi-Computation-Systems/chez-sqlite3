@@ -8,8 +8,8 @@
 ;;; tests/test-conveniences-engines.sps's.
 ;;;
 ;;;   the loop      every statement in turn, its rows dropped, each prepared
-;;;                 only once the one before it has run; PRAGMAs
-;;;                 in order; a statement with no semicolon at its end
+;;;                 only once the one before it has run; PRAGMAs in order; a
+;;;                 statement with no semicolon at its end
 ;;;   no statement  empty SQL, only semicolons, only comments or whitespace:
 ;;;                 no error; a NULL statement ends the loop, and leading
 ;;;                 semicolons and comments belong to the next statement
@@ -379,8 +379,8 @@
 ;; THUNK's answer, a timer's handler run at every tick of it counting the
 ;; foreign blocks held: the most it counted, and at how many ticks. The
 ;; count after THUNK cannot tell a block allocated and freed on the way out
-;; from none: a script that allocated before its checks, and freed the
-;; block as the refusal left, passed a row that read it then.
+;; from none: a script that allocates before its checks, and frees the
+;; block as the refusal leaves, passes a row that reads it then.
 (define (most-blocks thunk)
   (let ((most 0) (ticks 0) (old (timer-interrupt-handler)))
     (let ((answer

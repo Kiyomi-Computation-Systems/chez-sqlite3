@@ -1,8 +1,8 @@
 #!r6rs
 ;;; The suite for the change counters and in-transaction? (ADR-0016), in
-;;; (chez-sqlite3 private connection): every counter case through them, and
-;;; the in-transaction? cases through in-transaction?. Not yet exported from (chez-sqlite3), whose
-;;; names and docs come with the conveniences.
+;;; (chez-sqlite3 private connection), which (chez-sqlite3) exports: every
+;;; counter case through them, and the in-transaction? cases through
+;;; in-transaction?.
 ;;;
 ;;;   the cases   as a C program of the counters runs them: before each
 ;;;               statement, an INSERT OR REPLACE of two rows into z sets
@@ -124,8 +124,8 @@
 
 ;; with-counters-db : (List String) (String Database -> Any) -> Any
 ;; PROC's answer, or what it raised, given a file c.db in a temporary
-;; directory, made with the tables z and t and then SETUP, and a
-;; connection to it, closed after.
+;; directory, made with the tables z and t and then SETUP, and a connection to
+;; it, closed after.
 (define (with-counters-db setup proc)
   (in-dir
    (lambda (dir)
@@ -141,7 +141,7 @@
          (lambda () (when db (undo! '() (list db)))))))))
 
 ;; prime! : Database -> Void
-;; changes 2 and last-insert-rowid 7777 (counters.c's prime).
+;; changes 2 and last-insert-rowid 7777, as the C program primes them.
 (define (prime! db)
   (exec! db "insert or replace into z(rowid, v) values (7776, 'p'), (7777, 'p')"))
 
@@ -155,7 +155,7 @@
     (list c t r)))
 
 ;; measure : Database String -> (List Any (List Integer Integer Integer) Any)
-;; counters.c's measure: DB primed, SQL prepared and stepped to its end; how
+;; The C program's measure: DB primed, SQL prepared and stepped to its end; how
 ;; the steps ended, done or the failure's extended code; the counters after
 ;; the last step; and after the finalize, same when they did not move.
 (define (measure db sql)
@@ -245,7 +245,7 @@
   zero-counts
   (native-counts))
 
-;; --- case by case ------------------------------------------------------------------
+;; --- case by case -----------------------------------------------------------------------------
 ;; Each row's expected values are the C program's output for its case, on
 ;; 3.53.1 and 3.45.1 alike.
 
@@ -438,7 +438,7 @@
              (after-rollback (counters db before)))
         (list after-insert after-rollback)))))
 
-;; --- in-transaction?, by its cases ------------------------------------------------
+;; --- in-transaction?, by its cases ---------------------------------------------------------------
 
 (test-equal "in-transaction? is #f in autocommit, #t after a deferred BEGIN that has read nothing, #f after COMMIT; #t after BEGIN IMMEDIATE, #f after ROLLBACK; #t after a SAVEPOINT outside a transaction, #f after its RELEASE"
   '(#f #t #f #t #f #t #f)

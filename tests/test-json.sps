@@ -17,15 +17,17 @@
 ;;;                  -1e400, and a flonum for 9223372036854775808, where
 ;;;                  9223372036854775807 stays an exact integer
 ;;;
-;;; Every value a row asserts was measured, the same on all four libraries: the floor's
-;;; 3.45.1, Guix's 3.53.1 and 3.54.1, plain and with FTS5, but two, measured on those
-;;; libraries: a bound string's typeof is text, so a string bound as a BLOB fails the bound
-;;; row on every library, where 3.53.1 and 3.54.1 read a BLOB's JSON as text; and json_each
-;;; answers an object's keys in the document's order, so the key-order row's object is
-;;; written out of order. No row uses json_pretty, which 3.45.1 lacks. The rows go through
-;;; the conveniences and the statement verbs, so they test the values' path through the
-;;; library, not SQLite: a row's REAL reads as a flonum, its INTEGER as an exact integer,
-;;; its TEXT as a string and its BLOB as a bytevector, and each is asserted whole.
+;;; Every value a row asserts was measured, the same on all four libraries:
+;;; the floor's 3.45.1, Guix's 3.53.1 and 3.54.1, plain and with FTS5. Two
+;;; of those measurements shape a row: a bound string's typeof is text, so a
+;;; string bound as a BLOB fails the bound row on every library, where 3.53.1
+;;; and 3.54.1 read a BLOB's JSON as text; and json_each answers an object's
+;;; keys in the document's order, so the key-order row's object is written
+;;; out of order. No row uses json_pretty, which 3.45.1 lacks. The rows go
+;;; through the conveniences and the statement verbs, so they test the
+;;; values' path through the library, not SQLite: a row's REAL reads as a
+;;; flonum, its INTEGER as an exact integer, its TEXT as a string and its
+;;; BLOB as a bytevector, and each is asserted whole.
 ;;;
 ;;; The library is reached through eval, under a guard, as
 ;;; tests/test-conveniences.sps reaches it. Every computation that can raise

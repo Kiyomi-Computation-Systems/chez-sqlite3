@@ -1,9 +1,8 @@
 #!r6rs
 ;;; The suite for open-database with settings under an engine (ADR-0018,
-;;; consequences), in
-;;; (chez-sqlite3 private open). open-database holds no dynamic-wind around
-;;; its settings, so an engine's expiry between two of their critical
-;;; sections suspends the open, and the resume goes on.
+;;; consequences), in (chez-sqlite3 private open). open-database holds no
+;;; dynamic-wind around its settings, so an engine's expiry between two of
+;;; their critical sections suspends the open, and the resume goes on.
 ;;;
 ;;;   every fuel     the six settings and statement-cache on a file, at every
 ;;;                  fuel from 1 until the open completes without expiring,
@@ -51,11 +50,11 @@
 ;;;                  256 bytes, where a request due inside a critical section
 ;;;                  is handled at its exit and costs the engine ticks there, so
 ;;;                  a remainder or a continuation is taken at a section's exit
-;;;                  too, before anything after it: a claim advanced just after
-;;;                  its section, not inside it, applied a setting twice there.
-;;;                  The low pass fails
-;;;                  by name unless collect requests fell in its trials, and
-;;;                  unless a run past the call's last section answered again
+;;;                  too, before anything after it: a claim advanced just
+;;;                  after its section, not inside it, applies a setting twice
+;;;                  there. The low pass fails by name unless collect requests
+;;;                  fell in its trials, and unless a run past the call's last
+;;;                  section answered again
 ;;;   a failing      the procedure leaves a statement its
 ;;;   close          connection does not track, so the close fails, then
 ;;;                  re-enters a continuation a timer's handler took at each
@@ -71,16 +70,15 @@
 ;;;                  run up to a tick, so two runs' ticks can differ
 ;;;
 ;;; An engine spends no ticks inside a critical section, so the fuels measure
-;;; the Scheme work between the open's sections. Each trial
-;;; of the two passes begins with a collection, so its first slice runs as
-;;; every trial's at that fuel does, unless a collect request falls in it
-;;; (below); each is judged by what it saw itself,
-;;; and each bound on a whole new call is a refusal the sweep saw itself,
-;;; never a refused call's fuel, a control run on the code under test, or a
-;;; caller's count. The low pass leaves sweep, cwd-sweep and
-;;; untracked-sweep alone: each judges a fuel by itself. The loading procedures
-;;; are reached through eval, under a guard, as tests/test-statement.sps
-;;; reaches them.
+;;; the Scheme work between the open's sections. Each trial of the two passes
+;;; begins with a collection, so its first slice runs as every trial's at that
+;;; fuel does, unless a collect request falls in it (below); each is judged by
+;;; what it saw itself, and each bound on a whole new call is a refusal the
+;;; sweep saw itself, never a refused call's fuel, a control run on the code
+;;; under test, or a caller's count. The low pass leaves sweep, cwd-sweep and
+;;; untracked-sweep alone: each judges a fuel by itself. The loading
+;;; procedures are reached through eval, under a guard, as
+;;; tests/test-statement.sps reaches them.
 ;;;
 ;;; Every computation that can raise runs under a guard with a sentinel of its
 ;;; own. No expected value is #f where the actual could raise. Effects run in
@@ -357,9 +355,8 @@
 ;; quieted! : -> Void
 ;; A collection now, at a fuel's or a tick's start, with collect-trip-bytes
 ;; raised to 128 MiB, far above what one fuel's runs allocate, so no collect
-;; request falls in them: one costs a run up to a tick, and
-;; the rows that bound a
-;; whole new call read the fuels, or the ticks, in order.
+;; request falls in them: one costs a run up to a tick, and the rows that
+;; bound a whole new call read the fuels, or the ticks, in order.
 (define (quieted!)
   (collect-trip-bytes (expt 2 27))
   (collect))
@@ -373,9 +370,9 @@
 ;; falls due all through it, and one due inside a critical section is
 ;; handled at the section's exit, where it costs the engine ticks. So an
 ;; expiry, or a timer's tick, can fall at a section's exit, before anything
-;; after it. Every request the trials meet goes through
-;; counted-request, which counts it, and the low rows judge where they fell
-;; (where a remainder lies, below).
+;; after it. Every request the trials meet goes through counted-request, which
+;; counts it, and the low rows judge where they fell (where a remainder lies,
+;; below).
 
 (define low-trip 256)
 
@@ -389,14 +386,13 @@
 
 ;; A request in a run before its expiry, or before a timer's capture, costs
 ;; the engine ticks there, so that run's remainder lies earlier in the call
-;; than its fuel or tick says: a whole new call came at a fuel at or past
+;; than its fuel or tick says: a whole new call can come at a fuel at or past
 ;; one a trial was refused at, R before the call's first section, where a
-;; request fell. So each trial notes
-;; whether a request fell before its remainder was taken, and the sweep's
-;; bound on a whole new call reads only the trials where none did; a whole
-;; new call where one did is counted and printed, and judged by its other
-;; evidence. The bound's refusal may come from any trial: a request moves a
-;; remainder earlier, never later.
+;; request falls. So each trial notes whether a request fell before its
+;; remainder was taken, and the sweep's bound on a whole new call reads only
+;; the trials where none did; a whole new call where one did is counted and
+;; printed, and judged by its other evidence. The bound's refusal may come
+;; from any trial: a request moves a remainder earlier, never later.
 
 ;; counted-request : -> Any
 (define (counted-request)
@@ -407,25 +403,25 @@
 ;; --- where a remainder lies: at a forced section's exit ----------------------------------------
 ;; The forcing VFS calls back inside the library's critical sections: the
 ;; open's, through xFullPathname, and each setting's that begins a read
-;; transaction, through xAccess (the forcing VFS, above). The re-entered
-;; row's timer fires at every tick, so its ticks run out in every forced
-;; request's handler, and it fires at that section's exit.
+;; transaction, through xAccess (the forcing VFS, above). The re-entered row's
+;; timer fires at every tick, so its ticks run out in every forced request's
+;; handler, and it fires at that section's exit.
 ;; In the low pass force! allocates 32 KiB there, so a collect request falls
 ;; due inside the section and is handled at its exit, the first event check
-;; once the section enables interrupts again. The handler's own work costs
-;; the engine ticks. Where they run out in it, the engine's timer reads #f
-;; at its end, and the engine expires as the handler returns: the remainder
-;; lies at that section's exit, before anything after it. A probe's marker,
-;; set inside a section and overwritten just after it, read the section's
-;; at exactly those fuels, three a section, at the low trip, and at none at
-;; the high trip or at 256 KiB. So a low row fails by name unless every forced section met
-;; its request before the next forced section or its slice's end, which a
-;; trip slipped to 256 KiB breaks, a 32 KiB allocation then meeting one
-;; about one time in eight; and unless some first slice expired at a forced
-;; section's exit, which the high pass, forcing none, never does. Each first
-;; slice numbers the forced sections it passes, from 1, and the row shows
-;; whose exits were met. The timer is read through Chez's own $tc-field,
-;; reached through eval.
+;; once the section enables interrupts again. The handler's own work costs the
+;; engine ticks. Where they run out in it, the engine's timer reads #f at its
+;; end, and the engine expires as the handler returns: the remainder lies at
+;; that section's exit, before anything after it. A marker set inside a
+;; section and overwritten just after it reads the section's value at exactly
+;; those fuels, three a section, at the low trip, and at none at the high trip
+;; or at 256 KiB. So a low row fails by name unless every forced section met
+;; its request before the next forced section or its slice's end, which a trip
+;; slipped to 256 KiB breaks, a 32 KiB allocation then meeting one about one
+;; time in eight; and unless some first slice expired at a forced section's
+;; exit, which the high pass, forcing none, never does. Each first slice
+;; numbers the forced sections it passes, from 1, and the row shows whose
+;; exits were met. The timer is read through Chez's own $tc-field, reached
+;; through eval.
 
 ;; tc-field, tc : (U Procedure #f)
 (define tc-field
@@ -1166,7 +1162,7 @@
                     'some-closed 'none-closed)
                 (native-counts))))))
 
-;; --- a failing close beside a refused re-entry -----------------------------
+;; --- a failing close beside a refused re-entry ------------------------------------------------
 
 ;; raw-prepare! : Database String -> Positive-Integer
 ;; A statement of SQL on DB, made with the raw sqlite3_prepare_v2, so the
@@ -1231,19 +1227,19 @@
 ;; untracked-reentry-at at each tick from 1 until the procedure starts, at
 ;; most 20000, each judged by its own capture, never by another run's: a
 ;; collect request costs a run up to a tick, so two runs' ticks can differ.
-;; With the connection open at
-;; the capture, the continuation lies inside the call's extent: refused at a setting's
-;; section, the call raises &sqlite-closed, the close's refusal not raised
-;; over it; or, past the settings, the procedure is called again and
-;; returns, so the close's refusal is raised. Before the open, a
-;; continuation inside the extent is refused at the open's section, the
-;; same &sqlite-closed; one before the extent, or before the call's first
-;; expression, is left by the procedure's jump, so the close's refusal is
-;; raised, the procedure not called again. The connection stays open and
-;; counted each time. Answers that tick; each tick's deviations, with the
-;; counts after it; and whether some tick before the open, and some after
-;; it, answered &sqlite-closed: the open's refusal and the settings' are
-;; each marked, so the close's refusal is never raised over them.
+;; With the connection open at the capture, the continuation lies inside the
+;; call's extent: refused at a setting's section, the call raises
+;; &sqlite-closed, the close's refusal not raised over it; or, past the
+;; settings, the procedure is called again and returns, so the close's refusal
+;; is raised. Before the open, a continuation inside the extent is refused at
+;; the open's section, the same &sqlite-closed; one before the extent, or
+;; before the call's first expression, is left by the procedure's jump, so the
+;; close's refusal is raised, the procedure not called again. The connection
+;; stays open and counted each time. Answers that tick; each tick's
+;; deviations, with the counts after it; and whether some tick before the
+;; open, and some after it, answered &sqlite-closed: the open's refusal and
+;; the settings' are each marked, so the close's refusal is never raised over
+;; them.
 (define (untracked-sweep path)
   (let ((closed '((raised (closed call-with-database)) 1 0))
         (left '(raised (assertion-violation call-with-database (untracked-statements 1)))))
