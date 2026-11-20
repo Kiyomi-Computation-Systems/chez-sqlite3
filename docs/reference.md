@@ -139,8 +139,10 @@ value without a word, so the library checks them first.
 `busy-timeout` is set first, wherever it stands; then the others, in the
 list's order. Each is read back once it is set. When SQLite kept another
 value, the open raises a condition that `sqlite-setting-mismatch?` holds.
-`(journal-mode . wal)` on `":memory:"` is such a mismatch: an in-memory
-database keeps its journal in memory.
+Any `journal-mode` on an in-memory database, `":memory:"` or one opened with
+`memory`, is such a mismatch: its journal is kept in memory, so every value
+reads back `memory`. So is `wal` on a temporary database, `""`, which reads
+back `delete`.
 
 ```scheme run
 (guard (e ((sqlite-setting-mismatch? e)
@@ -208,7 +210,7 @@ Two fail at once, however long the timeout:
 | The other connection | Waits | Busy at once |
 |---|---|---|
 | is reading | `(journal-mode . wal)` | |
-| is in `begin immediate` and has written | | `(journal-mode . wal)` |
+| is in `begin immediate`, or in `begin` and has written | | `(journal-mode . wal)` |
 | is in `begin exclusive` | `journal-mode`, `synchronous` | |
 | has read a WAL file, even if idle now | | `journal-mode` but `wal` |
 
@@ -294,8 +296,9 @@ opened.
 It does not survive an engine's preemption: an engine that runs out of
 fuel leaves the procedure, and the connection is closed under it. If that
 close fails, as it does when an extension has left a statement open on the
-connection, its error is raised out of the engine, and the engine is lost.
-If you use engines, use `open-database` and close it yourself.
+connection, the engine is lost: its caller gets Chez's own assertion
+violation, "no engine active", and the connection stays open. If you use
+engines, use `open-database` and close it yourself.
 
 Each call opens once and sets each setting once, as `open-database` does.
 Going back into its open or its settings raises a condition that
@@ -589,15 +592,19 @@ transaction begun with `begin immediate`, which takes the lock first.
 
 The statement is finished when the procedure returns, raises, or leaves
 through a continuation. A continuation that goes back into a finished fold
-raises a condition that `sqlite-closed?` holds, or an assertion violation, and
-never calls the procedure again.
+never calls the procedure again: it raises a condition that `sqlite-closed?`
+holds, or an assertion violation, or, from past the last step, gives the
+fold's answer again.
 
 It does not survive an engine's preemption: an engine that runs out of fuel
-leaves the procedure, the statement is finished under it, and the resumed
-fold raises a closed condition. If finishing the statement fails as the engine
-runs out, as a write's `commit` can while another connection reads, the
-engine is lost: its caller gets Chez's own error, "no engine active". If you
-use engines, use the statement verbs.
+while the fold holds its statement finishes the statement under it. If it
+ran out before the last step, while the procedure ran for instance, the
+resumed fold raises a closed condition; if after it, the resumed fold gives
+its answer.
+If finishing the statement fails as the engine runs out, as a write's
+`commit` can while another connection reads, the engine is lost: its caller
+gets Chez's own assertion violation, "no engine active". If you use engines,
+use the statement verbs.
 
 ### `execute-script!`
 
@@ -751,9 +758,15 @@ with the rest.
 ```
 
 When the procedure raises, what it raised reaches you unchanged. Some
-failures end the whole transaction by themselves, such as `insert or
-rollback`, a full disk, or an interrupted write; `with-transaction` notices,
-and rolls back only what is still there.
+failures end the whole transaction by themselves: `insert or rollback`, an
+interrupted write, and, in many statements, a full disk or running out of
+memory. Running out of memory ends it even in a `select` that reads a
+table: at the step, or, when a column read ran out, at the statement's next
+`reset!` or finalize. Neither the error's code nor its SQL tells you which:
+the same out-of-memory ends the transaction in one statement and not in
+another, and how SQLite was built can change it. `in-transaction?`, read
+after the failure, tells you. `with-transaction` reads it too, and rolls
+back only what is still there.
 
 When it can't commit, as when a deferred foreign key is missing, it rolls
 back and raises the commit's error.
@@ -808,8 +821,8 @@ engine stopped before the call started makes a new call when resumed.
 It does not survive an engine's preemption: an engine that runs out of fuel
 inside it rolls the transaction back. If that rollback fails, as a nested
 level's `RELEASE` does beside the body's own `insert ... returning` held on
-its row, the engine is lost: its caller gets Chez's
-own error, "no engine active". Resuming an engine, or calling any
+its row, the engine is lost: its caller gets Chez's own assertion
+violation, "no engine active". Resuming an engine, or calling any
 continuation, taken outside the call from inside it leaves the call too: it
 rolls back, and its return raises the ended condition. If you use engines,
 issue `begin` and `commit` with `execute!` yourself.
@@ -973,7 +986,9 @@ step! : Statement -> Boolean
 Runs the statement to its next row. It gives `#t` when a row is ready, and
 `#f` when the statement is done. When SQLite fails, the statement is failed,
 and it raises a condition that `sqlite-error?` holds, with the statement's
-SQL and no place.
+SQL and no place. Inside a transaction, a failed step can end the
+transaction, as [`with-transaction`](#with-transaction) says: read
+`in-transaction?` to know.
 
 ```scheme run
 (call-with-database ":memory:"
@@ -1341,8 +1356,8 @@ that holds U+0000, is an assertion violation.
 ;; => #t
 ```
 
-Full-text search, FTS5, is an option too, and SQLite's own default build
-leaves it out. So check for it before you use it:
+Full-text search, FTS5, is an option too, and SQLite compiled from its
+source with no options leaves it out. So check for it before you use it:
 
 ```scheme
 (if (sqlite-compile-option? "ENABLE_FTS5")
@@ -1368,7 +1383,7 @@ one kind with its own predicate:
 
 | Predicate | Raised when |
 |---|---|
-| `sqlite-library-unavailable?` | SQLite could not be loaded: not found, too old, not threadsafe, or missing a function. |
+| `sqlite-library-unavailable?` | SQLite could not be loaded: a bad override, not found, failed to load, too old, not threadsafe, or missing a function. |
 | `sqlite-error?` | SQLite answered with an error code. |
 | `sqlite-busy?`, `sqlite-constraint?`, `sqlite-read-only?`, `sqlite-interrupt?` | An `sqlite-error?` of one kind: see below. |
 | `sqlite-wrong-thread?` | A connection, or a statement of one, is used by a thread that did not open it. |

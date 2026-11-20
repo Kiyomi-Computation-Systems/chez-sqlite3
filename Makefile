@@ -387,14 +387,15 @@ check-suites: deps ## Fail unless every tests/test-*.sps ends with the shared ex
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs $(LIBDIRS) --program tests/check-suites.sps $(SUITES) $(SITE_SUITES)
 
-# Holds README.org's Requirements section, and every file under
-# .github/workflows and scripts/ci, to packaging/floors.sexp, the one file that
-# writes the floors (ADR-0008, tests/check-floors.sps): the README must state
-# them, and no workflow or CI script may. It needs no deps: (floors) imports
+# Holds README.org, and every file under .github/workflows, scripts/ci and
+# docs, to packaging/floors.sexp, the one file that writes the floors
+# (ADR-0008, tests/check-floors.sps): the list lines of README.org's
+# Requirements section must state them, and no other line of README.org, no
+# workflow, no CI script and no page may. It needs no deps: (floors) imports
 # only (rnrs) and a few of Chez's own bindings.
-check-floors: ## Fail unless README.org states the floors in packaging/floors.sexp, and no workflow or CI script does
+check-floors: ## Fail unless README.org's Requirements state the floors in packaging/floors.sexp, and nothing else in README.org, no workflow, CI script or page does
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
-	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows scripts/ci
+	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows scripts/ci docs
 
 # Reads every library under src/ as data, and fails on any that breaks the
 # seam (ADR-0009, amended): a library outside (chez-sqlite3) and

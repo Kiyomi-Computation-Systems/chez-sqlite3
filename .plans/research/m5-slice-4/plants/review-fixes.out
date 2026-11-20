@@ -1,0 +1,31 @@
+control: test-docs rc=0
+# of expected passes      151
+control: test-manifest rc=0
+# of expected passes      93
+control: check-site rc=0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow, each page's H1 its label -- all green
+twinA1: test-docs rc=1
+FAIL twin-problems: the twin is found at each place, first, between and last among a page's runnable blocks, and in the first, middle and last of three pages
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+# of expected passes      149
+twinA2: test-docs rc=1
+FAIL twin-problems: a README whose one Scheme block is a page's runnable block, line for line, has its twin
+FAIL twin-problems: two Scheme blocks, each held: the second without a twin, the first, and both, each named by its line, in order
+FAIL twin-problems: the twin may be in any page, among other runnable blocks; with no page there is none
+FAIL twin-problems: the twin is found at each place, first, between and last among a page's runnable blocks, and in the first, middle and last of three pages
+twinFirst: test-docs rc=1
+FAIL twin-problems: the twin may be in any page, among other runnable blocks; with no page there is none
+FAIL twin-problems: the twin is found at each place, first, between and last among a page's runnable blocks, and in the first, middle and last of three pages
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+# of expected passes      148
+quote: test-docs rc=1
+FAIL README.org holds no block inside another, where a Scheme block would escape the block rules: the outer blocks' lines
+# of expected passes      150
+dup2: check-site rc=2
+check-site: README.org has more than one "** Documentation" section: the nav is held to one list of the pages
+clone-ok-other: test-manifest rc=0
+# of expected passes      93
+clone-bad-other: test-manifest rc=1
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+# of expected passes      92
+  actual:   ("docs/libraries.md:101: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.0.0 calls for \"git clone https://github.com/

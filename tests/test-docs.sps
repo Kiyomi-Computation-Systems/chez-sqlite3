@@ -13,10 +13,51 @@
 ;;;   and an Org link to a place on its own page, fail: nothing here could
 ;;;   check them. No link points into .plans/, and no page says so;
 ;;; - README.org links every page of docs/, so none is orphaned;
+;;; - README.org holds a Scheme block, and each of its Scheme blocks is the
+;;;   twin of a runnable example (below) of a page of docs/: its lines are,
+;;;   line for line, all of that block's lines, its ";; =>" line included. So
+;;;   the README's example runs, through its twin. A block with no twin
+;;;   fails, by its #+begin_src line; so does a README with no Scheme block,
+;;;   and one with a block inside another, which the Org reader would not see;
 ;;; - no page says ADR- or TODO, "not yet" or any other "yet", "unreleased",
 ;;;   "slice", a path in .plans, or a date written YYYY-MM-DD, in any case;
 ;;; - every code span of a page's prose that is one name beginning sqlite- or
-;;;   chez-sqlite3- is an export of (chez-sqlite3).
+;;;   chez-sqlite3- is an export of (chez-sqlite3);
+;;; - every Markdown Scheme fragment whose first datum, as Chez's read reads
+;;;   the block's text, is a list headed import is a whole program: read
+;;;   skips a #!r6rs and comments before it. It runs as written, a program of
+;;;   its own in a fresh Chez with a reader's library path, src alone,
+;;;   through gated-command: it exits 0 with nothing on stderr; when a text
+;;;   block follows it on its page before the next Scheme block, whatever
+;;;   lies between, it prints the first such block's lines, line for line;
+;;;   and when it holds a guard with a clause (sqlite-library-unavailable?
+;;;   V), V the guard's variable, it prints the list of sqlite-version,
+;;;   sqlite-library-path and sqlite-library-source the suite reads itself,
+;;;   as write writes it, and a newline, and runs again with
+;;;   CHEZ_SQLITE3_LIBRARY naming a file that is not there, exits 0 with
+;;;   nothing on stderr, and prints one datum, as write writes it, and a
+;;;   newline: a list whose first element is refused. Some whole program
+;;;   has a text block that holds what it prints;
+;;; - docs/finding-sqlite.md's tables are the code's. The reasons table's
+;;;   first column, each cell one code span, is the library's list of
+;;;   refusal reasons, in its order. The discovery table's rows are
+;;;   discovery's worlds, in order, Guix, other Linux, macOS and any other
+;;;   system: each row's first cell names its world, the first holding Guix,
+;;;   the second beginning Other Linux, the third holding Mac and the fourth
+;;;   beginning Any other; and each row names the candidates discovery's own
+;;;   procedure gives for its world on x86_64 and on arm64, by their paths as
+;;;   it writes them, and their sources, each once, in order. The code span
+;;;   before " for `CHEZ_SQLITE3_LIBRARY`" in the prose is the source an
+;;;   override gets; with the table's, they are discovery's sources, each
+;;;   once;
+;;; - every word of a page, a run of letters, digits and _, in a block or
+;;;   not, that holds CHEZ_ is CHEZ_SQLITE3_LIBRARY; and every
+;;;   CHEZ_SQLITE3_LIBRARY= of a line that sets it, one at the line's start
+;;;   or after a blank, as export X=, env X= and X=... before a command do,
+;;;   gives it a value, up to a blank, that begins with /. One after any
+;;;   other char, as Org's verbatim =CHEZ_SQLITE3_LIBRARY= is, sets nothing;
+;;; - every page of docs/ has one level-1 heading, and it is the page's
+;;;   first line.
 ;;;
 ;;; THE RUNNABLE CONVENTION. A Markdown Scheme block whose info string is
 ;;; exactly the one word run, written ```scheme run, is run: the tests
@@ -46,6 +87,19 @@
 ;;; char but a letter, a digit, _, a space or a - dropped, each space made a
 ;;; -; a second heading of one anchor takes -1, a third -2.
 ;;;
+;;; A pipe table is a run of prose lines that begin, past up to three
+;;; spaces, with |, its second line a delimiter row; a cell is the text
+;;; between two |s, trimmed, a \| kept as |. A table whose lines do not
+;;; begin with | is out of reach. A discovery row's second cell is read by
+;;; its code spans: none names no path, one names that path, and more are
+;;; written `FILE` in `DIR`, `DIR`, ..., each path DIR/FILE. A span written
+;;; right after another as (`ALT` on M) takes that one's place on the
+;;; machine M, arm64 or x86_64, and names nothing on any other. Its third
+;;; cell's code spans are its sources. Discovery is asked in an environment
+;;; where GUIX_ENVIRONMENT, GUIX_PROFILE and HOME each name a stand-in
+;;; directory and nothing else is set, so a path under one reads as the page
+;;; writes it: $GUIX_ENVIRONMENT, $GUIX_PROFILE, and ~ for HOME.
+;;;
 ;;; Out of its reach, with no oracle but a reader's reading: prose that says
 ;;; something wrong, and a stated result that is wrong in a way equal? cannot
 ;;; see. (The signatures are tests/test-reference.sps's.) Every reader and
@@ -58,6 +112,9 @@
         (srfi :64)
         (chez-sqlite3-testing)
         (chez-sqlite3 private counters)
+        (only (chez-sqlite3 private conditions) sqlite-library-unavailable-reasons)
+        (only (chez-sqlite3 private discovery)
+              choose-libsqlite3 libsqlite3-candidates libsqlite3-sources)
         (only (chezscheme) directory-list file-directory? getenv))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
@@ -169,6 +226,16 @@
         (let ((d (read p)))
           (if (eof-object? d) (reverse out) (loop (cons d out))))))))
 
+;; shown : Datum -> String
+(define (shown d)
+  (call-with-string-output-port (lambda (p) (write d p))))
+
+;; numbered : (Listof String) -> (Listof (Pair Natural String))
+;; Each line with its number, from 1.
+(define (numbered lines)
+  (let loop ((ls lines) (n 1) (out '()))
+    (if (null? ls) (reverse out) (loop (cdr ls) (+ n 1) (cons (cons n (car ls)) out)))))
+
 ;; --- Markdown: blocks, prose, headings and links -------------------------------------
 
 ;; A block of a page: its line, its language, the words of its info string
@@ -238,6 +305,13 @@
           (else
            (loop (cdr ls) (+ n 1) #f 0 '() blocks (cons (car ls) prose)
                  (let ((h (heading-of (car ls)))) (if h (cons h heads) heads)))))))
+
+;; h1-lines : (Listof String) -> (Listof Natural)
+;; The line of each level-1 heading of a Markdown page's prose, as markdown
+;; reads its headings, in order.
+(define (h1-lines prose)
+  (map car (filter (lambda (l) (let ((h (heading-of (cdr l)))) (and h (= (car h) 1))))
+                   (numbered prose))))
 
 ;; code-ranges : String -> (Listof (Pair Natural Natural))
 ;; Where each `code` span of the text begins and ends: a run of backticks
@@ -513,6 +587,31 @@
               'ok
               (list 'wrong-result (caddr parsed) outcome))))))
 
+;; --- the README's twin ----------------------------------------------------------------------
+
+;; twin-problems : String String (Listof String) -> (Listof (Listof Any))
+;; What keeps the README NAME, of Org text ORG-TEXT, from its twins in the
+;; Markdown pages of texts MD-TEXTS: (NAME no-scheme-block) when it holds no
+;; Scheme block; else (NAME LINE no-twin) for each Scheme block, by the line
+;; of its #+begin_src, whose lines are not, line for line, all the lines of
+;; one runnable block of a page.
+(define (twin-problems name org-text md-texts)
+  (let ((blocks (filter (lambda (b) (string=? (block-language b) "scheme")) (car (org org-text))))
+        (runnable (apply append
+                         (map (lambda (t)
+                                (filter (lambda (b) (and (string=? (block-language b) "scheme")
+                                                         (eq? (scheme-mark b #f) 'run)))
+                                        (car (markdown t))))
+                              md-texts))))
+    (if (null? blocks)
+        (list (list name 'no-scheme-block))
+        (apply append
+               (map (lambda (b)
+                      (if (exists (lambda (r) (equal? (block-lines b) (block-lines r))) runnable)
+                          '()
+                          (list (list name (block-line b) 'no-twin))))
+                    blocks)))))
+
 ;; --- prose rules ----------------------------------------------------------------------------
 
 ;; digit? : Char -> Boolean
@@ -585,6 +684,13 @@
 (test-equal "markdown: the headings outside blocks, with level and text"
   '((1 . "Top `x`") (2 . "Top x"))
   (caddr sample-parsed))
+
+(test-equal "h1-lines: each level-1 heading's line, a bare # and one indented three spaces among them; not one in a block, a level-2, a #word, one indented four, or seven #s"
+  '((1) (2 8 10))
+  (list (h1-lines (cadr sample-parsed))
+        (h1-lines (cadr (markdown (string-append
+                                   "Intro\n# Two\n```\n# in a block\n```\n#NoSpace\n    # four spaces\n"
+                                   "   # three spaces\n## level two\n#\n####### seven\n"))))))
 
 (test-equal "markdown-links: inline links and images outside code, an angle-bracketed target as written within them"
   '("a.md#top-x" "b.png" "u#top-x-1" "mailto:a@b")
@@ -704,6 +810,551 @@
   (unknown-names '("sqlite-nope" "sqlite-ok" "chez-sqlite3-nope" "sqlite-nope" "sqlite-x y" "Sqlite-Q"
                    "(sqlite-nope)" "open-database")
                  '("sqlite-ok" "open-database")))
+
+;; twin-problems on texts of the suite's own: a page whose runnable block is
+;; TWIN, beside a fragment of other lines, and READMEs whose Scheme blocks
+;; differ from it in one way each. A README's first block opens on line 5.
+
+(define twin '("(define x 2)" "(* x 21)" ";; => 42"))
+
+;; fenced : String (Listof String) -> String
+;; A Markdown block of LINES whose fence's info string is INFO.
+(define (fenced info lines) (string-append "```" info "\n" (joined lines) "```\n"))
+
+;; org-src : String (Listof String) -> String
+;; An Org block of LINES opened by #+begin_src LANGUAGE.
+(define (org-src language lines)
+  (string-append "#+begin_src " language "\n" (joined lines) "#+end_src\n"))
+
+;; readme-of : String ... -> String
+;; A README of a heading and a paragraph, then PARTS.
+(define (readme-of . parts) (apply string-append "* Title\n\nProse.\n\n" parts))
+
+(define twin-page
+  (string-append "# Page\n\nProse.\n\n" (fenced "scheme run" twin) "\n" (fenced "scheme" '("(display 1)"))))
+
+;; changed-at : String Natural -> String
+;; S with its char at I made another.
+(define (changed-at s i)
+  (string-append (substring s 0 i)
+                 (if (char=? (string-ref s i) #\x) "y" "x")
+                 (substring s (+ i 1) (string-length s))))
+
+;; one-char-off : (Listof (Listof String))
+;; TWIN with one char changed, at the start and at the end of each line in
+;; turn, the ;; => line's among them.
+(define one-char-off
+  (apply append
+         (map (lambda (k)
+                (let ((line (list-ref twin k)))
+                  (map (lambda (i)
+                         (let loop ((j 0) (ls twin) (out '()))
+                           (if (null? ls)
+                               (reverse out)
+                               (loop (+ j 1) (cdr ls) (cons (if (= j k) (changed-at line i) (car ls)) out)))))
+                       (list 0 (- (string-length line) 1)))))
+              '(0 1 2))))
+
+(test-equal "twin-problems: a README whose one Scheme block is a page's runnable block, line for line, has its twin"
+  '()
+  (twin-problems "R" (readme-of (org-src "scheme" twin)) (list twin-page)))
+
+(test-equal "twin-problems: one char off, at the start or the end of any of its lines, the ;; => line's too, and the block has no twin, named by its line"
+  (map (lambda (x) '(("R" 5 no-twin))) one-char-off)
+  (map (lambda (lines) (twin-problems "R" (readme-of (org-src "scheme" lines)) (list twin-page)))
+       one-char-off))
+
+(test-equal "twin-problems: a twin is all of a runnable block's lines, as written: its body alone, a line added before or after, two lines swapped, each line indented, have none"
+  '((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  (map (lambda (lines) (twin-problems "R" (readme-of (org-src "scheme" lines)) (list twin-page)))
+       (list '("(define x 2)" "(* x 21)")
+             (cons "" twin)
+             (append twin '(""))
+             '("(* x 21)" "(define x 2)" ";; => 42")
+             (map (lambda (l) (string-append "  " l)) twin))))
+
+(test-equal "twin-problems: a README with no Scheme block is named: prose that says scheme, an sh block, a quote, an example, and an empty README"
+  '((("R" no-scheme-block)) (("R" no-scheme-block)))
+  (list (twin-problems "R"
+                       (readme-of "Some scheme here.\n\n" (org-src "sh" '("ls"))
+                                  "#+begin_quote\n(* 2 21)\n#+end_quote\n"
+                                  "#+begin_example\n(* 2 21)\n#+end_example\n")
+                       (list twin-page))
+        (twin-problems "R" "" (list twin-page))))
+
+(test-equal "twin-problems: two Scheme blocks, each held: the second without a twin, the first, and both, each named by its line, in order"
+  '((("R" 10 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin) ("R" 10 no-twin)))
+  (list (twin-problems "R" (readme-of (org-src "scheme" twin) (org-src "scheme" '("(* 2 21)")))
+                       (list twin-page))
+        (twin-problems "R" (readme-of (org-src "scheme" '("(* 2 21)")) "\n\n" (org-src "scheme" twin))
+                       (list twin-page))
+        (twin-problems "R" (readme-of (org-src "scheme" '("(* 2 21)")) "\n\n" (org-src "scheme" '("1")))
+                       (list twin-page))))
+
+(test-equal "twin-problems: the same lines in a block not marked run are no twin: plain scheme, scheme run with another word, scheme example, sh, text, and no language"
+  (map (lambda (info) '(("R" 5 no-twin))) '("scheme" "scheme run x" "scheme example" "sh" "text" ""))
+  (map (lambda (info)
+         (twin-problems "R" (readme-of (org-src "scheme" twin))
+                        (list (string-append "# Page\n\n" (fenced info twin)))))
+       '("scheme" "scheme run x" "scheme example" "sh" "text" "")))
+
+(test-equal "twin-problems: the twin may be in any page, among other runnable blocks; with no page there is none"
+  '(() () (("R" 5 no-twin)))
+  (list (twin-problems "R" (readme-of (org-src "scheme" twin))
+                       (list "# Other\n" twin-page))
+        (twin-problems "R" (readme-of (org-src "scheme" twin))
+                       (list (string-append (fenced "scheme run" '("1" ";; => 1")) twin-page)))
+        (twin-problems "R" (readme-of (org-src "scheme" twin)) '())))
+
+(test-equal "twin-problems: the twin is found at each place, first, between and last among a page's runnable blocks, and in the first, middle and last of three pages"
+  '(() () () () () ())
+  (let ((readme (readme-of (org-src "scheme" twin)))
+        (mine (string-append (fenced "scheme run" twin) "\n"))
+        (other (lambda (k)
+                 (string-append (fenced "scheme run" (list (number->string k)
+                                                          (string-append ";; => " (number->string k))))
+                                "\n")))
+        (page (lambda parts (apply string-append "# Page\n\n" parts))))
+    (list (twin-problems "R" readme (list (page mine (other 1) (other 2))))
+          (twin-problems "R" readme (list (page (other 1) mine (other 2))))
+          (twin-problems "R" readme (list (page (other 1) (other 2) mine)))
+          (twin-problems "R" readme (list (page mine) (page (other 1)) (page (other 2))))
+          (twin-problems "R" readme (list (page (other 1)) (page mine) (page (other 2))))
+          (twin-problems "R" readme (list (page (other 1)) (page (other 2)) (page mine))))))
+
+;; nested-blocks : String -> (Listof Natural)
+;; The line of each block of the Org text ORG-TEXT that holds a #+begin_
+;; line, in any case. org reads no block inside another, so a Scheme block
+;; inside a quote would escape every block rule, the twin's among them.
+(define (nested-blocks org-text)
+  (map block-line
+       (filter (lambda (b) (exists (lambda (l) (org-keyword l "#+begin_")) (block-lines b)))
+               (car (org org-text)))))
+
+(test-equal "nested-blocks: a quote holding a Scheme block, and an example holding one in capitals, are named by their lines; a quote of prose, and a src block beside a quote, are not"
+  '((5) (5) () ())
+  (list (nested-blocks (readme-of "#+begin_quote\n" (org-src "scheme" twin) "#+end_quote\n"))
+        (nested-blocks (readme-of "#+begin_example\n#+BEGIN_SRC scheme\n(* 2 21)\n#+END_SRC\n#+end_example\n"))
+        (nested-blocks (readme-of "#+begin_quote\nA quote of prose.\n#+end_quote\n"))
+        (nested-blocks (readme-of (org-src "scheme" twin) "\n#+begin_quote\nProse.\n#+end_quote\n"))))
+
+;; --- whole programs -------------------------------------------------------------------------------
+
+;; first-datum : String -> (U (List Any) 'none 'unreadable)
+;; The first datum Chez's read reads from the text, in a list; none when it
+;; holds none, unreadable when read raises.
+(define (first-datum text)
+  (guard (e (#t 'unreadable))
+    (let ((d (read (open-string-input-port text))))
+      (if (eof-object? d) 'none (list d)))))
+
+;; whole-program? : Block Boolean -> Boolean
+;; A Markdown Scheme fragment whose first datum, as Chez's read reads the
+;; block's text, is a list headed import: a program a reader saves and runs
+;; whole. read skips a #!r6rs and comments before it.
+(define (whole-program? b org?)
+  (and (not org?)
+       (string=? (block-language b) "scheme")
+       (eq? (scheme-mark b org?) 'fragment)
+       (let ((d (first-datum (joined (block-lines b)))))
+         (and (pair? d) (pair? (car d)) (eq? (caar d) 'import)))))
+
+;; text-after : Block (Listof Block) -> (U (Listof String) #f)
+;; The lines of the first text block after B among its page's BLOCKS,
+;; whatever lies between, when it comes before the next Scheme block; #f
+;; when a Scheme block, or the page's end, comes first.
+(define (text-after b blocks)
+  (let ((rest (memq b blocks)))
+    (and rest
+         (let loop ((rest (cdr rest)))
+           (cond ((null? rest) #f)
+                 ((string=? (block-language (car rest)) "text") (block-lines (car rest)))
+                 ((string=? (block-language (car rest)) "scheme") #f)
+                 (else (loop (cdr rest))))))))
+
+;; guards-unavailable? : Any -> Boolean
+;; Whether X holds, at any depth, a guard with a clause whose test is
+;; (sqlite-library-unavailable? V), V the guard's own variable.
+(define (guards-unavailable? x)
+  (cond ((pair? x)
+         (or (and (eq? (car x) 'guard)
+                  (pair? (cdr x)) (list? (cadr x)) (pair? (cadr x)) (symbol? (car (cadr x)))
+                  (exists (lambda (clause)
+                            (and (pair? clause)
+                                 (equal? (car clause)
+                                         (list 'sqlite-library-unavailable? (car (cadr x))))))
+                          (cdr (cadr x))))
+             (guards-unavailable? (car x))
+             (guards-unavailable? (cdr x))))
+        ((vector? x) (guards-unavailable? (vector->list x)))
+        (else #f)))
+
+;; refusal-shape : String -> (U 'one-refusal String)
+;; one-refusal when TEXT is one datum, as write writes it, and a newline,
+;; that datum a list whose first element is refused; else TEXT itself.
+(define (refusal-shape text)
+  (let ((d (datums text)))
+    (if (and (= (length d) 1) (list? (car d)) (pair? (car d)) (eq? (caar d) 'refused)
+             (string=? text (string-append (shown (car d)) "\n")))
+        'one-refusal
+        text)))
+
+(test-equal "whole-program?: a Markdown fragment whose first datum, as read reads it, is a list headed import: past blanks, a #!r6rs, a line comment, a block comment and a datum comment, in brackets, with a datum after; not one whose import comes later, a quoted import, an imports, unreadable text, a runnable block, an Org block, another language, or an empty block"
+  '(#t #t #t #t #t #t #t #t no no no no no no no no no)
+  (let ((b (lambda (lang info lines) (make-block 1 lang info lines #t)))
+        (yes-or-no (lambda (x) (if x #t 'no))))
+    (list (yes-or-no (whole-program? (b "scheme" '() '("(import (rnrs))" "(display 1)")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("" "  (import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("#!r6rs" "(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '(";; app.sps" "(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("#| app.sps" "|# (import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("#;(display 1)" "(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("[import (rnrs)]")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("#!r6rs ;; x" "" "(import (rnrs)) (display 1)")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("(display 1)" "(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("'(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("(imports (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("(import (rnrs)")) #f))
+          (yes-or-no (whole-program? (b "scheme" '("run") '("(import (rnrs))" ";; => 1")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("(import (rnrs))")) #t))
+          (yes-or-no (whole-program? (b "text" '() '("(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "sh" '() '("(import (rnrs))")) #f))
+          (yes-or-no (whole-program? (b "scheme" '() '("" "")) #f)))))
+
+(test-equal "text-after: the first text block's lines after it, right after, with prose between, past an sh block or two, the first of two; none when a Scheme block comes first, a runnable one or a fragment, or none follows"
+  '(("out 1") ("out 2") ("late") ("two sh") none none ("after fragment") none)
+  (let* ((page (markdown (string-append
+                          (fenced "scheme" '("(import (rnrs))")) (fenced "text" '("out 1"))
+                          (fenced "scheme" '("(import (rnrs))")) "\nIt prints:\n\n" (fenced "text" '("out 2"))
+                          (fenced "scheme" '("(import (rnrs))")) (fenced "sh" '("ls")) "\nThen:\n\n"
+                          (fenced "text" '("late"))
+                          (fenced "scheme" '("(import (rnrs))")) (fenced "sh" '("ls")) (fenced "sh" '("pwd"))
+                          (fenced "text" '("two sh")) (fenced "text" '("second"))
+                          (fenced "scheme" '("(import (rnrs))")) (fenced "scheme run" '("1" ";; => 1"))
+                          (fenced "text" '("after run"))
+                          (fenced "scheme" '("(import (rnrs))"))
+                          (fenced "scheme" '("(display 1)")) (fenced "text" '("after fragment"))
+                          (fenced "scheme" '("(import (rnrs))")) (fenced "sh" '("ls")))))
+         (bs (car page)))
+    (map (lambda (b) (or (text-after b bs) 'none))
+         (filter (lambda (b) (eq? (scheme-mark b #f) 'fragment))
+                 (filter (lambda (b) (string=? (block-language b) "scheme")) bs)))))
+
+(test-equal "guards-unavailable?: a guard clause (sqlite-library-unavailable? V) on its own variable, at any depth, among other clauses; not one on another variable, another predicate, or the name outside a guard"
+  '(yes yes no no no)
+  (map (lambda (text) (if (guards-unavailable? (datums text)) 'yes 'no))
+       '("(import (rnrs)) (write (guard (e ((sqlite-library-unavailable? e) 'no)) 1))"
+         "(define (f) (let () (vector (guard (c ((string? c) 1) ((sqlite-library-unavailable? c) 2)) 3))))"
+         "(guard (e ((sqlite-library-unavailable? x) 'no)) 1)"
+         "(guard (e ((sqlite-error? e) 'no)) 1)"
+         "(list sqlite-library-unavailable? (sqlite-library-unavailable? e))")))
+
+(test-equal "refusal-shape: one written datum and a newline, a list whose first element is refused; no newline, a line before, two data, another first element, a bare symbol, another spacing, or unreadable text is its own text"
+  '(one-refusal one-refusal "(refused x)" "start\n(refused x)\n" "(refused x)\n(refused y)\n"
+    "(denied x)\n" "refused\n" "(refused \"a\"  b)\n" "(refused x\n")
+  (map refusal-shape
+       '("(refused x)\n" "(refused load-failed \"/a b\")\n" "(refused x)" "start\n(refused x)\n"
+         "(refused x)\n(refused y)\n" "(denied x)\n" "refused\n" "(refused \"a\"  b)\n" "(refused x\n")))
+
+;; --- pipe tables and their cells ------------------------------------------------------------------
+
+;; pipe-cells : String -> (Listof String)
+;; The cells of a table line: the text between its |s, each trimmed, a |
+;; after a backslash kept as |, the empty text before a leading | and after
+;; a trailing one dropped.
+(define (pipe-cells line)
+  (let* ((s (trim line))
+         (pieces (let loop ((cs (string->list s)) (piece '()) (out '()))
+                   (cond ((null? cs) (reverse (cons (list->string (reverse piece)) out)))
+                         ((and (char=? (car cs) #\\) (pair? (cdr cs)) (char=? (cadr cs) #\|))
+                          (loop (cddr cs) (cons #\| piece) out))
+                         ((char=? (car cs) #\|)
+                          (loop (cdr cs) '() (cons (list->string (reverse piece)) out)))
+                         (else (loop (cdr cs) (cons (car cs) piece) out)))))
+         (pieces (if (starts? s "|") (cdr pieces) pieces))
+         (pieces (if (and (pair? pieces) (ends? s "|") (not (ends? s "\\|")))
+                     (reverse (cdr (reverse pieces)))
+                     pieces)))
+    (map trim pieces)))
+
+;; delimiter-row? : (Listof String) -> Boolean
+;; Cells each of one or more -, with a : at either end or both.
+(define (delimiter-row? cells)
+  (and (pair? cells)
+       (for-all (lambda (c)
+                  (let* ((c (if (starts? c ":") (substring c 1 (string-length c)) c))
+                         (c (if (ends? c ":") (substring c 0 (- (string-length c) 1)) c)))
+                    (and (> (string-length c) 0)
+                         (for-all (lambda (ch) (char=? ch #\-)) (string->list c)))))
+                cells)))
+
+;; table-line? : String -> Boolean
+(define (table-line? line)
+  (let ((indent (run line 0 #\space)))
+    (and (<= indent 3) (< indent (string-length line)) (char=? (string-ref line indent) #\|))))
+
+;; tables : (Listof String) -> (Listof (List Natural (Listof String) (Listof (Listof String))))
+;; Each pipe table of the prose: the number of its first line, its header's
+;; cells, and each later row's cells, in order. A run of table lines whose
+;; second is no delimiter row is no table.
+(define (tables prose)
+  (let loop ((ls prose) (n 1) (out '()))
+    (cond ((null? ls) (reverse out))
+          ((table-line? (car ls))
+           (let collect ((rest ls) (k n) (taken '()))
+             (if (and (pair? rest) (table-line? (car rest)))
+                 (collect (cdr rest) (+ k 1) (cons (car rest) taken))
+                 (let ((lines (reverse taken)))
+                   (loop rest k
+                         (if (and (pair? (cdr lines)) (delimiter-row? (pipe-cells (cadr lines))))
+                             (cons (list n (pipe-cells (car lines)) (map pipe-cells (cddr lines))) out)
+                             out))))))
+          (else (loop (cdr ls) (+ n 1) out)))))
+
+;; cell-span : String -> (U String (List 'not-one-code-span String))
+;; The text of a cell that is one code span, whole; else why not, with it.
+(define (cell-span cell)
+  (let ((ranges (code-ranges cell)))
+    (if (and (= (length ranges) 1) (= (caar ranges) 0) (= (cdar ranges) (string-length cell)))
+        (car (code-spans cell))
+        (list 'not-one-code-span cell))))
+
+;; spans-at : String -> (Listof (List Natural Natural String))
+;; Each code span of the text: where it begins, where it ends, its text.
+(define (spans-at text)
+  (map (lambda (r s) (list (car r) (cdr r) s)) (code-ranges text) (code-spans text)))
+
+;; alternative-word : String (List Natural Natural String) -> (U String #f)
+;; M, when the span of TEXT is written (`ALT` on M), M a word; else #f.
+(define (alternative-word text span)
+  (let ((s (car span)) (e (cadr span)) (n (string-length text)))
+    (and (> s 0) (char=? (string-ref text (- s 1)) #\()
+         (starts? (substring text e n) " on ")
+         (let ((close (search text ")" (+ e 4))))
+           (and close
+                (let ((w (substring text (+ e 4) close)))
+                  (and (> (string-length w) 0) (not (exists blank? (string->list w))) w)))))))
+
+;; spans-on : String String -> (Listof String)
+;; The code spans of CELL on the machine MACHINE: each that is no
+;; alternative, in order, in its place an alternative for MACHINE written
+;; right after it, when there is one.
+(define (spans-on cell machine)
+  (let loop ((rest (spans-at cell)) (out '()))
+    (cond ((null? rest) (reverse out))
+          ((alternative-word cell (car rest)) (loop (cdr rest) out))
+          (else
+           (let* ((alternatives (let take ((r (cdr rest)) (acc '()))
+                                  (if (and (pair? r) (alternative-word cell (car r)))
+                                      (take (cdr r) (cons (car r) acc))
+                                      (reverse acc))))
+                  (mine (find (lambda (a) (string=? (alternative-word cell a) machine)) alternatives)))
+             (loop (cdr rest) (cons (caddr (or mine (car rest))) out)))))))
+
+;; looks-in : String String -> (U (Listof String) (List 'unreadable String))
+;; The paths a where-it-looks cell names on MACHINE, in order: none for no
+;; code span, the one for one, and for more, `FILE` in `DIR`, ..., each
+;; DIR/FILE. A cell of more whose first span " in " does not follow is
+;; unreadable.
+(define (looks-in cell machine)
+  (let ((spans (spans-on cell machine)) (at (spans-at cell)))
+    (cond ((null? spans) '())
+          ((null? (cdr spans)) spans)
+          ((starts? (substring cell (cadr (car at)) (string-length cell)) " in ")
+           (map (lambda (dir) (string-append dir "/" (car spans))) (cdr spans)))
+          (else (list 'unreadable cell)))))
+
+;; spans-before : String String -> (Listof String)
+;; The text of each code span of TEXT that AFTER follows, a line's end in
+;; TEXT read as a space.
+(define (spans-before text after)
+  (let ((flat (list->string (map (lambda (c) (if (char=? c #\newline) #\space c)) (string->list text)))))
+    (map caddr (filter (lambda (s) (starts? (substring flat (cadr s) (string-length flat)) after))
+                       (spans-at flat)))))
+
+;; distinct : (Listof String) -> (Listof String)
+;; Each string once, at its first place.
+(define (distinct xs)
+  (let loop ((rest xs) (out '()))
+    (cond ((null? rest) (reverse out))
+          ((member (car rest) out) (loop (cdr rest) out))
+          (else (loop (cdr rest) (cons (car rest) out))))))
+
+;; stand-in-getenv : String -> (U String #f)
+;; An environment in which GUIX_ENVIRONMENT, GUIX_PROFILE and HOME each name
+;; a directory of its own, /@NAME, and nothing else is set.
+(define (stand-in-getenv name)
+  (and (member name '("GUIX_ENVIRONMENT" "GUIX_PROFILE" "HOME")) (string-append "/@" name)))
+
+;; as-written : String -> String
+;; A path under a stand-in's directory as the page writes it: /@HOME as ~,
+;; any other /@NAME as $NAME; any other path as it is.
+(define (as-written path)
+  (let* ((slash (and (starts? path "/@") (or (search path "/" 2) (string-length path))))
+         (name (and slash (substring path 2 slash))))
+    (if (and name (not (string=? name "")))
+        (string-append (if (string=? name "HOME") "~" (string-append "$" name))
+                       (substring path slash (string-length path)))
+        path)))
+
+;; label-names? : String (List (U 'holds 'begins) String) -> Boolean
+;; Whether a row's first cell names its world by RULE: (holds S), S
+;; anywhere in it; (begins S), S at its start.
+(define (label-names? cell rule)
+  (if (eq? (car rule) 'begins)
+      (starts? cell (cadr rule))
+      (and (search cell (cadr rule) 0) #t)))
+
+(define sample-tables
+  '("Prose."
+    "| A | B |"
+    "|---|:-:|"
+    "| `x` | y \\| z |"
+    "|  | last |"
+    ""
+    "| not | a table |"
+    "| no | delimiter |"
+    ""
+    "   | C |"
+    "   |---|"
+    "    | four spaces, no table line |"))
+
+(test-equal "tables: each run of | lines whose second is a delimiter row, by its first line, its header and its rows; a run with no delimiter row is none, and four spaces end one"
+  '((2 ("A" "B") (("`x`" "y | z") ("" "last")))
+    (10 ("C") ()))
+  (tables sample-tables))
+
+(test-equal "pipe-cells: no outer |s, outer |s, a lone |, an escaped | at the end, and an empty cell"
+  '(("a" "b") ("a") () ("a |") ("a" "" "b"))
+  (map pipe-cells '("a | b" "| a |" "|" "| a \\|" "| a || b |")))
+
+(test-equal "delimiter-row?: -, :-, -:, :-: cells; not an empty cell, a :, text, or no cell"
+  '(yes no no no no)
+  (map (lambda (cells) (if (delimiter-row? cells) 'yes 'no))
+       '(("---" ":--" "--:" ":-:") ("---" "") (":") ("-a-") ())))
+
+(test-equal "cell-span: a cell that is one code span, whole, single or double backticks; text beside it, two spans, none, and an empty cell are not"
+  '("below-floor" "a ` b" (not-one-code-span "`a` b") (not-one-code-span "`a` `b`")
+    (not-one-code-span "a") (not-one-code-span ""))
+  (map cell-span '("`below-floor`" "``a ` b``" "`a` b" "`a` `b`" "a" "")))
+
+(test-equal "looks-in: a file in each directory, in order; an alternative (`ALT` on M) in its span's place on M, first, between or last, and nothing elsewhere; one for another machine ignored; one path alone; none; and more spans not written FILE in DIR"
+  '(("/a/f" "/b/f" "/c/f")
+    ("/a/f" "/b/f" "/c/f")
+    ("/x/f" "/b/f" "/c/f")
+    ("/a/f" "/b/f")
+    ("/a/f" "/y/f" "/c/f")
+    ("/a/f" "/b/f" "/z/f")
+    ("/a/f" "/b/f" "/c/f")
+    ("/p/lib.dylib")
+    ()
+    (unreadable "`f` or `/a`"))
+  (list (looks-in "`f` in `/a`, `/b`, then `/c`" "x86_64")
+        (looks-in "`f` in `/a`, `/b`, then `/c`" "arm64")
+        (looks-in "`f` in `/a` (`/x` on arm64), `/b`, then `/c`" "arm64")
+        (looks-in "`f` in `/a` (`/x` on arm64), then `/b`" "x86_64")
+        (looks-in "`f` in `/a`, `/b` (`/y` on arm64), then `/c`" "arm64")
+        (looks-in "`f` in `/a`, `/b`, then `/c` (`/z` on arm64)" "arm64")
+        (looks-in "`f` in `/a`, `/b` (`/y` on riscv64), then `/c`" "arm64")
+        (looks-in "Apple's `/p/lib.dylib`" "arm64")
+        (looks-in "nothing" "x86_64")
+        (looks-in "`f` or `/a`" "x86_64")))
+
+(test-equal "spans-before: each code span that the text follows, across a line's end; not one another text follows"
+  '("override" "z")
+  (spans-before "and `override` for\n`CHEZ_SQLITE3_LIBRARY`, `x` for `Y`, `z` for `CHEZ_SQLITE3_LIBRARY`"
+                " for `CHEZ_SQLITE3_LIBRARY`"))
+
+(test-equal "distinct: each once, at its first place"
+  '("a" "b" "c")
+  (distinct '("a" "b" "a" "c" "b")))
+
+(test-equal "label-names?: holds finds its word at the cell's start, middle and end, and the whole cell; begins only at the start; neither in another case, nor in an empty cell"
+  '(yes yes yes yes yes no no no no)
+  (map (lambda (c) (if (label-names? (car c) (cadr c)) 'yes 'no))
+       '(("Guix's C library" (holds "Guix")) ("Linux, on Guix's C" (holds "Guix")) ("Linux on Guix" (holds "Guix"))
+         ("Mac" (holds "Mac")) ("Other Linux systems" (begins "Other Linux"))
+         ("Linux, other" (begins "Other Linux")) ("Not any other" (begins "Any other"))
+         ("macOS" (holds "Mac")) ("" (holds "Mac")))))
+
+(test-equal "as-written: a stand-in's directory as $NAME, HOME's as ~, alone or before more; any other path unchanged"
+  '("$GUIX_PROFILE/lib/x" "~/.guix-home/profile/lib/x" "~" "/usr/lib/x" "/@")
+  (map as-written '("/@GUIX_PROFILE/lib/x" "/@HOME/.guix-home/profile/lib/x" "/@HOME" "/usr/lib/x" "/@")))
+
+;; --- the variable's name, and its value ------------------------------------------------------------
+
+;; word-char? : Char -> Boolean
+(define (word-char? c)
+  (or (and (char<=? #\a c) (char<=? c #\z)) (and (char<=? #\A c) (char<=? c #\Z)) (digit? c) (char=? c #\_)))
+
+;; chez-words : String -> (Listof String)
+;; Each word of the text, a run of letters, digits and _, that holds CHEZ_,
+;; in order.
+(define (chez-words s)
+  (let ((n (string-length s)))
+    (let loop ((i 0) (out '()))
+      (cond ((>= i n) (reverse out))
+            ((word-char? (string-ref s i))
+             (let* ((j (let end ((j i)) (if (and (< j n) (word-char? (string-ref s j))) (end (+ j 1)) j)))
+                    (w (substring s i j)))
+               (loop j (if (search w "CHEZ_" 0) (cons w out) out))))
+            (else (loop (+ i 1) out))))))
+
+;; assignment-values : String -> (Listof String)
+;; What follows each CHEZ_SQLITE3_LIBRARY= of the line that sets the
+;; variable, up to a blank or the line's end: one at the line's start or
+;; after a blank, as export X=, env X= and X=... before a command are. One
+;; after any other char, as Org's verbatim =CHEZ_SQLITE3_LIBRARY= is, sets
+;; nothing.
+(define (assignment-values line)
+  (let ((pat "CHEZ_SQLITE3_LIBRARY="))
+    (let loop ((i 0) (out '()))
+      (let ((j (search line pat i)))
+        (if (not j)
+            (reverse out)
+            (let* ((start (+ j (string-length pat)))
+                   (end (let e ((k start))
+                          (if (and (< k (string-length line)) (not (blank? (string-ref line k)))) (e (+ k 1)) k))))
+              (loop end (if (or (= j 0) (blank? (string-ref line (- j 1))))
+                            (cons (substring line start end) out)
+                            out))))))))
+
+(test-equal "chez-words: each word that holds CHEZ_, at the text's start and end, after $, = or a backtick, before =, ' or a backtick, a letter before it or after; not CHEZ alone, CHEZSCHEME, or chez_"
+  '("CHEZ_A" "CHEZ_SQLITE3_LIBRARY" "CHEZ_B_2" "CHEZ_C" "XCHEZ_D" "CHEZ_Ee" "CHEZ_F")
+  (chez-words "CHEZ_A, $CHEZ_SQLITE3_LIBRARY=/x =CHEZ_B_2= `CHEZ_C`'s XCHEZ_D CHEZ_Ee CHEZ CHEZSCHEME chez_x CHEZ_F"))
+
+(test-equal "chez-words: a word that holds CHEZ_, set at each place in a text, is found there alone"
+  (let loop ((i 0) (out '())) (if (> i 6) out (loop (+ i 1) (cons '("CHEZ_Q") out))))
+  (let ((s "a-b, c"))
+    (let loop ((i 0) (out '()))
+      (if (> i (string-length s))
+          out
+          (loop (+ i 1)
+                (cons (chez-words (string-append (substring s 0 i) " CHEZ_Q " (substring s i (string-length s))))
+                      out))))))
+
+(test-equal "assignment-values: each value up to a blank, after export, indented, an empty one, two on a line, at the line's start before a command, past blanks or a tab, after env; none after =, as Org's verbatim is, a backtick, a $, a letter or a quote, nor without its ="
+  '(("/a/b") ("rel") ("") ("/a;" "b") ("/x") ("lib.so") ("t") ("/e") () () () () () ())
+  (map assignment-values
+       '("export CHEZ_SQLITE3_LIBRARY=/a/b" "  export CHEZ_SQLITE3_LIBRARY=rel x" "export CHEZ_SQLITE3_LIBRARY="
+         "export CHEZ_SQLITE3_LIBRARY=/a; export CHEZ_SQLITE3_LIBRARY=b"
+         "CHEZ_SQLITE3_LIBRARY=/x scheme --program app.sps" "  CHEZ_SQLITE3_LIBRARY=lib.so scheme"
+         "\tCHEZ_SQLITE3_LIBRARY=t" "env CHEZ_SQLITE3_LIBRARY=/e scheme"
+         "=CHEZ_SQLITE3_LIBRARY= names it" "`CHEZ_SQLITE3_LIBRARY=x`" "$CHEZ_SQLITE3_LIBRARY=x"
+         "XCHEZ_SQLITE3_LIBRARY=x" "'CHEZ_SQLITE3_LIBRARY=x'" "set CHEZ_SQLITE3_LIBRARY x")))
+
+(test-equal "assignment-values: one after a blank, set at each place in a text, is found there alone; one after =, at each place, is not"
+  (let loop ((i 0) (out '())) (if (> i 5) out (loop (+ i 1) (cons '(("v") ()) out))))
+  (let ((s "a=b c"))
+    (let loop ((i 0) (out '()))
+      (if (> i (string-length s))
+          out
+          (loop (+ i 1)
+                (cons (list (assignment-values (string-append (substring s 0 i) " CHEZ_SQLITE3_LIBRARY=v "
+                                                              (substring s i (string-length s))))
+                            (assignment-values (string-append (substring s 0 i) "=CHEZ_SQLITE3_LIBRARY=v "
+                                                              (substring s i (string-length s)))))
+                      out))))))
 
 ;; --- the pages ----------------------------------------------------------------------------------
 
@@ -845,6 +1496,19 @@
      (cadddr r)))
  runs)
 
+;; --- the README's example, through its twin ---------------------------------------------------------
+
+;; text-or-empty : String -> String
+(define (text-or-empty p) (let ((t (text-of p))) (if (string? t) t "")))
+
+(test-equal "README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line"
+  '()
+  (twin-problems "README.org" (text-or-empty "README.org") (map text-or-empty docs-pages)))
+
+(test-equal "README.org holds no block inside another, where a Scheme block would escape the block rules: the outer blocks' lines"
+  '()
+  (nested-blocks (text-or-empty "README.org")))
+
 ;; --- the links --------------------------------------------------------------------------------------
 
 ;; links-of : String -> (Listof String)
@@ -876,6 +1540,16 @@
   '()
   (filter (lambda (d) (not (member d (linked-files "README.org")))) docs-pages))
 
+;; --- the headings -------------------------------------------------------------------------------------
+
+(test-equal "every page of docs/ has one level-1 heading, and it is the page's first line: the others, by page and the lines of their level-1 headings"
+  '()
+  (apply append
+         (map (lambda (p)
+                (let ((lines (h1-lines (prose-of p))))
+                  (if (equal? lines '(1)) '() (list (list p lines)))))
+              docs-pages)))
+
 ;; --- the prose ----------------------------------------------------------------------------------------
 
 (test-equal "no page says a banned phrase, by page"
@@ -902,6 +1576,169 @@
                                           export-strings)))
                   (map (lambda (n) (list p n)) bad)))
               pages)))
+
+;; --- the variable's name, and its value, on the pages ----------------------------------------------
+
+;; page-lines : String -> (Listof (Pair Natural String))
+;; Every line of the page, in a block or not, with its number.
+(define (page-lines p) (numbered (text-lines (text-or-empty p))))
+
+(test-equal "the pages name CHEZ_SQLITE3_LIBRARY, and set it: the rules below hold words that are there"
+  '(some some)
+  (let ((all (apply append (map page-lines pages))))
+    (list (if (exists (lambda (l) (pair? (chez-words (cdr l)))) all) 'some 'none)
+          (if (exists (lambda (l) (pair? (assignment-values (cdr l)))) all) 'some 'none))))
+
+(test-equal "every word of a page that holds CHEZ_, in a block or not, is CHEZ_SQLITE3_LIBRARY: the others, by page and line"
+  '()
+  (apply append
+         (map (lambda (p)
+                (apply append
+                       (map (lambda (l)
+                              (map (lambda (w) (list p (car l) w))
+                                   (filter (lambda (w) (not (string=? w "CHEZ_SQLITE3_LIBRARY")))
+                                           (chez-words (cdr l)))))
+                            (page-lines p))))
+              pages)))
+
+(test-equal "every CHEZ_SQLITE3_LIBRARY= of a page that sets it, at a line's start or after a blank, in a block or not, gives it a value that begins with /: the others, by page and line"
+  '()
+  (apply append
+         (map (lambda (p)
+                (apply append
+                       (map (lambda (l)
+                              (map (lambda (v) (list p (car l) v))
+                                   (filter (lambda (v) (not (starts? v "/"))) (assignment-values (cdr l)))))
+                            (page-lines p))))
+              pages)))
+
+;; --- finding-sqlite.md's tables, held to the code --------------------------------------------------
+
+(define finding-page "docs/finding-sqlite.md")
+
+;; The page's prose, none when the page is not among the pages read, so
+;; each row below fails by its name.
+(define finding-prose (guard (e (#t '())) (prose-of finding-page)))
+
+(define finding-tables (tables finding-prose))
+
+;; table-headed : String -> (U (List Natural (Listof String) (Listof (Listof String))) (List 'tables Natural))
+;; The one table of the page whose header's first cell is HEAD; else how
+;; many there are.
+(define (table-headed head)
+  (let ((found (filter (lambda (t) (and (pair? (cadr t)) (string=? (car (cadr t)) head))) finding-tables)))
+    (if (= (length found) 1) (car found) (list 'tables (length found)))))
+
+;; rows-of : (U Table (List 'tables Natural)) -> (U (Listof (Listof String)) (List 'tables Natural))
+(define (rows-of t) (if (symbol? (car t)) t (caddr t)))
+
+;; no-table? : Any -> Boolean
+;; Whether ROWS is table-headed's answer that no one table has its header.
+(define (no-table? rows) (and (pair? rows) (eq? (car rows) 'tables)))
+
+(define library-reasons
+  (guard (e (#t (list 'raised (describe e))))
+    (map symbol->string sqlite-library-unavailable-reasons)))
+
+(test-equal "finding-sqlite.md: the reasons table's first column is the library's refusal reasons, in its order, each cell one code span"
+  library-reasons
+  (let ((rows (rows-of (table-headed "Reason"))))
+    (if (no-table? rows)
+        rows
+        (map (lambda (row) (if (pair? row) (cell-span (car row)) (list 'no-cell row))) rows))))
+
+;; discovery-worlds : (Listof (List String (U 'guix 'fhs #f) (Listof (Pair Symbol String))
+;;                                   (List (U 'holds 'begins) String)))
+;; Discovery's worlds, in the table's order: each one's name, the world
+;; libsqlite3-candidates takes, the machine types it is read on, each with
+;; the word a row's (`ALT` on WORD) names it by, and how its row's first
+;; cell names it, as label-names? reads a rule.
+(define discovery-worlds
+  '(("Guix" guix ((ta6le . "x86_64") (tarm64le . "arm64")) (holds "Guix"))
+    ("other Linux" fhs ((ta6le . "x86_64") (tarm64le . "arm64")) (begins "Other Linux"))
+    ("macOS" #f ((ta6osx . "x86_64") (tarm64osx . "arm64")) (holds "Mac"))
+    ("any other system" #f ((ta6fb . "x86_64") (tarm64nt . "arm64")) (begins "Any other"))))
+
+;; world-indices : (Listof Natural)
+;; Each world's place in the table, from 0.
+(define world-indices
+  (let loop ((k (- (length discovery-worlds) 1)) (out '())) (if (< k 0) out (loop (- k 1) (cons k out)))))
+
+;; discovery-says : (U 'guix 'fhs #f) Symbol -> (U (List (Listof String) (Listof String)) (List 'raised String))
+;; Discovery's candidates for WORLD on MACHINE-TYPE, with the stand-in
+;; environment: their paths as the page writes them, and their sources,
+;; each once, in order.
+(define (discovery-says world machine-type)
+  (guard (e (#t (list 'raised (describe e))))
+    (let ((cs (libsqlite3-candidates world machine-type stand-in-getenv)))
+      (list (map (lambda (c) (as-written (car c))) cs)
+            (distinct (map (lambda (c) (symbol->string (cdr c))) cs))))))
+
+;; row-says : (Listof String) String -> (U (List (Listof String) (Listof String)) (List 'cells (Listof String)))
+;; A discovery row read on MACHINE: the paths its second cell names, and its
+;; third cell's code spans.
+(define (row-says cells machine)
+  (if (= (length cells) 3)
+      (list (looks-in (cadr cells) machine) (code-spans (caddr cells)))
+      (list 'cells cells)))
+
+(define discovery-rows (rows-of (table-headed "System")))
+
+(test-equal "finding-sqlite.md: the discovery table has a row for each of discovery's worlds, and no other"
+  (length discovery-worlds)
+  (if (no-table? discovery-rows) discovery-rows (length discovery-rows)))
+
+(for-each
+ (lambda (w k)
+   (test-equal (string-append "finding-sqlite.md: the discovery table's row " (number->string (+ k 1))
+                              ", for " (car w) ", names discovery's candidates, by the paths it writes, and their sources, in order, on x86_64 and on arm64")
+     (map (lambda (m) (discovery-says (cadr w) (car m))) (caddr w))
+     (if (and (not (no-table? discovery-rows)) (> (length discovery-rows) k))
+         (map (lambda (m) (row-says (list-ref discovery-rows k) (cdr m))) (caddr w))
+         'no-row)))
+ discovery-worlds
+ world-indices)
+
+(for-each
+ (lambda (w k)
+   (let ((rule (cadddr w)))
+     (test-equal (string-append "finding-sqlite.md: the discovery table's row " (number->string (+ k 1))
+                                ", for " (car w) ", names its world in its first cell, which "
+                                (if (eq? (car rule) 'begins) "begins " "holds ") (cadr rule))
+       'names-its-world
+       (if (and (not (no-table? discovery-rows)) (> (length discovery-rows) k)
+                (pair? (list-ref discovery-rows k)))
+           (let ((cell (car (list-ref discovery-rows k))))
+             (if (label-names? cell rule) 'names-its-world (list 'first-cell cell)))
+           'no-row))))
+ discovery-worlds
+ world-indices)
+
+;; override-source : (U String (List 'raised String))
+;; The source discovery gives a path CHEZ_SQLITE3_LIBRARY names.
+(define override-source
+  (guard (e (#t (list 'raised (describe e))))
+    (call-with-values
+     (lambda () (choose-libsqlite3 (lambda (name) (and (string=? name "CHEZ_SQLITE3_LIBRARY") "/@override/lib.so"))
+                                   'ta6le #f (lambda (path) #f)))
+     (lambda (path source) (symbol->string source)))))
+
+(define prose-override-sources
+  (spans-before (joined finding-prose) " for `CHEZ_SQLITE3_LIBRARY`"))
+
+(test-equal "finding-sqlite.md: its prose names the source an override gets, in the one code span before \" for `CHEZ_SQLITE3_LIBRARY`\""
+  (list override-source)
+  prose-override-sources)
+
+(test-equal "finding-sqlite.md: the discovery table's sources and the prose's override source are discovery's sources, each once"
+  (guard (e (#t (list 'raised (describe e))))
+    (list-sort string<? (map symbol->string libsqlite3-sources)))
+  (list-sort string<?
+             (append (if (no-table? discovery-rows)
+                         (list (shown discovery-rows))
+                         (apply append (map (lambda (row) (if (= (length row) 3) (code-spans (caddr row)) '()))
+                                            discovery-rows)))
+                     prose-override-sources)))
 
 ;; --- the load a guard cannot catch ------------------------------------------------------------------
 ;; docs/reference.md says a library that fails to load is caught by an eval
@@ -962,29 +1799,37 @@
                           (make-transcoder (utf-8-codec)))
    (lambda (p) (put-string p text))))
 
-;; child : (U String #f) String -> (U (List Integer String String) (List 'raised String))
-;; A program of BODY, after its imports, run in a fresh Chez, with
-;; CHEZ_SQLITE3_LIBRARY set to OVERRIDE, or as the environment has it for #f,
-;; and the status, stdout and stderr it gave.
-(define (child override body)
+;; The library path a reader gives: the quick start's --libdirs names the
+;; clone's src and nothing else, so a program that imports anything more
+;; fails for the reader, and must fail here.
+(define reader-libdirs "src")
+
+;; program-run : (U String #f) String -> (U (List Integer String String) (List 'raised String))
+;; TEXT, as written, run as a program in a fresh Chez with a reader's
+;; library path, through gated-command, with CHEZ_SQLITE3_LIBRARY set to
+;; OVERRIDE, or as the environment has it for #f; and the status, stdout and
+;; stderr it gave.
+(define (program-run override text)
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory
      (lambda (base)
        (let ((program (string-append base "/child.sps")))
-         (write-text program
-                     (string-append "#!r6rs\n(import (rnrs) (rnrs eval) (chez-sqlite3))\n"
-                                    body "\n" valgrind-printer))
+         (write-text program text)
          (capture-command
           (append (if override
                       (list "env" (string-append "CHEZ_SQLITE3_LIBRARY=" override))
                       '())
                   (gated-command getenv
-                                 (list chez "--libdirs" "src:tests:build/scheme-libs"
+                                 (list chez "--libdirs" reader-libdirs
                                        "--program" program)))))))))
 
-;; shown : Datum -> String
-(define (shown d)
-  (call-with-string-output-port (lambda (p) (write d p))))
+;; child : (U String #f) String -> (U (List Integer String String) (List 'raised String))
+;; A program of BODY, after its imports, and then the valgrind printer, run
+;; as program-run runs one.
+(define (child override body)
+  (program-run override
+               (string-append "#!r6rs\n(import (rnrs) (rnrs eval) (chez-sqlite3))\n"
+                              body "\n" valgrind-printer)))
 
 (test-equal "a program that evals a loading call inside the guard the docs show, with the library missing, catches the refusal: it ran to its end, and printed what the guard answered"
   (list 0 (string-append "start\nno-sqlite\n" valgrind-line) "")
@@ -1013,6 +1858,83 @@
          (string-append "(display \"start\\n\")\n"
                         "(write (guard (e ((sqlite-library-unavailable? e) 'caught)) (string? (sqlite-version))))\n"
                         "(newline)")))
+
+;; --- the whole programs, run as written ----------------------------------------------------------
+;; Each runs through program-run, so under make test-memory the gate's own
+;; Valgrind runs it, and reads its log; Valgrind writes to that log, not to
+;; the program's stdout or stderr. A whole program prints no valgrind line
+;; of its own: the rows above, whose children run through the same
+;; program-run, print one, and fail when the gate asked and it says no.
+
+;; whole-programs : (Listof (List String Block (U (Listof String) #f) Boolean))
+;; Each whole program of every Markdown page: its page, its block, the
+;; lines of the text block after it or #f, and whether it holds a guard on
+;; sqlite-library-unavailable?.
+(define whole-programs
+  (apply append
+         (map (lambda (p)
+                (let ((bs (blocks-of p)))
+                  (map (lambda (b)
+                         (list p b (text-after b bs) (guards-unavailable? (datums (joined (block-lines b))))))
+                       (filter (lambda (b) (whole-program? b (org-page? p))) bs))))
+              pages)))
+
+;; program-runs : (Listof (List String Natural (U (Listof String) #f) Run (U Run #f)))
+;; Each whole program's page, line and text block's lines, what it gave run
+;; as the environment has the library, and, for one that guards
+;; sqlite-library-unavailable?, what it gave with the library missing.
+(define program-runs
+  (each-in-order
+   (lambda (w)
+     (let* ((text (joined (block-lines (cadr w))))
+            (present (program-run #f text))
+            (missing (and (cadddr w) (program-run missing-library text))))
+       (list (car w) (block-line (cadr w)) (caddr w) present missing)))
+   whole-programs))
+
+;; status-and-stderr, stdout-of, refusal-of : Run -> ...
+;; What a row asserts of a run's answer, or the answer when the run raised.
+(define (ran? r) (integer? (car r)))
+(define (status-and-stderr r) (if (ran? r) (list (car r) (caddr r)) r))
+(define (stdout-of r) (if (ran? r) (cadr r) r))
+(define (refusal-of r) (if (ran? r) (list (car r) (refusal-shape (cadr r)) (caddr r)) r))
+
+;; loaded-line : (U String (List 'raised String))
+;; What the suite reads itself of the library it loaded, as a program that
+;; guards sqlite-library-unavailable? prints it with the library there: the
+;; list of its version, path and source, written, and a newline.
+(define loaded-line
+  (guard (e (#t (list 'raised (describe e))))
+    (string-append (shown (eval '(list (sqlite-version) (sqlite-library-path) (sqlite-library-source)) run-env))
+                   "\n")))
+
+(test-equal "the docs hold whole programs, and one of them guards sqlite-library-unavailable?"
+  '(some some)
+  (list (if (null? whole-programs) 'none 'some)
+        (if (exists cadddr whole-programs) 'some 'none)))
+
+(test-equal "a whole program of the docs has a text block after it that holds what it prints"
+  'some
+  (if (exists caddr whole-programs) 'some 'none))
+
+(for-each
+ (lambda (r)
+   (let ((name (string-append (car r) ":" (number->string (cadr r)) ": the whole program, run as written, ")))
+     (test-equal (string-append name "exits 0 with nothing on stderr")
+       '(0 "")
+       (status-and-stderr (list-ref r 3)))
+     (when (caddr r)
+       (test-equal (string-append name "prints the text block after it, line for line")
+         (joined (caddr r))
+         (stdout-of (list-ref r 3))))
+     (when (list-ref r 4)
+       (test-equal (string-append name "with the library there, prints the version, path and source the suite reads itself, the list written, and a newline")
+         loaded-line
+         (stdout-of (list-ref r 3)))
+       (test-equal (string-append name "with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused")
+         '(0 one-refusal "")
+         (refusal-of (list-ref r 4))))))
+ program-runs)
 
 (test-end "docs")
 

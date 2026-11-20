@@ -1,0 +1,16 @@
+control: check-site rc=0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow, each page's H1 its label -- all green
+Ra: check-site rc=2
+FAIL each page's footer links its neighbours in the nav, or is absent with none
+Rb: check-site rc=2
+FAIL each page's footer links its neighbours in the nav, or is absent with none
+Rc: check-site rc=2
+FAIL each page's footer links its neighbours in the nav, or is absent with none
+Rd: check-site rc=2
+FAIL a link to the home page is written as index.html, beside the wordmark's and the nav's, and none keeps its .md name
+FAIL on the home page, index.html is linked by the wordmark and by its own nav entry, marked
+P1: check-site rc=2
+FAIL a link to the home page is written as index.html, beside the wordmark's and the nav's, and none keeps its .md name
+FAIL on the home page, index.html is linked by the wordmark and by its own nav entry, marked
+Rf: check-site rc=2
+FAIL every page of pages is written to a file of its own: the first index.html, each other its base name and .html

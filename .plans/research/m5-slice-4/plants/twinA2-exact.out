@@ -1,0 +1,4 @@
+1
+twinA2x: test-docs rc=1
+FAIL twin-problems: the twin is found at each place, first, between and last among a page's runnable blocks, and in the first, middle and last of three pages
+# of expected passes      150

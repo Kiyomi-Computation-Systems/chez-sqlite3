@@ -1,7 +1,7 @@
 #!r6rs
-;;; The suite for Akku.manifest, Akku.lock, CHANGELOG.md and .gitattributes,
-;;; which no tool checks for us. It reads them as data and compares whole
-;;; values:
+;;; The suite for Akku.manifest, Akku.lock, CHANGELOG.md, .gitattributes and
+;;; the clone lines of README.org and docs/, which no tool checks for us. It
+;;; reads them as data and compares whole values:
 ;;;
 ;;;   - the package is chez-sqlite3, one akku-package form, licensed
 ;;;     BSD-3-Clause;
@@ -25,10 +25,16 @@
 ;;;     instructions (ADR-0022). git archive reads the file of the tree it
 ;;;     archives, so a tag's archive follows the tag's file.
 ;;;
-;;; There is no check of git clone lines in README.org or docs/ yet: there
-;;; are no install instructions. They come with the first release. Until a
-;;; check exists, a tripwire fails this suite on any line of README.org, or of
-;;; any file under docs/, that holds "git clone": the line would go unchecked.
+;;; The clone lines. Every line of README.org, or of any file under docs/,
+;;; that holds "git clone" is, past its leading spaces, exactly
+;;; git clone --branch vX.Y.Z https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+;;; X.Y.Z being Akku.manifest's version; while that is 0.0.0, with no
+;;; release, the same line without --branch vX.Y.Z, which clones the default
+;;; branch the docs there describe. README.org holds one, docs/quickstart.md
+;;; one, and another page any number. So a release that bumps the
+;;; manifest and the changelog bumps the clone lines with them, or fails
+;;; (ADR-0007, ADR-0022). Other spellings, as git  clone with two spaces, are
+;;; no clone line.
 ;;;
 ;;; CHANGELOG.md is read as Keep a Changelog writes it: `# Changelog` first,
 ;;; then `## [Unreleased]`, then each release's `## [X.Y.Z] - YYYY-MM-DD`, the
@@ -40,8 +46,9 @@
 ;;; an older one. Lines inside a fenced block are not headings. A yanked
 ;;; release's `[YANKED]` is refused too: the first release yanked amends this.
 ;;;
-;;; make test runs every suite from the repository root, where all four files
-;;; are.
+;;; make test runs every suite from the repository root, where all these
+;;; files are. The clone check takes its root and its version as arguments,
+;;; and is held on fixture trees under tests/fixtures/clone-lines first.
 ;;;
 ;;; Each expected value is one the code under test cannot produce by failing.
 ;;; SRFI-64 turns a raise in the actual expression into #f, so no expected
@@ -335,23 +342,97 @@
                     '(raised no-message))))
     (thunk)))
 
-;; clone-lines : String -> (Listof String)
-;; The lines of README.org, and of each file under docs/, that hold "git
-;; clone", in the directory ROOT: "PATH:N: LINE", with PATH from ROOT, N the
-;; line's number from 1, and LINE whole. README.org must be there: it raises
-;; when it cannot be read. A docs/ that is absent holds nothing. Files in order,
-;; README.org first, then docs/ depth first, each directory sorted.
-(define (clone-lines root)
+;; clone-url : String
+;; The repository a clone line clones.
+(define clone-url "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git")
+
+;; clone-line : String -> String
+;; The one clone line VERSION calls for: the tag vVERSION's; at 0.0.0, no
+;; release, the default branch's.
+(define (clone-line version)
+  (if (string=? version "0.0.0")
+      (string-append "git clone " clone-url)
+      (string-append "git clone --branch v" version " " clone-url)))
+
+;; clone-homes : (Listof String)
+;; The files that hold one clone line each, from the root. No other file
+;; under docs/ holds any.
+(define clone-homes '("README.org" "docs/quickstart.md"))
+
+;; shown : String -> String
+;; TEXT as write writes it, in double quotes.
+(define (shown text)
+  (call-with-string-output-port (lambda (port) (write text port))))
+
+;; numbered-clone-lines : String -> (Listof (Pair Integer String))
+;; Each line of the file at PATH that holds "git clone", with its number from
+;; 1. It raises when the file cannot be read.
+(define (numbered-clone-lines path)
+  (let loop ((lines (file-lines path)) (n 1) (found '()))
+    (cond ((null? lines) (reverse found))
+          ((contains? (car lines) "git clone") (loop (cdr lines) (+ n 1) (cons (cons n (car lines)) found)))
+          (else (loop (cdr lines) (+ n 1) found)))))
+
+;; line-numbers : (Listof (Pair Integer String)) -> String
+;; The numbers of numbered LINES, ", " between them.
+(define (line-numbers lines)
+  (fold-left (lambda (text line)
+               (string-append text (if (string=? text "") "" ", ") (number->string (car line))))
+             "" lines))
+
+;; home-problems : String (Listof (Pair Integer String)) String String -> (Listof String)
+;; line-problems : String (Listof (Pair Integer String)) String String -> (Listof String)
+;; Each of the clone lines LINES of the file REL that is not WANT, the line
+;; VERSION calls for, past its leading spaces.
+(define (line-problems rel lines version want)
   (apply append
-         (map (lambda (rel)
-                (let loop ((lines (file-lines (string-append root "/" rel))) (n 1) (found '()))
-                  (cond ((null? lines) (reverse found))
-                        ((contains? (car lines) "git clone")
-                         (loop (cdr lines) (+ n 1)
-                               (cons (string-append rel ":" (number->string n) ": " (car lines))
-                                     found)))
-                        (else (loop (cdr lines) (+ n 1) found)))))
-              (cons "README.org" (files-under root "docs")))))
+         (map (lambda (line)
+                (let ((text (substring (cdr line) (indent (cdr line)) (string-length (cdr line)))))
+                  (if (string=? text want)
+                      '()
+                      (list (string-append rel ":" (number->string (car line))
+                                           ": past its leading spaces it is " (shown text)
+                                           ", but version " version " calls for " (shown want))))))
+              lines)))
+
+;; home-problems : String (Listof (Pair Integer String)) String String -> (Listof String)
+;; What is wrong with the clone lines LINES of the file REL, one of
+;; clone-homes, where VERSION calls for the line WANT: how many there are,
+;; unless one, then each line that is not WANT past its leading spaces.
+(define (home-problems rel lines version want)
+  (append
+   (cond ((null? lines)
+          (list (string-append rel ": it holds no git clone line, but must hold one")))
+         ((pair? (cdr lines))
+          (list (string-append rel ": it holds " (number->string (length lines))
+                               " git clone lines, at lines " (line-numbers lines)
+                               ", but must hold one")))
+         (else '()))
+   (line-problems rel lines version want)))
+
+;; clone-problems : String String -> (Listof String)
+;; What is wrong with the clone lines of the tree at ROOT, VERSION being
+;; Akku.manifest's: each problem names its file, from ROOT, and its line. A
+;; clone line is any line of README.org, or of a file under docs/, that holds
+;; "git clone", and past its leading spaces each is (clone-line VERSION).
+;; README.org and docs/quickstart.md hold one each; another page may hold
+;; any number. Files in order, README.org first, then docs/ depth first, each
+;; directory sorted, and then a quick start that is missing. It raises when
+;; README.org, or a file under docs/, cannot be read.
+(define (clone-problems root version)
+  (let* ((want (clone-line version))
+         (rels (cons "README.org" (files-under root "docs"))))
+    (append
+     (apply append
+            (map (lambda (rel)
+                   (let ((lines (numbered-clone-lines (string-append root "/" rel))))
+                     (if (member rel clone-homes)
+                         (home-problems rel lines version want)
+                         (line-problems rel lines version want))))
+                 rels))
+     (if (member "docs/quickstart.md" rels)
+         '()
+         (list "docs/quickstart.md: there is no such file, but it must hold one git clone line")))))
 
 ;; attribute-lines : (Listof String) -> (Listof (Listof String))
 ;; The words of each line of a .gitattributes, its blanks and tabs the
@@ -601,30 +682,109 @@
                (if (eq? latest 'none) "0.0.0" latest))))
   (answer package-version))
 
-;; --- git clone lines: a tripwire until a check of them exists ---------------------
-;; clone-lines is held on fixture trees first, so that a tripwire which never
-;; fires cannot pass the real one.
+;; --- git clone lines ---------------------------------------------------------------
+;; clone-problems is held on the fixture trees under tests/fixtures/clone-lines
+;; first, at each version a row names, so that a check which never fires
+;; cannot pass the real tree. The expected messages are written here, from
+;; the URL the fixtures write, not from clone-url.
 
-(test-equal "clone-lines: a git clone line in README.org is named, with its file, number and whole text"
-  '("README.org:3:   $ git clone https://example.invalid/x.git")
-  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/readme"))))
+(define clone-fixtures "tests/fixtures/clone-lines")
 
-(test-equal "clone-lines: a git clone line in a file deep under docs/ is named the same way"
-  '("docs/guide/install.md:5:     git clone https://example.invalid/x.git")
-  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/docs"))))
+;; fixture-clone : String -> String
+;; A clone line of the fixtures: of the tag TAG, or with no --branch for "".
+(define (fixture-clone tag)
+  (string-append "git clone " (if (string=? tag "") "" (string-append "--branch " tag " "))
+                 "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git"))
 
-(test-equal "clone-lines: lines that mention git, a clone, or neither, are not clone lines"
+;; not-the-line : String Integer String String String -> String
+;; The complaint about line N of PATH, which is TEXT past its leading spaces,
+;; where VERSION calls for the clone line of TAG.
+(define (not-the-line path n text version tag)
+  (string-append path ":" (number->string n) ": past its leading spaces it is \"" text
+                 "\", but version " version " calls for \"" (fixture-clone tag) "\""))
+
+;; clones-at : String String -> Any
+;; clone-problems on the fixture tree TREE at VERSION, or what it raised.
+(define (clones-at tree version)
+  (answer (lambda () (clone-problems (string-append clone-fixtures "/" tree) version))))
+
+(test-equal "clone-problems: a tree with no release, its README's line in a block, the quick start's at the line's start, a page that mentions git and a clone: nothing at 0.0.0"
   '()
-  (answer (lambda () (clone-lines "tests/fixtures/clone-lines/clean"))))
+  (clones-at "unreleased" "0.0.0"))
 
-(test-equal "clone-lines: with no README.org it raises, and does not pass for want of a file"
-  '("failed for ~a: ~(~a~)"
-    ("tests/fixtures/clone-lines/none/README.org" "No such file or directory"))
-  (refusal (lambda () (clone-lines "tests/fixtures/clone-lines/none"))))
+(test-equal "clone-problems: the same tree at 0.1.0, where each line must name the tag: both lines named"
+  (list (not-the-line "README.org" 6 (fixture-clone "") "0.1.0" "v0.1.0")
+        (not-the-line "docs/quickstart.md" 4 (fixture-clone "") "0.1.0" "v0.1.0"))
+  (clones-at "unreleased" "0.1.0"))
 
-(test-equal "README.org and docs/ hold no git clone line: no clone-line check exists yet, so none may be written"
+(test-equal "clone-problems: a tree whose lines name v0.1.0, the quick start's in an indented block: nothing at 0.1.0"
   '()
-  (answer (lambda () (clone-lines "."))))
+  (clones-at "released" "0.1.0"))
+
+(test-equal "clone-problems: the same tree at 0.0.0, where no line may name a branch: both lines named"
+  (list (not-the-line "README.org" 6 (fixture-clone "v0.1.0") "0.0.0" "")
+        (not-the-line "docs/quickstart.md" 5 (fixture-clone "v0.1.0") "0.0.0" ""))
+  (clones-at "released" "0.0.0"))
+
+(test-equal "clone-problems: the same tree at 0.2.0, whose tag the lines do not name: both lines named"
+  (list (not-the-line "README.org" 6 (fixture-clone "v0.1.0") "0.2.0" "v0.2.0")
+        (not-the-line "docs/quickstart.md" 5 (fixture-clone "v0.1.0") "0.2.0" "v0.2.0"))
+  (clones-at "released" "0.2.0"))
+
+(test-equal "clone-problems: a quick start whose line names another version than the README's: it alone is named"
+  (list (not-the-line "docs/quickstart.md" 4 (fixture-clone "v0.2.0") "0.1.0" "v0.1.0"))
+  (clones-at "other-version" "0.1.0"))
+
+(test-equal "clone-problems: a line cloning the repository without .git, and one cloning another host's: both named"
+  (list (not-the-line "README.org" 6
+                      "git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3"
+                      "0.1.0" "v0.1.0")
+        (not-the-line "docs/quickstart.md" 4
+                      "git clone --branch v0.1.0 https://gitlab.com/Kiyomi-Computation-Systems/chez-sqlite3.git"
+                      "0.1.0" "v0.1.0"))
+  (clones-at "other-url" "0.1.0"))
+
+(test-equal "clone-problems: a second line in README.org and in the quick start, each named; in another page, the right line passes, and a wrong one, git clone at a line's start, middle and end, is named"
+  (list "README.org: it holds 2 git clone lines, at lines 3, 5, but must hold one"
+        (not-the-line "docs/a/b.md" 2
+                      "git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git"
+                      "0.0.0" "")
+        (not-the-line "docs/finding.md" 1 "git clone first, at the start of a line" "0.0.0" "")
+        (not-the-line "docs/finding.md" 2 "in the middle, git clone, of a line" "0.0.0" "")
+        (not-the-line "docs/finding.md" 3 "at the end of a line, git clone" "0.0.0" "")
+        "docs/quickstart.md: it holds 2 git clone lines, at lines 3, 4, but must hold one")
+  (clones-at "extra-lines" "0.0.0"))
+
+(test-equal "clone-problems: a README.org and a quick start with no clone line: both named"
+  (list "README.org: it holds no git clone line, but must hold one"
+        "docs/quickstart.md: it holds no git clone line, but must hold one")
+  (clones-at "missing-lines" "0.0.0"))
+
+(test-equal "clone-problems: a docs/ with no quick start, and a tree with no docs/: the quick start named, missing"
+  '(("docs/quickstart.md: there is no such file, but it must hold one git clone line")
+    ("docs/quickstart.md: there is no such file, but it must hold one git clone line"))
+  (list (clones-at "no-quickstart" "0.0.0") (clones-at "no-docs" "0.0.0")))
+
+(test-equal "clone-problems: a line with a space at its end, and one indented with a tab, which is no leading space: both named"
+  (list (not-the-line "README.org" 3 (string-append (fixture-clone "") " ") "0.0.0" "")
+        (string-append "docs/quickstart.md:3: past its leading spaces it is \"\\t" (fixture-clone "")
+                       "\", but version 0.0.0 calls for \"" (fixture-clone "") "\""))
+  (clones-at "spacing" "0.0.0"))
+
+(test-equal "clone-problems: with no README.org it raises, and does not pass for want of a file"
+  (list "failed for ~a: ~(~a~)"
+        (list (string-append clone-fixtures "/no-readme/README.org") "No such file or directory"))
+  (refusal (lambda () (clone-problems (string-append clone-fixtures "/no-readme") "0.0.0"))))
+
+;; A fixture tree no row reads guards nothing.
+(test-equal "every fixture tree under tests/fixtures/clone-lines is one the rows above read"
+  '("extra-lines" "missing-lines" "no-docs" "no-quickstart" "no-readme" "other-url" "other-version"
+    "released" "spacing" "unreleased")
+  (answer (lambda () (list-sort string<? (directory-list clone-fixtures)))))
+
+(test-equal "README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start"
+  '()
+  (answer (lambda () (clone-problems "." (package-version)))))
 
 ;; --- .gitattributes ----------------------------------------------------------
 ;; attribute-lines is held on the suite's own text first, so that a reader

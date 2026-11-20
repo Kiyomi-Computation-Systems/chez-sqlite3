@@ -1,3 +1,0 @@
-* A title
-
-No install lines here, and git is not cloned.

@@ -14,8 +14,8 @@
 ;;;     scheme --program tests/check-site.sps
 ;;; or simply `make check-site`.
 ;;;
-;;; Asserts seven invariants directly on render-site's return value -- no
-;;; filesystem write, no `build/site/` dependency:
+;;; Asserts eight invariants, on render-site's return value and the files
+;;; it reads -- no filesystem write, no `build/site/` dependency:
 ;;;   1. nav completeness -- (site pages) names exactly docs/*.md on disk,
 ;;;      the home page, its first, included.
 ;;;   2. anchor resolution -- render-site left no dangling intra-site link.
@@ -27,8 +27,11 @@
 ;;;      (site pages) writes it to, or the stylesheet.
 ;;;   6. every link out to the repository (a ../ escape) names a file the
 ;;;      checkout has.
-;;;   7. the nav is README.org's list of the pages, its pages in its order,
-;;;      under its labels, so the home page is that list's first.
+;;;   7. the nav is README.org's list of the pages, in its "** Documentation"
+;;;      section, its pages in its order, under its labels, so the home page
+;;;      is that list's first.
+;;;   8. every page's first line is "# " and its nav label, so a label and
+;;;      its page's H1 cannot drift apart.
 ;;;
 ;;; Each invariant `die`s with its own name on failure and exits 1, so a
 ;;; caller reading this program's stderr learns which invariant broke.
@@ -211,11 +214,12 @@
 ;; --- (7) the nav is README.org's list of the pages ----------------------------
 ;; README.org lists the pages: each an Org link [[file:docs/PAGE.md][LABEL]],
 ;; on any line of its "** Documentation" section, after its heading and up to
-;; the next heading of any level. A README.org with no such section lists them
-;; by every such link it holds. (site pages) must be those links, in order: so
-;; a page listed there and not in the nav, a label changed in one alone, or
-;; two pages swapped, fails, and the home page, the nav's first, is the
-;; list's first. A link into docs/ that names no .md file, as
+;; the next heading of any level. A link into docs/ elsewhere in the file lists
+;; no page, and a README.org with no such section, or with two, fails, naming
+;; it: the nav is held to that one list. (site pages) must be those links, in
+;; order: so a page listed there and not in the nav, a label changed in one
+;; alone, or two pages swapped, fails, and the home page, the nav's first, is
+;; the list's first. A link into docs/ that names no .md file, as
 ;; [[file:docs/][docs/]] does, lists no page.
 (define (file-lines path)
   (call-with-input-file path
@@ -235,15 +239,18 @@
 
 ;; documentation-lines : (Listof String) -> (Listof String)
 ;; The lines of the "** Documentation" section of README.org's LINES, after
-;; its heading and up to the next heading; LINES whole when it has none.
+;; its heading and up to the next heading. It dies, naming the section, when
+;; README.org has none, or more than one.
 (define (documentation-lines lines)
   (let ((tail (member "** Documentation" lines)))
-    (if tail
-        (let loop ((ls (cdr tail)) (acc '()))
-          (if (or (null? ls) (org-heading? (car ls)))
-              (reverse acc)
-              (loop (cdr ls) (cons (car ls) acc))))
-        lines)))
+    (unless tail
+      (die "check-site: README.org has no \"** Documentation\" section, the list of the pages the nav is held to"))
+    (when (member "** Documentation" (cdr tail))
+      (die "check-site: README.org has more than one \"** Documentation\" section: the nav is held to one list of the pages"))
+    (let loop ((ls (cdr tail)) (acc '()))
+      (if (or (null? ls) (org-heading? (car ls)))
+          (reverse acc)
+          (loop (cdr ls) (cons (car ls) acc))))))
 
 ;; docs-links : (Listof String) -> (Listof (Pairof String String))
 ;; The (page . label) of each [[file:docs/PAGE.md][LABEL]] in LINES, in
@@ -292,5 +299,22 @@
   (unless (string=? probe "<pre><code>a\n        b\n</code></pre>")
     (die "check-site: <pre> reflow FAILED: " probe)))
 
-(display "check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow -- all green\n")
+;; --- (8) every page's H1 is its nav label -------------------------------------
+;; A page's first line must be "# " and its label in (site pages). (7) holds
+;; the labels to README.org's; this holds the pages' headings to both: a
+;; heading changed on its page alone, or a label changed in the nav and
+;; README.org and not on its page, fails, naming the page, the line it wants
+;; and the line it found.
+(for-each
+  (lambda (pg)
+    (let* ((path (string-append "docs/" (car pg)))
+           (lines (file-lines path))
+           (want (string-append "# " (cdr pg))))
+      (unless (and (pair? lines) (string=? (car lines) want))
+        (die "check-site: a page's H1 is not its nav label, in " path ": wanted \"" want
+             "\" as its first line, found "
+             (if (pair? lines) (string-append "\"" (car lines) "\"") "an empty page")))))
+  pages)
+
+(display "check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow, each page's H1 its label -- all green\n")
 (exit 0)

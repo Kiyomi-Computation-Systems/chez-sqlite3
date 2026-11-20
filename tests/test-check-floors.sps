@@ -20,10 +20,14 @@
 ;;;
 ;;; The CI rules hold every file under the workflow directory: no line may
 ;;; contain a floor's version text, and none may hold a backslash after a
-;;; double quote. The same file tests the CI scripts that read the floors file
-;;; or hold the workflows, scripts/ci/floor.sh and check-action-pins.sh, in
-;;; temporary trees and directories the suite makes, each call in a directory
-;;; of its own.
+;;; double quote. The docs rules hold every file under the docs directory, and
+;;; every line of README.org but its Requirements' list lines: none may hold a
+;;; floor's version text, nor the SQLite floor's numeric forms as whole runs
+;;; of digits, each held at every place in a line and beside every character.
+;;; The same file tests the CI scripts that read the floors file or hold the
+;;; workflows, scripts/ci/floor.sh and check-action-pins.sh, in temporary
+;;; trees and directories the suite makes, each call in a directory of its
+;;; own.
 ;;;
 ;;; The program runs under the CHEZ the container exports: without it nothing
 ;;; below can run, which fails here, by name, and never skips. Each computation
@@ -756,6 +760,130 @@
   (string-append "8001002\n" "name: CI\n" "# 8010200")
   (list (numbered wp 1) (amalgam wp 3)))
 
+;; --- the README: no floor but in the Requirements' list lines ------------------------
+;; Every other line of the README is held as a page is: no line may contain
+;; either floor's version text, nor the SQLite floor's numeric forms as whole
+;; runs of digits. The Requirements' prose lines are held too; the list lines
+;; there are the comparison's.
+
+;; said : String String String String String -> String
+;; The complaint that WHERE, "line N" or "its name", of the file PATH holds
+;; FORM, one of the fixtures' floor texts or numeric forms; WHO is the rule's
+;; words, FLOORS the floors file's path.
+(define (said who floors path where form)
+  (string-append path ": " where " contains "
+                 (cond ((string=? form "10.9.1") "the Chez floor 10.9.1")
+                       ((string=? form "8.1.2") "the SQLite floor 8.1.2")
+                       ((string=? form "8001002") "8001002, the version-number form of the SQLite floor 8.1.2")
+                       ((string=? form "8010200") "8010200, the amalgamation form of the SQLite floor 8.1.2")
+                       (else (string-append "an unknown form " form)))
+                 ", which " who " " floors))
+
+(define readme-who
+  "only the list lines under \"** Requirements\" may write: they state it from")
+
+;; readme-said : Natural String -> String
+;; The complaint about line N of the README rp, which holds FORM.
+(define (readme-said n form) (said readme-who fp rp (string-append "line " (number->string n)) form))
+
+;; readme-around : (Listof String) (Listof String) -> String
+;; A README of the lines BEFORE, then a Requirements section of the two
+;; lines, then the lines AFTER.
+(define (readme-around before after)
+  (apply readme (append before (list section line-chez line-sqlite) after)))
+
+(define the-forms '("8.1.2" "8001002" "8010200" "10.9.1"))
+
+;; at-each-place : String -> (Listof String)
+;; Three lines that hold FORM: at the start of a line, in its middle, at its
+;; end.
+(define (at-each-place form)
+  (list (string-append form " at the start of a line")
+        (string-append "in the middle " form " of a line")
+        (string-append "at the end of a line " form)))
+
+(for-each
+ (lambda (form)
+   (readme-row (string-append form " in the Status section, at the start, the middle and the end of a line: each line named")
+     (readme-around (append (list "* Title" "** Status") (at-each-place form)) '())
+     (list (readme-said 3 form) (readme-said 4 form) (readme-said 5 form)))
+   (readme-row (string-append form " before the first heading, in a section after Requirements, and in a src block there: each line named")
+     (readme-around (list (string-append "A taste of " form "."))
+                    (list "** License" (string-append form " here") "#+begin_src scheme"
+                          (string-append "(list " form ")") "#+end_src"))
+     (list (readme-said 1 form) (readme-said 6 form) (readme-said 8 form)))
+   (readme-row (string-append form " in a prose line of the Requirements section: named, where its list lines are not")
+     (under-section line-chez (string-append "Prose that says " form ".") line-sqlite)
+     (list (readme-said 8 form))))
+ the-forms)
+
+(readme-row "the Chez floor in the Status section, as a list line there: named, for only the Requirements' list lines may say it"
+  (readme-around (list "* Title" "** Status" line-chez) '())
+  (list (readme-said 3 "10.9.1")))
+
+(readme-row "a heading that holds a floor is a line like any other: named"
+  (readme-around (list "* chez-sqlite3 for SQLite 8.1.2") '())
+  (list (readme-said 1 "8.1.2")))
+
+(readme-row "an extra list line in the Requirements that holds a floor is the comparison's: named as an extra line, not as a floor"
+  (under-section line-chez line-sqlite "  * SQLite 8.1.2 again")
+  (list (extra-line "  * SQLite 8.1.2 again")))
+
+(readme-row "a deeper heading ends the Requirements' list lines: a list line under it is held"
+  (under-section line-chez line-sqlite "*** Details" "- SQLite 8.1.2 or later")
+  (list (readme-said 10 "8.1.2")))
+
+(readme-row "the forms beside letters and digits, and the Chez floor's digits run together, in the Status section: nothing to report"
+  (readme-around (list "* Title" "** Status" "a8001002 18010200 8001002f 80102001 10091 1009001") '())
+  '())
+
+(readme-row "both floors and both forms on one line: the Chez floor, then the SQLite floor, then its two forms"
+  (readme-around (list "8010200 8001002 8.1.2 10.9.1") '())
+  (list (readme-said 1 "10.9.1") (readme-said 1 "8.1.2") (readme-said 1 "8001002") (readme-said 1 "8010200")))
+
+(readme-row "with no Requirements section, that alone is named: the other lines are held against the one section"
+  (readme "* Title" "** Status" "Chez 10.9.1 and SQLite 8.1.2")
+  (list no-section))
+
+(readme-row "with two Requirements sections, that alone is named"
+  (string-append (apply under-section good-lines) (readme "** Status" "SQLite 8.1.2")
+                 (apply under-section good-lines))
+  (list (many-sections "2")))
+
+;; The boundary against its whole complement, in a Status line of the README,
+;; as for the workflows: for the numeric forms, exactly the 62 ASCII letters
+;; and digits leave a form unfound; the version texts are found beside every
+;; character.
+
+;; readme-unfound : String (Char -> String) -> (Listof Char)
+;; The neighbours for which the README whose Status line is LINE-OF's has no
+;; complaint MESSAGE, or raises.
+(define (readme-unfound message line-of)
+  (let ((outcomes
+         (map (lambda (c)
+                (cons c (outcome (lambda ()
+                                   (check-floors fp good rp (readme-around (list "* Title" "** Status" (line-of c)) '())
+                                                 wd (list (list wp good-workflow)))))))
+              neighbours)))
+    (let loop ((rest outcomes) (acc '()))
+      (cond ((null? rest) (reverse acc))
+            ((and (eq? (car (cdar rest)) 'returned) (member message (cadr (cdar rest))))
+             (loop (cdr rest) acc))
+            (else (loop (cdr rest) (cons (caar rest) acc)))))))
+
+(for-each
+ (lambda (form)
+   (let ((unfound (if (member form '("8001002" "8010200")) letters-and-digits '())))
+     (test-equal (string-append "README boundary: " form " with each character on its left is found but for "
+                                (if (null? unfound) "none" "the ASCII letters and digits"))
+       unfound
+       (readme-unfound (readme-said 3 form) (lambda (c) (string-append (string c) form))))
+     (test-equal (string-append "README boundary: " form " with each character on its right is found but for "
+                                (if (null? unfound) "none" "the ASCII letters and digits"))
+       unfound
+       (readme-unfound (readme-said 3 form) (lambda (c) (string-append form (string c)))))))
+ the-forms)
+
 ;; --- the workflow: a backslash after a double quote ----------------------------------
 ;; YAML reads escapes inside double quotes, so "8\x2e1\x2e2" is the SQLite
 ;; floor with no floor text in it. check-floors does not resolve them: it
@@ -1278,6 +1406,145 @@
   (workflow-with "      - run: echo \"x\" 8.1.\\" "2")
   (list (literal body-line "SQLite" "8.1.2") (escaped wp body-line)))
 
+;; --- the docs directory: pure -----------------------------------------------------
+;; docs-problems holds every file under the docs directory, each as its path
+;; and text, as scripts-problems holds the scripts: no line, a code block's
+;; among them, and no file's name, may hold a floor's version text, or the
+;; SQLite floor's numeric forms as whole runs of digits, by the same boundary.
+;; A page names the floors by a link to README.org's Requirements. The rules
+;; about double quotes are YAML's, and no line is joined to the next: a page is
+;; read by its lines as written. The directory must hold a file. The base is
+;; the fixtures' floors, 10.9.1 and 8.1.2.
+
+(define dd "D")
+(define dp "D/page.md")
+
+(define docs-who
+  "no page may write: a page links to README.org's Requirements, which state it from")
+
+;; docs-said : String Natural String -> String
+;; The complaint about line N of the page PATH, which holds FORM.
+(define (docs-said path n form) (said docs-who fp path (string-append "line " (number->string n)) form))
+
+;; docs-name-said : String String -> String
+;; The complaint about the name of the file PATH, which holds FORM.
+(define (docs-name-said path form) (said docs-who fp path "its name" form))
+
+(define docs-no-files (string-append dd ": it holds no file, but must hold the docs' pages"))
+
+(define (docs-row name pages problems)
+  (test-equal (string-append "docs: " name)
+    (list 'returned problems)
+    (outcome (lambda () (docs-problems fp dd pages (parse-floors good))))))
+
+;; page : String ... -> String
+;; A page of a heading and a blank line, then LINES, the first of them line 3.
+(define (page . lines) (apply workflow (cons "# A page" (cons "" lines))))
+
+(docs-row "a page that names no floor of the file, the real floors and other versions among them, in prose and in a code block: nothing to report"
+  (list (list dp (page "Ubuntu 24.04's library is 3.45.1, the real floor, here no floor."
+                       "```text" "10.4.0 3045001 3450100 10.9 8.1 8.1.3 8001003 8010300" "```")))
+  '())
+
+(for-each
+ (lambda (form)
+   (docs-row (string-append form " in a page's prose, at the start, the middle and the end of a line: each line named")
+     (list (list dp (apply page (at-each-place form))))
+     (list (docs-said dp 3 form) (docs-said dp 4 form) (docs-said dp 5 form)))
+   (docs-row (string-append form " in a page's fenced code block, at each place: each line named")
+     (list (list dp (apply page (append (list "```sh") (at-each-place form) (list "```")))))
+     (list (docs-said dp 4 form) (docs-said dp 5 form) (docs-said dp 6 form)))
+   (docs-row (string-append form " in an indented code block of a page in a subdirectory: named by its path and line")
+     (list (list dp (page)) (list "D/guide/deep.md" (page (string-append "    (list " form ")"))))
+     (list (docs-said "D/guide/deep.md" 3 form)))
+   (docs-row (string-append "a file named for " form ", and a file in a directory named for it: named by their paths, not their lines")
+     (list (list dp (page)) (list (string-append "D/pin-" form ".md") (page))
+           (list (string-append "D/" form "/page.md") (page)))
+     (list (docs-name-said (string-append "D/" form "/page.md") form)
+           (docs-name-said (string-append "D/pin-" form ".md") form))))
+ the-forms)
+
+(docs-row "both floors and both forms on one line: the Chez floor, then the SQLite floor, then its two forms"
+  (list (list dp (page "8010200 8001002 8.1.2 10.9.1")))
+  (list (docs-said dp 3 "10.9.1") (docs-said dp 3 "8.1.2") (docs-said dp 3 "8001002") (docs-said dp 3 "8010200")))
+
+(docs-row "the floor inside a longer number is still the floor's text, before it and after it"
+  (list (list dp (page "110.9.1 and 8.1.23")))
+  (list (docs-said dp 3 "10.9.1") (docs-said dp 3 "8.1.2")))
+
+(docs-row "the forms beside letters and digits, a hex digest, and the Chez floor's digits run together: nothing to report"
+  (list (list dp (page "a8001002 18010200 8001002f 80102001 deadbeef8001002cafe 10091 1009001 10090100")))
+  '())
+
+(docs-row "a backslash after a double quote and an odd number of double quotes are prose, not YAML: nothing to report"
+  (list (list dp (page "echo \"\\x38\"" "an \"open quote")))
+  '())
+
+(docs-row "a line ending in a backslash joins nothing in a page: a floor split there is no floor"
+  (list (list dp (page "v=8.1.\\" "2" "w=10.9\\" ".1")))
+  '())
+
+(docs-row "a hidden file, a file with no .md and a file in a subdirectory are each held, in path order, whatever order they come in"
+  (list (list "D/z.md" (page "8.1.2")) (list "D/.notes" "10.9.1\n") (list "D/a/b.txt" "\n8001002\n")
+        (list dp (page)))
+  (list (docs-said "D/.notes" 1 "10.9.1") (docs-said "D/a/b.txt" 2 "8001002") (docs-said "D/z.md" 3 "8.1.2")))
+
+(docs-row "a floor on the first line of a page, and on its last, which has no newline after it"
+  (list (list dp "8.1.2\n# A page\n\n8010200"))
+  (list (docs-said dp 1 "8.1.2") (docs-said dp 4 "8010200")))
+
+(docs-row "no file at all: the directory is named, once"
+  '()
+  (list docs-no-files))
+
+(docs-row "an unreadable page, #f, is not compared; an unreadable file's name is held"
+  (list (list dp #f) (list "D/8.1.2.md" #f))
+  (list (docs-name-said "D/8.1.2.md" "8.1.2")))
+
+(test-equal "docs: the directory's own name is no part of a file's name"
+  (list 'returned '())
+  (outcome (lambda () (docs-problems fp "D/8.1.2" (list (list "D/8.1.2/page.md" (page))) (parse-floors good)))))
+
+(test-equal "docs: the floors come from the floors file: the forms of SQLite 3.46.0 are found, and 3.45.1's are not"
+  (list 'returned
+        (list (string-append dp ": line 3 contains 3046000, the version-number form of the SQLite floor 3.46.0, which " docs-who " " fp)
+              (string-append dp ": line 3 contains 3460000, the amalgamation form of the SQLite floor 3.46.0, which " docs-who " " fp)))
+  (outcome (lambda ()
+             (docs-problems fp dd (list (list dp (page "3046000 3460000 3045001 3450100")))
+                            (parse-floors (floors-of "\"10.9.1\"" "\"3.46.0\""))))))
+
+;; The boundary against its whole complement, in a page, as for the
+;; workflows: for the numeric forms, exactly the 62 ASCII letters and digits
+;; leave a form unfound; the version texts are found beside every character.
+
+;; docs-unfound : String (Char -> String) -> (Listof Char)
+;; The neighbours for which the page whose line 3 is LINE-OF's has no
+;; complaint MESSAGE, or raises.
+(define (docs-unfound message line-of)
+  (let ((outcomes
+         (map (lambda (c)
+                (cons c (outcome (lambda ()
+                                   (docs-problems fp dd (list (list dp (page (line-of c)))) (parse-floors good))))))
+              neighbours)))
+    (let loop ((rest outcomes) (acc '()))
+      (cond ((null? rest) (reverse acc))
+            ((and (eq? (car (cdar rest)) 'returned) (member message (cadr (cdar rest))))
+             (loop (cdr rest) acc))
+            (else (loop (cdr rest) (cons (caar rest) acc)))))))
+
+(for-each
+ (lambda (form)
+   (let ((unfound (if (member form '("8001002" "8010200")) letters-and-digits '())))
+     (test-equal (string-append "docs boundary: " form " with each character on its left is found but for "
+                                (if (null? unfound) "none" "the ASCII letters and digits"))
+       unfound
+       (docs-unfound (docs-said dp 3 form) (lambda (c) (string-append (string c) form))))
+     (test-equal (string-append "docs boundary: " form " with each character on its right is found but for "
+                                (if (null? unfound) "none" "the ASCII letters and digits"))
+       unfound
+       (docs-unfound (docs-said dp 3 form) (lambda (c) (string-append form (string c)))))))
+ the-forms)
+
 ;; --- the program -----------------------------------------------------------------------
 
 ;; run : (Listof String) -> (U (List Integer String String) (List 'raised String))
@@ -1297,6 +1564,20 @@
 ;; a backslash after a double quote and an odd number of double quotes in it.
 (define clean-scripts (at "legal" "scripts"))
 
+;; clean-docs, clean-doc-names : String
+;; The docs directory the cases share, and the pages the program reads in it:
+;; one page, and one in a subdirectory, that name versions no floor of the
+;; fixtures equals, in prose and in a code block.
+(define clean-docs (at "legal" "docs"))
+(define clean-doc-names "page.md, sub/more.md")
+
+;; docs-said-legal, readme-said-legal : the complaints a case that takes the
+;; legal fixture's floors file names a page's line, or a README's, by.
+(define (docs-said-legal path n form)
+  (said docs-who (at "legal" "floors.sexp") path (string-append "line " (number->string n)) form))
+(define (readme-said-legal path n form)
+  (said readme-who (at "legal" "floors.sexp") path (string-append "line " (number->string n)) form))
+
 ;; scripts-wrote-legal, scripts-form-legal : the complaints a case that takes
 ;; the legal fixture's floors file (8.1.2) names it by.
 (define (scripts-wrote-legal path n which version)
@@ -1305,34 +1586,53 @@
   (scripts-form-from (at "legal" "floors.sexp") path n form what))
 
 ;; both : String -> (Listof String)
-;; The four arguments the program takes for the fixture directory CASE: the
-;; floors file, the README, the workflow directory and the shared scripts
-;; directory.
+;; The five arguments the program takes for the fixture directory CASE: the
+;; floors file, the README, the workflow directory, and the shared scripts and
+;; docs directories.
 (define (both case)
-  (list (at case "floors.sexp") (at case "README.org") (at case "workflows") clean-scripts))
+  (list (at case "floors.sexp") (at case "README.org") (at case "workflows") clean-scripts clean-docs))
 
 ;; with-scripts : String -> (Listof String)
-;; The four arguments for a case that holds only a scripts directory: the
-;; legal fixture's floors file, README and workflows, and CASE's scripts.
+;; The five arguments for a case that holds only a scripts directory: the
+;; legal fixture's floors file, README and workflows, CASE's scripts, and the
+;; shared docs.
 (define (with-scripts case)
   (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows")
-        (at case "scripts")))
+        (at case "scripts") clean-docs))
 
-;; holds-with : String String String String String String String -> (List 0 String "")
-;; What a pass prints: the README, the workflow directory and the scripts
-;; directory that hold the floors in the floors file, the files read in each
-;; directory, and the floors.
-(define (holds-with readme-path workflows-path names scripts-path script-names floors-path summary)
+;; with-docs : String -> (Listof String)
+;; The five arguments for a case that holds only a docs directory: the legal
+;; fixture's floors file, README, workflows and scripts, and CASE's docs.
+(define (with-docs case)
+  (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows")
+        clean-scripts (at case "docs")))
+
+;; with-readme : String -> (Listof String)
+;; The five arguments for a case that holds only a README: the legal
+;; fixture's floors file, CASE's README, and the shared directories.
+(define (with-readme case)
+  (list (at "legal" "floors.sexp") (at case "README.org") (at "legal" "workflows")
+        clean-scripts clean-docs))
+
+;; holds-with : String String String String String String String String String -> (List 0 String "")
+;; What a pass prints: the README, the workflow directory, the scripts
+;; directory and the docs directory that hold the floors in the floors file,
+;; the files read in each directory, and the floors.
+(define (holds-with readme-path workflows-path names scripts-path script-names docs-path doc-names
+                    floors-path summary)
   (list 0
         (string-append "check-floors: " readme-path ", " workflows-path " (" names ")"
-                       " and " scripts-path " (" script-names ")"
+                       ", " scripts-path " (" script-names ")"
+                       " and " docs-path " (" doc-names ")"
                        " hold the floors in " floors-path " (" summary ")\n")
         ""))
 
 ;; holds : String String String String String -> (List 0 String "")
-;; The same, with the shared scripts directory, which holds floor.sh alone.
+;; The same, with the shared scripts directory, which holds floor.sh alone,
+;; and the shared docs directory.
 (define (holds readme-path workflows-path names floors-path summary)
-  (holds-with readme-path workflows-path names clean-scripts "floor.sh" floors-path summary))
+  (holds-with readme-path workflows-path names clean-scripts "floor.sh" clean-docs clean-doc-names
+              floors-path summary))
 
 ;; refused : Natural String ... -> (List 1 "" String)
 ;; What a failure prints: PROBLEMS, one line each, then the count. COUNT is
@@ -1359,7 +1659,7 @@
 (define usage
   (list 1
         ""
-        "check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS\n"))
+        "check-floors: usage: scheme --libdirs tests --program tests/check-floors.sps FLOORS README WORKFLOWS SCRIPTS DOCS\n"))
 
 (define floors-summary "chez 10.9.1, sqlite 8.1.2")
 
@@ -1537,7 +1837,54 @@
          "the scripts directory is itself a symbolic link to a directory with a legal floor.sh: refused, not followed"
          (with-scripts "scripts-self-link")
          (refused 1 (string-append (at "scripts-self-link" "scripts")
-                                   ": it cannot be read: Exception: it is a symbolic link, not a directory")))))
+                                   ": it cannot be read: Exception: it is a symbolic link, not a directory")))
+   (list "docs-sqlite-literal"
+         "a page names the SQLite floor at the start of a line, in its middle and at its end"
+         (with-docs "docs-sqlite-literal")
+         (refused 3 (docs-said-legal (at "docs-sqlite-literal" "docs/page.md") 3 "8.1.2")
+                  (docs-said-legal (at "docs-sqlite-literal" "docs/page.md") 4 "8.1.2")
+                  (docs-said-legal (at "docs-sqlite-literal" "docs/page.md") 5 "8.1.2")))
+   (list "docs-sqlite-number"
+         "a page names the SQLite floor's version number, 8001002, at the start of a line, in its middle beside a parenthesis, and at its end"
+         (with-docs "docs-sqlite-number")
+         (refused 3 (docs-said-legal (at "docs-sqlite-number" "docs/page.md") 3 "8001002")
+                  (docs-said-legal (at "docs-sqlite-number" "docs/page.md") 4 "8001002")
+                  (docs-said-legal (at "docs-sqlite-number" "docs/page.md") 5 "8001002")))
+   (list "docs-sqlite-amalgamation"
+         "a page names the SQLite floor's amalgamation number, 8010200, at the start of a line, in a file name, and at its end"
+         (with-docs "docs-sqlite-amalgamation")
+         (refused 3 (docs-said-legal (at "docs-sqlite-amalgamation" "docs/page.md") 3 "8010200")
+                  (docs-said-legal (at "docs-sqlite-amalgamation" "docs/page.md") 4 "8010200")
+                  (docs-said-legal (at "docs-sqlite-amalgamation" "docs/page.md") 5 "8010200")))
+   (list "docs-code-block"
+         "a fenced code block of a page names the Chez floor"
+         (with-docs "docs-code-block")
+         (refused 1 (docs-said-legal (at "docs-code-block" "docs/page.md") 6 "10.9.1")))
+   (list "docs-nested"
+         "a page in a subdirectory, guide/deep.md, names the SQLite floor, beside a clean page"
+         (with-docs "docs-nested")
+         (refused 1 (docs-said-legal (at "docs-nested" "docs/guide/deep.md") 3 "8.1.2")))
+   (list "docs-name-floor"
+         "a page named sqlite-8.1.2.md, whose lines hold no floor: its name holds the SQLite floor"
+         (with-docs "docs-name-floor")
+         (refused 1 (said docs-who (at "legal" "floors.sexp") (at "docs-name-floor" "docs/sqlite-8.1.2.md")
+                          "its name" "8.1.2")))
+   (list "docs-dir-link"
+         "a symbolic link to a directory among the pages is not followed: it is a file that cannot be read"
+         (with-docs "docs-dir-link")
+         (refused 1 (string-append
+                     (at "docs-dir-link" "docs/linked")
+                     ": it cannot be read: Exception in get-string-all: failed on #<binary input port "
+                     (at "docs-dir-link" "docs/linked") ">: is a directory")))
+   (list "docs-self-link"
+         "the docs directory is itself a symbolic link to a directory of clean pages: refused, not followed"
+         (with-docs "docs-self-link")
+         (refused 1 (string-append (at "docs-self-link" "docs")
+                                   ": it cannot be read: Exception: it is a symbolic link, not a directory")))
+   (list "readme-status-chez"
+         "README.org's Status section names the Chez floor, outside the Requirements' list lines"
+         (with-readme "readme-status-chez")
+         (refused 1 (readme-said-legal (at "readme-status-chez" "README.org") 5 "10.9.1")))))
 
 ;; ad hoc : (List String (Listof String) Expected)
 ;; Runs that need no directory of their own: no file exists, a bad floors file
@@ -1545,46 +1892,66 @@
 ;; arguments.
 (define ad-hoc
   (list
-   (list "no file exists: all four named, the floors first, then the README, then the workflow directory, then the scripts directory"
-         (list (at "legal" "none.sexp") (at "legal" "none.org") (at "legal" "none") (at "legal" "nothing"))
-         (refused 4 (cannot-read (at "legal" "none.sexp"))
+   (list "no file exists: all five named, the floors first, then the README, then the workflow directory, then the scripts directory, then the docs directory"
+         (list (at "legal" "none.sexp") (at "legal" "none.org") (at "legal" "none") (at "legal" "nothing")
+               (at "legal" "nowhere"))
+         (refused 5 (cannot-read (at "legal" "none.sexp"))
                   (cannot-read (at "legal" "none.org"))
                   (cannot-list (at "legal" "none") "no such file or directory")
-                  (cannot-list (at "legal" "nothing") "no such file or directory")))
-   (list "a bad floors file, no README, no workflow directory and no scripts directory: the floors problems, then the README, then the directories"
+                  (cannot-list (at "legal" "nothing") "no such file or directory")
+                  (cannot-list (at "legal" "nowhere") "no such file or directory")))
+   (list "a bad floors file, no README, no workflow, scripts or docs directory: the floors problems, then the README, then the directories"
          (list (at "floors-invalid" "floors.sexp") (at "floors-invalid" "none.org")
-               (at "floors-invalid" "none") (at "floors-invalid" "nothing"))
-         (refused 5
+               (at "floors-invalid" "none") (at "floors-invalid" "nothing") (at "floors-invalid" "nowhere"))
+         (refused 6
                   (string-append (at "floors-invalid" "floors.sexp") ": the key python is extra: the keys are chez, sqlite")
                   (string-append (at "floors-invalid" "floors.sexp")
                                  ": chez: the version \"10.9\" is not three dot-separated naturals, major.minor.patch")
                   (cannot-read (at "floors-invalid" "none.org"))
                   (cannot-list (at "floors-invalid" "none") "no such file or directory")
-                  (cannot-list (at "floors-invalid" "nothing") "no such file or directory")))
+                  (cannot-list (at "floors-invalid" "nothing") "no such file or directory")
+                  (cannot-list (at "floors-invalid" "nowhere") "no such file or directory")))
+   (list "a bad floors file and a docs directory whose page names a floor: the page is not read against it"
+         (list (at "floors-invalid" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts
+               (at "docs-sqlite-literal" "docs"))
+         (refused 2
+                  (string-append (at "floors-invalid" "floors.sexp") ": the key python is extra: the keys are chez, sqlite")
+                  (string-append (at "floors-invalid" "floors.sexp")
+                                 ": chez: the version \"10.9\" is not three dot-separated naturals, major.minor.patch")))
    (list "a README with a problem and no workflow directory: both named, the README first"
-         (list (at "legal" "floors.sexp") (at "no-section" "README.org") (at "legal" "none") clean-scripts)
+         (list (at "legal" "floors.sexp") (at "no-section" "README.org") (at "legal" "none") clean-scripts clean-docs)
          (refused 2
                   (string-append (at "no-section" "README.org") ": it has no \"** Requirements\" section")
                   (cannot-list (at "legal" "none") "no such file or directory")))
    (list "the workflows argument names ci.yml itself, a file: it cannot be read as a directory"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows/ci.yml") clean-scripts)
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows/ci.yml") clean-scripts clean-docs)
          (refused 1 (cannot-list (at "legal" "workflows/ci.yml") "not a directory")))
    (list "the scripts argument names floor.sh itself, a file: it cannot be read as a directory"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "scripts/floor.sh"))
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "scripts/floor.sh") clean-docs)
          (refused 1 (cannot-list (at "legal" "scripts/floor.sh") "not a directory")))
    (list "a scripts directory that is missing, with the rest right: named alone"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "nothing"))
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") (at "legal" "nothing") clean-docs)
          (refused 1 (cannot-list (at "legal" "nothing") "no such file or directory")))
+   (list "the docs argument names a page itself, a file: it cannot be read as a directory"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts (at "legal" "docs/page.md"))
+         (refused 1 (cannot-list (at "legal" "docs/page.md") "not a directory")))
+   (list "a docs directory that is missing, with the rest right: named alone"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts (at "legal" "nowhere"))
+         (refused 1 (cannot-list (at "legal" "nowhere") "no such file or directory")))
    (list "no arguments: the usage line, exit 1" '() usage)
    (list "one argument: the usage line, exit 1" (list (at "legal" "floors.sexp")) usage)
    (list "two arguments: the usage line, exit 1"
          (list (at "legal" "floors.sexp") (at "legal" "README.org"))
          usage)
-   (list "three arguments, as before the scripts were held: the usage line, exit 1"
+   (list "three arguments: the usage line, exit 1"
          (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows"))
          usage)
-   (list "five arguments: the usage line, exit 1"
-         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts "extra")
+   (list "four arguments, as before the docs were held: the usage line, exit 1"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts)
+         usage)
+   (list "six arguments: the usage line, exit 1"
+         (list (at "legal" "floors.sexp") (at "legal" "README.org") (at "legal" "workflows") clean-scripts clean-docs
+               "extra")
          usage)))
 
 (for-each
@@ -1610,7 +1977,8 @@
    (lambda ()
      (call-with-temp-directory
       (lambda (dir)
-        (let ((got (run (list (at "no-workflow" "floors.sexp") (at "no-workflow" "README.org") dir clean-scripts)))
+        (let ((got (run (list (at "no-workflow" "floors.sexp") (at "no-workflow" "README.org") dir clean-scripts
+                              clean-docs)))
               (want (refused 1 (string-append dir ": it holds no file, but must hold ci.yml,"
                                               " the workflow CI runs"))))
           (if (equal? got want) 'same (list 'got got 'want want))))))))
@@ -1623,9 +1991,21 @@
      (call-with-temp-directory
       (lambda (dir)
         (let ((got (run (list (at "legal" "floors.sexp") (at "legal" "README.org")
-                              (at "legal" "workflows") dir)))
+                              (at "legal" "workflows") dir clean-docs)))
               (want (refused 1 (string-append dir ": it holds no file, but must hold floor.sh,"
                                               " the script CI reads the floors through"))))
+          (if (equal? got want) 'same (list 'got got 'want want))))))))
+
+;; The same for the docs directory.
+(test-equal "program: an empty docs directory: named, once, and nothing else"
+  '(returned same)
+  (outcome
+   (lambda ()
+     (call-with-temp-directory
+      (lambda (dir)
+        (let ((got (run (list (at "legal" "floors.sexp") (at "legal" "README.org")
+                              (at "legal" "workflows") clean-scripts dir)))
+              (want (refused 1 (string-append dir ": it holds no file, but must hold the docs' pages"))))
           (if (equal? got want) 'same (list 'got got 'want want))))))))
 
 ;; The program and the pure procedure agree on the fixtures: each answer above
@@ -1637,6 +2017,14 @@
              (check-floors "f" (file-text (at "legal" "floors.sexp"))
                            "r" (file-text (at "legal" "README.org"))
                            "w" (list (list "w/ci.yml" (file-text (at "legal" "workflows/ci.yml"))))))))
+
+(test-equal "the legal fixture's pages pass the pure procedure"
+  '(returned ())
+  (outcome (lambda ()
+             (docs-problems "f" "d"
+                            (list (list "d/page.md" (file-text (at "legal" "docs/page.md")))
+                                  (list "d/sub/more.md" (file-text (at "legal" "docs/sub/more.md"))))
+                            (parse-floors (file-text (at "legal" "floors.sexp")))))))
 
 ;; A fixture nothing runs guards nothing, and a case with no fixture runs on a
 ;; missing directory.
@@ -1729,6 +2117,22 @@
                            ".github/workflows"
                            (list (list ".github/workflows/ci.yml"
                                        (file-text ".github/workflows/ci.yml")))))))
+
+;; files-in : String -> (Listof String)
+;; Every file under DIR, in its subdirectories too, in no set order.
+(define (files-in dir)
+  (apply append
+         (map (lambda (name)
+                (let ((path (string-append dir "/" name)))
+                  (if (file-directory? path) (files-in path) (list path))))
+              (directory-list dir))))
+
+(test-equal "the checked-in pages under docs/ hold no floor"
+  '(returned ())
+  (outcome (lambda ()
+             (docs-problems floors-path "docs"
+                            (map (lambda (path) (list path (file-text path))) (files-in "docs"))
+                            (read-floors)))))
 
 ;; --- the CI scripts ------------------------------------------------------------------
 ;;

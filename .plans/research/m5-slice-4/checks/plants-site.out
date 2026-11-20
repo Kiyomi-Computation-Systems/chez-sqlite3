@@ -1,0 +1,19 @@
+site-deps exit 0
+=== the stand-in README, whole
+--- old-on-stand-in: exit 0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow -- all green
+--- new-on-stand-in: exit 0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow -- all green
+=== s-heading-deleted: the stand-in README with its ** Documentation line deleted
+--- old-heading-deleted: exit 1
+check-site: the nav is not README.org's list of the pages. listed=((quickstart.md . quick start) (reference.md . API reference)) nav=((reference.md . API reference))
+--- new-heading-deleted: exit 1
+check-site: README.org has no "** Documentation" section, the list of the pages the nav is held to
+=== s-main-readme: main's README.org, which has no ** Documentation section and links the reference elsewhere
+--- old-main-readme: exit 0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow -- all green
+--- new-main-readme: exit 1
+check-site: README.org has no "** Documentation" section, the list of the pages the nav is held to
+=== restored
+--- new-restored: exit 0
+check-site: nav, anchors, no .md leak, every link written, repository links exist, nav is README.org's list, no <pre> reflow -- all green

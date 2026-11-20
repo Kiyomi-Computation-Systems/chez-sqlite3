@@ -1,0 +1,81 @@
+=== m-never-fires: exit 1
+FAIL twin-problems: one char off, at the start or the end of any of its lines, the ;; => line's too, and the block has no twin, named by its line
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   (() () () () () ())
+FAIL twin-problems: a twin is all of a runnable block's lines, as written: its body alone, a line added before or after, two lines swapped, each line indented, have none
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   (() () () () ())
+FAIL twin-problems: a README with no Scheme block is named: prose that says scheme, an sh block, a quote, an example, and an empty README
+  expected: ((("R" no-scheme-block)) (("R" no-scheme-block)))
+  actual:   (() ())
+FAIL twin-problems: two Scheme blocks, each held: the second without a twin, the first, and both, each named by its line, in order
+  expected: ((("R" 10 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin) ("R" 10 no-twin)))
+  actual:   (() () ())
+FAIL twin-problems: the same lines in a block not marked run are no twin: plain scheme, scheme run with another word, scheme example, sh, text, and no language
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   (() () () () () ())
+FAIL twin-problems: the twin may be in any page, among other runnable blocks; with no page there is none
+  expected: (() () (("R" 5 no-twin)))
+  actual:   (() () ())
+=== m-always-fires: exit 1
+FAIL twin-problems: a README whose one Scheme block is a page's runnable block, line for line, has its twin
+  expected: ()
+  actual:   (("R" no-scheme-block))
+FAIL twin-problems: one char off, at the start or the end of any of its lines, the ;; => line's too, and the block has no twin, named by its line
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   ((("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)))
+FAIL twin-problems: a twin is all of a runnable block's lines, as written: its body alone, a line added before or after, two lines swapped, each line indented, have none
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   ((("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)))
+FAIL twin-problems: two Scheme blocks, each held: the second without a twin, the first, and both, each named by its line, in order
+  expected: ((("R" 10 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin) ("R" 10 no-twin)))
+  actual:   ((("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)))
+FAIL twin-problems: the same lines in a block not marked run are no twin: plain scheme, scheme run with another word, scheme example, sh, text, and no language
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   ((("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)))
+FAIL twin-problems: the twin may be in any page, among other runnable blocks; with no page there is none
+  expected: (() () (("R" 5 no-twin)))
+  actual:   ((("R" no-scheme-block)) (("R" no-scheme-block)) (("R" no-scheme-block)))
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" no-scheme-block))
+=== m-any-scheme-block: exit 1
+FAIL twin-problems: the same lines in a block not marked run are no twin: plain scheme, scheme run with another word, scheme example, sh, text, and no language
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   (() () () (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+=== m-lines-trimmed: exit 1
+FAIL twin-problems: a twin is all of a runnable block's lines, as written: its body alone, a line added before or after, two lines swapped, each line indented, have none
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) ())
+=== m-prefix-is-twin: exit 1
+FAIL twin-problems: a twin is all of a runnable block's lines, as written: its body alone, a line added before or after, two lines swapped, each line indented, have none
+  expected: ((("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+  actual:   (() (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin)))
+=== m-first-block-only: exit 1
+FAIL twin-problems: two Scheme blocks, each held: the second without a twin, the first, and both, each named by its line, in order
+  expected: ((("R" 10 no-twin)) (("R" 5 no-twin)) (("R" 5 no-twin) ("R" 10 no-twin)))
+  actual:   (() (("R" 5 no-twin)) (("R" 5 no-twin)))
+=== p-readme-one-char-off: exit 1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" 26 no-twin))
+=== p-twin-fence-plain-scheme: exit 1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" 26 no-twin))
+=== p-twin-deleted: exit 1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" 26 no-twin))
+=== p-readme-no-scheme-block: exit 1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" no-scheme-block))
+=== p-readme-second-block-no-twin: exit 1
+FAIL README.org holds a Scheme block, and each is, line for line, all of a runnable block of a page of docs/: the blocks that are not, by line
+  expected: ()
+  actual:   (("README.org" 35 no-twin))
+=== restored: exit 0
+%%%% Starting test docs
+# of expected passes      117
+suite-exit-status: the sqlite3_memory_used check passed: the count is back at its baseline, 0 bytes, after the control's :memory: open and close
