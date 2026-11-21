@@ -21,7 +21,7 @@ case $base in http://*/ | https://*/) ;; *) usage ;; esac
 case $tag in v[0-9]*.[0-9]*.[0-9]*) ;; *) usage ;; esac
 
 repo=https://github.com/Kiyomi-Computation-Systems/chez-sqlite3
-pages="index.html finding-sqlite.html libraries.html reference.html style.css"
+pages="index.html examples.html finding-sqlite.html libraries.html reference.html style.css"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/live-check.XXXXXX") || exit 2
 trap 'rm -rf "$tmp"' EXIT
 fail=0

@@ -18,6 +18,10 @@ Homebrew's.
 git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
 ```
 
+Git may warn that the tag "is not a commit!", and say you are in a
+"detached HEAD" state. Both are expected for a release's tag: the clone
+holds the release.
+
 There is nothing to build. chez-sqlite3 is Scheme source, and it loads
 SQLite's library when your program runs. `src/` holds the library you
 import, `(chez-sqlite3)`.
@@ -146,6 +150,8 @@ lists every target.
 
 ## Next
 
+- [Examples](examples.md): five programs for everyday work, each in
+  full.
 - [Finding SQLite](finding-sqlite.md): which library is loaded, and how to
   name another.
 - [What varies by library](libraries.md): what differs between the SQLites

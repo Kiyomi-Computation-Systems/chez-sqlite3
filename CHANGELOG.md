@@ -6,6 +6,13 @@ All notable changes to chez-sqlite3 are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Examples:** five programs in `examples/`, each shown in full, with
+  what it prints, on [their page](docs/examples.md): basics,
+  transactions and errors, prepared statements, a database file with
+  its migrations, and SQLite's JSON functions.
+
 ## [0.1.0] - 2026-11-20
 
 The first release: SQLite for Chez Scheme, bound to SQLite's own C

@@ -79,6 +79,7 @@ The [[file:docs/quickstart.md][quick start]] shows the whole program, and how to
 ** Documentation
 
 - [[file:docs/quickstart.md][Quick start]]: from a clone to a first query.
+- [[file:docs/examples.md][Examples]]: five programs for everyday work, JSON among them.
 - [[file:docs/finding-sqlite.md][Finding SQLite]]: which library is loaded, and how to name another.
 - [[file:docs/libraries.md][What varies by library]]: what differs between the SQLites the suites ran on.
 - [[file:docs/reference.md][API reference]]: every name the library exports.

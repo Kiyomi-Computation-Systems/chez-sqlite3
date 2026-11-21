@@ -38,6 +38,23 @@
 ;;;   nothing on stderr, and prints one datum, as write writes it, and a
 ;;;   newline: a list whose first element is refused. Some whole program
 ;;;   has a text block that holds what it prints;
+;;; - every whole program runs from a fresh directory of its own, src named
+;;;   by its absolute path, so a file it writes by a relative path lands
+;;;   there, not in the checkout; one that leaves a file there runs again
+;;;   beside it, and exits 0 with nothing on stderr, printing the same. Some
+;;;   whole program does;
+;;; - no whole program names a (chez-sqlite3 private ...) library: no list
+;;;   of its data, at any depth, begins chez-sqlite3 private, so neither its
+;;;   import form, a second import in its body, an environment nor a quoted
+;;;   name reaches one. The reader's library path finds those too;
+;;; - docs/examples.md's whole programs and the .sps files of examples/ are
+;;;   twins: each program's lines, each ended by a newline, are the text of
+;;;   the file the page links last before it, after the Scheme block before
+;;;   it, a link written [`examples/NAME.sps`](../examples/NAME.sps), and each
+;;;   file is one program's. Each of the page's programs has a text block
+;;;   after it. So the files run, through their blocks. The page's sh blocks
+;;;   run one from beside a clone, chez-sqlite3/examples/NAME.sps, and each
+;;;   file they name is there;
 ;;; - docs/finding-sqlite.md's tables are the code's. The reasons table's
 ;;;   first column, each cell one code span, is the library's list of
 ;;;   refusal reasons, in its order. The discovery table's rows are
@@ -116,7 +133,7 @@
         (only (chez-sqlite3 private conditions) sqlite-library-unavailable-reasons)
         (only (chez-sqlite3 private discovery)
               choose-libsqlite3 libsqlite3-candidates libsqlite3-sources)
-        (only (chezscheme) directory-list file-directory? getenv))
+        (only (chezscheme) current-directory directory-list file-directory? getenv))
 
 ;; SRFI-64 sets no exit status. This suite's last line turns the runner's
 ;; counts into one.
@@ -1057,6 +1074,336 @@
        '("(refused x)\n" "(refused load-failed \"/a b\")\n" "(refused x)" "start\n(refused x)\n"
          "(refused x)\n(refused y)\n" "(denied x)\n" "refused\n" "(refused \"a\"  b)\n" "(refused x\n")))
 
+;; --- the private libraries a whole program names ----------------------------------------------
+
+;; elements : Any -> (Listof Any)
+;; The elements of a list, and the tail of an improper one as the last.
+(define (elements x)
+  (cond ((pair? x) (cons (car x) (elements (cdr x))))
+        ((null? x) '())
+        (else (list x))))
+
+;; private-names : Any -> (Listof (Listof Symbol))
+;; The name of each private library X names: each list among X's elements,
+;; at any depth, a vector's among them, whose first two elements are
+;; chez-sqlite3 and private, as its symbols, a version after them dropped.
+;; Never a list's tail, which is no element. However a program reaches the
+;; library, by its import form, a second import in its body, an
+;; environment or a quoted name, it names it. In the order met, each once.
+(define (private-names x)
+  (let walk ((x x) (found '()))
+    (cond ((vector? x) (fold-left (lambda (acc e) (walk e acc)) found (vector->list x)))
+          ((pair? x)
+           (let ((found (if (and (pair? (cdr x)) (eq? (car x) 'chez-sqlite3) (eq? (cadr x) 'private))
+                            (let ((name (filter symbol? (elements x))))
+                              (if (member name found) found (append found (list name))))
+                            found)))
+             (fold-left (lambda (acc e) (walk e acc)) found (elements x))))
+          (else found))))
+
+(test-equal "private-names: a private library named plainly, with a version, through only, except, prefix, rename, for and library, two in turn, the bare prefix, a second import in the body, an environment, a quoted name and one in a vector, each once in its order; not chez-sqlite3, chez-sqlite3-testing, private chez-sqlite3, chez-sqlite3 privates, private as an identifier, the two symbols quoted apart, a list's tail, or a string"
+  '(((chez-sqlite3 private utf8))
+    ((chez-sqlite3 private native))
+    ((chez-sqlite3 private counters))
+    ((chez-sqlite3 private memory))
+    ((chez-sqlite3 private open))
+    ((chez-sqlite3 private values))
+    ((chez-sqlite3 private script))
+    ((chez-sqlite3 private interrupt))
+    ((chez-sqlite3 private a) (chez-sqlite3 private b))
+    ((chez-sqlite3 private))
+    ((chez-sqlite3 private utf8))
+    ((chez-sqlite3 private native))
+    ((chez-sqlite3 private open))
+    ((chez-sqlite3 private memory))
+    ((chez-sqlite3 private a))
+    () () () () () () ())
+  (map (lambda (text) (private-names (datums text)))
+       '("(import (rnrs) (chez-sqlite3 private utf8))"
+         "(import (chez-sqlite3 private native (1 0)) (chez-sqlite3))"
+         "(import (only (chez-sqlite3 private counters) native-counts))"
+         "(import (except (chez-sqlite3 private memory) x))"
+         "(import (prefix (chez-sqlite3 private open) o:))"
+         "(import (rename (chez-sqlite3 private values) (a b)))"
+         "(import (for (chez-sqlite3 private script) run expand))"
+         "(import (library (chez-sqlite3 private interrupt)))"
+         "(import (prefix (only (chez-sqlite3 private a) x) p:) (rnrs) (for (except (chez-sqlite3 private b) y) run))"
+         "(import (chez-sqlite3 private))"
+         "(import (rnrs) (only (chezscheme) import)) (display 1) (import (chez-sqlite3 private utf8))"
+         "(import (rnrs) (rnrs eval)) (eval 'x (environment '(rnrs) '(chez-sqlite3 private native)))"
+         "(import (rnrs)) (define lib '(chez-sqlite3 private open))"
+         "(import (rnrs)) (define libs '#((chez-sqlite3 private memory)))"
+         "(import (chez-sqlite3 private a)) (import (chez-sqlite3 private a))"
+         "(import (rnrs) (rnrs eval) (chez-sqlite3))"
+         "(import (chez-sqlite3-testing))"
+         "(import (private chez-sqlite3) (chez-sqlite3 privates x))"
+         "(import (only (chez-sqlite3) private))"
+         "(import (rnrs)) (f 'chez-sqlite3 'private)"
+         "(import (rnrs)) (g chez-sqlite3 private x)"
+         "(import (rnrs)) (display \"(chez-sqlite3 private utf8)\")")))
+
+;; --- the examples and their twins -----------------------------------------------------------------
+
+;; lines-between : (Listof String) Natural Natural -> (Listof String)
+;; PROSE's lines FROM to BELOW, BELOW left out, counted from 1.
+(define (lines-between prose from below)
+  (let loop ((i 1) (rest prose) (out '()))
+    (if (or (null? rest) (>= i below))
+        (reverse out)
+        (loop (+ i 1) (cdr rest) (if (>= i from) (cons (car rest) out) out)))))
+
+;; linked-example : String (Listof String) -> (U String #f)
+;; The path of the .sps file under examples/ that the last link to one of
+;; LINES names, each link read from PAGE's directory; #f when none does.
+(define (linked-example page lines)
+  (let ((paths (filter (lambda (p) (and p (starts? p "examples/") (ends? p ".sps")))
+                       (map (lambda (t)
+                              (let ((parts (link-parts t #f)))
+                                (and parts (string? (car parts)) (resolve (dir-of page) (car parts)))))
+                            (markdown-links lines)))))
+    (and (pair? paths) (car (reverse paths)))))
+
+;; written-link : String String -> String
+;; The link to PATH, a path of the checkout, as PAGE writes it: its text
+;; the path as code, its target the path from PAGE's directory.
+(define (written-link page path)
+  (string-append "[`" path "`]("
+                 (let ((dir (dir-of page)))
+                   (if (string=? dir "") "" (apply string-append (map (lambda (s) "../") (split dir #\/)))))
+                 path ")"))
+
+;; example-problems : String String (Listof (Pair String String)) -> (Listof (Listof Any))
+;; What keeps PAGE, of Markdown TEXT, and FILES, each a path under
+;; examples/ and its text, from being twins: (PAGE no-whole-program) when
+;; the page holds no whole program, and (examples no-file) when there are no
+;; FILES; then, by each whole program's line, (PAGE LINE no-file-link) for
+;; one with no link to a .sps file of examples/ after the Scheme block
+;; before it, (PAGE LINE no-such-file PATH) for one whose last such link
+;; names no file of FILES, (PAGE LINE not-its-file PATH) for one whose
+;; lines, each ended by a newline, are not that file's text, and (PAGE LINE
+;; link-not-written PATH) for one whose lines before it hold no link
+;; written as written-link writes it, its text naming the file; then, by
+;; file, (PATH no-block) for a file no whole program links, and (PATH
+;; blocks LINE ...) for one linked by more than one.
+(define (example-problems page text files)
+  (let* ((parsed (markdown text))
+         (blocks (filter (lambda (b) (string=? (block-language b) "scheme")) (car parsed)))
+         (prose (cadr parsed))
+         ;; each whole program, the file it links, and the lines before it
+         (programs
+          (let loop ((rest blocks) (from 1) (out '()))
+            (cond ((null? rest) (reverse out))
+                  ((whole-program? (car rest) #f)
+                   (let ((lines (lines-between prose from (block-line (car rest)))))
+                     (loop (cdr rest) (block-line (car rest))
+                           (cons (list (car rest) (linked-example page lines) lines) out))))
+                  (else (loop (cdr rest) (block-line (car rest)) out)))))
+         (empty (append (if (null? programs) (list (list page 'no-whole-program)) '())
+                        (if (null? files) (list (list "examples" 'no-file)) '())))
+         (by-block
+          (apply append
+                 (map (lambda (p)
+                        (let ((b (car p)) (path (cadr p)) (lines (caddr p)))
+                          (cond ((not path) (list (list page (block-line b) 'no-file-link)))
+                                ((not (assoc path files)) (list (list page (block-line b) 'no-such-file path)))
+                                ((not (let ((t (cdr (assoc path files))))
+                                        (and (string? t) (string=? t (joined (block-lines b))))))
+                                 (list (list page (block-line b) 'not-its-file path)))
+                                ((not (search (joined lines) (written-link page path) 0))
+                                 (list (list page (block-line b) 'link-not-written path)))
+                                (else '()))))
+                      programs)))
+         (by-file
+          (apply append
+                 (map (lambda (f)
+                        (let ((lines (map (lambda (p) (block-line (car p)))
+                                          (filter (lambda (p) (equal? (cadr p) (car f))) programs))))
+                          (cond ((null? lines) (list (list (car f) 'no-block)))
+                                ((null? (cdr lines)) '())
+                                (else (list (cons (car f) (cons 'blocks lines)))))))
+                      files))))
+    (append empty by-block by-file)))
+
+;; section-of : String (Listof String) -> String
+;; A section of an examples page: the line LINK, a program of LINES, and
+;; what it prints, 13 lines. Its program's fence is its third line.
+(define (section-of link lines)
+  (string-append link "\n\n" (fenced "scheme" lines) "\nIt prints:\n\n" (fenced "text" '("out")) "\n"))
+
+;; example-section : String (Listof String) -> String
+;; A section whose link to FILE is written as the page writes one.
+(define (example-section file lines)
+  (section-of (string-append "[`" file "`](../" file ")") lines))
+
+;; examples-page : String ... -> String
+;; An examples page: a heading, a blank line, then SECTIONS, so the first
+;; section's link is line 3 and its program's fence line 5.
+(define (examples-page . sections) (apply string-append "# Examples\n\n" sections))
+
+(define example-a '("(import (rnrs))" "(display \"a\")"))
+(define example-b '("(import (rnrs))" "(display \"b\")"))
+
+;; files-of : (Listof (Pair String (Listof String))) -> (Listof (Pair String String))
+;; Each path with its lines as a file's text.
+(define (files-of pairs) (map (lambda (p) (cons (car p) (joined (cdr p)))) pairs))
+
+(define two-files (files-of (list (cons "examples/a.sps" example-a) (cons "examples/b.sps" example-b))))
+
+(test-equal "example-problems: a page whose two whole programs each link their file, line for line, have their twins"
+  '()
+  (example-problems "docs/examples.md"
+                    (examples-page (example-section "examples/a.sps" example-a)
+                                   (example-section "examples/b.sps" example-b))
+                    two-files))
+
+(test-equal "example-problems: one char off, at the start or the end of either line of the file, and the program is not its file's, named by its line"
+  (map (lambda (k) '(("docs/examples.md" 5 not-its-file "examples/a.sps"))) '(0 1 2 3))
+  (map (lambda (changed)
+         (example-problems "docs/examples.md"
+                           (examples-page (example-section "examples/a.sps" example-a)
+                                          (example-section "examples/b.sps" example-b))
+                           (files-of (list (cons "examples/a.sps" changed) (cons "examples/b.sps" example-b)))))
+       (list (list (changed-at (car example-a) 0) (cadr example-a))
+             (list (changed-at (car example-a) (- (string-length (car example-a)) 1)) (cadr example-a))
+             (list (car example-a) (changed-at (cadr example-a) 0))
+             (list (car example-a) (changed-at (cadr example-a) (- (string-length (cadr example-a)) 1))))))
+
+(test-equal "example-problems: a file's text is the program's lines, each ended by a newline: one with no last newline, a blank line after, a line before, and its lines swapped are not its file's"
+  (map (lambda (k) '(("docs/examples.md" 5 not-its-file "examples/a.sps"))) '(0 1 2 3))
+  (map (lambda (a-text)
+         (example-problems "docs/examples.md"
+                           (examples-page (example-section "examples/a.sps" example-a)
+                                          (example-section "examples/b.sps" example-b))
+                           (list (cons "examples/a.sps" a-text) (cons "examples/b.sps" (joined example-b)))))
+       (list (substring (joined example-a) 0 (- (string-length (joined example-a)) 1))
+             (string-append (joined example-a) "\n")
+             (string-append "#!r6rs\n" (joined example-a))
+             (joined (reverse example-a)))))
+
+(test-equal "example-problems: a file no program links, a program that links no file, one whose file is not there, and two links swapped, each named"
+  '((("examples/c.sps" no-block))
+    (("docs/examples.md" 18 no-file-link) ("examples/b.sps" no-block))
+    (("docs/examples.md" 18 no-such-file "examples/z.sps") ("examples/b.sps" no-block))
+    (("docs/examples.md" 5 not-its-file "examples/b.sps") ("docs/examples.md" 18 not-its-file "examples/a.sps")))
+  (list (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/a.sps" example-a)
+                                         (example-section "examples/b.sps" example-b))
+                          (append two-files (files-of (list (cons "examples/c.sps" '("(import (rnrs))"))))))
+        (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/a.sps" example-a)
+                                         (string-append "\n\n" (fenced "scheme" example-b)
+                                                        "\nIt prints:\n\n" (fenced "text" '("out")) "\n"))
+                          two-files)
+        (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/a.sps" example-a)
+                                         (example-section "examples/z.sps" example-b))
+                          two-files)
+        (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/b.sps" example-a)
+                                         (example-section "examples/a.sps" example-b))
+                          two-files)))
+
+(test-equal "example-problems: two programs that link one file name it with both lines; the second is not its text, and the other file has no block"
+  '(("docs/examples.md" 18 not-its-file "examples/a.sps")
+    ("examples/a.sps" blocks 5 18)
+    ("examples/b.sps" no-block))
+  (example-problems "docs/examples.md"
+                    (examples-page (example-section "examples/a.sps" example-a)
+                                   (example-section "examples/a.sps" example-b))
+                    two-files))
+
+(test-equal "example-problems: the link counts only after the Scheme block before the program: one before a fragment, a runnable block or the program before is no program's, and the last of two links counts"
+  '((("docs/examples.md" 9 no-file-link) ("examples/a.sps" no-block))
+    (("docs/examples.md" 10 no-file-link) ("examples/a.sps" no-block))
+    (("docs/examples.md" 18 no-file-link) ("examples/b.sps" no-block))
+    ())
+  (list (example-problems "docs/examples.md"
+                          (examples-page "[a](../examples/a.sps)\n\n" (fenced "scheme" '("(display 1)"))
+                                         "\n" (fenced "scheme" example-a))
+                          (files-of (list (cons "examples/a.sps" example-a))))
+        (example-problems "docs/examples.md"
+                          (examples-page "[a](../examples/a.sps)\n\n" (fenced "scheme run" '("1" ";; => 1"))
+                                         "\n" (fenced "scheme" example-a))
+                          (files-of (list (cons "examples/a.sps" example-a))))
+        (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/a.sps" example-a)
+                                         (string-append "\n\n" (fenced "scheme" example-b) "\n"))
+                          two-files)
+        (example-problems "docs/examples.md"
+                          (examples-page (example-section "examples/a.sps" example-a)
+                                         "Unlike [`examples/a.sps`](../examples/a.sps), [`examples/b.sps`](../examples/b.sps)\n\n"
+                                         (fenced "scheme" example-b) "\n")
+                          two-files)))
+
+(test-equal "example-problems: fragments and runnable blocks are no programs, and need no file; a link to a file outside examples/, or to no .sps file, names none"
+  '(()
+    (("docs/examples.md" 5 no-file-link) ("examples/a.sps" no-block))
+    (("docs/examples.md" 5 no-file-link) ("examples/a.sps" no-block)))
+  (list (example-problems "docs/examples.md"
+                          (examples-page (fenced "scheme" '("(display 1)")) "\n"
+                                         (fenced "scheme run" '("1" ";; => 1")) "\n"
+                                         (example-section "examples/a.sps" example-a))
+                          (files-of (list (cons "examples/a.sps" example-a))))
+        (example-problems "docs/examples.md"
+                          (examples-page "[a](../tests/a.sps)\n\n" (fenced "scheme" example-a) "\n")
+                          (files-of (list (cons "examples/a.sps" example-a))))
+        (example-problems "docs/examples.md"
+                          (examples-page "[a](../examples/a.md)\n\n" (fenced "scheme" example-a) "\n")
+                          (files-of (list (cons "examples/a.sps" example-a))))))
+
+(test-equal "example-problems: a program whose link's text is not its file's path as code is named: another file's path, other words, the path without its code marks, and the target without ../"
+  (map (lambda (k) '(("docs/examples.md" 18 link-not-written "examples/b.sps"))) '(0 1 2 3))
+  (map (lambda (link)
+         (example-problems "docs/examples.md"
+                           (examples-page (example-section "examples/a.sps" example-a)
+                                          (section-of link example-b))
+                           two-files))
+       '("[`examples/a.sps`](../examples/b.sps)" "[the second](../examples/b.sps)"
+         "[examples/b.sps](../examples/b.sps)" "[`examples/b.sps`](../examples/./b.sps)")))
+
+(test-equal "written-link: from a page of docs/, of the root, and two folders down"
+  '("[`examples/a.sps`](../examples/a.sps)" "[`examples/a.sps`](examples/a.sps)"
+    "[`examples/a.sps`](../../examples/a.sps)")
+  (list (written-link "docs/examples.md" "examples/a.sps") (written-link "README.md" "examples/a.sps")
+        (written-link "docs/more/page.md" "examples/a.sps")))
+
+;; run-line-problems : String String (Listof (Pair String String)) -> (Listof (Listof Any))
+;; What is wrong with the commands of PAGE, of Markdown TEXT, that run an
+;; example from beside a clone: (PAGE no-run-line) when no word of its sh
+;; blocks names a file under chez-sqlite3/examples/; else (PAGE LINE
+;; no-such-file PATH), by its block's line, for each such word whose file,
+;; PATH under examples/, is none of FILES.
+(define (run-line-problems page text files)
+  (let ((named (apply append
+                      (map (lambda (b)
+                             (map (lambda (w) (list (block-line b) (substring w 13 (string-length w))))
+                                  (filter (lambda (w) (starts? w "chez-sqlite3/examples/"))
+                                          (apply append (map words (block-lines b))))))
+                           (filter (lambda (b) (string=? (block-language b) "sh")) (car (markdown text)))))))
+    (if (null? named)
+        (list (list page 'no-run-line))
+        (apply append
+               (map (lambda (n) (if (assoc (cadr n) files) '() (list (list page (car n) 'no-such-file (cadr n)))))
+                    named)))))
+
+(test-equal "run-line-problems: an sh block that runs a file of examples/ from beside a clone, two that do, one naming a file not there, one naming the clone's src alone, and none"
+  '(()
+    ()
+    (("docs/examples.md" 3 no-such-file "examples/c.sps"))
+    (("docs/examples.md" no-run-line))
+    (("docs/examples.md" no-run-line)))
+  (map (lambda (text) (run-line-problems "docs/examples.md" text two-files))
+       (list (examples-page (fenced "sh" '("scheme --libdirs chez-sqlite3/src --program chez-sqlite3/examples/a.sps")))
+             (examples-page (fenced "sh" '("scheme --program chez-sqlite3/examples/a.sps"))
+                            (fenced "sh" '("chez --program chez-sqlite3/examples/b.sps")))
+             (examples-page (fenced "sh" '("scheme --libdirs chez-sqlite3/src --program chez-sqlite3/examples/c.sps")))
+             (examples-page (fenced "sh" '("scheme --libdirs chez-sqlite3/src --program app.sps")))
+             (examples-page "Prose: chez-sqlite3/examples/a.sps\n"))))
+
+(test-equal "example-problems: a page with no whole program, and no files, are each named"
+  '(("docs/examples.md" no-whole-program) ("examples" no-file))
+  (example-problems "docs/examples.md" (examples-page "Prose.\n" (fenced "scheme" '("(display 1)"))) '()))
+
 ;; --- pipe tables and their cells ------------------------------------------------------------------
 
 ;; pipe-cells : String -> (Listof String)
@@ -1761,7 +2108,15 @@
 ;; there, shows both. Each runs through gated-command, so under make
 ;; test-memory the gate's own Valgrind runs it, and says so on its last line.
 
-(define chez (getenv "CHEZ"))
+;; chez : (U String #f)
+;; CHEZ as the environment has it, made absolute from the suite's directory
+;; when it is a relative path, since each program runs from a directory of
+;; its own. A bare name is left for the shell's PATH.
+(define chez
+  (let ((c (getenv "CHEZ")))
+    (if (and c (not (starts? c "/")) (search c "/" 0))
+        (string-append (current-directory) "/" c)
+        c)))
 
 ;; The file the override names, which is not there.
 (define missing-library "/no/such/directory/libsqlite3.so")
@@ -1814,27 +2169,51 @@
 
 ;; The library path a reader gives: the quick start's --libdirs names the
 ;; clone's src and nothing else, so a program that imports anything more
-;; fails for the reader, and must fail here.
-(define reader-libdirs "src")
+;; fails for the reader, and must fail here. It is the checkout's src by its
+;; absolute path, since each program runs in a directory of its own.
+(define reader-libdirs (string-append (current-directory) "/src"))
 
-;; program-run : (U String #f) String -> (U (List Integer String String) (List 'raised String))
-;; TEXT, as written, run as a program in a fresh Chez with a reader's
-;; library path, through gated-command, with CHEZ_SQLITE3_LIBRARY set to
+;; The file each program is written to, in its directory.
+(define program-name "child.sps")
+
+;; run-in : String (U String #f) String -> (List Integer String String)
+;; PROGRAM run in a fresh Chez with a reader's library path, through
+;; gated-command, from the directory DIR, with CHEZ_SQLITE3_LIBRARY set to
 ;; OVERRIDE, or as the environment has it for #f; and the status, stdout and
-;; stderr it gave.
-(define (program-run override text)
+;; stderr it gave. A cd that fails exits 125.
+(define (run-in dir override program)
+  (capture-command
+   (append (list "/bin/sh" "-c" "cd \"$1\" || exit 125; shift; exec \"$@\"" "sh" dir)
+           (if override
+               (list "env" (string-append "CHEZ_SQLITE3_LIBRARY=" override))
+               '())
+           (gated-command getenv (list chez "--libdirs" reader-libdirs "--program" program)))))
+
+;; program-session : (U String #f) String Boolean
+;;                   -> (U (List Run (U Run #f) (Listof String)) (List 'raised String))
+;; TEXT, as written, run as a program from a fresh directory of its own, as
+;; run-in runs it, and what it gave; the files it left in that directory,
+;; but its own, sorted; and, when AGAIN? and it left one, what it gave run
+;; again there, else #f. The directory is removed after.
+(define (program-session override text again?)
   (guard (e (#t (list 'raised (describe e))))
     (call-with-temp-directory
      (lambda (base)
-       (let ((program (string-append base "/child.sps")))
+       (let ((program (string-append base "/" program-name)))
          (write-text program text)
-         (capture-command
-          (append (if override
-                      (list "env" (string-append "CHEZ_SQLITE3_LIBRARY=" override))
-                      '())
-                  (gated-command getenv
-                                 (list chez "--libdirs" reader-libdirs
-                                       "--program" program)))))))))
+         (let* ((first (run-in base override program))
+                (left (list-sort string<?
+                                 (filter (lambda (f) (not (string=? f program-name)))
+                                         (directory-list base))))
+                (second (and again? (pair? left) (run-in base override program))))
+           (list first second left)))))))
+
+;; program-run : (U String #f) String -> (U (List Integer String String) (List 'raised String))
+;; TEXT, as written, run once as program-session runs it; and the status,
+;; stdout and stderr it gave.
+(define (program-run override text)
+  (let ((session (program-session override text #f)))
+    (if (eq? (car session) 'raised) session (car session))))
 
 ;; child : (U String #f) String -> (U (List Integer String String) (List 'raised String))
 ;; A program of BODY, after its imports, and then the valgrind printer, run
@@ -1892,18 +2271,79 @@
                        (filter (lambda (b) (whole-program? b (org-page? p))) bs))))
               pages)))
 
-;; program-runs : (Listof (List String Natural (U (Listof String) #f) Run (U Run #f)))
-;; Each whole program's page, line and text block's lines, what it gave run
-;; as the environment has the library, and, for one that guards
-;; sqlite-library-unavailable?, what it gave with the library missing.
+;; program-runs : (Listof (List String Natural (U (Listof String) #f) Run (U Run #f) (U Run #f)
+;;                              (Listof String)))
+;; Each whole program's page, line and text block's lines; what it gave run
+;; as the environment has the library; for one that guards
+;; sqlite-library-unavailable?, what it gave with the library missing; and,
+;; for one that left a file in its directory, what it gave run again there,
+;; and the files it left.
 (define program-runs
   (each-in-order
    (lambda (w)
      (let* ((text (joined (block-lines (cadr w))))
-            (present (program-run #f text))
+            (session (program-session #f text #t))
+            (raised? (eq? (car session) 'raised))
             (missing (and (cadddr w) (program-run missing-library text))))
-       (list (car w) (block-line (cadr w)) (caddr w) present missing)))
+       (list (car w) (block-line (cadr w)) (caddr w)
+             (if raised? session (car session))
+             missing
+             (if raised? #f (cadr session))
+             (if raised? '() (caddr session)))))
    whole-programs))
+
+;; The file the program in the row below writes, by a relative path.
+(define relative-file "written-by-a-docs-program.txt")
+
+(test-equal "a whole program runs from a directory of its own: the file it writes by a relative path is left there, and not in the checkout"
+  (list '(0 "" "") (list relative-file) 'not-in-the-checkout)
+  (let* ((session (program-session #f
+                                   (string-append "(import (rnrs))\n(call-with-output-file \"" relative-file
+                                                  "\" (lambda (p) (display \"x\" p)))\n")
+                                   #f))
+         (in-checkout (file-exists? relative-file)))
+    (when in-checkout (guard (e (#t #f)) (delete-file relative-file)))
+    (if (eq? (car session) 'raised)
+        session
+        (list (car session) (caddr session) (if in-checkout 'in-the-checkout 'not-in-the-checkout)))))
+
+;; the-examples-page : String
+(define the-examples-page "docs/examples.md")
+
+;; example-files : (Listof (Pair String (U String (List 'unreadable String))))
+;; Each .sps file of examples/, sorted, and its text; none when the folder
+;; cannot be read. A name that begins with a dot, as an editor's lock file's
+;; does, is no example. Other files, and folders, are not read.
+(define example-files
+  (guard (e (#t '()))
+    (map (lambda (f) (let ((p (string-append "examples/" f))) (cons p (read-page p))))
+         (list-sort string<? (filter (lambda (f) (and (ends? f ".sps") (not (starts? f "."))))
+                                     (directory-list "examples"))))))
+
+(test-equal "docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file"
+  '()
+  (example-problems the-examples-page
+                    (if (assoc the-examples-page page-texts) (text-or-empty the-examples-page) "")
+                    example-files))
+
+(test-equal "docs/examples.md's commands run a file of examples/ from beside a clone, and each file they name is there: the problems, by page and line"
+  '()
+  (run-line-problems the-examples-page
+                     (if (assoc the-examples-page page-texts) (text-or-empty the-examples-page) "")
+                     example-files))
+
+(test-equal "each whole program of docs/examples.md has a text block after it, what it prints: those that have none, by line"
+  '()
+  (map (lambda (w) (list (car w) (block-line (cadr w)) 'no-text-block))
+       (filter (lambda (w) (and (string=? (car w) the-examples-page) (not (caddr w)))) whole-programs)))
+
+(test-equal "no whole program names a (chez-sqlite3 private ...) library, which a reader's library path finds too, in any of its data: those that do, by page and line, with the libraries"
+  '()
+  (apply append
+         (map (lambda (w)
+                (let ((names (private-names (datums (joined (block-lines (cadr w)))))))
+                  (if (null? names) '() (list (list (car w) (block-line (cadr w)) names)))))
+              whole-programs)))
 
 ;; status-and-stderr, stdout-of, refusal-of : Run -> ...
 ;; What a row asserts of a run's answer, or the answer when the run raised.
@@ -1930,6 +2370,10 @@
   'some
   (if (exists caddr whole-programs) 'some 'none))
 
+(test-equal "a whole program of the docs leaves a file in its directory, and runs again there"
+  'some
+  (if (exists (lambda (r) (and (pair? (list-ref r 6)) (list-ref r 5))) program-runs) 'some 'none))
+
 (for-each
  (lambda (r)
    (let ((name (string-append (car r) ":" (number->string (cadr r)) ": the whole program, run as written, ")))
@@ -1946,7 +2390,13 @@
          (stdout-of (list-ref r 3)))
        (test-equal (string-append name "with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused")
          '(0 one-refusal "")
-         (refusal-of (list-ref r 4))))))
+         (refusal-of (list-ref r 4))))
+     (when (list-ref r 5)
+       (test-equal (string-append name "and run again in its directory, beside what it left there, "
+                                  (shown (list-ref r 6))
+                                  ", exits 0 with nothing on stderr and prints the same")
+         (list 0 (stdout-of (list-ref r 3)) "")
+         (list-ref r 5)))))
  program-runs)
 
 (test-end "docs")

@@ -340,9 +340,11 @@ Proposed record is marked *(provisional)* until that record is accepted.
 
 ## The release
 
-- **`docs/` holds four pages, a quick start, finding SQLite, what varies by library and the
-  reference, each linked from README.org;** README.org's one Scheme block equals a `scheme run`
-  block of a page, which `test-docs` holds (ADR-0022, decision 2).
+- **`docs/` holds five pages, a quick start, the examples, finding SQLite, what varies by
+  library and the reference, each linked from README.org;** README.org's one Scheme block equals a
+  `scheme run` block of a page, and each whole program of the examples page is, line for line, a
+  `.sps` file of `examples/`, each file one program's, which `test-docs` holds (ADR-0022,
+  decision 2, amended by the examples task) *(provisional)*.
 - **Installing is a clone of the tag, with `src` on the library path, and nothing built.** Every
   `git clone` line of README.org and `docs/` names the manifest's version's tag, or no branch at
   0.0.0, so a release moves the manifest, CHANGELOG.md and the clone lines together
