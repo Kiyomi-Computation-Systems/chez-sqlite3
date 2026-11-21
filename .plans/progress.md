@@ -140,21 +140,23 @@ newest first.
   - **M5 slice 5 is done,** the comment sweep of `src/` and `tests/`, as PR #57, `c3df9de`, by the
     M3 session's four sweepers, reviewed (Opus) and checked by the M4 session, squash-merged with
     CI passing in every job.
-  - **M5's closing review is PR #58 on `m5-closing-review`:** two reviewers (Opus, read-only) and
+  - **M5's closing review is done,** as PR #58, `cad9ba1`: two reviewers (Opus, read-only) and
     their fixes, by the M3 session, checked read-only by the M4 session. The maintainer accepted its
     amendments to the plan, ADR-0022 and ADR-0005 (2026-11-20, "Accept all three"). The maintainer's
     answers (2026-11-20): "Drop main, keep v*", "Sweep them in the fix PR", "Protect update and
     deletion" and "Say tests run from a clone"; the lead set the two settings on GitHub and read
     them back: the `github-pages` environment takes the tag `v*` alone, and the ruleset "release
     tags" refuses an update or a deletion of `refs/tags/v*`, with no bypass.
-  - **M5 slice 6, the release, is PR #59 on `m5-release`:** CHANGELOG.md's `[0.1.0]` entry, dated
-    2026-11-20, `Akku.manifest` at 0.1.0 and both clone lines at `--branch v0.1.0`, by the M3
-    session, checked read-only by the M4 session. Then the release's steps (the plan, §4.9): the
-    Mac's `make test` on the branch ([its steps](research/m5-mac/release.md)), the merge, the
-    live check, the signed tag, the deploy, the Release and the archives.
-  - **After the release,** the maintainer's next task: an `examples/` folder
-    of five programs, `docs/examples.md` showing each in full, held by `test-docs`' whole-program
-    rows, built by the M4 session and checked by the M3 session, one PR after slice 6.
+  - **M5 slice 6 is done, and 0.1.0 is released** (2026-11-21): PR #59, `2c761d4`, the entry, the
+    manifest and the clone lines; and PR #60, `21b3e1b`, the entry's and the reference's fixes
+    after the lead's Opus review of `2c761d4`, the maintainer's "Fix first, then tag". Both were
+    by the M3 session, checked read-only by the M4 session, and squash-merged with CI passing in
+    every job. `v0.1.0` is the signed tag `cfaf268` on `21b3e1b`, its site deployed and its GitHub
+    Release published, the release's ten steps each passing
+    ([the release](research/m5-release/README.md)). **M5 is done.**
+  - **Next, the maintainer's task:** an `examples/` folder of five programs, `docs/examples.md`
+    showing each in full, held by `test-docs`' whole-program rows, built by the M4 session and
+    checked by the M3 session.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -277,10 +279,65 @@ newest first.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
     12 and 12 s on `main`'s runs 44325663052, 44305936182, 44298034354 and 44293661574. The risk
     is closed.
+  - **`call-with-statement`'s lost engine is held by a probe, not a suite row.** Its reference
+    entry warns, since PR #60, that a finalize failing at an expiry loses the engine, as the other
+    four verbs' do. The probe that shows it is
+    [research/m5-release/probes/cws-lost.sps](research/m5-release/probes/cws-lost.sps); no suite
+    fails if the warning stops being true.
+  - **The README's clone line prints a warning:** `git clone --branch v0.1.0` on git 2.54 says
+    "refs/tags/v0.1.0 … is not a commit!", as it does for any annotated tag (chez-curl's too), and
+    clones the tag right. The quick start says nothing of it; a line there would.
+  - **The release's Mac run** was on `10a9569`, PR #59's head, not on the tagged `21b3e1b`. PR
+    #60 changed only text, and the maintainer chose to skip a rerun (2026-11-21).
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
 ## Close-outs
+
+### M5 is done
+
+M5's slices 0 to 6 (PRs #52 to #57, #59 and #60) and its closing review (PR #58) are merged, with
+CI passing in every job, and chez-sqlite3 0.1.0 is released: the signed tag `v0.1.0`, the docs
+site at https://kiyomi-computation-systems.github.io/chez-sqlite3/, deployed from it, and its
+GitHub Release. Next is the examples task, by the M4 session.
+
+### 2026-11-21 — M5 slice 6: the release, 0.1.0 (PRs #59 and #60)
+
+- **Built** by the M3 session:
+  - PR #59: CHANGELOG.md's `[0.1.0]` entry, dated 2026-11-20, the day the branch was cut, kept
+    on the maintainer's word; `Akku.manifest` at 0.1.0; both clone lines at `--branch v0.1.0`;
+    the Mac run's steps; and slice 5's plant driver, committed as
+    `research/m5-slice-5/build-file-plants.sh` for the log that cites it.
+  - **Checked by the M4 session:** two minors, a nit and four limitations, all taken: the
+    statement cache filed under the conveniences; the settings linked to the reference's
+    Settings; the API before 1.0, Ubuntu's old Chez, the verbs engines preempt, and the tests
+    run from a clone.
+- **The maintainer's Mac run** on `10a9569`: 93 of 93 with Apple's library and with Homebrew's
+  ([its steps and results](research/m5-mac/release.md)).
+- **The lead's Opus review was skipped before #59's merge,** and run after it, before the tag.
+  It found no blocker and one major: the Engines limitation named 3 of the 5 verbs that don't
+  survive an engine's preemption. "Fix first, then tag": PR #60 named all five and fixed the
+  minors.
+  - A second Opus review, of #60's first head, found three minors. The one only it found was a
+    real fault, shown by its probe: `call-with-statement` can lose the engine. Its entry now
+    says so.
+  - `execute-script!`'s engine advice now works, and the install remedy is Linux's.
+  - The M4 session checked both heads, and its own engine probes found no sixth verb.
+- **The release's ten steps** each passed ([the release](research/m5-release/README.md)):
+  - the tag signed and read back;
+  - its CI and Pages runs;
+  - the live check at the site, and failing as `v0.2.0`;
+  - the Release's body byte-equal as a draft and once published, its 22 links at
+    `blob/v0.1.0/`;
+  - the archives without `.plans/` or `AGENTS.md`, the watched failure
+    `git archive d23cfc5 | tar -t | grep -c -E '^(\.plans/.|AGENTS\.md$)'` giving 879;
+  - the clone line run verbatim, and the first program.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer of `2c761d4` | Opus | 209k | 94 | 13 min |
+  | Reviewer of #60 | Opus | 219k | 59 | 17 min |
 
 ### 2026-11-20 — M5's closing review and its fixes (PR #58)
 
