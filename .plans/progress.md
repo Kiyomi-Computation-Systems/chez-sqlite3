@@ -334,8 +334,10 @@ newest first.
   30 plant trees, each failing exactly its rows: the control and an editor's lock file none. The
   programs printed the same on 3.45.1, 3.53.1 and 3.54.1, run twice.
 - **Reviewed:** one Opus review, read-only, found no blocker or major, and five minors and five
-  nits, all taken. A private library reached past the import form had passed; so had a link's
-  text and the run line; and `json_group_array`'s order had come from a subquery.
+  nits, all taken but two, left as Open: the examples needing a clone of `main` until the next
+  tag, and a `:` in the checkout's path. A private library reached past the import form had
+  passed; so had a link's text and the run line; and `json_group_array`'s order had come from a
+  subquery.
 - **Checked read-only by the M3 session** at `7389bcc`:
   - `make test` 93 of 93;
   - the page's run line, verbatim, from beside a clone laid out by `git archive`: 30 runs on

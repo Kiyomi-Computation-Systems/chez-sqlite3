@@ -99,7 +99,7 @@ report` read each log's failing rows against the rows the plant must fail, and n
 One Opus reviewer, read-only, on the worktree before its PR: no blocker, no major, five minors and
 five nits. It ran `test-docs` on 3.45.1, 3.53.1 and 3.54.1, 187 passes each, and planted three
 trees of its own that passed. The lead reran its body-import tree and its two probes (both exited
-0, and the tree passed 187), and took every finding:
+0, and the tree passed 187), and took every finding but the two under **Left**:
 
 - **A private library reached past the import form passed:** a second `(import …)` in the body,
   `(only (chezscheme) import)` first, and `(environment '(chez-sqlite3 private utf8))`. The rule
