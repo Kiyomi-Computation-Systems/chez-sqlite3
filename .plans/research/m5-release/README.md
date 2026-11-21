@@ -33,7 +33,13 @@ repository's root inside `scripts/guix-env`, after `make deps` and `mkdir -p bui
   `(caller-got (assertion "no engine active" ()))`, where the same work through
   `prepare-statement` answers `(done 2003 ((body-got (busy busy))))`.
 - **`fold-lost.sps`:** `query-fold`'s sweep.
-- **`window.sps` and `window2.sps`:** every other verb, which survives.
+- **`window.sps` and `window2.sps`:** every other verb a program steps through, which survives:
+  the open with settings, `execute!`, `query`, `query-row`, the statement verbs, the counters,
+  `sqlite-compile-option?`, `interrupt-database!` and the close. The rest, `load-extension!` and
+  the library's reports among them, are read from `src/`, not run. None holds a wind that
+  finishes work on the way out. The only such winds are the five verbs'. The shared
+  `call-with-open-handle` and `call-with-block` wind around a section, and each `with-mutex`,
+  in `interrupt.sls`, `memory.sls` and `counters.sls`, only lets its mutex go.
 
 ## The steps
 
@@ -47,7 +53,7 @@ repository's root inside `scripts/guix-env`, after `make deps` and `mkdir -p bui
 | 6 | The tag's CI and Pages runs | 44924721168, 7 of 7; 44924721201, build and deploy |
 | 7 | The live check at the site | exits 0; as `v0.2.0`, exits 1 on links and clone |
 | 8 | The GitHub Release, 453822480 | draft, body byte-equal, published as the latest, read back |
-| 9 | The archives, listed | 820 entries each, no `.plans/` or `AGENTS.md` |
+| 9 | The archives, listed | the same 820 entries, no `.plans/` or `AGENTS.md` |
 | 10 | The README's clone line, verbatim; the first program | clones `21b3e1b`; prints `(#("bird" 2) #("cat" 4))` |
 
 - **Step 2, the Mac:** Apple's run named the same 140 rows unavailable as the run after M4's
@@ -81,7 +87,8 @@ repository's root inside `scripts/guix-env`, after `make deps` and `mkdir -p bui
 - **Step 9:**
   - The listings: [github-tarball.txt](out/github-tarball.txt) and
     [git-archive.txt](out/git-archive.txt).
-  - They're the same entries but the tarball's `chez-sqlite3-0.1.0/` prefix.
+  - They're the same 820 entries but the tarball's `chez-sqlite3-0.1.0/` prefix. The tarball lists
+    821, its first being that folder's own entry.
   - The watched failure is `git archive d23cfc5 | tar -t | grep -c -E '^(\.plans/.|AGENTS\.md$)'`,
     which gives the plan's 879. Without the `.` after `.plans/` the same command gives 880, since
     it counts the directory `.plans/` itself.
