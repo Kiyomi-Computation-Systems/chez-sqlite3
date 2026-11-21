@@ -141,8 +141,8 @@ newest first.
     M3 session's four sweepers, reviewed (Opus) and checked by the M4 session, squash-merged with
     CI passing in every job.
   - **M5's closing review is PR #58 on `m5-closing-review`:** two reviewers (Opus, read-only) and
-    their fixes, by the M3 session, checked read-only by the M4 session. Its amendments to the
-    plan, ADR-0022 and ADR-0005 wait for the maintainer's acceptance. The maintainer's answers
+    their fixes, by the M3 session, checked read-only by the M4 session. The maintainer accepted
+    its amendments to the plan, ADR-0022 and ADR-0005 (2026-11-20, "Accept all three"). The maintainer's answers
     (2026-11-20): "Drop main, keep v*", "Sweep them in the fix PR", "Protect update and
     deletion" and "Say tests run from a clone"; the lead set the two settings on GitHub and read
     them back: the `github-pages` environment takes the tag `v*` alone, and the ruleset "release

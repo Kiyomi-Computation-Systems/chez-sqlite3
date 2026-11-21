@@ -348,7 +348,7 @@ Proposed record is marked *(provisional)* until that record is accepted.
   0.0.0, so a release moves the manifest, CHANGELOG.md and the clone lines together
   (ADR-0007, amended; ADR-0022, decision 3). `test-manifest` holds the latest entry's body and its
   two link references, `[Unreleased]` and its own, each once, and none before the first release
-  (ADR-0022, amended in M5's closing review) *(provisional)*.
+  (ADR-0022, amended in M5's closing review).
 - **The site renders `docs/` through chez-cmark-gfm, and imports nothing under `src/`;** its
   suites, `tests/site-*.sps`, import `(site-testing)`, never `(chez-sqlite3-testing)`, since they
   run on Ubuntu's Chez, below the floor; `tests/test-site-testing.sps`, which `make test` runs on
@@ -362,12 +362,12 @@ Proposed record is marked *(provisional)* until that record is accepted.
   `github-pages` environment takes `v*` tags alone. A failed deploy is rerun at its tag; a fault
   in a tag's tree takes a new tag. The live check, `research/m5-closing-review/live-check.sh`,
   runs on the release's render, served on loopback, before its tag is pushed, and on the deployed
-  site after (ADR-0022, amended in M5's closing review) *(provisional)*.
+  site after (ADR-0022, amended in M5's closing review).
 - **A comment in `src/` or `tests/` is for a developer reading the code:** no milestone, slice,
   plan section, research path, date or "the maintainer"; a bare `ADR-NNNN` points to why
   (ADR-0022, decision 9). It binds every comment there; `tests/fixtures/` is a suite's input, and
   is not swept. It binds the Makefile's, `scripts/`' and `packaging/`' comments too (ADR-0022,
-  amended in M5's closing review) *(provisional)*.
+  amended in M5's closing review).
 
 ## Environment and tests
 

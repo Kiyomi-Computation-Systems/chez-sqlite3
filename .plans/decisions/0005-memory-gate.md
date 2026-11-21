@@ -44,7 +44,7 @@
   Amended 2026-11-20 in M5's plan, accepted: the site's job, `pages.yml`, and the memory jobs'
   timeout
   ([amendment](#amendment-2026-11-20-the-sites-job-pagesyml-and-the-memory-jobs-timeout-m5s-plan)).
-  Amended 2026-11-20 in M5's closing review, proposed: `pages.yml`'s run blocks, the site's
+  Amended 2026-11-20 in M5's closing review, accepted: `pages.yml`'s run blocks, the site's
   context and `CHEZ`
   ([amendment](#amendment-2026-11-20-run-blocks-the-sites-context-and-chez-m5s-closing-review)).
 - **Date:** 2026-11-13
@@ -873,6 +873,7 @@ Accepted by the maintainer on 2026-11-20 ("Accept all").
 
 Proposed in M5's closing review ([the M5 plan](../2026-11-20-m5-plan.md), its amendments "the
 site in CI as built" and "the release's steps and the records").
+Accepted by the maintainer on 2026-11-20 ("Accept all three").
 
 - **`check-ci` holds `pages.yml`'s run blocks whole.** The M5 plan's amendment above frees every
   line of `pages.yml` "but a comment or a blank line", which is weaker than what was built and

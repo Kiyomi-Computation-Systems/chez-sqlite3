@@ -10,7 +10,7 @@
   twin" (Q8); decision 8's claim, "What ran" (Q6); decision 9's sweep, "Sweep src/ and tests/"
   (Q7); decision 10's timeout, "timeout-minutes 120" (Q9); decision 1's signature, "Signed with
   chez-curl's key" (Q10); decision 2's home page, "The quick start is home" (the plan's Q11).
-  Amended 2026-11-20 in M5's closing review, proposed: the tag rule, the tag ruleset, the
+  Amended 2026-11-20 in M5's closing review, accepted: the tag rule, the tag ruleset, the
   release's steps and the sweep's reach
   ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
 - **Date:** 2026-11-20
@@ -205,6 +205,7 @@ Proposed in M5's closing review ([the M5 plan](../2026-11-20-m5-plan.md), its am
 release's steps and the records";
 [the live check's runs](../research/m5-closing-review/README.md)), with the maintainer's answers
 of 2026-11-20 to the review's four questions:
+Accepted by the maintainer on 2026-11-20 ("Accept all three").
 
 - **"Drop main, keep v\*".** Decision 4's `github-pages` environment takes the tag rule `v*`
   alone; its branch rule `main` is deleted. The lead read it back: `deployment_branch_policy`
