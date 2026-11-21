@@ -1,0 +1,66 @@
+# live-check.sh on loopback serves of seven renders of c3df9de, each under build/lc/.
+# The host's /bin/sh is dash; TMPDIR is build/lc/tmp, empty after every run.
+
+$ live-check.sh http://127.0.0.1:8765/serve-main/chez-sqlite3/
+live-check: links: not a file at v0.1.0: blob/main/README.org
+live-check: links: no link names a repository file at blob/v0.1.0/
+live-check: clone: this git clone is not --branch v0.1.0:
+  git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-unbumped/chez-sqlite3/
+live-check: clone: this git clone is not --branch v0.1.0:
+  git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-ref-main/chez-sqlite3/
+live-check: links: not a file at v0.1.0: blob/main/README.org
+live-check: links: no link names a repository file at blob/v0.1.0/
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-missing/chez-sqlite3/
+live-check: pages: libraries.html answered 404, not 200
+live-check: pages: style.css answered 404, not 200
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-one-ref/chez-sqlite3/
+live-check: links: not a file at v0.1.0: blob/main/README.org
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-two-clones/chez-sqlite3/
+live-check: clone: this git clone is not --branch v0.1.0:
+  git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-rel/chez-sqlite3/
+live-check: http://127.0.0.1:8765/serve-rel/chez-sqlite3/ is v0.1.0's site
+exit 0
+
+$ live-check.sh 
+usage: live-check.sh BASE [TAG], BASE a URL ending in /
+exit 2
+
+$ live-check.sh http://127.0.0.1:8765/serve-rel/chez-sqlite3
+usage: live-check.sh BASE [TAG], BASE a URL ending in /
+exit 2
+
+$ live-check.sh http://127.0.0.1:8765/serve-rel/chez-sqlite3/ 0.1.0
+usage: live-check.sh BASE [TAG], BASE a URL ending in /
+exit 2
+
+$ live-check.sh http://127.0.0.1:8799/chez-sqlite3/  (no server)
+live-check: pages: index.html answered 000, not 200
+live-check: pages: finding-sqlite.html answered 000, not 200
+live-check: pages: libraries.html answered 000, not 200
+live-check: pages: reference.html answered 000, not 200
+live-check: pages: style.css answered 000, not 200
+live-check: links: no link names a repository file at blob/v0.1.0/
+live-check: clone: the quick start holds no git clone
+exit 1
+
+$ live-check.sh http://127.0.0.1:8765/serve-rel/chez-sqlite3/ v0.2.0
+live-check: links: not a file at v0.2.0: blob/v0.1.0/README.org
+live-check: links: no link names a repository file at blob/v0.2.0/
+live-check: clone: this git clone is not --branch v0.2.0:
+  git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+exit 1

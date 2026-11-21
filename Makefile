@@ -42,16 +42,14 @@ TIMEOUT ?= $(or $(shell command -v timeout 2>/dev/null),$(shell command -v gtime
 # The memory gate (ADR-0005): Valgrind, and the seconds a suite may run
 # under it before timeout kills it and make test-memory names it HUNG. Past
 # three quarters of them, 450 s of 600, a suite is named SLOW and fails the
-# run, so that it is split before a slow runner kills it (ADR-0005, amended).
-# Valgrind runs 10 to 50 times slower than Chez alone. Most suites take 7 to
-# 12 s under it in the container (.plans/research/memory-gate/). The
-# exceptions are the nine tests/test-library-loading-*.sps, whose children
-# each run under a Valgrind of their own, at most 11 apiece. They were one
-# suite, which took 562 s with its 76 children on CI's slowest runner of M2,
-# 38 s short of the limit, then two, which took 319 s and 272 s on a slow
-# runner of M3's slice 2, then three, whose -real took 264 s with 35 children
-# on M4's. 600 s is far below the memory jobs' 120-minute limit in CI, so a
-# hang is named HUNG before the job is killed.
+# run, so that it is split before a slow runner kills it (ADR-0005).
+# Valgrind runs 10 to 50 times slower than Chez alone, and most suites take
+# 7 to 12 s under it in the container. The exceptions are the nine
+# tests/test-library-loading-*.sps, whose children each run under a Valgrind
+# of their own, at most 11 apiece: each child costs 4 to 7 s under the gate
+# on CI, so the children are split among nine suites. 600 s is far below
+# the memory jobs' 120-minute limit in CI, so a hang is named HUNG before the
+# job is killed.
 # make test-memory refuses a MEMORY_TIMEOUT that is not a positive whole
 # number, as make test refuses such a TEST_TIMEOUT.
 VALGRIND ?= valgrind
@@ -60,17 +58,11 @@ MEMORY_TIMEOUT ?= 600
 # The suites make test-memory runs: every suite, unless a run names others.
 MEMORY_SUITES ?= $(SUITES)
 
-# The memory gate's two shards, CI's jobs memory-1 and memory-2 (ADR-0005,
-# amended in M3 slice 6): make test-memory MEMORY_SHARD=1 runs the first
-# list, 2 the second, and with no MEMORY_SHARD it runs MEMORY_SUITES. Each is
-# written out, and the two are balanced by each suite's time under the gate
-# on CI, its "time:" line (.plans/research/m3-slice-6/memory-shard-input.md),
-# the first a little lighter: its test-transaction-interrupt has taken 20 s
-# to 149 s on CI, and 434 s here. M4's closing review placed its loading and
-# low-pass suites, then moved script-low-2 and loading-preflight to the first:
-# PR #48's run 44460844478 read 1507 s against 1763 s, and the review's
-# two follow-ups added about 97 s and 150 s, so the two project at about
-# 1770 s and 1750 s (.plans/research/m4-closing-review/).
+# The memory gate's two shards, CI's jobs memory-1 and memory-2 (ADR-0005):
+# make test-memory MEMORY_SHARD=1 runs the first list, 2 the second, and with
+# no MEMORY_SHARD it runs MEMORY_SUITES. Each is written out, and the two are
+# balanced by each suite's time under the gate on CI, its "time:" line. The
+# first's test-transaction-interrupt varies most, from 20 s to 149 s on CI.
 # make check-memory-shards, which make test runs, fails unless the two run
 # every tests/test-*.sps once between them, so a new suite fails make test
 # until it is put in one: the shard whose suites take less time.
@@ -258,13 +250,13 @@ deps: ## Link vendor/chez-srfi into build/scheme-libs; never fetches
 # A refused libsqlite3 fails it, exit 1, with the reason, the path, the
 # detail, the candidates checked and a remedy, and, when the refusal came
 # after the version was read, that library's own report. Its last line, on
-# either stream, is its counts, all zero (ADR-0005, decision 4);
+# either stream, is its counts, all zero (ADR-0005);
 # tests/test-library-loading-real.sps and -preflight.sps hold the whole
-# output. chez-sqlite3
-# compiles nothing (ADR-0001), so this is the question an install asks. It
-# writes nothing: no build output, under src/ or anywhere. build is in
-# .PHONY: the build/ directory exists, and without it make would answer that
-# build is up to date and run nothing. make test does not depend on it.
+# output. chez-sqlite3 compiles nothing (ADR-0001), so this is the question
+# an install asks. It writes nothing: no build output, under src/ or
+# anywhere. build is in .PHONY: the build/ directory exists, and without it
+# make would answer that build is up to date and run nothing. make test does
+# not depend on it.
 build: ## Load libsqlite3 as chez-sqlite3 would and name it; fail with the reason when it is refused
 	@scripts/require-tools "$(GOAL)" $(CHEZ)
 	@$(CHEZ) --libdirs src --program tests/preflight.sps
@@ -398,7 +390,7 @@ check-floors: ## Fail unless README.org's Requirements state the floors in packa
 	@$(CHEZ) --libdirs tests --program tests/check-floors.sps packaging/floors.sexp README.org .github/workflows scripts/ci docs
 
 # Reads every library under src/ as data, and fails on any that breaks the
-# seam (ADR-0009, amended): a library outside (chez-sqlite3) and
+# seam (ADR-0009): a library outside (chez-sqlite3) and
 # (chez-sqlite3 private ...), an import off the allowlists, a name of
 # (chezscheme) that only some libraries may import, a re-export of one, a
 # macro that could carry one out, a library off its name's path or sharing a
@@ -411,11 +403,11 @@ check-seam: ## Fail unless every library under src/ keeps to the seam: the famil
 	@$(CHEZ) --program tests/check-seam.sps src
 
 # Holds .github/workflows/ci.yml to the one shape tests/check-ci.sh reads
-# (ADR-0005, ADR-0001 and ADR-0008, amended in M0 slice 4): its triggers, its
-# seven jobs and every key in them, each check as a step's whole run line, no
-# if: but the cache's own, no variable that steers a check, and no key
-# spelled so that a text check would miss it; and pages.yml, the one other
-# file the directory may hold, to the copy check-ci holds, line for line.
+# (ADR-0005, ADR-0001 and ADR-0008): its triggers, its seven jobs and every
+# key in them, each check as a step's whole run line, no if: but the cache's
+# own, no variable that steers a check, and no key spelled so that a text
+# check would miss it; and pages.yml, the one other file the directory may
+# hold, to the copy check-ci holds, line for line.
 # make test runs it, so every make test, the container's self-test and CI's
 # main job among them, holds the workflows. tests/test-check-ci.sps plants
 # each fault in a copy of the real files. It reads text with sh and awk, and
@@ -427,15 +419,15 @@ check-ci: ## Fail unless .github/workflows holds ci.yml and pages.yml alone: ci.
 
 # Holds the memory gate's two shards, MEMORY_SUITES_1 and MEMORY_SUITES_2,
 # which CI's jobs memory-1 and memory-2 run, to the tree's suites, every
-# tests/test-*.sps (ADR-0005, amended in M3 slice 6): each suite in exactly
-# one of them, and nothing else in either. So a new suite fails make test
-# here, by name, until it is put in a shard. It reads the tree, not SUITES:
-# make test SUITES=... narrows the suites that run, and must not narrow the
-# shards' check with them (check-test-fails' case shards-narrowed). tests/check-memory-shards.sh names each suite
-# in neither or in both, each written twice in one, and each path in one that
-# is no suite; tests/test-check-memory-shards.sps holds each rule, and
-# tests/check-test-fails.sh holds that make test runs it. It reads text with
-# sh and awk, and needs no deps.
+# tests/test-*.sps (ADR-0005): each suite in exactly one of them, and nothing
+# else in either. So a new suite fails make test here, by name, until it is
+# put in a shard. It reads the tree, not SUITES: make test SUITES=... narrows
+# the suites that run, and must not narrow the shards' check with them
+# (check-test-fails' case shards-narrowed). tests/check-memory-shards.sh
+# names each suite in neither or in both, each written twice in one, and each
+# path in one that is no suite; tests/test-check-memory-shards.sps holds each
+# rule, and tests/check-test-fails.sh holds that make test runs it. It reads
+# text with sh and awk, and needs no deps.
 check-memory-shards: ## Fail unless the memory gate's two shards, MEMORY_SUITES_1 and MEMORY_SUITES_2, run every tests/test-*.sps once between them
 	@sh tests/check-memory-shards.sh '$(sort $(wildcard tests/test-*.sps))' '$(MEMORY_SUITES_1)' '$(MEMORY_SUITES_2)'
 
@@ -443,9 +435,9 @@ check-memory-shards: ## Fail unless the memory gate's two shards, MEMORY_SUITES_
 # import to be refused, by name, as (chez-sqlite3 private require-threaded)
 # refuses a Chez that is not threaded: a syntax violation from chez-sqlite3,
 # whose message starts with the refusal's marker. Every library under src/
-# imports require-threaded first (ADR-0001, amended), so every one must be
-# refused, the public (chez-sqlite3) among them. It fails if it finds no
-# library, and names each one that loaded or raised something else
+# imports require-threaded first (ADR-0001), so every one must be refused,
+# the public (chez-sqlite3) among them. It fails if it finds no library, and
+# names each one that loaded or raised something else
 # (tests/check-nothreads.sps). tests/test-check-nothreads.sps holds each rule
 # on a fixture tree. On the threaded Chez that make test runs, every import
 # loads, so this FAILS there, naming each library: that is its red run, and
@@ -467,7 +459,7 @@ check-test-fails: ## Plant bad suites, none at all, a stale README, a bad workfl
 
 # sqlite3_db_config is variadic, and on x86-64 and Linux arm64 a binding
 # without its convention answers alike, so only test-conventions, which reads
-# the form, can see the convention lost there (ADR-0001, amended 2026-11-17).
+# the form, can see the convention lost there (ADR-0001).
 # In a copy of the tree, the unchanged copy must pass test-conventions and
 # test-native; then the convention is removed from sqlite3_db_config's
 # binding, one line alone changed, and test-conventions must fail, naming
@@ -476,8 +468,8 @@ check-test-fails: ## Plant bad suites, none at all, a stale README, a bad workfl
 # fail on the copy too; on any other machine its result is reported. CI's
 # main job runs it as a step after check-test-fails, and make test does not:
 # inside make test it would run in each of check-test-fails' cases, under a
-# 5 s suite timeout (the M4 plan, section 4.2). tests/check-variadic.sh holds
-# the steps, and tests/test-check-variadic.sps each of its failure branches.
+# 5 s suite timeout. tests/check-variadic.sh holds the steps, and
+# tests/test-check-variadic.sps each of its failure branches.
 check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy; test-conventions must fail on it, by name, and on Apple arm64 test-native too
 	@scripts/require-tools "$(GOAL)" $(TIMEOUT) $(CHEZ)
 	@TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' TEST_TIMEOUT='$(TEST_TIMEOUT)' sh tests/check-variadic.sh
@@ -503,9 +495,9 @@ check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy
 #   time: 283s under the gate, within 450s, three quarters of MEMORY_TIMEOUT's 600s
 # A suite that would pass, but whose time passes three quarters of
 # MEMORY_TIMEOUT, is named SLOW, and fails the run as a FAIL or a HUNG does
-# (ADR-0005, amended). The limit is MEMORY_TIMEOUT's own, kept in quarters of
-# a second so the comparison stays whole, and printed from the same number,
-# so no second number can drift from it. A suite that failed and was slow is
+# (ADR-0005). The limit is MEMORY_TIMEOUT's own, kept in quarters of a
+# second so the comparison stays whole, and printed from the same number, so
+# no second number can drift from it. A suite that failed and was slow is
 # named FAIL, and its time line says past. The two date calls are all the
 # check costs. make check-memory-gate's case r plants a suite on each side of
 # the limit.
@@ -522,11 +514,10 @@ check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy
 #   - its "Valgrind options:" list is exactly the options test-memory
 #     hands it, in order: -v, --command-line-only=yes, the suite's
 #     --log-file and ADR-0005's four flags. So nothing VALGRIND, CHEZ or a
-#     stand-in for Valgrind adds, drops or changes gets past it (measured
-#     in chez-curl: --undef-value-errors=no through VALGRIND hid an
-#     undefined-value plant, and a dropped --leak-check=full hid the leak
-#     plant). make check-memory-gate holds the options themselves to
-#     ADR-0005's;
+#     stand-in for Valgrind adds, drops or changes gets past it:
+#     --undef-value-errors=no through VALGRIND hides an undefined value,
+#     and a dropped --leak-check=full a leak. make check-memory-gate holds
+#     the options themselves to ADR-0005's;
 #   - the first program it read is the file CHEZ names, not a script's
 #     interpreter: a CHEZ that is a script runs the shell under Valgrind,
 #     and Chez outside it;
@@ -545,9 +536,9 @@ check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy
 # was named: an empty MEMORY_SUITES, or an empty shard's list.
 #
 # Valgrind also takes options and files that its command line does not
-# show, and one of them can hide a leak (measured in chez-curl: a
-# suppression in VALGRIND_OPTS, in a .valgrindrc, or in the default.supp of
-# a directory VALGRIND_LIB names, each hid the planted one). So it refuses
+# show, and one of them can hide a leak: a suppression in VALGRIND_OPTS, in
+# a .valgrindrc, or in the default.supp of a directory VALGRIND_LIB names
+# hides it as well as one on the command line would. So it refuses
 # to run while any VALGRIND_ variable is set (Valgrind reads VALGRIND_OPTS,
 # VALGRIND_LIB and VALGRIND_LAUNCHER) or a .valgrindrc exists in $HOME or
 # here, and hands Valgrind --command-line-only=yes, so that no .valgrindrc
@@ -563,13 +554,14 @@ check-variadic: deps ## Remove sqlite3_db_config's variadic convention in a copy
 # build/memory/<suite>.children/. After the suite, every child's log is read
 # with the parent's rules, but that its Command: line must begin with CHEZ, or
 # name a C program called libsqlite3-oracle, the program Valgrind ran, its path
-# resolved with readlink -f as Valgrind's is (ADR-0005, amended). Valgrind
-# follows no child itself: --trace-children was measured and not taken. Its
+# resolved with readlink -f as Valgrind's is (ADR-0005). Valgrind follows no
+# child itself, with no --trace-children: traced, the static bash Chez's
+# system runs reports errors of its own, so every child would fail. Its
 # options carry --child-silent-after-fork=yes: a child that forks before it
 # execs, as capture-command does, would otherwise leave a second log with a
 # Command: line and no summary. Each child's log path is absolute, for a child
 # that runs from another working directory.
-# Not covered (ADR-0005, amended):
+# Not covered (ADR-0005):
 #   - a child started without gated-command runs outside Valgrind, unseen:
 #     the children of the nine tests/test-library-loading-*.sps and of
 #     test-blocks.sps each say whether they ran under memcheck (preflight's,
@@ -843,16 +835,16 @@ test-memory: deps ## Run every MEMORY_SUITES suite, or MEMORY_SHARD=1's or 2's l
 # MEMORY_TIMEOUT of 12, it requires a suite that takes 10 s named SLOW, and
 # one that takes 7 or 8 to pass, each with its time line.
 # tests/check-memory-gate.sh lists the cases. CI's jobs memory-1 and
-# memory-2 each run it before their shard (ADR-0005, amended).
+# memory-2 each run it before their shard (ADR-0005).
 check-memory-gate: ## Plant a heap overrun and a leak; make test-memory must fail on each, by name
 	@scripts/require-tools "$(GOAL)" $(firstword $(VALGRIND)) $(TIMEOUT) $(CHEZ)
 	@MAKE='$(MAKE)' TIMEOUT='$(TIMEOUT)' CHEZ='$(CHEZ)' VALGRIND='$(VALGRIND)' LIBDIRS='$(LIBDIRS)' sh tests/check-memory-gate.sh
 
 # --- the docs site ------------------------------------------------------------
-# docs/*.md rendered to build/site/ through chez-cmark-gfm, as chez-curl's
-# site is rendered (ADR-0022). Akku.lock pins chez-cmark-gfm for the site
-# alone: nothing under src/, nor any tests/test-*.sps, imports it, so make
-# test needs none of this (ADR-0007). The site needs the system cmark-gfm
+# docs/*.md rendered to build/site/ through chez-cmark-gfm (ADR-0022).
+# Akku.lock pins chez-cmark-gfm for the site alone: nothing under src/, nor
+# any tests/test-*.sps, imports it, so make test needs none of this
+# (ADR-0007). The site needs the system cmark-gfm
 # library (`cmark-gfm` from Homebrew or apt). In the container,
 # scripts/guix-env-enter hands chez-cmark-gfm the profile's by absolute path
 # (CHEZ_CMARK_GFM_LIBS, ADR-0006).
@@ -911,9 +903,8 @@ check-site-deps: ## Test scripts/fetch-akku-lock offline, against a local archiv
 
 # Removes build/, and nothing else: make deps' links (the links, never what
 # they name, since rm does not follow a link), the memory gate's logs and
-# every check's scratch. The
-# path is written out, not a variable, so no make command line can point it
-# elsewhere. With no build/, it passes.
+# every check's scratch. The path is written out, not a variable, so no make
+# command line can point it elsewhere. With no build/, it passes.
 clean: ## Remove build/, and nothing else
 	rm -rf build
 

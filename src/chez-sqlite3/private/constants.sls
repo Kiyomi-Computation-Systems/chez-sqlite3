@@ -7,7 +7,7 @@
 ;;; tests/test-constants.sps holds every value here to the sqlite3.h the
 ;;; compiler finds, with a C program compiled at test time (ADR-0001).
 ;;;
-;;;   sqlite-open-*             the open flags v1 uses (ADR-0012)
+;;;   sqlite-open-*             the open flags open-database passes (ADR-0012)
 ;;;   sqlite-row, sqlite-done   what sqlite3_step answers for a row, and at
 ;;;                             the end
 ;;;   sqlite-integer ... sqlite-null
@@ -16,8 +16,9 @@
 ;;;   sqlite-prepare-persistent
 ;;;                             sqlite3_prepare_v3's flag for a statement kept
 ;;;                             and run again
-;;;   sqlite-dbconfig-*         the four sqlite3_db_config ops v1 sets, each
-;;;                             in the shape (db op int int*) (ADR-0021)
+;;;   sqlite-dbconfig-*         the four sqlite3_db_config ops the settings
+;;;                             set, each in the shape (db op int int*)
+;;;                             (ADR-0021)
 ;;;   sqlite-result-codes       every primary and extended result code in
 ;;;                             3.45.1's sqlite3.h, in the header's order
 ;;;   sqlite-result-code-name   a code's name, or the integer
@@ -85,7 +86,7 @@
   ;; again, so SQLite avoids the lookaside memory for it (ADR-0020)
   (define sqlite-prepare-persistent #x01)
 
-  ;; The sqlite3_db_config ops of v1's four settings (ADR-0021).
+  ;; The sqlite3_db_config ops of the four settings set through it (ADR-0021).
   ;; Each takes an int, 1 to set, 0 to clear, -1 to read, and an int* for the
   ;; state after the call.
   ;; sqlite-dbconfig-enable-load-extension : Natural   SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION

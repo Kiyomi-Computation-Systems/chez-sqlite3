@@ -36,8 +36,8 @@ SqliteSettingMismatch  a condition that sqlite-setting-mismatch? holds
 Settings               a list of pairs, each a setting's name and its value
 ```
 
-A code block marked `scheme run` is run by the tests, and its last line says
-what it gives.
+A code block whose last line is `;; =>` is run by the tests, and that line
+says what it gives.
 
 ## Connections
 
@@ -1467,10 +1467,14 @@ sqlite-error-offset : SqliteError -> (U Natural #f)
 ```
 
 Where in the SQL SQLite found the error, as a character index into
-`sqlite-error-sql`, or `#f` when it gives none. It gives none for an error at
-the end of the SQL, nor for some errors in the middle, such as a missing
-table. Only a failed prepare has one, `prepare-statement`'s or
-`call-with-statement`'s; a failed step, reset or finalize has none.
+`sqlite-error-sql`, or `#f` when there is none. A failed prepare has one,
+by any verb that prepares, unless SQLite gives none: it gives none for an
+error at the end of the SQL, nor for some errors in the middle, such as a
+missing table. A failed step, reset or finalize has none.
+
+`execute-script!` is the exception: every SQLite error it raises has one,
+at the token SQLite names, or else at the start of the statement that
+failed.
 
 ### `sqlite-library-unavailable?`
 

@@ -377,8 +377,9 @@
         (values copy bytes))))
 
   ;; prepare-flags? : Any -> Boolean
-  ;; Whether FLAGS is a prepare's flags in v1: 0, or SQLITE_PREPARE_PERSISTENT,
-  ;; which the statement cache's statements take (ADR-0020).
+  ;; Whether FLAGS is flags this library prepares with: 0, or
+  ;; SQLITE_PREPARE_PERSISTENT, which the statement cache's statements take
+  ;; (ADR-0020).
   (define (prepare-flags? flags)
     (or (eqv? flags 0) (eqv? flags sqlite-prepare-persistent)))
 

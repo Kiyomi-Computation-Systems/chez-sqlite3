@@ -19,6 +19,9 @@
 ;;;     checks;
 ;;;   - the package's version is CHANGELOG.md's latest release, or 0.0.0
 ;;;     while there is none, so a release that bumps one alone fails;
+;;;   - CHANGELOG.md's latest release has an entry that says something, and
+;;;     the link references [Unreleased] and its own, each once and naming
+;;;     its tag; while there is no release, no line is a link reference;
 ;;;   - .gitattributes, its comments and blank lines aside, is exactly
 ;;;     /.plans export-ignore and /AGENTS.md export-ignore, in that order, so
 ;;;     a release archive leaves out the design records and the agents'
@@ -45,6 +48,12 @@
 ;;; wrongly, at another level, indented, or out of order, is never skipped for
 ;;; an older one. Lines inside a fenced block are not headings. A yanked
 ;;; release's `[YANKED]` is refused too: the first release yanked amends this.
+;;; The link references are Keep a Changelog's: `[Unreleased]` compares the
+;;; latest release's tag with HEAD; the first release links its tag's
+;;; release page, and each later one compares the tag below it with its own.
+;;; A release's entry runs from its heading to the next `## ` heading, and
+;;; says something when one of its lines, past its blanks, begins with no #
+;;; and is no link reference.
 ;;;
 ;;; make test runs every suite from the repository root, where all these
 ;;; files are. The clone check takes its root and its version as arguments,
@@ -308,6 +317,101 @@
     (if (null? (cdr headings))
         'none
         (release-version (cadr headings)))))
+
+;; repository : String
+;; The repository's address, which a changelog's link references name.
+(define repository "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3")
+
+;; link-label : String -> (U String #f)
+;; LABEL when LINE begins `[LABEL]: `, LABEL holding no `]`: a link
+;; reference; #f for any other line.
+(define (link-label line)
+  (and (starts-with? line "[")
+       (let ((parts (cut-at (substring line 1 (string-length line)) #\])))
+         (and (pair? (cdr parts))
+              (starts-with? (cadr parts) ": ")
+              (car parts)))))
+
+;; body-line? : String -> Boolean
+;; Whether LINE says something in an entry: past its spaces and tabs it is
+;; not empty, and begins with no #, and it is no link reference.
+(define (body-line? line)
+  (let loop ((i 0))
+    (cond ((= i (string-length line)) #f)
+          ((memv (string-ref line i) '(#\space #\tab)) (loop (+ i 1)))
+          (else (and (not (char=? (string-ref line i) #\#))
+                     (not (link-label line)))))))
+
+;; latest-entry : (Listof String) -> (Listof String)
+;; The lines of a changelog's LINES below its first release heading outside
+;; a fenced block, up to the next `## ` heading outside one, or the end: the
+;; latest release's entry. None when it has no release.
+(define (latest-entry lines)
+  (let skip ((lines lines) (fence #f))
+    (cond ((null? lines) '())
+          (fence (skip (cdr lines) (if (eqv? (fence-char (car lines)) fence) #f fence)))
+          ((fence-char (car lines)) => (lambda (c) (skip (cdr lines) c)))
+          ((release-version (car lines))
+           (let take ((lines (cdr lines)) (fence #f) (found '()))
+             (cond ((null? lines) (reverse found))
+                   (fence (take (cdr lines) (if (eqv? (fence-char (car lines)) fence) #f fence)
+                                (cons (car lines) found)))
+                   ((fence-char (car lines))
+                    => (lambda (c) (take (cdr lines) c (cons (car lines) found))))
+                   ((starts-with? (car lines) "## ") (reverse found))
+                   (else (take (cdr lines) #f (cons (car lines) found))))))
+          (else (skip (cdr lines) #f)))))
+
+;; link-problems : (Listof String) String String -> (Listof String)
+;; What is wrong with the link reference LABEL among a changelog's link
+;; references REFS, where WANT is the one line it must be: none, more than
+;; one, or one that is not WANT.
+(define (link-problems refs label want)
+  (let ((given (filter (lambda (line) (equal? (link-label line) label)) refs)))
+    (cond ((null? given)
+           (list (string-append "there is no link reference [" label "], but it must be "
+                                (shown want))))
+          ((pair? (cdr given))
+           (list (string-append "the link reference [" label "] is given "
+                                (number->string (length given)) " times, but once it must be "
+                                (shown want))))
+          ((string=? (car given) want) '())
+          (else
+           (list (string-append "the link reference [" label "] is " (shown (car given))
+                                ", but it must be " (shown want)))))))
+
+;; changelog-problems : (Listof String) -> (Listof String)
+;; What is wrong with the latest release of a changelog's LINES, as Keep a
+;; Changelog writes it. With no release, each link reference is wrong, as
+;; there is nothing to link. With one, X.Y.Z: an entry holding no body-line?;
+;; and the link references [Unreleased] and [X.Y.Z], unless each is given
+;; once, as `[Unreleased]: REPOSITORY/compare/vX.Y.Z...HEAD` and, for the
+;; first release, `[X.Y.Z]: REPOSITORY/releases/tag/vX.Y.Z`, or, for a later
+;; one, `[X.Y.Z]: REPOSITORY/compare/vW...vX.Y.Z`, W the release below. A
+;; link reference is any line link-label takes, a fenced block's too. It
+;; raises where latest-release raises.
+(define (changelog-problems lines)
+  (let ((latest (latest-release lines))
+        (refs (filter link-label lines)))
+    (if (eq? latest 'none)
+        (map (lambda (line)
+               (string-append "there is no release, so no link reference, but this is one: "
+                              (shown line)))
+             refs)
+        (let ((below (map release-version (cddr (section-headings lines)))))
+          (append
+           (if (exists body-line? (latest-entry lines))
+               '()
+               (list (string-append "the entry of [" latest "] says nothing: it holds no line"
+                                    " but blanks, headings and link references")))
+           (link-problems refs "Unreleased"
+                          (string-append "[Unreleased]: " repository "/compare/v" latest "...HEAD"))
+           (link-problems refs latest
+                          (string-append "[" latest "]: " repository
+                                         (if (null? below)
+                                             (string-append "/releases/tag/v" latest)
+                                             (string-append "/compare/v" (car below) "...v"
+                                                            latest)))))))))
 
 ;; file-lines : String -> (Listof String)
 ;; Every line of the file at PATH, read as UTF-8, without its line feed.
@@ -681,6 +785,140 @@
              (let ((latest (latest-release (file-lines "CHANGELOG.md"))))
                (if (eq? latest 'none) "0.0.0" latest))))
   (answer package-version))
+
+;; --- the latest release's entry and link references -----------------------------
+;; changelog-problems and its parts are held on the suite's own changelogs
+;; first, so that a check which never fires cannot pass CHANGELOG.md. The
+;; expected link references are written out here, as a reader follows them,
+;; not built from repository.
+
+(define unreleased-0.1.0
+  "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.1.0...HEAD")
+(define unreleased-0.2.0
+  "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.2.0...HEAD")
+(define tag-0.1.0
+  "[0.1.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/releases/tag/v0.1.0")
+(define compare-0.2.0
+  "[0.2.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.1.0...v0.2.0")
+
+;; must-be : String String -> String
+;; The complaint that the link reference LABEL is the line GIVEN, not WANT.
+(define (must-be label given want)
+  (string-append "the link reference [" label "] is \"" given "\", but it must be \"" want "\""))
+
+;; missing : String String -> String
+;; The complaint that there is no link reference LABEL, which must be WANT.
+(define (missing label want)
+  (string-append "there is no link reference [" label "], but it must be \"" want "\""))
+
+(test-equal "link-label: [LABEL]: at a line's start is a link reference; indented, inside a bullet, without its colon or the space after it, or with a ] in its label, it is none"
+  '("Unreleased" "0.1.0" #f #f #f #f #f)
+  (map link-label '("[Unreleased]: https://x" "[0.1.0]: https://y" " [0.1.0]: https://y"
+                    "- [0.1.0]: https://y" "[0.1.0] https://y" "[0.1.0]:https://y"
+                    "[0.1]0]: https://y")))
+
+(test-equal "body-line?: an empty line, one of spaces and tabs, a heading, an indented heading and a link reference say nothing; text, a bullet and a fence do"
+  '(#f #f #f #f #f #t #t #t)
+  (map body-line? '("" " \t " "### Added" "  ## x" "[0.1.0]: https://x" "Some text."
+                    "- a bullet" "```")))
+
+(test-equal "latest-entry: the lines below the first release heading, up to the next ## heading, [Unreleased]'s left out; none with no release"
+  '(("" "The second release." "" "### Added" "- a line" "") ())
+  (list (latest-entry '("# Changelog" "## [Unreleased]" "- unreleased" "## [0.2.0] - 2026-12-01" ""
+                        "The second release." "" "### Added" "- a line" "" "## [0.1.0] - 2026-11-10"
+                        "- older"))
+        (latest-entry '("# Changelog" "## [Unreleased]" "- unreleased"))))
+
+(test-equal "latest-entry: a release heading in a fenced block is no release, a ## line in one ends no entry, and an entry with nothing below it runs to the end"
+  '("```" "## [0.0.1] - 2026-01-01" "```" "- a line")
+  (latest-entry '("## [Unreleased]" "~~~" "## [9.9.9] - 2026-12-01" "~~~" "## [0.1.0] - 2026-11-10"
+                  "```" "## [0.0.1] - 2026-01-01" "```" "- a line")))
+
+(test-equal "changelog-problems: no release and no link reference, the shape before the first release: nothing"
+  '()
+  (answer (lambda () (changelog-problems '("# Changelog" "" "Some text." "" "## [Unreleased]")))))
+
+(test-equal "changelog-problems: with no release, each link reference is named, one in a fenced block too"
+  (list (string-append "there is no release, so no link reference, but this is one: \"" unreleased-0.1.0
+                       "\"")
+        (string-append "there is no release, so no link reference, but this is one: \"" tag-0.1.0 "\""))
+  (answer (lambda () (changelog-problems (list "## [Unreleased]" "- a line" "" unreleased-0.1.0 "```"
+                                               tag-0.1.0 "```")))))
+
+(test-equal "changelog-problems: a first release with a body, then both link references closing the file: nothing"
+  '()
+  (answer (lambda () (changelog-problems (list "# Changelog" "" "## [Unreleased]" ""
+                                               "## [0.1.0] - 2026-11-20" "" "The first release." ""
+                                               unreleased-0.1.0 tag-0.1.0)))))
+
+(test-equal "changelog-problems: a release heading alone, with no body and no link reference: all three named"
+  (list "the entry of [0.1.0] says nothing: it holds no line but blanks, headings and link references"
+        (missing "Unreleased" unreleased-0.1.0)
+        (missing "0.1.0" tag-0.1.0))
+  (answer (lambda () (changelog-problems '("# Changelog" "" "## [Unreleased]" ""
+                                           "## [0.1.0] - 2099-12-31")))))
+
+(test-equal "changelog-problems: an entry of blanks, a heading and a link reference says nothing, and the body of the release below is not its own"
+  (list "the entry of [0.2.0] says nothing: it holds no line but blanks, headings and link references")
+  (answer (lambda () (changelog-problems (list "## [Unreleased]" "## [0.2.0] - 2026-12-01" "" "### Added"
+                                               " \t" "[x]: https://example.org" "## [0.1.0] - 2026-11-10"
+                                               "- older" "" unreleased-0.2.0 compare-0.2.0 tag-0.1.0)))))
+
+(test-equal "changelog-problems: [Unreleased] compared from an older tag, and the first release linked as a compare: both named"
+  (list (must-be "Unreleased"
+                 "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.0.9...HEAD"
+                 unreleased-0.1.0)
+        (must-be "0.1.0"
+                 "[0.1.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.0.0...v0.1.0"
+                 tag-0.1.0))
+  (answer (lambda ()
+            (changelog-problems
+             '("## [Unreleased]" "## [0.1.0] - 2026-11-20" "- a line"
+               "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.0.9...HEAD"
+               "[0.1.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.0.0...v0.1.0")))))
+
+(test-equal "changelog-problems: another repository's [Unreleased], and a release linked to main: both named"
+  (list (must-be "Unreleased"
+                 "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-curl/compare/v0.1.0...HEAD"
+                 unreleased-0.1.0)
+        (must-be "0.1.0" "[0.1.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/tree/main"
+                 tag-0.1.0))
+  (answer (lambda ()
+            (changelog-problems
+             '("## [Unreleased]" "## [0.1.0] - 2026-11-20" "- a line"
+               "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-curl/compare/v0.1.0...HEAD"
+               "[0.1.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/tree/main")))))
+
+(test-equal "changelog-problems: a second release, its link a compare from the release below and [Unreleased] from it: nothing; its link the first release's form, and [Unreleased] left at the older tag: both named"
+  (list '()
+        (list (must-be "Unreleased" unreleased-0.1.0 unreleased-0.2.0)
+              (must-be "0.2.0"
+                       "[0.2.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/releases/tag/v0.2.0"
+                       compare-0.2.0)))
+  (list (answer (lambda () (changelog-problems (list "## [Unreleased]" "## [0.2.0] - 2026-12-01" "- new"
+                                                     "## [0.1.0] - 2026-11-20" "- old" ""
+                                                     unreleased-0.2.0 compare-0.2.0 tag-0.1.0))))
+        (answer (lambda ()
+                  (changelog-problems
+                   (list "## [Unreleased]" "## [0.2.0] - 2026-12-01" "- new" "## [0.1.0] - 2026-11-20"
+                         "- old" "" unreleased-0.1.0
+                         "[0.2.0]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/releases/tag/v0.2.0"
+                         tag-0.1.0))))))
+
+(test-equal "changelog-problems: a link reference given twice is named, the same line twice too"
+  (list (string-append "the link reference [Unreleased] is given 2 times, but once it must be \""
+                       unreleased-0.1.0 "\"")
+        (string-append "the link reference [0.1.0] is given 2 times, but once it must be \"" tag-0.1.0
+                       "\""))
+  (answer (lambda ()
+            (changelog-problems
+             (list "## [Unreleased]" "## [0.1.0] - 2026-11-20" "- a line" unreleased-0.1.0
+                   "[Unreleased]: https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/compare/v0.1.0...main"
+                   tag-0.1.0 tag-0.1.0)))))
+
+(test-equal "CHANGELOG.md's latest release has a body and both link references, [Unreleased] and its own; or, with no release, no link reference"
+  '()
+  (answer (lambda () (changelog-problems (file-lines "CHANGELOG.md")))))
 
 ;; --- git clone lines ---------------------------------------------------------------
 ;; clone-problems is held on the fixture trees under tests/fixtures/clone-lines

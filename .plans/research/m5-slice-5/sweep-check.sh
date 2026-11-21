@@ -1,14 +1,24 @@
 #!/bin/sh
 # sweep-check.sh BASE: from the worktree's root, inside scripts/guix-env, with BASE a copy of the
-# swept commit's src/ and tests/, which extract-base.sh writes on the host. It holds the comment
-# sweep to changing comments alone, in every file of src/ and tests/ but tests/fixtures/:
+# swept commit's src/, tests/ and build files, which extract-base.sh writes on the host. It holds
+# the comment sweep to changing comments alone, in every file of src/ and tests/ but
+# tests/fixtures/, and in the build files: the Makefile, every file of scripts/ and packaging/,
+# .gitignore and .gitattributes:
 #   - every file keeps its mode, as ls prints it;
 #   - a .sps or .sls reads, by Chez's read, as the same datums as BASE's (datums.sps), and no
 #     changed line holds #! or #; (lines.awk);
-#   - every line a .sh changes, before and after, is a whole-line comment or blank, outside
-#     every quoted string and heredoc, and not line 1; or a # line in a heredoc named in
-#     awk_heredocs below, whose body is an awk program. None follows a line ending in a
-#     backslash (lines.awk);
+#   - every line a .sh changes, or a file of scripts/ whose line 1, on both sides, names sh,
+#     bash or dash, before and after, is a whole-line comment or blank, outside every quoted
+#     string and heredoc, and not line 1; or a # line in a heredoc named in awk_heredocs
+#     below, whose body is an awk program. None follows a line ending in a backslash
+#     (lines.awk);
+#   - every line the Makefile changes, before and after, is a comment at column 0, or empty:
+#     no recipe line, none in a define block, none ending in a backslash or following one
+#     that does (lines.awk);
+#   - every line a packaging/*.txt, .gitignore or .gitattributes changes, before and after,
+#     is a comment with # at column 0, or empty (lines.awk);
+#   - a packaging/*.sexp reads as the same datums as BASE's (datums.sps), and every line it
+#     changes, before and after, is a ; comment or blank (lines.awk);
 #   - a .c reads, its comments stripped by the compiler's -fpreprocessed, each line's ends
 #     trimmed and its blank lines dropped, as BASE's does, so a token changed in a branch no
 #     build compiles is seen; no changed line ends in a backslash or follows one that does
@@ -26,7 +36,15 @@ out=build/m5s5/check
 awk_heredocs='tests/check-ci.sh:AWKPROGRAM'
 mkdir -p "$out"
 : > "$out/problems"
-list() { (cd "$1" && find src tests -type f -not -path 'tests/fixtures/*' | LC_ALL=C sort); }
+# list ROOT: the files the sweep holds under ROOT, one a line, sorted.
+list() {
+  (cd "$1" && {
+    find src tests scripts packaging -type f -not -path 'tests/fixtures/*'
+    for f in Makefile .gitignore .gitattributes; do [ ! -e "$f" ] || echo "$f"; done
+  } | LC_ALL=C sort)
+}
+# shell F: whether F's line 1 names sh, bash or dash as its interpreter.
+shell() { head -n 1 -- "$1" | grep -Eq '^#![[:space:]]*[^[:space:]]*/(env[[:space:]]+)?(sh|bash|dash)([[:space:]]|$)'; }
 list "$base" > "$out/base.list"
 list . > "$out/tree.list"
 LC_ALL=C comm -23 "$out/base.list" "$out/tree.list" | sed 's/^/removed: /' >> "$out/problems"
@@ -105,6 +123,21 @@ while IFS= read -r f; do
       done < "$out/c/builds"
       [ -z "$differ" ] || echo "$f: its object code differs, built as:$differ" >> "$out/problems"
       [ -z "$unbuilt" ] || echo "$f: did not compile, built as$unbuilt" >> "$out/problems" ;;
+    Makefile)
+      lines make "$f" ;;
+    packaging/*.txt | .gitignore | .gitattributes)
+      lines hash "$f" ;;
+    packaging/*.sexp)
+      r=$("$CHEZ" --program "$here/datums.sps" "$base/$f" "$f" 2>&1) ||
+        echo "$f: $r" >> "$out/problems"
+      lines semi "$f" ;;
+    scripts/*)
+      if shell "$base/$f" && shell "$f"; then
+        lines sh "$f"
+      else
+        echo "$f: a file of scripts/ changed whose line 1 names no shell on both sides" \
+          >> "$out/problems"
+      fi ;;
     *)
       echo "$f: a $(echo "${f##*.}") file changed, and no rule holds its kind" >> "$out/problems" ;;
   esac

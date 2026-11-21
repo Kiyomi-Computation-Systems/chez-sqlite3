@@ -18,8 +18,9 @@
 ;;;   uri        adds URI            memory     adds MEMORY
 ;;;   no-follow  adds NOFOLLOW       no-mutex   NOMUTEX in place of FULLMUTEX
 ;;;
-;;; and EXRESCODE always (ADR-0010). So the flags SQLite gets hold exactly one
-;;; of its three legal modes, and v1 never passes a shared-cache flag.
+;;; and EXRESCODE always (ADR-0013); FULLMUTEX, and no-mutex's NOMUTEX in its
+;;; place, are ADR-0010's. So the flags SQLite gets hold exactly one of its
+;;; three legal modes, and no open passes a shared-cache flag.
 ;;;
 ;;; It never loads libsqlite3.
 (library (chez-sqlite3 private open-options)
@@ -89,8 +90,7 @@
 
   ;; uri-filename? : String -> Boolean
   ;; Whether S starts with the five characters file:, as SQLite tests a
-  ;; filename for a URI: byte for byte, so FILE: is no URI (measured on
-  ;; 3.53.1).
+  ;; filename for a URI: byte for byte, so FILE: is no URI.
   (define (uri-filename? s)
     (and (>= (string-length s) 5)
          (string=? (substring s 0 5) "file:"))))

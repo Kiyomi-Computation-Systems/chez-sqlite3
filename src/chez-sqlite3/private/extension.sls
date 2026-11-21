@@ -30,7 +30,7 @@
 ;;;                        (ADR-0021)
 ;;;
 ;;; The first three are one call-with-open-handle, its procedure answering
-;;; nothing, in a critical section of its own: its database and owner
+;;; (open) alone, in a critical section of its own: its database and owner
 ;;; checks, then its open check inside its section. So the thread's refusal
 ;;; and the closed one come before the argument checks, and SQLite, which
 ;;; loads from any thread, is never reached from another. The load's own
@@ -39,9 +39,9 @@
 ;;; alone checked and handed to C, so another thread cannot change it between
 ;;; the two (ADR-0011). Every refusal of a caller's mistake is an assertion
 ;;; violation whose irritants are a symbol naming its rule, then the value by
-;;; shown-value, never a string's text (ADR-0013). On Ubuntu's library, whose
-;;; every connection opens with the C switch on, the sixth check is all that
-;;; stops a load.
+;;; shown-value, never a string's text (ADR-0013). On a library whose every
+;;; connection opens with the C switch on, the sixth check is all that stops
+;;; a load.
 ;;;
 ;;; One call, one load. Chez's engine remainders are multi-shot, and a
 ;;; timer's handler can capture a continuation between any two critical
@@ -100,8 +100,9 @@
 ;;;             whose own refusal would name it, as the open's db_config
 ;;;             sets are (ADR-0021)
 ;;;
-;;; A failed load leaves the connection as it was: SQLite's own failures set
-;;; no error on it.
+;;; A failed load sets no error of its own on the connection: SQLite's own
+;;; failures leave the connection's code and message as they were, and only
+;;; an init's failing call leaves its own there, as above.
 (library (chez-sqlite3 private extension)
   (export load-extension! load-extension/with)
   (import (chez-sqlite3 private require-threaded)
@@ -129,7 +130,7 @@
 
   ;; checked-open : Any -> Void
   ;; The first three checks: DB a database, on its owning thread, and open,
-  ;; by call-with-open-handle, whose procedure answers nothing, in a
+  ;; by call-with-open-handle, whose procedure answers (open) alone, in a
   ;; critical section of its own, so no expiry falls inside its wind. What
   ;; it raised is caught there and raised after it, the same object.
   (define (checked-open db)

@@ -2,18 +2,17 @@
 # scripts/ci/build-sqlite.sh PREFIX [--current | --no-load]
 #
 # Builds SQLite from sqlite.org's source and installs it into PREFIX, for
-# .github/workflows/ci.yml's floor and current lanes (ADR-0003, decision 3:
-# CI tests the floor against an amalgamation it compiles itself). Without a
+# .github/workflows/ci.yml's floor and current lanes (ADR-0003: CI tests
+# the floor against an amalgamation it compiles itself). Without a
 # flag it builds the floor, the one packaging/floors.sexp holds (ADR-0008),
 # read by scripts/ci/floor.sh, which fails closed on a file that does not
 # give exactly one well-formed SQLite version. With --current it builds the
 # pinned current release below and reads no floors file. With --no-load it
 # builds the same release, by the same pins, as --current does, but without
 # extension loading: the current job's second build, a library that lacks
-# sqlite3_load_extension, as Apple's does (M4's closing review). Nothing a
-# workflow says, an env key or a matrix value, can change which: the
-# version, its year and its pins are set here, whatever the environment
-# holds.
+# sqlite3_load_extension, as Apple's does. Nothing a workflow says, an env
+# key or a matrix value, can change which: the version, its year and its
+# pins are set here, whatever the environment holds.
 #
 # It downloads sqlite-autoconf-NNNNNNN.tar.gz, whose number is computed
 # from the version, X then Y and Z in two digits each then 00, and checks
@@ -33,7 +32,7 @@
 #   -DSQLITE_ENABLE_FTS5    --current and --no-load: FTS5, which SQLite's
 #                           defaults leave out, so the current lane runs the
 #                           FTS5 suite's rows and the floor lane its refusal
-#                           (ADR-0003, amended)
+#                           (ADR-0003)
 #   -DSQLITE_OMIT_LOAD_EXTENSION
 #                           --no-load only: no sqlite3_load_extension, so
 #                           the suites run their unavailable branches on
@@ -98,9 +97,9 @@ fail() {
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
-# current_version: the current SQLite, built with --current and --no-load: sqlite.org's
-# newest release on 2026-11-14, chosen that day (the M1 plan, section 7). It
-# is no floor, so it is not in packaging/floors.sexp.
+# current_version: the current SQLite, built with --current and --no-load: a
+# recent release of sqlite.org's, pinned. It is no floor, so it is not in
+# packaging/floors.sexp.
 current_version=3.54.1
 
 # The pins of each build, by role: --no-load's are the current release's.

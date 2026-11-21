@@ -15,8 +15,9 @@
 ;;; A row is a vector of the row's values, in column order. Its column count
 ;;; is read once, at the row, after its step, and each value is read by the
 ;;; who-taking column read, in a critical section of its own; parameters are
-;;; positional, bound by bind-each!/who, every value checked before any is
-;;; bound, then one value a section (ADR-0015).
+;;; positional, bound by bind-each!/at, or by bind-each!/who for query-fold,
+;;; every value checked before any is bound, then one value a section
+;;; (ADR-0015).
 ;;;
 ;;; Everything raised names the convenience the caller called: each reaches
 ;;; the statement tier through the tier's internals that take a WHO
@@ -467,7 +468,7 @@
   ;; each statement is prepared only once the one before it has run, since
   ;; preparing a PRAGMA applies it, stepped to done, its rows dropped, and
   ;; finalized. The loop ends at the script's end, or at a NULL statement,
-  ;; whose tail was the input's end in every case measured: so SQL holding no
+  ;; whose tail SQLite answers as the input's end: so SQL holding no
   ;; statement is no error. It stops at the first error, the statements
   ;; before it standing, and begins, ends or rolls back no transaction of its
   ;; own.
