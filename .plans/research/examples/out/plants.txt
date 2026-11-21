@@ -1,0 +1,79 @@
+ok   control: exit 0; failed 0, expected 0
+ok   text-line: exit 1; failed 1, expected 1
+       docs/examples.md:311: the whole program, run as written, prints the text block after it, line for line
+ok   file-only: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   block-only: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   orphan-file: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   orphan-block: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   swapped-links: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   no-text-block: exit 1; failed 1, expected 1
+       each whole program of docs/examples.md has a text block after it, what it prints: those that have none, by line
+ok   private-import: exit 1; failed 1, expected 1
+       no whole program names a (chez-sqlite3 private ...) library, which a reader's library path finds too, in any of its data: those that do, by page and line, with the libraries
+ok   stderr: exit 1; failed 1, expected 1
+       docs/examples.md:94: the whole program, run as written, exits 0 with nothing on stderr
+ok   exit-3: exit 1; failed 1, expected 1
+       docs/examples.md:167: the whole program, run as written, exits 0 with nothing on stderr
+ok   cwd-checkout: exit 1; failed 2, expected 2
+       a whole program runs from a directory of its own: the file it writes by a relative path is left there, and not in the checkout
+       a whole program of the docs leaves a file in its directory, and runs again there
+       notes.db is in the tree's root
+ok   libdirs-relative: exit 1; failed 18, expected 18
+       a program that evals a loading call inside the guard the docs show, with the library missing, catches the refusal: it ran to its end, and printed what the guard answered
+       the same program with the library there, a control, runs to its end: the version it prints is a string, and its first line prints too
+       a whole program of the docs leaves a file in its directory, and runs again there
+       docs/examples.md:21: the whole program, run as written, exits 0 with nothing on stderr
+       docs/examples.md:21: the whole program, run as written, prints the text block after it, line for line
+       docs/examples.md:94: the whole program, run as written, exits 0 with nothing on stderr
+       docs/examples.md:94: the whole program, run as written, prints the text block after it, line for line
+       docs/examples.md:167: the whole program, run as written, exits 0 with nothing on stderr
+       docs/examples.md:167: the whole program, run as written, prints the text block after it, line for line
+       docs/examples.md:231: the whole program, run as written, exits 0 with nothing on stderr
+       docs/examples.md:231: the whole program, run as written, prints the text block after it, line for line
+       docs/examples.md:311: the whole program, run as written, exits 0 with nothing on stderr
+       docs/examples.md:311: the whole program, run as written, prints the text block after it, line for line
+       docs/quickstart.md:44: the whole program, run as written, exits 0 with nothing on stderr
+       docs/quickstart.md:44: the whole program, run as written, prints the text block after it, line for line
+       docs/quickstart.md:105: the whole program, run as written, exits 0 with nothing on stderr
+       docs/quickstart.md:105: the whole program, run as written, with the library there, prints the version, path and source the suite reads itself, the list written, and a newline
+       docs/quickstart.md:105: the whole program, run as written, with CHEZ_SQLITE3_LIBRARY naming a missing file, exits 0 with nothing on stderr and prints one datum, a list whose first element is refused
+ok   never-again: exit 1; failed 1, expected 1
+       a whole program of the docs leaves a file in its directory, and runs again there
+ok   rerun-differs: exit 1; failed 1, expected 1
+       docs/examples.md:231: the whole program, run as written, and run again in its directory, beside what it left there, ("notes.db"), exits 0 with nothing on stderr and prints the same
+ok   h-first-link: exit 1; failed 1, expected 1
+       example-problems: the link counts only after the Scheme block before the program: one before a fragment, a runnable block or the program before is no program's, and the last of two links counts
+ok   h-from-ignored: exit 1; failed 2, expected 2
+       example-problems: a file no program links, a program that links no file, one whose file is not there, and two links swapped, each named
+       example-problems: the link counts only after the Scheme block before the program: one before a fragment, a runnable block or the program before is no program's, and the last of two links counts
+ok   h-lines-not-text: exit 1; failed 1, expected 1
+       example-problems: a file's text is the program's lines, each ended by a newline: one with no last newline, a blank line after, a line before, and its lines swapped are not its file's
+ok   h-walk-first-only: exit 1; failed 1, expected 1
+       private-names: a private library named plainly, with a version, through only, except, prefix, rename, for and library, two in turn, the bare prefix, a second import in the body, an environment, a quoted name and one in a vector, each once in its order; not chez-sqlite3, chez-sqlite3-testing, private chez-sqlite3, chez-sqlite3 privates, private as an identifier, the two symbols quoted apart, a list's tail, or a string
+ok   h-walk-tails: exit 1; failed 1, expected 1
+       private-names: a private library named plainly, with a version, through only, except, prefix, rename, for and library, two in turn, the bare prefix, a second import in the body, an environment, a quoted name and one in a vector, each once in its order; not chez-sqlite3, chez-sqlite3-testing, private chez-sqlite3, chez-sqlite3 privates, private as an identifier, the two symbols quoted apart, a list's tail, or a string
+ok   h-walk-no-vector: exit 1; failed 1, expected 1
+       private-names: a private library named plainly, with a version, through only, except, prefix, rename, for and library, two in turn, the bare prefix, a second import in the body, an environment, a quoted name and one in a vector, each once in its order; not chez-sqlite3, chez-sqlite3-testing, private chez-sqlite3, chez-sqlite3 privates, private as an identifier, the two symbols quoted apart, a list's tail, or a string
+ok   h-walk-twice: exit 1; failed 1, expected 1
+       private-names: a private library named plainly, with a version, through only, except, prefix, rename, for and library, two in turn, the bare prefix, a second import in the body, an environment, a quoted name and one in a vector, each once in its order; not chez-sqlite3, chez-sqlite3-testing, private chez-sqlite3, chez-sqlite3 privates, private as an identifier, the two symbols quoted apart, a list's tail, or a string
+ok   h-written-any: exit 1; failed 1, expected 1
+       example-problems: a program whose link's text is not its file's path as code is named: another file's path, other words, the path without its code marks, and the target without ../
+ok   body-import: exit 1; failed 1, expected 1
+       no whole program names a (chez-sqlite3 private ...) library, which a reader's library path finds too, in any of its data: those that do, by page and line, with the libraries
+ok   environment: exit 1; failed 1, expected 1
+       no whole program names a (chez-sqlite3 private ...) library, which a reader's library path finds too, in any of its data: those that do, by page and line, with the libraries
+ok   link-text: exit 1; failed 1, expected 1
+       docs/examples.md's whole programs and the .sps files of examples/ are twins: each program, line for line, the text of the file the page links last before it; the problems, by page and line, or by file
+ok   run-line: exit 1; failed 1, expected 1
+       docs/examples.md's commands run a file of examples/ from beside a clone, and each file they name is there: the problems, by page and line
+ok   lock-file: exit 0; failed 0, expected 0
+ok   not-in-nav: exit 1; failed 1, expected 1
+       check-site: nav completeness FAILED. missing-from-site/pages.sls=(examples.md) extra-in-site/pages.sls=()
+ok   not-in-readme: exit 1; failed 1, expected 1
+       README.org links every page of docs/: the pages it leaves out
+30 trees, 0 not as expected

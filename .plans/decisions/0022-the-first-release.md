@@ -13,6 +13,8 @@
   Amended 2026-11-20 in M5's closing review, accepted: the tag rule, the tag ruleset, the
   release's steps and the sweep's reach
   ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
+  Amended 2026-11-21 by the examples task, proposed: a fifth page, the examples
+  ([amendment](#amendment-2026-11-21-a-fifth-page-the-examples)).
 - **Date:** 2026-11-20
 - **Scope:** chez-sqlite3 M5, the release: the docs, the site, the archive, CI's margin, the
   comments, and v0.1.0 with its Release
@@ -244,3 +246,24 @@ Decision 12's steps change (the M5 plan, §4.9):
 Decision 11's entry is held a step further: `test-manifest` holds the latest entry's body and
 its two link references, `[Unreleased]` comparing the tag with `HEAD` and the release's own
 linking its tag's Release, each given once, and no link reference before the first release.
+
+## Amendment, 2026-11-21: a fifth page, the examples
+
+Proposed by the examples task ([its plan](../2026-11-21-examples-plan.md)), the maintainer's
+after the release, on their answers of 2026-11-20: all four everyday examples, built-in JSON
+only, and "Also a docs page".
+Not yet accepted.
+
+- **Decision 2's pages are five:** the fifth, `docs/examples.md`, second in the nav after the
+  quick start, linked from README.org as every page is. It shows five whole programs, each in
+  full with what it prints.
+- **Its programs are the files of `examples/`:** each `.sps` file there is, line for line, the
+  whole program the page links it from, and each of the page's whole programs is its file's,
+  which `test-docs` holds. `test-docs` runs each as it runs every whole program of the docs: it
+  exits 0 with nothing on stderr, and prints its text block.
+- **Q8's rejection stands:** README.org's example is a twin of a `scheme run` block, not an
+  `examples/` file, and the files run through their page's blocks, with no suite or wrapper of
+  their own.
+- **Every whole program runs from a directory of its own,** so what one writes by a relative path
+  lands there; one that leaves a file runs again beside it and must print the same. No whole
+  program names a `(chez-sqlite3 private …)` library, in its import form or anywhere else.

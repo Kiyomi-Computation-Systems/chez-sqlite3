@@ -12,6 +12,7 @@
   ;; equals docs/*.md, and the whole list equals README.org's.
   (define pages
     '(("quickstart.md" . "Quick start")
+      ("examples.md" . "Examples")
       ("finding-sqlite.md" . "Finding SQLite")
       ("libraries.md" . "What varies by library")
       ("reference.md" . "API reference")))
