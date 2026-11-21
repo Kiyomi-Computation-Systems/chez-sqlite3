@@ -1,0 +1,4 @@
+live-check: links: not a file at v0.2.0: blob/v0.1.0/README.org
+live-check: links: no link names a repository file at blob/v0.2.0/
+live-check: clone: this git clone is not --branch v0.2.0:
+  git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git

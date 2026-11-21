@@ -1,0 +1,2 @@
+live-check: links: not a file at v0.1.0: blob/main/README.org
+live-check: links: no link names a repository file at blob/v0.1.0/
