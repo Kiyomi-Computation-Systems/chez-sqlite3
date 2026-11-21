@@ -154,9 +154,13 @@ newest first.
     every job. `v0.1.0` is the signed tag `cfaf268` on `21b3e1b`, its site deployed and its GitHub
     Release published, the release's ten steps each passing
     ([the release](research/m5-release/README.md)). **M5 is done.**
-  - **Next, the maintainer's task:** an `examples/` folder of five programs, `docs/examples.md`
-    showing each in full, held by `test-docs`' whole-program rows, built by the M4 session and
-    checked by the M3 session.
+  - **The examples are done,** the maintainer's task after the release, as PR #62, `7d762c2`: five
+    programs in `examples/`, `docs/examples.md` showing each in full with what it prints, and
+    `test-docs`' rules holding them. Built by the M4 session, reviewed (Opus) and checked
+    read-only by the M3 session, and squash-merged with CI passing in every job. The maintainer
+    accepted its amendment, ADR-0022's decision 2 with five pages (2026-11-21, "Accept it"). The
+    quick start's clone note settles the open item on git's "is not a commit!". The next tag
+    carries `examples/`; nothing else is planned.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -273,7 +277,9 @@ newest first.
     min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`,
     has crept from 161 s to 221 s, under half the gate's 450 s `SLOW` line; read it again as suites
     are added. On the six runs to #57 the jobs took 28.0 to 40.3 minutes, and `test-check-ci`,
-    which grows with every `check-ci` row, took 177 s.
+    which grows with every `check-ci` row, took 177 s. On PR #62's run, 44944425019, `memory-1`
+    took 37 min 45 s, its 48 suites 1,923 s together and the slowest 167 s; `test-docs`, with the
+    examples, took 125 s, up from 68 s.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
@@ -284,15 +290,76 @@ newest first.
     four verbs' do. The probe that shows it is
     [research/m5-release/probes/cws-lost.sps](research/m5-release/probes/cws-lost.sps); no suite
     fails if the warning stops being true.
-  - **The README's clone line prints a warning:** `git clone --branch v0.1.0` on git 2.54 says
+  - **The clone line's warning is settled.** `git clone --branch v0.1.0` on git 2.54 says
     "refs/tags/v0.1.0 … is not a commit!", as it does for any annotated tag (chez-curl's too), and
-    clones the tag right. The quick start says nothing of it; a line there would.
+    clones the tag right. Since PR #62 the quick start says so, and that the clone is a detached
+    HEAD, the maintainer's "Fold it in".
+  - **On `main`, the examples need a clone of `main`.** README.org's clone line names `v0.1.0`,
+    which has no `examples/`, and its Documentation list links the examples page, whose run line
+    runs `chez-sqlite3/examples/…`. The site deploys from tags alone, so it shows no examples page
+    until the next tag, which closes this; until then the live check, whose page list now holds
+    `examples.html`, fails against `v0.1.0`'s site, as it should.
+  - **The examples haven't run on a Mac.** Apple's 3.51.0 and Homebrew's run them at the next
+    release's Mac walk.
+  - **The examples page's run line is held by its file name alone:** nothing holds its `--libdirs
+    chez-sqlite3/src`, nor the quick start's run line (the M3 session's check of PR #62).
+  - **A checkout path holding `:` splits `test-docs`' `--libdirs`,** as it splits `make test`'s
+    own (PR #62's review).
   - **The release's Mac run** was on `10a9569`, PR #59's head, not on the tagged `21b3e1b`. PR
     #60 changed only text, and the maintainer chose to skip a rerun (2026-11-21).
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-21 — the examples (PR #62)
+
+- **Built** by the M4 session, on `examples` from `21b3e1b`, moved to `16f1787` before its PR
+  ([the plan](2026-11-21-examples-plan.md), [the mutation log](examples-mutation-log.md)):
+  - five programs in `examples/`: basics, transactions and errors, prepared statements, a
+    database file with its migrations, and SQLite's built-in JSON;
+  - `docs/examples.md`, each program in full with what it prints, second in the nav and in
+    README.org's list, and linked from the quick start's Next;
+  - the quick start's note on the clone's warning, CHANGELOG.md's `[Unreleased]` Added entry, and
+    `examples.html` in the live check's page list.
+- **`test-docs`, 162 passes to 191:**
+  - each file is, line for line, the whole program the page links it from, by a link written as
+    its path;
+  - the page's run line names a file that is there;
+  - each of the page's programs has its text block;
+  - no whole program names a `(chez-sqlite3 private …)` library in any of its data;
+  - every whole program runs from a directory of its own, and one that leaves a file there runs
+    again and prints the same.
+
+  30 plant trees, each failing exactly its rows: the control and an editor's lock file none. The
+  programs printed the same on 3.45.1, 3.53.1 and 3.54.1, run twice.
+- **Reviewed:** one Opus review, read-only, found no blocker or major, and five minors and five
+  nits, all taken. A private library reached past the import form had passed; so had a link's
+  text and the run line; and `json_group_array`'s order had come from a subquery.
+- **Checked read-only by the M3 session** at `7389bcc`:
+  - `make test` 93 of 93;
+  - the page's run line, verbatim, from beside a clone laid out by `git archive`: 30 runs on
+    three libraries, each byte-equal to the page;
+  - `test-docs` under the gate, 106 s, its 13 children each under Valgrind, one directory
+    holding the rerun's two;
+  - three plants of its own, each as predicted: a quoted private name in the quick start's body
+    failed the private-names row alone; a relative `CHEZ` passed; and that `CHEZ` with the
+    absolute path dropped failed every child, 19 rows.
+
+  It found no blocker, major or minor, and three nits: the log's 158-character line and the
+  plan's base commit, both fixed in this close-out; and the run line's `--libdirs`, held by
+  nothing, left (Open).
+- **The maintainer** accepted the ADR-0022 amendment ("Accept it") and approved the merge
+  ("Merge it"), 2026-11-21.
+- **Cost:** `memory-1` gave `test-docs` 125 s of its 450 s, up from 68 s (run 44944425019).
+- **The lead's review of this close-out,** one Opus reviewer, read-only, found no blocker and one
+  major: the log still called the amendment proposed. It and the minors are fixed here.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer of #62 (the M4 session's) | Opus | 210k | 56 | 13 min |
+  | Reviewer of this close-out | Opus | 127k | 42 | 5 min |
 
 ### M5 is done
 

@@ -6,8 +6,9 @@ and that what the examples print was run on more than one library
 [slice 4's log](m5-slice-4-mutation-log.md).
 
 The M4 session built it on `examples`, from `21b3e1b`, the squash of PR #60 that `v0.1.0` tags,
-once the release was cut, and moved it to `16f1787`, the close-out's squash, before its PR. Builds and suites ran in the Guix container: Chez 10.4.0 (`ta6le`,
-threaded), x86_64, Guix's SQLite 3.53.1. The plant driver is in
+once the release was cut, and moved it to `16f1787`, the close-out's squash, before its PR.
+Builds and suites ran in the Guix container: Chez 10.4.0 (`ta6le`, threaded), x86_64, Guix's
+SQLite 3.53.1. The plant driver is in
 [research/examples/](research/examples/), its output in
 [research/examples/out/](research/examples/out/).
 
@@ -43,7 +44,7 @@ threaded), x86_64, Guix's SQLite 3.53.1. The plant driver is in
 - **The live check's page list** gains `examples.html`. A run against `v0.1.0`'s site now fails
   its pages clause, as it should: that site has no such page.
 - **ADR-0022's decision 2 and `global-constraints.md`'s line on the pages,** amended: five pages.
-  Proposed, for the maintainer.
+  Proposed, and accepted by the maintainer on 2026-11-21 ("Accept it").
 
 ## The rules watched failing
 
@@ -108,7 +109,8 @@ trees of its own that passed. The lead reran its body-import tree and its two pr
 - **`json_group_array`'s order came from a subquery's `ORDER BY`,** which SQLite doesn't promise.
   It is now `json_group_array(… order by id)`, an aggregate's own `ORDER BY`, which 3.45.1 has;
   the three libraries print the same as before.
-- **The constraint line** is marked *(provisional)*, as the file's header asks.
+- **The constraint line** was marked *(provisional)*, as the file's header asks, until the
+  amendment was accepted.
 - **An editor's lock file, `examples/.#basics.sps`,** would have been read as an example; a name
   beginning with a dot no longer is. **A relative `CHEZ`** would have failed every child after
   the `cd`; it is made absolute.
@@ -136,5 +138,6 @@ walk.
 
 `make test-memory MEMORY_SUITES=tests/test-docs.sps`, in the container on the same machine: 57 s
 on `21b3e1b`, 106 s with the examples, each within the limit of 450 s. On CI, `memory-1` gave
-`test-docs` 68 s on the tag's run, 44924721168; by the same ratio, about 127 s. The PR's CI run
-gives the figure.
+`test-docs` 68 s on the tag's run, 44924721168; by the same ratio, about 127 s. The PR's CI run,
+44944425019 on `7389bcc`, gave 125 s. Its `memory-1` shard's 48 suites took 1,923 s together, up
+from 1,871 s, the slowest 167 s and none slow, and the job 37 min 45 s of its 120.

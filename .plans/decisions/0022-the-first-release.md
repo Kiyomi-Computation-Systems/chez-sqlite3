@@ -13,7 +13,7 @@
   Amended 2026-11-20 in M5's closing review, accepted: the tag rule, the tag ruleset, the
   release's steps and the sweep's reach
   ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
-  Amended 2026-11-21 by the examples task, proposed: a fifth page, the examples
+  Amended 2026-11-21 by the examples task, accepted: a fifth page, the examples
   ([amendment](#amendment-2026-11-21-a-fifth-page-the-examples)).
 - **Date:** 2026-11-20
 - **Scope:** chez-sqlite3 M5, the release: the docs, the site, the archive, CI's margin, the
@@ -252,7 +252,7 @@ linking its tag's Release, each given once, and no link reference before the fir
 Proposed by the examples task ([its plan](../2026-11-21-examples-plan.md)), the maintainer's
 after the release, on their answers of 2026-11-20: all four everyday examples, built-in JSON
 only, and "Also a docs page".
-Not yet accepted.
+Accepted by the maintainer on 2026-11-21 ("Accept it").
 
 - **Decision 2's pages are five:** the fifth, `docs/examples.md`, second in the nav after the
   quick start, linked from README.org as every page is. It shows five whole programs, each in

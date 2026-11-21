@@ -5,9 +5,10 @@
   transactions and errors, prepared statements, a file database), built-in JSON only (no
   `load-extension!` example), and a docs page as well as the folder. Started 2026-11-21, once
   `v0.1.0` was released ([the release](research/m5-release/README.md)).
-- **Built by** the M4 session, on the branch `examples` from `21b3e1b`, as one PR with a mutation
-  log ([examples-mutation-log.md](examples-mutation-log.md)) and an Opus review. **Checked
-  read-only by** the M3 session.
+- **Built by** the M4 session, on the branch `examples` from `21b3e1b`, moved to `16f1787` before
+  its PR, as one PR with a mutation log ([examples-mutation-log.md](examples-mutation-log.md)) and
+  an Opus review. **Checked read-only by** the M3 session. **Merged** as PR #62, `7d762c2`, on
+  2026-11-21, with CI passing in every job.
 
 ## 1. What a reader gets
 
@@ -77,8 +78,8 @@ row passes on nothing.
 - **ADR-0022, decision 2, amended:** five pages, the fifth the examples, whose programs are
   `examples/`' files, held by `test-docs`. ADR-0022 rejected "`examples/*.sps` run by a suite" for
   README.org's example (Q8): that stands, and these files run through their page's blocks, with no
-  suite or wrapper of their own. `global-constraints.md`'s line on the release says the same. Both
-  are for the maintainer to accept.
+  suite or wrapper of their own. `global-constraints.md`'s line on the release says the same. The
+  maintainer accepted both on 2026-11-21 ("Accept it").
 
 ## 4. The probe
 
@@ -110,8 +111,8 @@ Each is watched failing by name, against a copy of the tree, then put back (the 
 
 `test-docs` runs in `memory-1`. On the tag's run, 44924721168, it took 68 s under the gate, its
 limit 450 s, and the shard's suites 1,871 s together. The examples add six children, the file
-example's second run among them. The PR's CI run gives the new figure; a suite of their own comes
-only if it nears the limit.
+example's second run among them. The PR's CI run, 44944425019, gave 125 s, and the shard's
+suites 1,923 s; a suite of their own comes only if it nears the limit.
 
 ## 7. Not in it
 
