@@ -636,7 +636,7 @@ statements are never kept for reuse.
 
 It does not survive an engine's preemption: an engine that runs out of fuel
 inside it frees the script's copy, and its resume is refused. If you use
-engines, use `prepare-statement` and finalize each statement yourself.
+engines, split the script into its statements, and run each with `execute!`.
 
 Going back into a script, through a continuation or an engine resumed a
 second time, never runs any of its statements again, whether from before the
@@ -949,8 +949,11 @@ you get no answers.
 ```
 
 It does not survive an engine's preemption: an engine that runs out of fuel
-leaves the procedure, and the statement is finalized under it. If you use
-engines, use `prepare-statement` and finalize it yourself.
+leaves the procedure, and the statement is finalized under it. If that
+finalize fails, as an `insert ... returning` stepped once can while another
+connection reads, the engine is lost: its caller gets Chez's own assertion
+violation, "no engine active". If you use engines, use `prepare-statement`
+and finalize it yourself.
 
 ### `statement?`
 

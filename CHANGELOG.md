@@ -9,8 +9,8 @@ All notable changes to chez-sqlite3 are recorded here. The format follows
 ## [0.1.0] - 2026-11-20
 
 The first release: SQLite for Chez Scheme, bound to SQLite's own C
-library, which is found and loaded when a program starts. Nothing is
-built: put the clone's `src` on Chez's library path.
+library, which is found and loaded the first time a program needs it.
+Nothing is built: put the clone's `src` on Chez's library path.
 
 ### Added
 
@@ -26,8 +26,8 @@ built: put the clone's `src` on Chez's library path.
   [Values](docs/reference.md#values)).
 - **Conveniences:** `execute!`, `query`, `query-row` and `query-fold`,
   each through a statement cache per connection; `execute-script!`,
-  uncached; and the counters, `changes`, `total-changes`,
-  `last-insert-rowid` and `in-transaction?`
+  uncached; the counters `changes`, `total-changes` and
+  `last-insert-rowid`; and `in-transaction?`
   ([Conveniences and counters](docs/reference.md#conveniences-and-counters)).
 - **Transactions:** `with-transaction`, nested as savepoints, rolled
   back on a raise ([Transactions](docs/reference.md#transactions)).
@@ -54,13 +54,13 @@ built: put the clone's `src` on Chez's library path.
   not run them. Windows is not supported.
 - **Older systems:** chez-sqlite3 refuses a SQLite below the floor in
   README.org's Requirements as `below-floor`, as an older macOS's may
-  be. Name a newer one with `CHEZ_SQLITE3_LIBRARY`, or install one
-  where discovery looks before the file it refused
+  be. Name a newer one with `CHEZ_SQLITE3_LIBRARY`, or, on Linux,
+  install one where discovery looks before the file it refused
   ([when it is refused](docs/finding-sqlite.md#when-it-is-refused),
   [who needs the override](docs/finding-sqlite.md#who-needs-the-override)).
   Ubuntu 24.04's own `chezscheme` package is too old as well: build
   Chez from its source, or use Guix's or Homebrew's
-  ([the quick start](docs/quickstart.md)).
+  ([what you need](docs/quickstart.md#what-you-need)).
 - **What varies by library,** such as extension loading, defensive
   mode, full-text search and double-quoted words, is on
   [its page](docs/libraries.md).
