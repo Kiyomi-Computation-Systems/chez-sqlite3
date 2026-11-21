@@ -1026,10 +1026,13 @@ told in chez-curl's `.plans/traps.md`.
   check that skips comment-like lines skips it inside a `run: |` block too: in `pages.yml`, `# a
   note` at column 0 there passed `check-ci` at `3f68b33`, and PyYAML 5.4.1 refused the file. Its
   `${{ }}` is filled in before the shell starts, which GitHub documents and no run here tried, so
-  a string holding a newline would put a command on a line of its own. Reproduce: the slice 3
-  plant `x-main-expr-in-block` (`research/m5-slice-3/review-plants-run.sh`) passes `3f68b33`'s
-  `check-ci` and fails the fixed one (M5 slice 3's review; the lead's rerun agreed).
-  (chez-sqlite3)
+  a string holding a newline would put a command on a line of its own. Reproduce: put `# a note`
+  at column 0 before `pages.yml`'s `sudo apt-get update -qq`, in a copy of `.github/workflows`;
+  `3f68b33`'s `tests/check-ci.sh`, run with `CHECK_CI_ROOT` the checkout, passes the copy, and
+  `c3df9de`'s refuses it, "pages.yml differs from the copy check-ci holds" (M5's closing review).
+  The expression in a comment-like line of `ci.yml`'s block is the plant `x-main-expr-in-block`
+  (`research/m5-slice-3/review-plants-extra.py`), which passes `3f68b33`'s `check-ci` and fails
+  the fixed one (M5 slice 3's review; the lead's rerun agreed). (chez-sqlite3)
 - **A block held to a copy only while the copy's block runs frees the lines after it that YAML
   still reads as the block's.** A line indented as content after the copy's last block line is
   part of the script, so a check must hold it by the file's own indentation too. The review's

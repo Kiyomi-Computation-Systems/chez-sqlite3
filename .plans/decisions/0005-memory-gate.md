@@ -44,6 +44,9 @@
   Amended 2026-11-20 in M5's plan, accepted: the site's job, `pages.yml`, and the memory jobs'
   timeout
   ([amendment](#amendment-2026-11-20-the-sites-job-pagesyml-and-the-memory-jobs-timeout-m5s-plan)).
+  Amended 2026-11-20 in M5's closing review, accepted: `pages.yml`'s run blocks, the site's
+  context and `CHEZ`
+  ([amendment](#amendment-2026-11-20-run-blocks-the-sites-context-and-chez-m5s-closing-review)).
 - **Date:** 2026-11-13
 - **Scope:** every suite, and CI's `memory` job, two since M3 slice 6: `memory-1` and `memory-2`
 - **Settles:** brief §2.4
@@ -865,3 +868,24 @@ Accepted by the maintainer on 2026-11-20 ("Accept all").
   A change to `pages.yml` changes `check-ci.sh` with it, as a change to `ci.yml` does.
 - **`pages.yml` runs on no pull request,** so no required check names it; `ci.yml`'s `site` job
   runs its build on each.
+
+## Amendment, 2026-11-20: run blocks, the site's context and `CHEZ` (M5's closing review)
+
+Proposed in M5's closing review ([the M5 plan](../2026-11-20-m5-plan.md), its amendments "the
+site in CI as built" and "the release's steps and the records").
+Accepted by the maintainer on 2026-11-20 ("Accept all three").
+
+- **`check-ci` holds `pages.yml`'s run blocks whole.** The M5 plan's amendment above frees every
+  line of `pages.yml` "but a comment or a blank line", which is weaker than what was built and
+  accepted in slice 3: inside a `run: |` block such a line is script, and a `#` at column 0 there
+  passed and ended the block for YAML. A comment or a blank line is free only outside a run block;
+  a block's lines are held to the copy whole, and so is a line indented as a block's content after
+  the copy's block ends.
+- **Branch protection's context is the job's name,** `site (the docs site, on Ubuntu's Chez)`, not
+  `site`, as GitHub names a check by its job's `name:`.
+- **`check-ci` requires `env: CHEZ` only on some steps:** the site job's four checks; each lane's
+  steps that build, check and test a SQLite; and `main`'s "Report the runner's SQLite". On every
+  other step it holds the value given, the job's Chez, and passes a step that gives none: the
+  closing review's plants dropping it from `main`'s "Checks and suites", `memory-1`'s shard step
+  and `nothreads`' check each passed. Those runners have no `scheme` on the path, so such a step
+  fails loudly there, and the gap is carried past 0.1.0, not closed.

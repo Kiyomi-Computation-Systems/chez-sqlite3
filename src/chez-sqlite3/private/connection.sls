@@ -1,8 +1,9 @@
 #!r6rs
 ;;; (chez-sqlite3 private connection): a connection to a database, opened,
-;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports its two
-;;; public procedures, close-database! and database?, the counters and
-;;; interrupt-database!; call-with-open-handle, the one way to a connection's
+;;; owned and closed (ADR-0010, ADR-0012). (chez-sqlite3) exports seven of
+;;; its procedures: close-database! and database?; the counters, changes,
+;;; total-changes, last-insert-rowid and in-transaction?; and
+;;; interrupt-database!. call-with-open-handle, the one way to a connection's
 ;;; handle, and check-database-owner are the statement tier's, with the
 ;;; tracking procedures below; failure-details, first-finalize-failure and
 ;;; interrupt-database/with are exported for the suites too.
@@ -236,13 +237,10 @@
   ;; is set once the section is over and its outcome in hand, never by an
   ;; after thunk: an engine's expiry before that unwinds the wind and its
   ;; resume enters it again, and must go on.
-  ;; A few instructions lie between FINISHED's set! and the wind's exit.
-  ;; An expiry there would make its resume refused, re-entered: harmless,
-  ;; the section's work done, and the refused run touching nothing. None was
-  ;; seen there in a measurement: no engine over fuel 1 to 3000, 20 calls
-  ;; each, nor a timer's handler over 2804 trials re-entering execute-script!;
-  ;; the 212 to 218 refused as re-entered had taken theirs inside the wind
-  ;; before the section, the re-entry this before thunk exists to refuse.
+  ;; A few instructions lie between FINISHED's set! and the wind's exit. An
+  ;; expiry there makes its resume raise re-entered after the section's work
+  ;; is done: the work stands, and the refused run touches nothing, but the
+  ;; caller gets the refusal in place of the section's outcome.
   (define (call-with-open-handle who db proc)
     (check-who 'call-with-open-handle who)
     (unless (procedure? proc)

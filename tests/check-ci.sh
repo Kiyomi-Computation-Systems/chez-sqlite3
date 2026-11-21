@@ -32,7 +32,10 @@
 #     nothreads, floor, current and site) and each key in them, each
 #     step's keys, with: and env: keys, the one if: and where it may be, the
 #     cache keys, the checks each job must run, each as one step's whole run
-#     line, in order, and the CHEZ each job runs with; in job main, ADR-0002's
+#     line, in order, and the CHEZ of each step whose env gives one, its
+#     job's Chez. A step must give one only where this list says so: a step
+#     of main, memory-1, memory-2 or nothreads that gives none passes, but
+#     main's "Report the runner's SQLite"; in job main, ADR-0002's
 #     install check, make build, as one step's whole run line, after its
 #     check-chez step and before its make step; and in job main, between its
 #     check-chez step and its make step, the steps "Report the versions this

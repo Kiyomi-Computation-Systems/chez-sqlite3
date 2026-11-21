@@ -2,15 +2,15 @@
 # scripts/ci/report-sqlite.sh
 #
 # Reports the SQLite a CI lane tests: CI's main job runs it on the runner's
-# own SQLite, so each run records it (harness plan, section 5). It prints the
-# library's path, its version and number, the version and number of the
-# sqlite3.h the compiler finds, the SQLite floor, and every compile option,
-# one per line. It reads the library through Chez's FFI, never from a sqlite3
-# command, which can carry its own copy of SQLite (AGENTS.md).
+# own SQLite, so each run records it. It prints the library's path, its
+# version and number, the version and number of the sqlite3.h the compiler
+# finds, the SQLite floor, and every compile option, one per line. It reads
+# the library through Chez's FFI, never from a sqlite3 command, which can
+# carry its own copy of SQLite.
 #
-# It reports and checks nothing. M1 holds a library to its floor (discovery's
-# below-floor refusal, and the floor lane's assertions) and to its header
-# (the constants check), with tests of their own.
+# It reports and checks nothing. The suites hold a library to its floor
+# (discovery's below-floor refusal, and the floor lane's assertions) and to
+# its header (the constants check), with tests of their own.
 #
 # The library is the one CHEZ_SQLITE3_LIBRARY names, an absolute path, when
 # that is set, as in the Guix container (ADR-0002). Otherwise it is the one

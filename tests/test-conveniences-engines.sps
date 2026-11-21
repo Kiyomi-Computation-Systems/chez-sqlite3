@@ -17,10 +17,14 @@
 ;;;                 what is read, by the lookaside a UTF-16 TEXT read takes,
 ;;;                 seen at every tick by a timer's handler, a count at a
 ;;;                 time; and the expiries' count
-;;;   query-fold    does not survive a preemption: an expiry inside its wind
-;;;                 finalizes its statement, and the resumed loop raises
-;;;                 &sqlite-closed. At every fuel it answers its fold or that,
-;;;                 at fuel 1 that, and leaves no statement at a row
+;;;   query-fold    does not survive a preemption before its last step: an
+;;;                 expiry inside its wind before then finalizes its
+;;;                 statement, and the resumed loop raises &sqlite-closed;
+;;;                 one past the last step finalizes it too, or gives it back
+;;;                 to the cache, and the resumed fold answers. At every fuel
+;;;                 it answers its fold or that, at fuel 1 that, at some fuel
+;;;                 its fold after such a finalize, and leaves no statement at
+;;;                 a row
 ;;;   execute-script!
 ;;;                 does not survive one either: an expiry inside its block's
 ;;;                 extent frees the block, and call-with-block refuses the
@@ -629,11 +633,17 @@
 
 (define fold-closed (list 'raised '(closed query-fold)))
 
-;; fold-under-engine : Database Positive-Integer -> (List Boolean Any (Listof Any))
+;; fold-under-engine : Database Positive-Integer -> (List Boolean Any (Listof Any) Boolean)
 ;; query-fold of n's sum on DB as an engine at FUEL, resumed after each
-;; expiry: whether it expired; what it answered; and what deviated: an
-;; answer neither the sum nor &sqlite-closed, a statement left at a row or
-;; out of the cache unfinalized, or the count not the statements tracked.
+;; expiry: whether it expired; what it answered; what deviated: an answer
+;; neither the sum nor &sqlite-closed, a statement left at a row or out of
+;; the cache unfinalized, or the count not the statements tracked; and
+;; whether it expired, answered the sum, and left its statement finalized,
+;; not cached. With the cache on, only an expiry past the last step, before
+;; the fold's body has answered, does that: one earlier makes the resumed
+;; loop raise &sqlite-closed, and one later, or none, gives the statement
+;; back to the cache. With the cache 0 every finish finalizes, so the sum
+;; and a finalized statement say nothing of where the expiry fell.
 (define (fold-under-engine db fuel)
   (let* ((r (engine-run (lambda ()
                           (attempt (lambda ()
@@ -650,17 +660,30 @@
                           (and (equal? left '(("select x from n" . ready))) (= cached 1)))
                       '()
                       (list (list 'left left cached)))
-                  (if (= counted (length left)) '() (list (list 'counted counted)))))))
+                  (if (= counted (length left)) '() (list (list 'counted counted))))
+          (and (cadr r) (eqv? (car r) 6) (equal? left '()) (= cached 0)))))
 
-(test-equal "query-fold under an engine does not survive a preemption: at every fuel until it completes without expiring, each fuel on a fresh connection, cold then warm, it answers its fold, or, its statement finalized by an expiry, &sqlite-closed from the resumed loop; at fuel 1 the latter, cold and warm; never a statement at a row, nor one left out of the cache unfinalized"
-  (list '() (list 6 fold-closed) fold-closed)
-  (let ((run (outcome-sweep
+;; past-last-step : (Listof Positive-Integer) -> Symbol
+;; Whether FUELS, those at which a run answered the sum with its statement
+;; finalized by an expiry, holds any, printing them.
+(define (past-last-step fuels)
+  (display "  query-fold answered its fold after an expiry past its last step finalized its statement at fuels ")
+  (write (list-sort < fuels))
+  (newline)
+  (if (null? fuels) 'never-seen 'seen))
+
+(test-equal "query-fold under an engine does not survive a preemption before its last step: at every fuel until it completes without expiring, each fuel on a fresh connection, cold then warm, it answers its fold, or, its statement finalized by an expiry, &sqlite-closed from the resumed loop; at fuel 1 the latter, cold and warm; at some fuel an expiry past its last step finalizes its statement, and the resumed fold answers its fold; never a statement at a row, nor one left out of the cache unfinalized"
+  (list '() (list 6 fold-closed) fold-closed 'seen)
+  (let* ((past '())
+         (run (outcome-sweep
               (lambda (fuel)
                 (let ((r (with-memory-db
                           (lambda (db)
                             (setup-n db)
                             (let* ((cold (fold-under-engine db fuel))
                                    (warm (begin (warmed! db 'warm) (fold-under-engine db fuel))))
+                              (when (or (cadddr cold) (cadddr warm))
+                                (set! past (cons fuel past)))
                               (list (or (car cold) (car warm))
                                     (cadr cold)
                                     (append (caddr cold)
@@ -683,7 +706,8 @@
       (if (integer? (car run))
           (list (car shown)
                 (list-sort (lambda (a b) (and (integer? a) (not (integer? b)))) (cadr shown))
-                (caddr shown))
+                (caddr shown)
+                (past-last-step past))
           shown))))
 
 (define script "insert into s values (1); insert into s values (2); insert into s values (3)")

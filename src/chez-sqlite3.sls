@@ -12,12 +12,14 @@
 ;;; explicitly: no collection closes one (ADR-0010, ADR-0012). A statement
 ;;; belongs to its connection and its thread, and closing the connection
 ;;; finalizes it (ADR-0014). Its values are bound and read by
-;;; (chez-sqlite3 private statement-values) (ADR-0015). The conveniences run
-;;; one statement each, through the connection's statement cache, and finish
-;;; it on every path; the counters are SQLite's, read as it keeps them
-;;; (ADR-0016, ADR-0020). with-transaction reads autocommit to nest, and again
-;;; to learn whether its transaction survived its body (ADR-0017). The open
-;;; verbs take a settings list, applied at open and read back (ADR-0018),
+;;; (chez-sqlite3 private statement-values) (ADR-0015). The conveniences
+;;; finish every statement they run on every path: execute!, query,
+;;; query-row and query-fold run one each, through the connection's
+;;; statement cache, and execute-script! a script's, one at a time, uncached;
+;;; the counters are SQLite's, read as it keeps them (ADR-0016, ADR-0020).
+;;; with-transaction reads autocommit to nest, and again to learn whether its
+;;; transaction survived its body (ADR-0017). The open verbs take a settings
+;;; list, applied at open and read back (ADR-0018),
 ;;; db_config's four among it, each one call held by its own answer, and an
 ;;; open that opts in to extension loading on a library without it refused
 ;;; by sqlite-extensions-unavailable?'s condition (ADR-0021). load-extension!

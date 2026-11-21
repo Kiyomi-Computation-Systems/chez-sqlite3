@@ -131,14 +131,25 @@ newest first.
     branch protection, strict, gained its seventh context, `site (the docs site, on Ubuntu's
     Chez)`; Pages, built from GitHub Actions with HTTPS enforced, at
     <https://kiyomi-computation-systems.github.io/chez-sqlite3/>; and its `github-pages`
-    environment takes custom rules alone, the branch `main` and the tag `v*`.
+    environment takes custom rules alone, the tag `v*` since M5's closing review, which dropped
+    the branch `main`.
   - **M5 slice 4 is done,** the docs, as PR #56, `9728bed`, by the M4 session, reviewed twice
     (Opus) and checked by the M3 session, squash-merged with CI passing in every job. The
     maintainer accepted its plan amendment, the docs as built, and ADR-0016's, an expiry past the
     fold's last step (2026-11-20, "Accept both"), and its walk passed on Linux and on the Mac.
-  - **M5 slice 5 is PR #57 on `m5-slice-5`:** the comment sweep of `src/` and `tests/`, by the M3
-    session's four sweepers, reviewed (Opus) and checked read-only by the M4 session. M5's closing
-    review comes after it, then the release.
+  - **M5 slice 5 is done,** the comment sweep of `src/` and `tests/`, as PR #57, `c3df9de`, by the
+    M3 session's four sweepers, reviewed (Opus) and checked by the M4 session, squash-merged with
+    CI passing in every job.
+  - **M5's closing review is PR #58 on `m5-closing-review`:** two reviewers (Opus, read-only) and
+    their fixes, by the M3 session, checked read-only by the M4 session. The maintainer accepted its
+    amendments to the plan, ADR-0022 and ADR-0005 (2026-11-20, "Accept all three"). The maintainer's
+    answers (2026-11-20): "Drop main, keep v*", "Sweep them in the fix PR", "Protect update and
+    deletion" and "Say tests run from a clone"; the lead set the two settings on GitHub and read
+    them back: the `github-pages` environment takes the tag `v*` alone, and the ruleset "release
+    tags" refuses an update or a deletion of `refs/tags/v*`, with no bypass.
+  - **Then the release, slice 6;** and after it, the maintainer's next task: an `examples/` folder
+    of five programs, `docs/examples.md` showing each in full, held by `test-docs`' whole-program
+    rows, built by the M4 session and checked by the M3 session, one PR after slice 6.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -238,19 +249,24 @@ newest first.
     "Report the runner's SQLite" step;** elsewhere it checks the value when one is there. A lost
     `CHEZ` fails on a runner with no `scheme`, but not where Ubuntu's `chezscheme` answers to
     `scheme` ([traps](traps.md); M5 slice 3 and its review).
-  - **For M5's closing review, from slice 4's amendment:** no suite row fails a fold that raises
-    closed after an expiry past its last step that finalized its statement; the versions the
-    pages name, 3.54.1, Guix's 3.53.1 and Apple's 3.51.0, are held to nothing; and two copies of
-    discovery's list, the quick start's Apple path and the reference's "Which SQLite" list, are
-    held to nothing, where `docs/finding-sqlite.md`'s tables are held.
-  - **No tag ruleset limits who may push a `v*` tag,** so once the `github-pages` environment
-    takes `v*`, any such tag deploys the site. With one maintainer that stands; a ruleset would
-    close it (M5 slice 3's review).
+  - **Carried past 0.1.0, from slice 4's amendment** (M5's closing review): the versions the pages
+    name, 3.54.1, Guix's 3.53.1 and Apple's 3.51.0, are held to nothing, all three true today;
+    and two copies of discovery's list, the quick start's Apple path and the reference's "Which
+    SQLite" list, are held to nothing, where `docs/finding-sqlite.md`'s tables are held. The
+    fold's row is done, in the closing review.
+  - **Anyone who can push may create a `v*` tag, and it deploys the site.** The ruleset "release
+    tags" refuses a tag's update or deletion, not its creation: testing a rule on creation would
+    take a scratch `v*` tag, which would deploy. With one maintainer that stands (M5's closing
+    review).
+  - **Carried past 0.1.0, as M4 carried them** (M5's closing review): `check-ci` passes a cache
+    save, or a Chez build, with its `if:` removed; "at most 11 children" a loading suite has is a
+    count, not a check. Both cost a rebuild or a re-save at worst.
   - **The memory jobs' margin:** each takes `timeout-minutes: 120` since M5 slice 1 (PR #53). The
     runs since M4's closing review put `memory-1`'s suites at 1,408 to 2,414 s, its job at up to 47
     min 22 s, 79% of the old 60 and 39% of 120. Its slowest suite, `test-open-db-config-engines`,
     has crept from 161 s to 221 s, under half the gate's 450 s `SLOW` line; read it again as suites
-    are added.
+    are added. On the six runs to #57 the jobs took 28.0 to 40.3 minutes, and `test-check-ci`,
+    which grows with every `check-ci` row, took 177 s.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
@@ -260,6 +276,56 @@ newest first.
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-20 — M5's closing review and its fixes (PR #58)
+
+- **Reviewed** by two Opus reviewers, read-only, on `c3df9de`, all of M5's slices, on disjoint
+  dimensions:
+  - **A, the release as a reader gets it:** a fresh clone and the bare archive both ran every
+    command, program and stated output of the quick start; the site built and read right; the
+    archive left out `.plans/` and AGENTS.md. No blocker, no major. Minors: the reference's
+    `sqlite-error-offset` said a prepare's failure alone has one, where `execute!` and every
+    `execute-script!` failure carry one; the quick start's Apple library unqualified, true on
+    macOS 26; nothing said where to get a Chez new enough; a dozen `src/` comments said what
+    the code doesn't do; the build files shipped the build's history; and nothing said the tests
+    need a clone.
+  - **B, the build and the records:** a dry run of slice 6 in a copy passed every check, and every
+    half-done release was refused by name but an entry with no body. No blocker. Majors: §4.9 had
+    no failure path for the tag's deploy, whose natural retry, from `main`, deploys a site
+    ADR-0022 rejects; and the live check had only been seen failing on 404s. Minors: stale
+    records, ADR-0005's weaker `pages.yml` rule, the plan's `CHEZ` claim, an entry nothing held.
+- **The maintainer's answers** (2026-11-20): "Drop main, keep v*"; "Sweep them in the fix PR";
+  "Protect update and deletion"; "Say tests run from a clone". The lead set the environment's
+  rules and the ruleset on GitHub and read them back.
+- **The fixes,** by two Opus builders on disjoint files:
+  - the pages, the `src/` comments, and a sweep of the Makefile's, `scripts/`', `packaging/`',
+    `.gitignore`'s and `.gitattributes`' comments, the sweep's checker extended to them, each rule
+    watched failing ([slice 5's log](m5-slice-5-mutation-log.md), its last section);
+  - §4.9's failure path, the tag's read-back and the archive listing's watched failure; a live
+    check, `research/m5-closing-review/live-check.sh`, each clause watched failing on loopback
+    renders and passing on a release render; 14 `test-manifest` rows holding the changelog's
+    entry and link references; a fold row in `test-conveniences-engines`, at the default cache,
+    where cache 0 can't tell the cases apart; and the records, with amendments to the plan,
+    ADR-0022 and ADR-0005, proposed.
+- **The lead's verification:** on the combined tree, `make test` 93 of 93, `check-site`,
+  `check-floors`, `check-ci` and `check-test-fails` passing; the sweep's checker refusing only
+  the two intended code changes, `test-manifest`'s and the engines suite's, every other file its
+  comments alone; the live check failing `main`'s render on links and clone and passing a release
+  render; and the fold row failing on a plant that raises closed after the last step.
+- **Checked by the M4 session** (read-only, on `98c6edc`): no blocker. One minor: the pages' new
+  sentence, that a block whose last line is `;; =>` is run, held by convention alone, a plain
+  `scheme` block ending `;; => 4` under `(+ 1 2)` passing. A `test-docs` row now refuses a `;; =>`
+  line in any Markdown fragment, watched failing on that plant; README.org's block, held to its
+  twin, is outside it. The suite's header says what a reader sees.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer A | Opus | 296k | 87 | 17 min |
+  | Its `src/` reader | Opus | 327k | 39 | 11 min |
+  | Reviewer B | Opus | 281k | 109 | 15 min |
+  | Builder 1, the reader's side | Opus | 387k | 289 | 33 min |
+  | Builder 2, the release's side | Opus | 392k | 151 | 31 min |
 
 ### 2026-11-20 — M5 slice 5: the comment sweep (PR #57)
 

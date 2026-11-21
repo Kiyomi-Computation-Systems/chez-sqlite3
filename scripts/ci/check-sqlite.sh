@@ -6,8 +6,7 @@
 # packaging/floors.sexp by scripts/ci/floor.sh (ADR-0008); or, with
 # --current, the pinned current release, which reads no floors file; or,
 # with --no-load, the same release as build-sqlite.sh --no-load builds it,
-# without extension loading, for the current job's second build (M4's
-# closing review).
+# without extension loading, for the current job's second build.
 # scripts/ci/build-sqlite.sh runs it on what it built, before a cache saves
 # it, and each lane runs it again after restoring SQLite from a cache, so a
 # cache that serves another build is caught before any suite runs on it.
@@ -26,16 +25,17 @@
 #   4. that header defines the release's SQLITE_VERSION,
 #      SQLITE_VERSION_NUMBER and SQLITE_SOURCE_ID;
 #   5. the library, read through Chez's FFI by a probe of its own, never
-#      through chez-sqlite3 and never from a sqlite3 command (AGENTS.md),
-#      answers the release's version, number and source id, answers 1,
-#      serialized, to sqlite3_threadsafe(), and lists every compile option
-#      the release lists when build-sqlite.sh builds it, line for line, in
-#      SQLite's order, and no other. A lane tests SQLite's defaults, built
-#      here with known flags, the current lane FTS5 besides (ADR-0003,
-#      amended), and the no-load build FTS5 and OMIT_LOAD_EXTENSION: so a
-#      build with DEFAULT_MEMSTATUS=0, which ADR-0005's memory check cannot
-#      read, or with THREADSAFE=0, fails, and so does a current build
-#      without ENABLE_FTS5, or a no-load build without either.
+#      through chez-sqlite3 and never from a sqlite3 command, which can
+#      carry its own copy of SQLite, answers the release's version, number
+#      and source id, answers 1, serialized, to sqlite3_threadsafe(), and
+#      lists every compile option the release lists when build-sqlite.sh
+#      builds it, line for line, in SQLite's order, and no other. A lane
+#      tests SQLite's defaults, built here with known flags, the current lane
+#      FTS5 besides (ADR-0003), and the no-load build FTS5 and
+#      OMIT_LOAD_EXTENSION: so a build with DEFAULT_MEMSTATUS=0, which
+#      ADR-0005's memory check cannot read, or with THREADSAFE=0, fails, and
+#      so does a current build without ENABLE_FTS5, or a no-load build
+#      without either.
 #
 # The release's version number is computed from its version, X*1000000 +
 # Y*1000 + Z, never written. Its source id is the one sqlite.org's release
@@ -50,9 +50,9 @@
 # build-sqlite.sh's pins must.
 #
 # current_version, which --no-load checks too, is written here, in
-# build-sqlite.sh, and in
-# tests/test-ci-sqlite.sps: a change to one that misses another fails at
-# build-sqlite.sh's own call to this script, before any cache is saved.
+# build-sqlite.sh, and in tests/test-ci-sqlite.sps: a change to one that
+# misses another fails at build-sqlite.sh's own call to this script, before
+# any cache is saved.
 #
 # CHEZ and CC name the Chez binary and the C compiler, scheme and cc by
 # default. It prints what it checked on stdout and exits 0, or says what is
@@ -91,9 +91,9 @@ export LC_ALL
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
-# current_version: the current SQLite, built with --current and --no-load:
-# sqlite.org's newest release on 2026-11-14, chosen that day (the M1 plan,
-# section 7). It is no floor, so it is not in packaging/floors.sexp.
+# current_version: the current SQLite, built with --current and --no-load: a
+# recent release of sqlite.org's, pinned. It is no floor, so it is not in
+# packaging/floors.sexp.
 current_version=3.54.1
 
 # The source ids sqlite.org's release logs publish, by role
@@ -105,9 +105,9 @@ current_source_id='2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f
 # The compile options each role's library lists, in SQLite's order, as
 # build-sqlite.sh builds it, with $compiler where SQLite lists the compiler:
 # the floor's SQLite's defaults; the current release's with ENABLE_FTS5,
-# which build-sqlite.sh adds for that role and --no-load's (ADR-0003,
-# amended); and --no-load's with OMIT_LOAD_EXTENSION too, between
-# MUTEX_PTHREADS and SYSTEM_MALLOC.
+# which build-sqlite.sh adds for that role and --no-load's (ADR-0003); and
+# --no-load's with OMIT_LOAD_EXTENSION too, between MUTEX_PTHREADS and
+# SYSTEM_MALLOC.
 floor_options() {
   cat <<EOF
 ATOMIC_INTRINSICS=1

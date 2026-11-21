@@ -1,5 +1,5 @@
 # Debian/Ubuntu packages to build and test chez-sqlite3 in CI, on
-# ubuntu-24.04 (harness plan, section 5).
+# ubuntu-24.04.
 #
 # Every job of .github/workflows/ci.yml but site installs from this file:
 # one step reads every uncommented line, installs them together with
@@ -24,8 +24,8 @@
 # CI builds Chez itself because noble's chezscheme is 9.5.8, below the floor
 # (ADR-0001). With ./configure --disable-x11 --disable-curses, Chez's BUILDING
 # file asks for nothing but a C compiler and make, so there is no libx11-dev
-# and no libncurses-dev (measured in chez-curl). build-essential is the C
-# toolchain: gcc, g++, make and libc6-dev.
+# and no libncurses-dev. build-essential is the C toolchain: gcc, g++, make
+# and libc6-dev.
 build-essential
 
 # --- to fetch the Chez release tarball and SQLite's source -------------------
@@ -43,11 +43,10 @@ curl
 openssl
 
 # --- SQLite ---------------------------------------------------------------------
-# libsqlite3-dev gives sqlite3.h, which scripts/ci/report-sqlite.sh and,
-# from M1, the constants check compile against (ADR-0001), and pulls in
-# libsqlite3-0, the library the suites load. The main job reports that
-# library's version and compile options, read through the FFI (harness plan,
-# section 5).
+# libsqlite3-dev gives sqlite3.h, which scripts/ci/report-sqlite.sh and the
+# constants check compile against (ADR-0001), and pulls in libsqlite3-0, the
+# library the suites load. The main job reports that library's version and
+# compile options, read through the FFI.
 libsqlite3-dev
 
 # --- the memory gate (ADR-0005) -------------------------------------------------

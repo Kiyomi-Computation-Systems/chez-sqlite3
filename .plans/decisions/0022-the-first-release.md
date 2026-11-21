@@ -10,6 +10,9 @@
   twin" (Q8); decision 8's claim, "What ran" (Q6); decision 9's sweep, "Sweep src/ and tests/"
   (Q7); decision 10's timeout, "timeout-minutes 120" (Q9); decision 1's signature, "Signed with
   chez-curl's key" (Q10); decision 2's home page, "The quick start is home" (the plan's Q11).
+  Amended 2026-11-20 in M5's closing review, accepted: the tag rule, the tag ruleset, the
+  release's steps and the sweep's reach
+  ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
 - **Date:** 2026-11-20
 - **Scope:** chez-sqlite3 M5, the release: the docs, the site, the archive, CI's margin, the
   comments, and v0.1.0 with its Release
@@ -195,3 +198,49 @@ And the plan's own:
   make the Release and read it back, list the archives.
 - **ADR-0004, ADR-0005, ADR-0006, ADR-0007 and ADR-0008, and the brief's §6,** are amended in the
   same slice.
+
+## Amendment, 2026-11-20: the tag's rules and the release's steps (M5's closing review)
+
+Proposed in M5's closing review ([the M5 plan](../2026-11-20-m5-plan.md), its amendment "the
+release's steps and the records";
+[the live check's runs](../research/m5-closing-review/README.md)), with the maintainer's answers
+of 2026-11-20 to the review's four questions:
+Accepted by the maintainer on 2026-11-20 ("Accept all three").
+
+- **"Drop main, keep v\*".** Decision 4's `github-pages` environment takes the tag rule `v*`
+  alone; its branch rule `main` is deleted. The lead read it back: `deployment_branch_policy`
+  custom, its policies `v*:tag`. A run of `pages.yml` from `main` fails at the gate, so no
+  deploy names `blob/main/`.
+- **"Protect update and deletion".** A ruleset, "release tags" (id 27776633), active, targets
+  `refs/tags/v*` with the rules `update` and `deletion` and no bypass actor; creating a tag is
+  unaffected. The lead read it back so. A pushed tag can't be moved or deleted, so a tag that
+  deploys stays the tag that was signed. It limits no one's making of a new `v*` tag, which
+  deploys once pushed, as the M5 plan's slice 3 amendment found; with one maintainer that stands.
+- **"Sweep them in the fix PR".** Decision 9's sweep reaches the comments of the Makefile,
+  `scripts/` and `packaging/` too, by the same rules and checks, in the closing review's fix PR.
+  `.github/`, `site/` and `build-site.sps` stay outside it.
+- **"Say tests run from a clone".** The quick start says the suites run from a clone. An archive
+  keeps `tests/` by design, as the consequences have it: no test tree, a library.
+
+Decision 12's steps change (the M5 plan, §4.9):
+
+- **The live check is a script,** `.plans/research/m5-closing-review/live-check.sh`, run before
+  the tag against the release's render served on loopback, since the tag's push deploys at once,
+  and run live after the deploy. Its three clauses: each page and the stylesheet answer 200; a
+  link names a repository file at `blob/v0.1.0/`, and every link into the repository is one, or
+  its home, or its clone URL; every `git clone` of the quick start is `--branch v0.1.0`'s. Each
+  was watched failing and passing in the closing review.
+- **The pushed tag is read back:** `git ls-remote origin 'refs/tags/v0.1.0*'` names the tag object
+  and, at `^{}`, the squash, each as `git rev-parse` gives it locally.
+- **A failed deploy is retried at the tag, never by moving it:** `gh run rerun` of the tag's run,
+  or `gh workflow run pages.yml --ref v0.1.0`, each with `SITE_REF` the tag. The build's
+  artifact is kept one day, so after a day the whole run is rerun, not the `deploy` job alone.
+  Only a fault in the tag's tree, `check-site` failing there or a broken `pages.yml`, takes a new
+  tag, `v0.1.1`, as chez-curl's 0.1.2 was. Decision 5's Release for v0.1.0 is made either way.
+- **The archive's listing is watched failing first:** `git archive d23cfc5`, before
+  `.gitattributes`, lists 879 entries under `.plans/` and `AGENTS.md`; `c3df9de` lists none of
+  either.
+
+Decision 11's entry is held a step further: `test-manifest` holds the latest entry's body and
+its two link references, `[Unreleased]` comparing the tag with `HEAD` and the release's own
+linking its tag's Release, each given once, and no link reference before the first release.

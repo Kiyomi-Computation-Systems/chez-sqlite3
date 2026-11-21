@@ -1,6 +1,6 @@
 # lines.awk: sweep-check.sh's judge of one side of one changed file, line by line.
-#   awk -v kind=sh|c|scheme -v file=PATH -v side=NAME -v allow='PATH:DELIM ...' \
-#       -f lines.awk NUMBERS SOURCE
+#   awk -v kind=sh|c|scheme|make|hash|semi -v file=PATH -v side=NAME \
+#       -v allow='PATH:DELIM ...' -f lines.awk NUMBERS SOURCE
 # NUMBERS holds the numbers of SOURCE's changed lines, one a line, and may be empty. Each
 # problem is printed as a line: FILE: SIDE's line N WHY: TEXT.
 #   - sh: a changed line is a whole-line comment or blank, outside every quoted string and
@@ -12,20 +12,36 @@
 #     ended swallows the next line, which -fpreprocessed does not splice.
 #   - scheme: no changed line holds #! or #;, which read passes over: #!r6rs and
 #     #!chezscheme read alike, and #; drops a datum.
+#   - make, the Makefile: a changed line is a whole-line comment at column 0, # its first
+#     character, or empty: never a recipe line, which begins with a tab and goes to the
+#     shell, nor one a space begins. It lies in no define ... endef block, whose lines are
+#     a variable's value, comments among them; it ends in no backslash, which carries a
+#     make comment on to the next line; and it follows no line that ends in one. The
+#     scanner counts define and endef lines, and a file it ends inside a block of is a
+#     problem.
+#   - hash, packaging/*.txt, .gitignore and .gitattributes: a changed line is a comment
+#     with # at column 0, or empty. CI's install step drops only lines that begin with #
+#     and empty ones, and git's ignore rules read a # after a blank as a pattern.
+#   - semi, packaging/*.sexp: a changed line is a ; comment, past any blanks, or blank.
+#     sweep-check.sh reads the file's datums too, so a line inside a string is seen.
 BEGIN {
   n = split(allow, a, " ")
   for (i = 1; i <= n; i++) allowed[a[i]] = 1
   st = "code"; qh = 1; nq = 0
+  depth = 0
 }
 FILENAME == ARGV[1] { if ($1 != "") changed[$1 + 0] = 1; next }
 {
   if (FNR in changed) judge($0)
   if (kind == "sh") advance($0)
+  if (kind == "make") blocks($0)
   prev = $0
 }
 END {
   if (kind == "sh" && st != "code")
     printf "%s: %s's scanner ends inside %s\n", file, side, place()
+  if (kind == "make" && depth != 0)
+    printf "%s: %s's scanner ends inside a define block\n", file, side
 }
 
 function bad(why) { printf "%s: %s's line %d %s: %s\n", file, side, FNR, why, $0 }
@@ -51,7 +67,26 @@ function judge(line) {
   } else if (kind == "scheme") {
     if (line ~ /#!/) bad("holds #!")
     if (line ~ /#;/) bad("holds #;")
-  }
+  } else if (kind == "make") {
+    if (line ~ /^\t/) bad("is a recipe line")
+    else if (line !~ /^(#.*)?$/) bad("is no comment at column 0")
+    if (depth > 0) bad("lies in a define block")
+    if (line ~ /\\$/) bad("ends in a backslash")
+    if (prev ~ /\\$/) bad("follows a line ending in a backslash")
+  } else if (kind == "hash") {
+    if (line !~ /^(#.*)?$/) bad("is no comment at column 0")
+  } else if (kind == "semi") {
+    if (line !~ /^[ \t]*(;.*)?$/) bad("is no ; comment")
+  } else bad("has no rule of kind " kind)
+}
+
+# blocks: the Makefile's define depth after LINE. A define line, past any override, export
+# or private, opens a block, also inside one, as make nests them; an endef line closes one.
+# A recipe line, and a line a backslash carries on, opens or closes nothing.
+function blocks(line) {
+  if (line ~ /^\t/ || prev ~ /\\$/) return
+  if (line ~ /^[ ]*((override|export|private)[ ]+)*define([ \t]|$)/) depth++
+  else if (depth > 0 && line ~ /^[ ]*endef([ \t]|$)/) depth--
 }
 
 # advance: the state after LINE, from the state before it.

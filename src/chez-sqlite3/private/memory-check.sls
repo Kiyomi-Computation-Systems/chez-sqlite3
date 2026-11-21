@@ -5,10 +5,9 @@
 ;;; The baseline is the count once libsqlite3 is loaded and initialised,
 ;;; before anything is opened: (chez-sqlite3 private native) reads it there,
 ;;; makes the check with it and registers the check with the counters. At a
-;;; suite's end, every connection closed, SQLite must hold what it held then.
-;;; Measured on Guix's 3.53.1 and a 3.45.1 built from the amalgamation: 0 once
-;;; loaded, and back at 0 after every open and close, of :memory:, of a WAL
-;;; file with a query, and of a failed open alike.
+;;; suite's end, every connection closed, SQLite must hold what it held then:
+;;; SQLite's count is back at its baseline after every open and close, of
+;;; :memory:, of a WAL file with a query, and of a failed open alike.
 ;;;
 ;;; A build with SQLITE_DEFAULT_MEMSTATUS=0, as Apple's is, answers 0 always,
 ;;; and a check of it would pass without testing anything. So the check opens
@@ -32,8 +31,8 @@
 
   (define sqlite-ok (cdr (assq 'ok sqlite-result-codes)))
 
-  ;; The control opens :memory: read-write and create, as open-database does
-  ;; by default, and with no other flag.
+  ;; The control opens :memory: read-write and create, open-database's
+  ;; default mode, and with no other flag.
   (define control-flags (bitwise-ior sqlite-open-readwrite sqlite-open-create))
 
   ;; memory-check-outcome : Integer Integer Integer Integer -> (List Symbol String)

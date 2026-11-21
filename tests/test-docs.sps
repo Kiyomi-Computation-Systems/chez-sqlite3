@@ -61,8 +61,9 @@
 ;;;
 ;;; THE RUNNABLE CONVENTION. A Markdown Scheme block whose info string is
 ;;; exactly the one word run, written ```scheme run, is run: the tests
-;;; evaluate it, and a reader sees the mark on the fence's own line, where no
-;;; other kind of block has it. Its last non-blank line is a comment that
+;;; evaluate it. Neither GitHub nor the site shows the info string, so what a
+;;; reader sees is its last line, ";; =>", which no Markdown fragment may
+;;; hold. Its last non-blank line is a comment that
 ;;; states its result, ";; => DATUM", and no other line of the block starts
 ;;; that way. Everything above that line is the body, one or more data
 ;;; evaluated as the body of (let () ...) in an environment of (rnrs) and
@@ -1430,6 +1431,18 @@
          (map (lambda (p)
                 (map (lambda (b) (list p (block-line b) 'unknown-mark (block-info b)))
                      (filter (lambda (b) (eq? (scheme-mark b (org-page? p)) 'unknown))
+                             (scheme-blocks p))))
+              pages)))
+
+(test-equal "no Markdown fragment holds a \";; =>\" line, the mark of a block the tests run, by page and line"
+  '()
+  (apply append
+         (map (lambda (p)
+                (map (lambda (b) (list p (block-line b) 'unrun-result))
+                     (filter (lambda (b)
+                               (and (not (org-page? p))
+                                    (eq? (scheme-mark b #f) 'fragment)
+                                    (exists (lambda (l) (starts? (trim l) ";; =>")) (block-lines b))))
                              (scheme-blocks p))))
               pages)))
 

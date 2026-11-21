@@ -56,11 +56,14 @@
 ;;;                  suite-exit-status (chez-sqlite3 private memory-check)
 ;;;
 ;;; The load runs once per process, whatever it decides. Chez runs a library
-;;; body that raised again at every later reference, so each step from 1 on
-;;; runs inside load-step, from (chez-sqlite3 private load-state), which
-;;; records the first failure and raises it, made serious. Step 0 raises that
-;;; recorded failure at every later reference: nothing is loaded twice, and a
-;;; CHEZ_SQLITE3_LIBRARY changed in between is never read (ADR-0002).
+;;; body that raised again at every later reference, so each definition from
+;;; step 1 on that can raise runs inside load-step, from (chez-sqlite3 private
+;;; load-state), which records the first failure and raises it, made
+;;; serious. The few that cannot raise are plain: step 1's path and source,
+;;; read from its pair, load-extension-available?, and step 8's two. Step 0
+;;; raises that recorded failure at every later reference: nothing is loaded
+;;; twice, and a CHEZ_SQLITE3_LIBRARY changed in between is never read
+;;; (ADR-0002).
 ;;;
 ;;; foreign-procedure resolves its entry point when it is evaluated, so a
 ;;; binding must follow the load, and an entry point the library lacks fails
@@ -99,17 +102,18 @@
 ;;; which can write; sqlite3_prepare_v3, which reads the schema and waits in
 ;;; the busy handler under another connection's lock; sqlite3_step, which does
 ;;; the statement's I/O and waits there too; and sqlite3_reset and
-;;; sqlite3_finalize, measured waiting 1502 ms in the busy handler under
-;;; another connection's read; and sqlite3_load_extension, whose dlopen waited
-;;; on a FIFO for a writer. Every other binding is plain: no measurement or
-;;; documentation shows one waiting (ADR-0011). sqlite3_db_config is variadic,
+;;; sqlite3_finalize, which can commit a write, and so wait in the busy
+;;; handler under another connection's read; and sqlite3_load_extension,
+;;; whose dlopen can wait, as on a FIFO for a writer. Every other binding is
+;;; plain: none is known to wait (ADR-0011). sqlite3_db_config is variadic,
 ;;; int sqlite3_db_config(sqlite3*, int op, ...), and its binding carries
 ;;; Chez's __varargs_after convention with the count of its named parameters,
 ;;; two, before its entry: Apple arm64 passes variadic arguments where named
 ;;; ones never go, and without it the call crashes there, where x86-64 answers
 ;;; alike either way (ADR-0001). Its one shape is (db op int int*), and it is
-;;; plain: no set waited in any measurement (ADR-0021). make check-variadic
-;;; removes the convention in a copy and watches test-conventions fail.
+;;; plain: a set of any of its four ops changes a flag of the connection's,
+;;; and does no I/O (ADR-0021). make check-variadic removes the convention in
+;;; a copy and watches test-conventions fail.
 ;;; sqlite-transient is SQLITE_TRANSIENT, the destructor that makes SQLite
 ;;; copy a bound value: a pointer whose bits are all ones, computed from the
 ;;; pointer's size (ADR-0001).
@@ -308,10 +312,9 @@
   ;; raise follows, from a plain thunk of a dynamic-wind around the block's:
   ;;   - a re-entry: from its before thunk, before the block's extent is
   ;;     entered again, so no second block is made. A resume between the free
-  ;;     and the end of the outer extent would be refused too, though PROC
-  ;;     had returned; with a PROC that did nothing, an engine of 1 to 300
-  ;;     ticks a slice was never refused once PROC had returned (measured,
-  ;;     Chez 10.4.0);
+  ;;     and the end of the outer extent is refused too, though PROC has
+  ;;     returned: a window of a few instructions, from the inner wind's exit
+  ;;     to the outer's;
   ;;   - a block that could not be made: from the body, before FILL!;
   ;;   - a free that failed, as when PROC freed the block itself: from its
   ;;     after thunk, once the block's extent is left.
@@ -321,13 +324,16 @@
           (make-failure #f)
           (free-failure #f))
       (dynamic-wind
-        ;; Latent, today: a raise that left PROC under a guard that did not
-        ;; match it would be handed on from inside PROC's extent, which
-        ;; re-enters this thunk, and the refusal below would replace the
-        ;; raise. No raise gets that far, since the catch-all guard just
-        ;; inside the critical section of call-with-open-handle
-        ;; (connection.sls) takes every one. Whoever narrows that guard, or
-        ;; calls this outside it, must meet this first.
+        ;; Latent: a raise that left PROC under a guard that did not match
+        ;; it would be handed on from inside PROC's extent, which re-enters
+        ;; this thunk, and the refusal below would replace the raise. No
+        ;; raise gets that far, since every block is made under a catch-all
+        ;; guard that takes every one: call-with-open-handle's, just inside
+        ;; its critical section, and connection-outcome's (connection.sls);
+        ;; execute-script!'s (conveniences.sls); sqlite-compile-option?'s
+        ;; (report.sls); and, for the memory check's control,
+        ;; run-exit-checks' in (chez-sqlite3-testing). Whoever narrows one
+        ;; of them, or makes a block outside them, must meet this first.
         (lambda ()
           (when freed
             (assertion-violation who "re-entered after its block was freed")))
@@ -721,9 +727,10 @@
   ;; int sqlite3_prepare_v3(sqlite3 *db, const char *zSql, int nByte,
   ;;                        unsigned int prepFlags, sqlite3_stmt **ppStmt,
   ;;                        const char **pzTail): the handle, a C string's
-  ;; address, its byte length, the flags (0 in v1), and two out-pointers'
-  ;; slots, the statement's and the tail's; the result code. It can block,
-  ;; reading the schema, and wait in the busy handler (ADR-0011).
+  ;; address, its byte length, the flags, 0 or SQLITE_PREPARE_PERSISTENT, and
+  ;; two out-pointers' slots, the statement's and the tail's; the result
+  ;; code. It can block, reading the schema, and wait in the busy handler
+  ;; (ADR-0011).
   (define sqlite3-prepare-v3
     (load-step
      (bind-required report

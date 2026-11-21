@@ -71,14 +71,14 @@
 ;;; The internals (ADR-0013; ADR-0016): each verb's work for a WHO, which
 ;;; everything it raises names, the verb itself a thin wrapper passing its own
 ;;; name: bind!/who, bind-all!/who, clear-bindings!/who, column-value/who,
-;;; column-bytevector/who and column-name/who. And bind-each!/who, which the
-;;; conveniences bind through: bind-all!'s rule, every value checked before
-;;; any is bound, with each value bound in a critical section of its own, each
-;;; of its sections reading the convenience's call's flag first, through
-;;; (chez-sqlite3 private statement)'s while-held. And bind-each!/at, its work
-;;; as data, each section made by its caller's sectioner: execute!, query and
-;;; query-row's claim on their call, at the run's position (ADR-0016);
-;;; bind-each!/who is it, each section by while-held.
+;;; column-bytevector/who and column-name/who. And the two the conveniences
+;;; bind through, each by bind-all!'s rule, every value checked before any is
+;;; bound, with each value bound in a critical section of its own:
+;;; bind-each!/at, its work as data, each section made by its caller's
+;;; sectioner, which is execute!, query and query-row's claim on their call,
+;;; at the run's position (ADR-0016); and bind-each!/who, query-fold's, which
+;;; runs bind-each!/at with each section made by (chez-sqlite3 private
+;;; statement)'s while-held, reading query-fold's flag first.
 (library (chez-sqlite3 private statement-values)
   (export bind! bind-all! clear-bindings! column-value column-bytevector column-name
           bind!/who bind-all!/who bind-each!/who bind-each!/at clear-bindings!/who
@@ -340,8 +340,9 @@
   ;; LEFT?, a convenience's call's check, or #f for none, is read first in
   ;; each of those sections, the count's and each value's, by while-held:
   ;; when it answers true, the section binds nothing, and &sqlite-closed is
-  ;; raised from WHO after it. query-fold's flag; bind-each!/at's work, each
-  ;; section by held-sectioner, what it answers raised.
+  ;; raised from WHO after it: query-fold passes its flag. The work is
+  ;; bind-each!/at's, each section made by held-sectioner, which never
+  ;; refuses, and the condition a run that is not done carries is raised.
   (define (bind-each!/who who st given left?)
     (let ((run (bind-each!/at who st given (held-sectioner who left?) 0)))
       (unless (eq? (car run) 'done) (raise (caddr run)))))

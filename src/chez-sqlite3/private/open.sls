@@ -136,7 +136,8 @@
 
   ;; checked-open : Symbol Any (Listof Any)
   ;;                -> (Values String Natural Natural (Listof Step) Boolean)
-  ;; Step = (U Setting-Step Db-Config-Step), settings-plan's
+  ;; Step = (U Setting-Step Db-Config-Step), settings-plan's.
+  ;;
   ;; FILENAME and ARGUMENTS, open's arguments after it, checked for WHO, in
   ;; the order the library's header gives: the split, then prepared-open's,
   ;; then settings-plan's, each refusal an assertion violation from WHO

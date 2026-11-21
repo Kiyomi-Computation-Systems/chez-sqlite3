@@ -34,13 +34,13 @@
 ;;;
 ;;; The mutex is held only inside a critical section, for constant time:
 ;;; across one read or write of the flag, and across INTERRUPT, which is
-;;; sqlite3_interrupt, bound plain, measured at microseconds. Never across
-;;; the close's work, which can write a checkpoint, nor the shut's, which
-;;; steps a statement. A section keeps out only this thread's engines, timers
-;;; and interrupts: the mutex is the exclusion between threads, and the
-;;; section keeps this thread from being stopped, by an engine's expiry above
-;;; all, between reading the flag and calling INTERRUPT, or while it holds the
-;;; mutex.
+;;; sqlite3_interrupt, bound plain, which only sets SQLite's own interrupt
+;;; flag on the connection and returns. Never across the close's work, which
+;;; can write a checkpoint, nor the shut's, which steps a statement. A
+;;; section keeps out only this thread's engines, timers and interrupts: the
+;;; mutex is the exclusion between threads, and the section keeps this thread
+;;; from being stopped, by an engine's expiry above all, between reading the
+;;; flag and calling INTERRUPT, or while it holds the mutex.
 ;;;
 ;;; Nothing raises inside a section here. A raise from INTERRUPT, from the
 ;;; close's WORK or from its LEFT-OPEN?, or from the shut's WORK, is caught

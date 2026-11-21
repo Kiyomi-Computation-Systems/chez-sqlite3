@@ -167,3 +167,113 @@ which are awk's comments and which the allowlist admits.
 After round 3, the checker reports "ok, 136 of 156 files changed, each in its comments alone
 (55 C builds compared)", and `make test` passes 93 of 93.
 
+
+## The closing review's sweep of the build files
+
+M5's closing review read `c3df9de` and found the release archive's build files carrying the
+history `src/` and `tests/` were swept of: milestones, slices, plan sections, dates, "amended" and
+"decision N" after an ADR, and pointers into the `.plans/` and `AGENTS.md` the archive leaves out.
+The maintainer's answer: sweep the Makefile, `scripts/` and `packaging/` in the fix PR, by slice
+5's rules. `.gitignore` and `.gitattributes` joined them. The base is `main` at `c3df9de`; one
+builder, Opus, in the fix's worktree, which also took the review's `src/` comment findings and
+its page findings.
+
+### The checker, extended
+
+`extract-base.sh` now unpacks the base's Makefile, `scripts/`, `packaging/`, `.gitignore` and
+`.gitattributes` beside `src/` and `tests/`, still on the host, and `sweep-check.sh` lists them
+too: 174 files, where it read 156. Its new rules, each on both sides of every changed line, in
+`lines.awk`:
+
+- **the Makefile** (`make`): a changed line is a comment with `#` at column 0, or empty: never a
+  recipe line, which a tab begins and the shell reads, nor one a space begins; it lies in no
+  `define ... endef` block, whose lines are a variable's value; it ends in no backslash, which
+  carries a make comment on to the next line; and it follows no line that ends in one. The
+  scanner counts `define` and `endef`, and a file it ends inside a block of is a problem;
+- **every file of `scripts/`**: a `.sh`, or a file whose line 1 names `sh`, `bash` or `dash` on
+  both sides, takes the shell rule; any other changed file there is a problem;
+- **`packaging/*.txt`, `.gitignore` and `.gitattributes`** (`hash`): a changed line is a comment
+  with `#` at column 0, or empty. CI's install step drops only `^#` and `^$` lines, so an
+  indented `#` line is a package, and git's ignore rules read one as a pattern;
+- **`packaging/*.sexp`** (`semi`): a changed line is a `;` comment or blank, and the file reads,
+  by `datums.sps`, as the same datums;
+- **modes**, for all of them, as for `src/` and `tests/`.
+
+### Its plants, each a copy of the base
+
+`build/fix1/plants/run.sh` makes each plant in a fresh copy of the base under
+`build/fix1/plants/t/` and runs the checker from the copy's root. The old checker passed every
+build-file plant: it read none of those files, and answered "ok, 0 of 156" on mkcode and gaout.
+The new checker:
+
+| Plant | What it changes | The new checker |
+|---|---|---|
+| bcomments | a comment line of the Makefile, `scripts/guix-env`, `scripts/ci/floor.sh`, `debian-prereqs.txt`, `floors.sexp`, `.gitignore` and `.gitattributes` | ok, 7 of 174 changed |
+| mkcode | `TEST_TIMEOUT ?= 300` to `301` | line 37 is no comment at column 0, on both sides |
+| mkrecipe | a tab-led `# ...` line after `deps`' last recipe line | line 255 is a recipe line |
+| mkspace | the Makefile's line 2, `#`, made ` # an indented line` | line 2 is no comment at column 0 |
+| mkcontin | a `#` line after `MEMORY_SUITES_1 := \` | line 79 follows a line ending in a backslash |
+| mkendslash | ` \` added to the comment above `CHEZ ?=`, which would swallow it | line 9 ends in a backslash |
+| mkdefine | a `#` line inside a `define` block, both sides given the block | line 927 lies in a define block |
+| mkopen | a comment reworded, both sides given a `define` with no `endef` | each side's scanner ends inside a define block |
+| shnoext | `set -eu` to `set -u` in `scripts/guix-env`, which has no suffix | line 15 is no comment, on both sides |
+| shkind | `scripts/require-tools`' line 1 made `#!/usr/bin/env python3` | its line 1 names no shell on both sides |
+| shciheredoc | a `# note` line inside `check-sqlite.sh`'s C heredoc | line 332 lies in the heredoc EOF |
+| txtcode | a package line, `git`, added to `debian-prereqs.txt` | line 30 is no comment at column 0 |
+| txtindent | `debian-site-prereqs.txt`'s line 1 indented by a space | line 1 is no comment at column 0 |
+| gicode | `.gitignore`'s `/build/` made `/build` | line 7 is no comment at column 0, on both sides |
+| gaout | `.gitattributes`' `/AGENTS.md` rule commented out | BASE's line 5 is no comment at column 0 |
+| sexpdatum | the SQLite floor's `3.45.1` made `3.45.2` | datum 0 differs; line 4 is no `;` comment, on both sides |
+| sexphash | `#;(chez "9.5.8")` added to `floors.sexp`, which `read` passes over | line 3 is no `;` comment; the datums alone matched |
+| modeci | the exec bit dropped from `scripts/ci/floor.sh` | its mode was `-rwxrwxr-x`, and is `-rw-rw-r--` |
+| modemk | the exec bit added to the Makefile | its mode was `-rw-rw-r--`, and is `-rwxrwxr-x` |
+| addedci | a new `scripts/ci/new.sh` | added |
+| removedpkg | `packaging/debian-site-prereqs.txt` removed | removed |
+
+The earlier plants were rebuilt on `c3df9de`, the slice's own scripts being gone with its
+worktree, and keep their results: control ok, 0 of 174; comments ok, 3 changed, 6 C builds; cA
+and cC ok over 48 builds; datum (datum 44), shcode2, ctoken2, added, unread, cB (its tokens, and
+its object built as marked), heredoc, contin, shebang, mode, cslash (the backslash, and built as
+named), cspace (the tokens, and built as failing), rnrs, hashsemi, squote and awkcode (BASE's line
+170 lies in the heredoc and is no `#` line) each refused as before. The allowlist plant, an
+`AWKPROGRAM` `#` line reworded, passes, and with the allowlist emptied in a copy of the checker
+fails at line 168 on both sides.
+
+### The files swept
+
+Every comment of the eighteen build files read. Ten changed, each in its comments alone:
+
+- the Makefile: the memory gate's timings and their history, the shards' balance and its runs,
+  "amended" after an ADR eleven times, "decision 4", "the M4 plan, section 4.2", chez-curl's
+  measurements, given as the behaviour they showed, `--trace-children`'s reason, chez-curl as
+  the site's precedent, and four paragraphs reflowed;
+- `scripts/ci/build-chez.sh`, `build-sqlite.sh`, `check-sqlite.sh` and `report-sqlite.sh`: "M4's
+  closing review", "M1", "decision 3", "amended", "(AGENTS.md)", "harness plan, section 5", and
+  `current_version`'s date and plan section;
+- `scripts/fetch-akku-lock`: a measurement put in the present tense;
+- `packaging/debian-prereqs.txt` and `debian-site-prereqs.txt`: the harness plan, "from M1",
+  chez-curl's measurement and "decision 4";
+- `.gitignore`: the ledger's path and `AGENTS.md`, and `/build/`'s comment, which named `make
+  deps` alone, now what the Makefile writes there;
+- `.gitattributes`: says what its rules do, naming nothing the archive drops.
+
+`scripts/ci/check-action-pins.sh`, `check-chez.sh`, `floor.sh`, `scripts/guix-env`,
+`guix-env-enter`, `guix-env-selftest`, `require-tools` and `packaging/floors.sexp` needed nothing.
+
+The same tree holds the review's `src/` findings, 14 files, comments alone, and its page
+findings, `docs/quickstart.md` and `docs/reference.md`, which the checker doesn't read.
+
+As in round 3, bash's own parser, the comments dropped, reads each of the five changed shell
+scripts as the base does, and reads the shnoext plant's `scripts/guix-env` as different.
+
+### The checks, on the swept tree
+
+In the container, on Guix's library:
+
+- `sweep-check.sh`: ok, 24 of 174 files changed, each in its comments alone;
+- `make test`: 93 of 93. Its first run failed `test-manifest`, whose clone-line rule refuses any
+  line holding "git clone": the quick start's new "The tests run from a git clone" was one. It
+  now says "from a clone";
+- `check-site`: all green;
+- `check-floors`: every file holds the floors file;
+- `check-test-fails`: all 18 cases.

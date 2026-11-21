@@ -169,7 +169,7 @@ for name in "$@"; do
     esac
   fi
   # tar reads the archive itself and finds the xz compression: piped from
-  # xz, a missing xz left bsdtar an empty stream, which it unpacks as an
+  # xz, a missing xz leaves bsdtar an empty stream, which it unpacks as an
   # empty archive and calls success. The new tree is unpacked beside the
   # old one, which is replaced only once the new one is whole.
   rm -rf "$tree.tmp"

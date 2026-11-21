@@ -8,6 +8,10 @@ A Chez Scheme built with threads, and SQLite's library, `libsqlite3`, at
 the versions [README.org's Requirements](../README.org) name. A program
 needs nothing else: no compiler, and no build step.
 
+Ubuntu 24.04's `chezscheme` package, 9.5.8, is too old. Build Chez from
+[its source](https://github.com/cisco/ChezScheme), or use Guix's or
+Homebrew's.
+
 ## Get it
 
 ```sh
@@ -59,8 +63,8 @@ Run it with the command above. It prints:
 - `query` gives every row, each a vector of its values.
 
 The examples on these pages leave out the `import` and the `write`. A
-block marked `scheme run` is a program's body, which the tests run, and its
-last line says what it gives. This is the same query:
+block whose last line is `;; =>` is a program's body, which the tests run,
+and that line says what it gives. This is the same query:
 
 ```scheme run
 (call-with-database ":memory:"
@@ -74,7 +78,10 @@ last line says what it gives. This is the same query:
 
 ## On a Mac
 
-- **Apple's library is found by itself:** `/usr/lib/libsqlite3.dylib`.
+- **On macOS 26, Apple's library is found by itself:**
+  `/usr/lib/libsqlite3.dylib`. An older macOS's may be too old, and refused
+  as `below-floor`: then name Homebrew's, as
+  [Who needs the override](finding-sqlite.md#who-needs-the-override) says.
 - **Homebrew's SQLite is not.** Name it with `CHEZ_SQLITE3_LIBRARY`, by
   its absolute path. On an arm64 Mac it is here:
 
@@ -113,15 +120,17 @@ This program says which library it loaded, or why it refused one:
   reason means.
 
 A program that names a procedure that loads SQLite loads it as it starts,
-before any `guard` in it is in place. So this program names them only
-inside `eval`, within the `guard`; the conditions' predicates and
-accessors load nothing ([The library](reference.md#the-library)).
+before any `guard` in it is in place. So this program names those
+procedures only inside `eval`, within the `guard`; the conditions'
+predicates and accessors load nothing
+([The library](reference.md#the-library)).
 
 ## Running the tests
 
-The tests need a pinned submodule, fetched once, and the tools
-[README.org's Requirements](../README.org) list. From the folder you cloned
-into:
+The tests run from a clone, not from a release's archive: they need a
+pinned submodule, which git fetches once, and the archive is no git
+repository. They need the tools [README.org's Requirements](../README.org)
+list too. From the folder you cloned into:
 
 ```sh
 cd chez-sqlite3

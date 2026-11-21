@@ -1,5 +1,5 @@
 # Debian/Ubuntu packages to build and check the docs site, on ubuntu-24.04
-# (ADR-0022, decision 4).
+# (ADR-0022).
 #
 # Two workflows install from this file: the site job of
 # .github/workflows/ci.yml, and the build job of .github/workflows/pages.yml,

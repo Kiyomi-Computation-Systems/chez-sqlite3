@@ -10,7 +10,7 @@
 # it. The tarball is checked against the sha256 pinned below, floor_sha256,
 # before anything is unpacked. The pin is by role, the floor's own, and writes
 # no version: nothing under scripts/ci may (`make check-floors`, ADR-0008).
-# Threaded by default, as chez-sqlite3 needs (ADR-0001, amended);
+# Threaded by default, as chez-sqlite3 needs (ADR-0001);
 # --nothreads builds the Chez the nothreads lane imports the libraries on.
 # Afterwards scripts/ci/check-chez.sh asks the installed scheme for its
 # version and (threaded?), and fails unless they are the floor and what was

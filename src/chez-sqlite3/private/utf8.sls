@@ -64,8 +64,8 @@
 
   ;; strict-utf8->string : Bytevector -> (U String (List 'invalid Natural))
   ;; (utf8->string B) when B is well-formed, where Chez's is exact except that
-  ;; it drops one leading U+FEFF (EF BB BF), measured on 10.4.0: then the
-  ;; character is put back. Else (invalid OFFSET) by utf8-ill-formed-offset.
+  ;; it drops one leading U+FEFF (EF BB BF): then the character is put back.
+  ;; Else (invalid OFFSET) by utf8-ill-formed-offset.
   (define (strict-utf8->string b)
     (let ((offset (utf8-ill-formed-offset b)))
       (cond (offset (list 'invalid offset))

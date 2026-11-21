@@ -68,13 +68,13 @@
 * Add entries to `CHANGELOG.md` for each release
 * A release bumps `Akku.manifest`, CHANGELOG.md and the clone lines of
   README.org and `docs/` together: `test-manifest` holds the first two to
-  each other, and the clone lines from M5 slice 4. The maintainer signs and
-  pushes each tag; its GitHub Release takes the tag's CHANGELOG entry as its
-  notes (ADR-0022).
-* A comment in `src/` or `tests/` is for a developer reading the code: no
-  milestone, slice, research path, date or "the maintainer". A bare
-  `ADR-NNNN` may point to why. It binds new comments now; M5 slice 5 sweeps
-  the older ones (ADR-0022).
+  each other, the latest entry's body and link references, and the clone
+  lines to the manifest's version. The maintainer signs and pushes each tag;
+  its GitHub Release takes the tag's CHANGELOG entry as its notes (ADR-0022).
+* A comment in `src/`, `tests/`, the Makefile, `scripts/` or `packaging/` is
+  for a developer reading the code: no milestone, slice, research path, date
+  or "the maintainer". A bare `ADR-NNNN` may point to why. It binds every
+  comment there but `tests/fixtures/`, a suite's input (ADR-0022).
 * `/docs` is for user facing documentation only.
 * Documentation should be very concise, focused, to the point, ELI5 style.
 * `Makefile` should have a `help` command which lists all of its commands
