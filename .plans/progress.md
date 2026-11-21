@@ -147,7 +147,12 @@ newest first.
     deletion" and "Say tests run from a clone"; the lead set the two settings on GitHub and read
     them back: the `github-pages` environment takes the tag `v*` alone, and the ruleset "release
     tags" refuses an update or a deletion of `refs/tags/v*`, with no bypass.
-  - **Then the release, slice 6;** and after it, the maintainer's next task: an `examples/` folder
+  - **M5 slice 6, the release, is PR #59 on `m5-release`:** CHANGELOG.md's `[0.1.0]` entry, dated
+    2026-11-20, `Akku.manifest` at 0.1.0 and both clone lines at `--branch v0.1.0`, by the M3
+    session, checked read-only by the M4 session. Then the release's steps (the plan, §4.9): the
+    Mac's `make test` on the branch ([its steps](research/m5-mac/release.md)), the merge, the
+    live check, the signed tag, the deploy, the Release and the archives.
+  - **After the release,** the maintainer's next task: an `examples/` folder
     of five programs, `docs/examples.md` showing each in full, held by `test-docs`' whole-program
     rows, built by the M4 session and checked by the M3 session, one PR after slice 6.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the

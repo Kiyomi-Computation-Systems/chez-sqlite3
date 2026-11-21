@@ -201,8 +201,9 @@ too: 174 files, where it read 156. Its new rules, each on both sides of every ch
 
 ### Its plants, each a copy of the base
 
-`build/fix1/plants/run.sh` makes each plant in a fresh copy of the base under
-`build/fix1/plants/t/` and runs the checker from the copy's root. The old checker passed every
+[`research/m5-slice-5/build-file-plants.sh`](research/m5-slice-5/build-file-plants.sh) makes
+each plant in a fresh copy of the base under `build/m5s5/plants/t/` and runs the checker from the
+copy's root. The old checker passed every
 build-file plant: it read none of those files, and answered "ok, 0 of 156" on mkcode and gaout.
 The new checker:
 

@@ -50,7 +50,7 @@ Clone it, and put its =src= directory on Chez's library path. There is
 nothing to build: SQLite's library is loaded when your program runs.
 
 #+begin_src sh
-git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
 scheme --libdirs chez-sqlite3/src --program app.sps
 #+end_src
 

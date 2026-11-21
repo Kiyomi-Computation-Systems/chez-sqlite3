@@ -18,9 +18,9 @@
 ;; install still reports success. There is nothing to build, since no C is
 ;; compiled (ADR-0001). See chez-cmark-gfm ADR-0017.
 ;;
-;; The version stays 0.0.0 until the first release; test-manifest holds it to
-;; CHANGELOG.md.
-(akku-package ("chez-sqlite3" "0.0.0")
+;; The version is CHANGELOG.md's latest release; test-manifest holds the two,
+;; and the clone lines of README.org and docs/, together.
+(akku-package ("chez-sqlite3" "0.1.0")
   (synopsis "SQLite bindings for Chez Scheme")
   (authors "Kiyomi Computation Systems LLC")
   (homepage "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3")
