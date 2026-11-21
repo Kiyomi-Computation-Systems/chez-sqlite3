@@ -312,6 +312,11 @@ newest first.
   the two intended code changes, `test-manifest`'s and the engines suite's, every other file its
   comments alone; the live check failing `main`'s render on links and clone and passing a release
   render; and the fold row failing on a plant that raises closed after the last step.
+- **Checked by the M4 session** (read-only, on `98c6edc`): no blocker. One minor: the pages' new
+  sentence, that a block whose last line is `;; =>` is run, held by convention alone, a plain
+  `scheme` block ending `;; => 4` under `(+ 1 2)` passing. A `test-docs` row now refuses a `;; =>`
+  line in any Markdown fragment, watched failing on that plant; README.org's block, held to its
+  twin, is outside it. The suite's header says what a reader sees.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
