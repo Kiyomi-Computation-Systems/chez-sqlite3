@@ -604,7 +604,7 @@ its answer.
 If finishing the statement fails as the engine runs out, as a write's
 `commit` can while another connection reads, the engine is lost: its caller
 gets Chez's own assertion violation, "no engine active". If you use engines,
-use the statement verbs.
+use `prepare-statement` and finalize the statement yourself.
 
 ### `execute-script!`
 
@@ -636,7 +636,7 @@ statements are never kept for reuse.
 
 It does not survive an engine's preemption: an engine that runs out of fuel
 inside it frees the script's copy, and its resume is refused. If you use
-engines, use the statement verbs.
+engines, use `prepare-statement` and finalize each statement yourself.
 
 Going back into a script, through a continuation or an engine resumed a
 second time, never runs any of its statements again, whether from before the
