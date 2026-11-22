@@ -15,7 +15,7 @@ Homebrew's.
 ## Get it
 
 ```sh
-git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
+git clone --branch v0.1.1 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
 ```
 
 Git may warn that the tag "is not a commit!", and say you are in a

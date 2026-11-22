@@ -20,7 +20,7 @@
 ;;
 ;; The version is CHANGELOG.md's latest release; test-manifest holds the two,
 ;; and the clone lines of README.org and docs/, together.
-(akku-package ("chez-sqlite3" "0.1.0")
+(akku-package ("chez-sqlite3" "0.1.1")
   (synopsis "SQLite bindings for Chez Scheme")
   (authors "Kiyomi Computation Systems LLC")
   (homepage "https://github.com/Kiyomi-Computation-Systems/chez-sqlite3")
