@@ -12,7 +12,7 @@ under `build/rel011-mac/`, which git ignores, and `rel011-mac.tgz` at the clone'
 ## 1. Get the release branch
 
 Start from a clean tree: `git status --short` should print nothing that git tracks. The
-`git log` line should be the branch's head, the one its PR shows.
+`git log` line should be the branch's head, the one PR #64 shows.
 
 ```
 git status --short
@@ -21,6 +21,7 @@ git switch release-0.1.1
 git pull --ff-only
 git log --oneline -1
 mkdir -p build/rel011-mac
+sw_vers | tee build/rel011-mac/macos.txt
 ```
 
 ## 2. Apple's library
@@ -50,11 +51,15 @@ Send `rel011-mac.tgz`. A step that fails is a result too: carry on to the next o
 
 ## What we will read
 
-- Each `make test` ends with `test: ran 93, passed 93`, as on Linux, and as 0.1.0's run did on
-  the Mac with each library ([its steps and results](../m5-mac/release.md)).
-- `test-docs` passes on both, its rows for `docs/examples.md` among them: each program exits 0
-  with nothing on stderr and prints its text block, and the file example prints the same run
-  again.
+- Each `make test` ends with `test: ran 93, passed 93, failed 0, hung 0`, as on Linux, and as
+  0.1.0's run did on the Mac with each library ([its steps and results](../m5-mac/release.md)).
+- `test-docs` gives `# of expected passes      191` on both, as on Linux: its rows for
+  `docs/examples.md` among them, each program exiting 0 with nothing on stderr and printing its
+  text block, and the file example printing the same run again. 0.1.0's Mac run gave 162 on
+  each, as Linux did then.
+- The libraries are the ones README.org's Status names: Apple's run's P4 line names SQLite
+  3.51.0, Homebrew's 3.54.1. `macos.txt` names macOS 26. Another version is a question for the
+  Status before the tag.
 - Apple's run names its unavailable rows as 0.1.0's did; Homebrew's names none.
 - `test-manifest` passes on both, holding the manifest, the changelog and the clone lines at
   0.1.1 together.

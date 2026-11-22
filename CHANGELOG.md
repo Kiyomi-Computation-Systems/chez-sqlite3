@@ -9,7 +9,8 @@ All notable changes to chez-sqlite3 are recorded here. The format follows
 ## [0.1.1] - 2026-11-22
 
 Examples, and a page that shows them. The library is unchanged from
-0.1.0, and so are 0.1.0's known limitations.
+0.1.0, and so are
+[0.1.0's known limitations](https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/blob/v0.1.0/CHANGELOG.md#known-limitations).
 
 ### Added
 
