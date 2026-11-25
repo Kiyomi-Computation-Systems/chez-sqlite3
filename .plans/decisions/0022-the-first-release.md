@@ -15,7 +15,7 @@
   ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
   Amended 2026-11-21 by the examples task, accepted: a fifth page, the examples
   ([amendment](#amendment-2026-11-21-a-fifth-page-the-examples)).
-  Amended 2026-11-25 by the 0.1.1 release's close-out, proposed: a later release's link
+  Amended 2026-11-25 by the 0.1.1 release's close-out, accepted: a later release's link
   reference and tag
   ([amendment](#amendment-2026-11-25-a-later-release-the-011-releases-close-out)).
 - **Date:** 2026-11-20
@@ -275,6 +275,7 @@ Accepted by the maintainer on 2026-11-21 ("Accept it").
 
 Proposed by the 0.1.1 release's close-out ([the release](../research/release-0.1.1/README.md)),
 from the lead's review of PR #64, for the maintainer.
+Accepted by the maintainer on 2026-11-25 ("Accept it").
 
 - **A later release's own link reference compares the tag of the release below it in
   CHANGELOG.md with its own:**

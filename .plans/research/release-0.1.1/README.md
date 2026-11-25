@@ -37,7 +37,7 @@ line.
   - the entry links 0.1.0's known limitations, since a Release's body stands alone.
 
   It also found four nits. Two were in mac.md and are fixed. The other two are in the records,
-  and this close-out proposes them as ADR-0022's amendment of 2026-11-25:
+  and they are ADR-0022's amendment of 2026-11-25, which the maintainer accepted:
   - the ADR's wording of a release's link reference fits only the first release;
   - §4.9 names `v0.1.0` throughout, and its fallback tag `v0.1.1`.
 

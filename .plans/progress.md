@@ -167,7 +167,8 @@ newest first.
     read-only check. `v0.1.1` is the signed tag `a0f55a4` on `960d9f0`. Its site is deployed with
     the examples page, and its GitHub Release is published, the release's ten steps each passing
     ([the release](research/release-0.1.1/README.md)). ADR-0022's amendment for a later
-    release's link reference and tag is proposed, for the maintainer. Nothing else is planned.
+    release's link reference and tag is accepted (2026-11-25, "Accept it"). Nothing else is
+    planned.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -332,7 +333,7 @@ newest first.
     left behind, and `[0.1.1]` in the first release's link form.
 - **Reviewed:** the lead's Opus review of `b5a3109`, read-only, found no blocker or major, three
   minors and four nits. The minors and mac.md's two nits are fixed in `91c5ccc`. The records'
-  two nits are ADR-0022's amendment of 2026-11-25, proposed here.
+  two nits are ADR-0022's amendment of 2026-11-25, made here.
 - **No peer check:** the M4 session was offline from the PR to the Release. The maintainer
   approved the merge knowing so.
 - **The maintainer's Mac run** on `91c5ccc`: 93 of 93 with each library, the examples' first run
@@ -350,10 +351,10 @@ newest first.
   - the Release's body byte-equal as a draft and once published, its two links answering 200;
   - the archives' 827 entries, without `.plans/` or `AGENTS.md`;
   - the clone line run verbatim, the first program, and `examples/basics.sps`.
-- **ADR-0022's amendment of 2026-11-25, proposed:** a later release's own link reference
-  compares the tag of the release below it with its own, as `test-manifest` holds. Decision 12's
-  steps take each release's own tag and version, and a fault in a tag's tree takes the next
-  patch's tag, now `v0.1.2`. The M5 plan's §4.9 says so too.
+- **ADR-0022's amendment of 2026-11-25, accepted** ("Accept it"): a later release's own link
+  reference compares the tag of the release below it with its own, as `test-manifest` holds.
+  Decision 12's steps take each release's own tag and version, and a fault in a tag's tree takes
+  the next patch's tag, now `v0.1.2`. The M5 plan's §4.9 says so too.
 - **Cost:** `memory-1` took 38 min 4 s on #64's run and on `main`'s, and 45 min 55 s on the
   tag's, all on one tree (Open, the memory jobs' margin).
 - **The lead's review of this close-out,** one Opus reviewer, read-only, found no blocker or
