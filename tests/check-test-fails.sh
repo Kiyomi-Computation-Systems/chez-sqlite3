@@ -28,6 +28,8 @@
 #                imports foreign-alloc, a      and no suite runs
 #                name only (chez-sqlite3
 #                private memory) may import
+#   help-quote   CONTRIBUTING.md quotes a      check-help names it, and no
+#                make target that is none      suite runs
 #   floors       README's Chez line says       check-floors names the line,
 #                10.3.0, not the floor         and no suite runs
 #   floors-script a script under            check-floors names its line, and
@@ -59,6 +61,7 @@
 # them included, the seam case those
 # starting "check-seam: ", the floors and floors-script cases those
 # starting "check-floors: ",
+# the help-quote case those starting "check-help: ",
 # the ci case those starting "check-ci: ", and the shards cases those
 # starting "check-memory-shards: ".
 #
@@ -468,6 +471,16 @@ run_case "seam: check-seam names a private library that imports foreign-alloc, a
      echo 'check-seam: FAILED (problems: 1)')" \
   '^(check-suites|check-seam|test): '
 rm -f "${copy:?}/src/chez-sqlite3/private/planted.sls"
+
+# The help-quote case: the copy's CONTRIBUTING.md quotes a make target that
+# the Makefile has none of. check-help runs before check-suites, so it stops
+# make test before check-suites' line. check-help passes before and after:
+# CONTRIBUTING.md is restored.
+printf '\nRun `make plant-not-a-target`.\n' >>"$copy/CONTRIBUTING.md"
+run_case "help-quote: check-help names a make target that CONTRIBUTING.md quotes and the Makefile lacks, and no suite runs" \
+  "check-help: CONTRIBUTING.md quotes 'make plant-not-a-target', and plant-not-a-target is not a .PHONY target" \
+  '^(check-suites|check-help|test): '
+cp "$root/CONTRIBUTING.md" "$copy/CONTRIBUTING.md"
 
 # The floors case: the copy's README states an older Chez than the floors
 # file does. The file's floor is read from the file, so this script is no

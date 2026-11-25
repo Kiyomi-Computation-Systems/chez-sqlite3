@@ -8,8 +8,8 @@ All notable changes to chez-sqlite3 are recorded here. The format follows
 
 ### Added
 
-- **Contributing:** CONTRIBUTING.md, SECURITY.md, and GitHub's issue and
-  pull-request templates.
+- **Contributing:** `CONTRIBUTING.md` and `SECURITY.md`, which README.org
+  links, and issue and pull-request templates for GitHub.
 
 ## [0.1.1] - 2026-11-22
 

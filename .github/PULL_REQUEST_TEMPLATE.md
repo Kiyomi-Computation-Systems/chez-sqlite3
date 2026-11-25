@@ -9,6 +9,7 @@
 ## Checklist
 
 - [ ] `make test` passes locally
+- [ ] `make test` ran on a Mac too, or I said I couldn't, if discovery or a binding changed
 - [ ] A behaviour change comes with a test I watched fail without it
 - [ ] The title is a Conventional Commit (`feat:`, `fix:`, `docs:`, …)
 - [ ] A new export has its type comment and its entry in `docs/reference.md`

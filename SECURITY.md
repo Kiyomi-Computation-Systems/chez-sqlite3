@@ -10,8 +10,9 @@
 ## Reporting a vulnerability
 
 Please report a suspected vulnerability privately, through GitHub:
-**Security → Report a vulnerability** on this repository. Don't open a
-public issue.
+**Security → Report a vulnerability** on this repository, or
+[its form](https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/security/advisories/new).
+Don't open a public issue.
 
 You can expect an acknowledgement within 7 days.
 
@@ -20,11 +21,14 @@ so these reports are especially welcome:
 
 - memory safety at the native boundary: a handle used after its close or
   finalize, or freed twice, or a value handed to C that doesn't fit its type;
-- a connection used from a thread other than the one that opened it, past
-  the wrong-thread condition;
+- a connection or its statement used from a thread other than the one that
+  opened it without raising the wrong-thread condition
+  (`interrupt-database!` alone may come from any thread);
 - an engine's expiry, or a continuation, that runs a call's step twice or
   skips a close or a finalize;
-- an extension loaded without `(enable-load-extension . #t)`.
+- an extension loaded on a connection opened without
+  `(enable-load-extension . #t)`, or SQL's `load_extension()` working on any
+  connection.
 
 Please include your platform, your Chez version, and the output of
 `make build`, which names the SQLite library loaded and its version.

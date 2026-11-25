@@ -11,7 +11,7 @@ report it privately. -->
 
 - OS and architecture (e.g. macOS 26 arm64, Ubuntu 24.04 x86_64):
 - Chez Scheme version (`scheme --version`; Homebrew's is `chez`):
-- SQLite library and version (`make build` prints both):
+- SQLite library and version (paste `make build`'s whole output):
 - chez-sqlite3 version or commit:
 
 **What happened**
