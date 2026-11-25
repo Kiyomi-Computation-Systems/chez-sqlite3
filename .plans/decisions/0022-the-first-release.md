@@ -276,13 +276,16 @@ Accepted by the maintainer on 2026-11-21 ("Accept it").
 Proposed by the 0.1.1 release's close-out ([the release](../research/release-0.1.1/README.md)),
 from the lead's review of PR #64, for the maintainer.
 
-- **A later release's own link reference compares the tag below it with its own:**
+- **A later release's own link reference compares the tag of the release below it in
+  CHANGELOG.md with its own:**
   `[0.1.1]: …/compare/v0.1.0...v0.1.1`. Only the first release's links its tag's Release,
   `…/releases/tag/v0.1.0`. The wording above, "the release's own linking its tag's Release",
   fits the first release alone. `test-manifest` has held the later form since M5's closing
   review (the M5 plan, §4.8), and it refused `[0.1.1]` written in the first release's form
   ([its run](../research/release-0.1.1/out/tm-plant-ref.txt)).
-- **Decision 12's steps take each release's own tag.** A later release reads each `v0.1.0` in
-  them, and in the M5 plan's §4.9, as its own tag. It passes that tag to `live-check.sh` as the
-  second argument, whose default is `v0.1.0`. A fault in a tag's tree takes the next patch's
-  tag, with its own entry: `v0.1.2` after `v0.1.1`.
+- **Decision 12's steps take each release's own tag and version.** A later release reads each
+  `v0.1.0` and `0.1.0` in them, as amended on 2026-11-20, and in the M5 plan's §4.9, as its own
+  tag and version: step 8's notes are its own entry, and step 9's `Akku.manifest` names its
+  version. It passes its tag to `live-check.sh` as the second argument, whose default is
+  `v0.1.0`. A fault in a tag's tree takes the next patch's tag, with its own entry: `v0.1.2`
+  after `v0.1.1`.

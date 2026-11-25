@@ -286,7 +286,9 @@ newest first.
     are added. On the six runs to #57 the jobs took 28.0 to 40.3 minutes, and `test-check-ci`,
     which grows with every `check-ci` row, took 177 s. On PR #62's run, 44944425019, `memory-1`
     took 37 min 45 s, its 48 suites 1,923 s together and the slowest 167 s; `test-docs`, with the
-    examples, took 125 s, up from 68 s.
+    examples, took 125 s, up from 68 s. On 0.1.1's three runs of one tree, 45033938606,
+    45037754109 and 45054908565, `memory-1` took 38 min 4 s, 38 min 4 s and 45 min 55 s, the
+    last 38% of 120, under the 47 min 22 s high.
   - **`test-transaction-interrupt`'s cost is settled.** It took 318 s on CI on `main` at
     `c0a5408` (run 44083802043), past the 150 s that ADR-0005's slice 6 amendment made a finding.
     On the memory-mutex device, from M3's closing review, it took 11 s on PR #32's CI, and 15, 11,
@@ -340,7 +342,8 @@ newest first.
 - **The release's ten steps** each passed ([the release](research/release-0.1.1/README.md)):
   - the squash's tree the tested head's, and `main`'s push run 7 of 7;
   - the live check on loopback before the tag: `v0.1.1`'s render passing, `main`'s failing on
-    links, and the live 0.1.0 site failing all three clauses;
+    links;
+  - the live check against the 0.1.0 site before the tag, failing all three clauses;
   - the tag signed and read back;
   - its Pages and CI runs;
   - the live check at the site passing, and failing as `v0.1.2`;
@@ -348,14 +351,22 @@ newest first.
   - the archives' 827 entries, without `.plans/` or `AGENTS.md`;
   - the clone line run verbatim, the first program, and `examples/basics.sps`.
 - **ADR-0022's amendment of 2026-11-25, proposed:** a later release's own link reference
-  compares the tag below it with its own, as `test-manifest` holds. Decision 12's steps take
-  each release's own tag, and a fault in a tag's tree takes the next patch's, now `v0.1.2`. The
-  M5 plan's §4.9 says so too.
+  compares the tag of the release below it with its own, as `test-manifest` holds. Decision 12's
+  steps take each release's own tag and version, and a fault in a tag's tree takes the next
+  patch's tag, now `v0.1.2`. The M5 plan's §4.9 says so too.
+- **Cost:** `memory-1` took 38 min 4 s on #64's run and on `main`'s, and 45 min 55 s on the
+  tag's, all on one tree (Open, the memory jobs' margin).
+- **The lead's review of this close-out,** one Opus reviewer, read-only, found no blocker or
+  major. It found three minors, all fixed here: the clone's git was 2.55.0, not 2.54; the
+  amendment missed the bare version, `0.1.0`, that steps 8 and 9 name; and the passing
+  controls weren't committed. Its eleven nits are taken, but the ledger's stale "Now: M5"
+  heading, which predates this PR.
 - **Subagents:**
 
   | Agent | Model | Tokens | Tool calls | Time |
   |---|---|---|---|---|
   | Reviewer of `b5a3109` | Opus | 119k | 26 | 5 min |
+  | Reviewer of this close-out | Opus | 186k | 66 | 10 min |
 
 ### 2026-11-21 — the examples (PR #62)
 

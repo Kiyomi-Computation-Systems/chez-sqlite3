@@ -1,7 +1,7 @@
 # The release of 0.1.1
 
 The M5 plan's §4.9, steps 1 to 10, as they ran on 2026-11-22, by the M3 session, the lead. The
-M4 session was offline throughout, so no PR had its read-only check. `v0.1.1` is the signed tag
+M4 session was offline throughout, so PR #64 had no read-only check. `v0.1.1` is the signed tag
 object `a0f55a4` on `960d9f0`, the squash of PR #64.
 
 ## Why a release
@@ -28,7 +28,8 @@ line.
   - with `[0.1.1]` written in the first release's form, `releases/tag/v0.1.1`, the entry's row
     failed ([tm-plant-ref.txt](out/tm-plant-ref.txt)).
 
-  The whole bump passed 107, and `make test` passed 93 of 93 in the container, on `b5a3109`.
+  The whole bump passed 107 ([tm-all.txt](out/tm-all.txt)), and `make test` passed 93 of 93
+  in the container, on `b5a3109` ([make-test.txt](out/make-test.txt), its `test:` lines).
 - **The lead's Opus review of `b5a3109`,** read-only, found no blocker or major. It found three
   minors, all fixed in `91c5ccc`:
   - the Mac steps now read `test-docs`' count, 191;
@@ -62,7 +63,9 @@ line.
     versions README.org's Status names.
   - Apple's run named the same rows unavailable as 0.1.0's, line for line. Homebrew's named
     none. `test-manifest` passed on both.
-  - The run was on `91c5ccc`, the tested head, whose tree is the tag's.
+  - The run was on `91c5ccc`, the tested head, whose tree is the tag's. No output names the
+    head, but `macos.txt` exists, and only `91c5ccc`'s steps ask for it; it was written at
+    09:40, after `91c5ccc`'s commit at 09:38.
 - **Step 4:**
   - Pages builds from workflows, over HTTPS. The `github-pages` environment holds one policy,
     `tag:v*`. The ruleset "release tags" is active on `refs/tags/v*`, with the rules `update`
@@ -90,19 +93,25 @@ line.
   - **The checks:** 0.1.0's [check.py](../m5-release/check.py) found the body equal to the notes
     as a draft ([check-draft.txt](out/check-draft.txt)), and again once published with
     `--latest` ([check-published.txt](out/check-published.txt)).
-  - **The links:** the body's two links, `blob/v0.1.1/docs/examples.md` and
-    `blob/v0.1.0/CHANGELOG.md#known-limitations`, each answer 200.
+  - **The links:** the published body, rendered ([body.html](out/body.html)), has two links,
+    `blob/v0.1.1/docs/examples.md` and `blob/v0.1.0/CHANGELOG.md#known-limitations`. Each
+    answers 200.
 - **Step 9:**
   - The listings: GitHub's tarball, from `gh api repos/…/tarball/v0.1.1`
     ([github-tarball.txt](out/github-tarball.txt)), and `git archive v0.1.1`
     ([git-archive.txt](out/git-archive.txt)).
   - The tarball lists 828: its first entry is its folder, `…-chez-sqlite3-a0f55a4/`, and the
     other 827 are `git archive`'s, once that prefix is stripped. 0.1.0 listed 820.
-  - Each holds `src/`, `docs/` with `examples.md`, `examples/`, README.org, `LICENSE`,
-    CHANGELOG.md, and `Akku.manifest` at 0.1.1.
-  - The watched failure is 0.1.0's: `git archive d23cfc5` still gives 879.
+  - 0.1.0's tarball came by the Release page's route, `archive/refs/tags/`, whose folder is
+    `chez-sqlite3-0.1.0/`. The review listed that route for `v0.1.1` too: 828 entries, the
+    folder `chez-sqlite3-0.1.1/`, and the same 827 under it.
+  - Each holds `src/`, `docs/` with `examples.md`, `examples/`, README.org, `LICENSE` and
+    CHANGELOG.md. `vendor/chez-srfi/` is the last entry, with nothing under it. The tag's
+    `Akku.manifest` names 0.1.1.
+  - The watched failure is 0.1.0's, run again:
+    `git archive d23cfc5 | tar -t | grep -c -E '^(\.plans/.|AGENTS\.md$)'` gives 879.
 - **Step 10:**
-  - README.org's clone line ran verbatim on the host, with git 2.54
+  - README.org's clone line ran verbatim on the host, with git 2.55.0
     ([clone.txt](out/clone.txt)). It printed git's "is not a commit!" warning and cloned a
     detached HEAD at `960d9f0`, as the quick start says it will.
   - In the clone, with the host's Chez 10.4.0, the quick start's first program printed
