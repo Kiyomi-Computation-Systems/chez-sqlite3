@@ -161,6 +161,13 @@ newest first.
     accepted its amendment, ADR-0022's decision 2 with five pages (2026-11-21, "Accept it"). The
     quick start's clone note settles the open item on git's "is not a commit!". The next tag
     carries `examples/`; nothing else is planned.
+  - **0.1.1 is released** (2026-11-22), the maintainer's "Release 0.1.1", after their Pages run
+    from `main` stopped at the environment's gate, as it was set to. PR #64, `960d9f0`, by the M3
+    session, squash-merged with CI passing in every job; the M4 session was offline, so it had no
+    read-only check. `v0.1.1` is the signed tag `a0f55a4` on `960d9f0`. Its site is deployed with
+    the examples page, and its GitHub Release is published, the release's ten steps each passing
+    ([the release](research/release-0.1.1/README.md)). ADR-0022's amendment for a later
+    release's link reference and tag is proposed, for the maintainer. Nothing else is planned.
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -294,23 +301,61 @@ newest first.
     "refs/tags/v0.1.0 … is not a commit!", as it does for any annotated tag (chez-curl's too), and
     clones the tag right. Since PR #62 the quick start says so, and that the clone is a detached
     HEAD, the maintainer's "Fold it in".
-  - **On `main`, the examples need a clone of `main`.** README.org's clone line names `v0.1.0`,
-    which has no `examples/`, and its Documentation list links the examples page, whose run line
-    runs `chez-sqlite3/examples/…`. The site deploys from tags alone, so it shows no examples page
-    until the next tag, which closes this; until then the live check, whose page list now holds
-    `examples.html`, fails against `v0.1.0`'s site, as it should.
-  - **The examples haven't run on a Mac.** Apple's 3.51.0 and Homebrew's run them at the next
-    release's Mac walk.
+  - **The examples' clone is settled by 0.1.1.** Until then README.org's clone line named
+    `v0.1.0`, which has no `examples/`, and the site showed no examples page. Now the line names
+    `v0.1.1`, the site deployed from it shows the page, and the live check passes against it.
+  - **The examples have run on a Mac,** in 0.1.1's Mac run: `test-docs` gave 191 with Apple's
+    3.51.0 and with Homebrew's 3.54.1, as on Linux.
   - **The examples page's run line is held by its file name alone:** nothing holds its `--libdirs
     chez-sqlite3/src`, nor the quick start's run line (the M3 session's check of PR #62).
   - **A checkout path holding `:` splits `test-docs`' `--libdirs`,** as it splits `make test`'s
     own (PR #62's review).
   - **The release's Mac run** was on `10a9569`, PR #59's head, not on the tagged `21b3e1b`. PR
-    #60 changed only text, and the maintainer chose to skip a rerun (2026-11-21).
+    #60 changed only text, and the maintainer chose to skip a rerun (2026-11-21). 0.1.1's Mac run
+    was on `91c5ccc`, whose tree is its tag's.
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-22 — the release of 0.1.1 (PR #64)
+
+- **Why:** the maintainer's Pages run from `main`, 45029901884, stopped at the `github-pages`
+  environment's gate, which takes the tag `v*` alone, by design. They chose "Release 0.1.1", to
+  carry the examples to the site and to README.org's clone line.
+- **Built** by the M3 session, on `release-0.1.1` from `487063c`:
+  - CHANGELOG.md's `[0.1.1]` entry, `Akku.manifest` at 0.1.1, both clone lines at
+    `--branch v0.1.1`, and the Mac steps;
+  - `test-manifest` failed by name on each partial bump: the changelog alone, the clone lines
+    left behind, and `[0.1.1]` in the first release's link form.
+- **Reviewed:** the lead's Opus review of `b5a3109`, read-only, found no blocker or major, three
+  minors and four nits. The minors and mac.md's two nits are fixed in `91c5ccc`. The records'
+  two nits are ADR-0022's amendment of 2026-11-25, proposed here.
+- **No peer check:** the M4 session was offline from the PR to the Release. The maintainer
+  approved the merge knowing so.
+- **The maintainer's Mac run** on `91c5ccc`: 93 of 93 with each library, the examples' first run
+  on a Mac ([its steps and results](research/release-0.1.1/mac.md)).
+- **The maintainer's answers** (2026-11-22): "Run the ritual now" for #64's merge, "Sign and
+  push it" for the tag, and "Publish when green" for the Release.
+- **The release's ten steps** each passed ([the release](research/release-0.1.1/README.md)):
+  - the squash's tree the tested head's, and `main`'s push run 7 of 7;
+  - the live check on loopback before the tag: `v0.1.1`'s render passing, `main`'s failing on
+    links, and the live 0.1.0 site failing all three clauses;
+  - the tag signed and read back;
+  - its Pages and CI runs;
+  - the live check at the site passing, and failing as `v0.1.2`;
+  - the Release's body byte-equal as a draft and once published, its two links answering 200;
+  - the archives' 827 entries, without `.plans/` or `AGENTS.md`;
+  - the clone line run verbatim, the first program, and `examples/basics.sps`.
+- **ADR-0022's amendment of 2026-11-25, proposed:** a later release's own link reference
+  compares the tag below it with its own, as `test-manifest` holds. Decision 12's steps take
+  each release's own tag, and a fault in a tag's tree takes the next patch's, now `v0.1.2`. The
+  M5 plan's §4.9 says so too.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer of `b5a3109` | Opus | 119k | 26 | 5 min |
 
 ### 2026-11-21 — the examples (PR #62)
 

@@ -1,0 +1,9 @@
+live-check: links: not a file at v0.1.2: blob/v0.1.1/examples/basics.sps
+live-check: links: not a file at v0.1.2: blob/v0.1.1/examples/file-database.sps
+live-check: links: not a file at v0.1.2: blob/v0.1.1/examples/json.sps
+live-check: links: not a file at v0.1.2: blob/v0.1.1/examples/prepared.sps
+live-check: links: not a file at v0.1.2: blob/v0.1.1/examples/transactions.sps
+live-check: links: not a file at v0.1.2: blob/v0.1.1/README.org
+live-check: links: no link names a repository file at blob/v0.1.2/
+live-check: clone: this git clone is not --branch v0.1.2:
+  git clone --branch v0.1.1 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git

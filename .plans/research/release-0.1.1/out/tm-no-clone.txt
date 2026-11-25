@@ -1,0 +1,7 @@
+%%%% Starting test manifest
+FAIL README.org and docs/ hold the clone lines Akku.manifest's version calls for, one in README.org, one in the quick start
+  expected: ()
+  actual:   ("README.org:53: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.1 calls for \"git clone --branch v0.1.1 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"" "docs/quickstart.md:18: past its leading spaces it is \"git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\", but version 0.1.1 calls for \"git clone --branch v0.1.1 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git\"")
+# of expected passes      106
+# of unexpected failures  1
+suite-exit-status: exit 1 (pass 106, fail 1, xpass 0): a suite needs a pass, and no fail or xpass

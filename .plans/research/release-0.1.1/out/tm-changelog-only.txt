@@ -1,0 +1,7 @@
+%%%% Starting test manifest
+FAIL Akku.manifest's version is CHANGELOG.md's latest release, or 0.0.0 with none
+  expected: "0.1.1"
+  actual:   "0.1.0"
+# of expected passes      106
+# of unexpected failures  1
+suite-exit-status: exit 1 (pass 106, fail 1, xpass 0): a suite needs a pass, and no fail or xpass

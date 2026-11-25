@@ -1,0 +1,7 @@
+live-check: links: not a file at v0.1.1: blob/main/examples/basics.sps
+live-check: links: not a file at v0.1.1: blob/main/examples/file-database.sps
+live-check: links: not a file at v0.1.1: blob/main/examples/json.sps
+live-check: links: not a file at v0.1.1: blob/main/examples/prepared.sps
+live-check: links: not a file at v0.1.1: blob/main/examples/transactions.sps
+live-check: links: not a file at v0.1.1: blob/main/README.org
+live-check: links: no link names a repository file at blob/v0.1.1/

@@ -1,0 +1,5 @@
+live-check: pages: examples.html answered 404, not 200
+live-check: links: not a file at v0.1.1: blob/v0.1.0/README.org
+live-check: links: no link names a repository file at blob/v0.1.1/
+live-check: clone: this git clone is not --branch v0.1.1:
+  git clone --branch v0.1.0 https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
