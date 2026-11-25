@@ -10,10 +10,10 @@ how it does that is a design decision, not a fix.
 ## Setup
 
 The tests need more than the library does: [README.org's
-Requirements](README.org) list them. Ubuntu's `chezscheme` is too old: build
-Chez from source, as `scripts/ci/build-chez.sh PREFIX` does for CI, or use
-Guix's or Homebrew's. `packaging/debian-prereqs.txt` lists the packages CI
-installs. Then:
+Requirements](README.org) list them. Ubuntu 24.04's `chezscheme` is too old:
+build Chez from source, as `scripts/ci/build-chez.sh PREFIX` does for CI, or
+use Guix's or Homebrew's. `packaging/debian-prereqs.txt` lists the packages
+CI's test jobs install. Then:
 
 ```sh
 git clone https://github.com/Kiyomi-Computation-Systems/chez-sqlite3.git
@@ -24,12 +24,9 @@ make test
 
 The submodule is chez-srfi, for the tests' SRFI-64 alone. `make help` lists
 every target, and `make test SUITES=tests/test-NAME.sps` runs one suite.
-
-`make build` names the SQLite library the tests will load. To test another,
-name it with `CHEZ_SQLITE3_LIBRARY`, by its absolute path, and set
-`C_INCLUDE_PATH` to the folder of its `sqlite3.h`: the tests compile C
-against the first `sqlite3.h` the compiler finds, and nothing checks that it
-is the loaded library's.
+`make build` names the SQLite library the tests will load; the quick start's
+[Running the tests](docs/quickstart.md#running-the-tests) says how to test
+another.
 
 **On Guix,** `scripts/guix-env` runs a pinned container with every tool:
 `scripts/guix-env make test`. It has no git, and no network but loopback, so
@@ -39,10 +36,11 @@ fetch, commit and push on the host. `make check-guix`, on the host, tests it.
 
 CI runs seven jobs on every pull request, on Linux x86_64. Keep them green:
 
-- `main`: `make build`, which must accept the runner's SQLite, found by
-  discovery; `make test`; and the checks it leaves out: `check-pins`,
-  `check-test-fails`, `check-variadic`, `check-dev` and `check-clean`, every
-  action pinned to a commit, and the Guix launcher's own tests.
+- `main`, in order: every action pinned to a commit; `make build`, which
+  must accept the runner's SQLite, found by discovery; `make test`; the
+  checks it leaves out, `make check-pins`, `make check-test-fails`,
+  `make check-variadic`, `make check-dev` and `make check-clean`; and the
+  Guix launcher's own tests.
 - `memory-1` and `memory-2`: every suite under Valgrind, in two shards,
   after `make check-memory-gate` shows the gate fails on a planted overrun
   and leak.
@@ -54,10 +52,11 @@ CI runs seven jobs on every pull request, on Linux x86_64. Keep them green:
 - `site`: `make check-site` and `make site`, on Ubuntu's Chez: the docs site
   renders, and its links and anchors resolve.
 
-**macOS isn't in CI.** The suites run on a Mac, with Apple's SQLite and
-Homebrew's, before each release. If you touch how the library is found
-(`src/chez-sqlite3/private/discovery.sls`) or how a C function is bound, run
-`make test` on a Mac too, or say in the pull request that you couldn't.
+**macOS isn't in CI,** and no macOS job will be added. The suites run on a
+Mac, with Apple's SQLite and Homebrew's, before each release. If you touch
+how the library is found (`src/chez-sqlite3/private/discovery.sls`) or how a
+C function is bound, run `make test` on a Mac too, or say in the pull
+request that you couldn't.
 
 ## When you change…
 
@@ -66,8 +65,8 @@ Homebrew's, before each release. If you touch how the library is found
   signatures agree.
 - **A suite:** a `tests/test-*.sps` ends with
   `(exit (suite-exit-status runner))`, or `make check-suites` fails. Add it
-  to `MEMORY_SUITES_1` or `MEMORY_SUITES_2` in the Makefile, whichever takes
-  less time on CI, by the `time:` line each memory job prints per suite:
+  to `MEMORY_SUITES_1` or `MEMORY_SUITES_2` in the Makefile, whichever took
+  less time on CI (each memory job prints a `time:` line per suite).
   `make test` fails, naming it, until it is in one.
 - **`docs/`:** it is for people using the library. Keep it short and plain.
   - A new page goes in README.org's Documentation list and in
@@ -77,8 +76,9 @@ Homebrew's, before each release. If you touch how the library is found
     until the nav matches. `make check-site` isn't part of `make test`: it
     needs the cmark-gfm library, and `make site-deps`, run once on the host,
     which fetches chez-cmark-gfm.
-  - `make test` runs a page's whole programs and its `scheme run` blocks,
-    and each must give what the page shows.
+  - `make test` runs a page's whole programs and its `scheme run` blocks.
+    Each must exit 0 with nothing on stderr, and print the text block that
+    follows it, if one does.
 - **The floors:** the oldest Chez and SQLite supported are written once, in
   `packaging/floors.sexp`. `make check-floors` fails if README.org's
   Requirements disagree, or if any other line of README.org, a page, a
@@ -86,12 +86,12 @@ Homebrew's, before each release. If you touch how the library is found
 - **A workflow:** `.github/workflows` holds `ci.yml` and `pages.yml` alone.
   `make check-ci` holds `ci.yml` to one shape and `pages.yml` to its copy;
   change `tests/check-ci.sh` and its suite with them. Each `uses:` names a
-  full commit SHA, its tag in a comment. CI stays on Linux: a macOS job won't
-  be added.
+  full commit SHA, its tag in a comment.
 - **The Makefile:** give each new target a `## ` description and a place in
   `.PHONY`: `make check-help` fails when it has one without the other. It
-  also fails when this file or the pull-request template quotes a `make`
-  command whose target the Makefile lacks.
+  also reads the code spans of this file, SECURITY.md, and the pull request
+  and bug report templates: it fails when a span's `make` command starts
+  with a target the Makefile lacks.
 - **The chez-srfi pin:** `make check-pins` fails unless `Akku.lock`, the
   gitlink and the checkout name one commit.
 - **What ships:** a release archive is `git archive` of the tag, which leaves
@@ -115,8 +115,8 @@ Homebrew's, before each release. If you touch how the library is found
 - The code is written fresh. Thunderchez's `sqlite3.sls` is Apache-2.0, and
   this project is BSD-3: read it for ideas if you like, but copy none of it.
 - Linux and macOS, on x86_64 and arm64, are supported, but only Linux on
-  x86_64 and macOS on arm64 have run the suites
-  ([README.org's Status](README.org)). Windows isn't supported.
+  x86_64 and macOS 26 on arm64 have run the suites (README.org's Status).
+  Windows isn't supported.
 - A comment in `src/`, `tests/`, the Makefile, `scripts/` or `packaging/` is
   for a developer reading the code: no plans, dates or issue numbers. A bare
   `ADR-NNNN` may point to why.
@@ -139,17 +139,16 @@ Homebrew's, before each release. If you touch how the library is found
 
 ## Pull requests
 
-- Commit messages and pull-request titles follow
+- Commit messages and pull request titles follow
   [Conventional Commits](https://www.conventionalcommits.org): `feat:`,
-  `fix:`, `docs:`, `test:`, `ci:`. Pull requests are squash-merged: the
-  commit takes the pull request's title, or, for a pull request of one
-  commit, that commit's message.
+  `fix:`, `docs:`, `test:`, `ci:`. Pull requests are squash-merged, and
+  either can become the squash commit's title.
 - Say where you ran `make test`, and on which SQLite: CI runs Linux x86_64
   alone.
 - A change users can see gets an entry under `## [Unreleased]` in
   [CHANGELOG.md](CHANGELOG.md).
 - Releases are the maintainer's. A release moves `Akku.manifest`,
-  CHANGELOG.md, and README.org's and `docs/`' clone lines together, and
+  CHANGELOG.md, and the clone lines in README.org and `docs/` together, and
   `test-manifest` fails one that moves them apart.
 
 ## How the project is developed
@@ -157,8 +156,8 @@ Homebrew's, before each release. If you touch how the library is found
 Each lasting decision has a numbered record in `.plans/decisions/`, and
 `.plans/progress.md` says where the project stands. [AGENTS.md](AGENTS.md)
 holds the rules in full, and the lessons behind them. Following them is
-encouraged for features, not demanded of small fixes; where a check holds a
-rule, it holds every change. Neither ships in a release archive; read them
+encouraged for features, not demanded of small fixes, but a rule a check
+enforces binds every change. Neither ships in a release archive; read them
 in the repository.
 
 ## Security

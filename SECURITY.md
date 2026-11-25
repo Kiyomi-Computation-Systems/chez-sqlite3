@@ -9,10 +9,10 @@
 
 ## Reporting a vulnerability
 
-Please report a suspected vulnerability privately, through GitHub:
-**Security → Report a vulnerability** on this repository, or
-[its form](https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/security/advisories/new).
-Don't open a public issue.
+Please report a suspected vulnerability privately, through GitHub's
+[report form](https://github.com/Kiyomi-Computation-Systems/chez-sqlite3/security/advisories/new)
+(**Security → Report a vulnerability** on this repository). Don't open a
+public issue.
 
 You can expect an acknowledgement within 7 days.
 
@@ -27,8 +27,8 @@ so these reports are especially welcome:
 - an engine's expiry, or a continuation, that runs a call's step twice or
   skips a close or a finalize;
 - an extension loaded on a connection opened without
-  `(enable-load-extension . #t)`, or SQL's `load_extension()` working on any
-  connection.
+  `(enable-load-extension . #t)`, or SQL's `load_extension()` working on a
+  connection where no extension you loaded turned it on.
 
 Please include your platform, your Chez version, and the output of
 `make build`, which names the SQLite library loaded and its version.

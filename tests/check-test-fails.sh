@@ -28,8 +28,14 @@
 #                imports foreign-alloc, a      and no suite runs
 #                name only (chez-sqlite3
 #                private memory) may import
-#   help-quote   CONTRIBUTING.md quotes a      check-help names it, and no
-#                make target that is none      suite runs
+#   help-quote   each file check-help reads    check-help names the target,
+#                quotes a make target the      and no suite runs
+#                Makefile lacks, one case
+#                for each
+#   help-none    CONTRIBUTING.md quotes no     check-help names the file,
+#                make target                   and no suite runs
+#   help-missing the pull request template     check-help names the file,
+#                is missing                    and no suite runs
 #   floors       README's Chez line says       check-floors names the line,
 #                10.3.0, not the floor         and no suite runs
 #   floors-script a script under            check-floors names its line, and
@@ -61,7 +67,7 @@
 # them included, the seam case those
 # starting "check-seam: ", the floors and floors-script cases those
 # starting "check-floors: ",
-# the help-quote case those starting "check-help: ",
+# the help cases those starting "check-help: ",
 # the ci case those starting "check-ci: ", and the shards cases those
 # starting "check-memory-shards: ".
 #
@@ -472,15 +478,34 @@ run_case "seam: check-seam names a private library that imports foreign-alloc, a
   '^(check-suites|check-seam|test): '
 rm -f "${copy:?}/src/chez-sqlite3/private/planted.sls"
 
-# The help-quote case: the copy's CONTRIBUTING.md quotes a make target that
-# the Makefile has none of. check-help runs before check-suites, so it stops
-# make test before check-suites' line. check-help passes before and after:
-# CONTRIBUTING.md is restored.
-printf '\nRun `make plant-not-a-target`.\n' >>"$copy/CONTRIBUTING.md"
-run_case "help-quote: check-help names a make target that CONTRIBUTING.md quotes and the Makefile lacks, and no suite runs" \
-  "check-help: CONTRIBUTING.md quotes 'make plant-not-a-target', and plant-not-a-target is not a .PHONY target" \
+# The help cases. check-help reads four files for the make commands they
+# quote. In each help-quote case one of them quotes a target the Makefile has
+# none of; in help-none CONTRIBUTING.md quotes none at all, and in
+# help-missing the pull request template is gone. Without a file in
+# check-help's list, or without its rule for an empty or a missing file, no
+# check sees the plant and make test passes: the case fails then. check-help
+# runs before check-suites, so it stops make test before check-suites' line.
+# check-help passes before and after each: the file is restored.
+for doc in CONTRIBUTING.md SECURITY.md .github/PULL_REQUEST_TEMPLATE.md .github/ISSUE_TEMPLATE/bug_report.md; do
+  printf '\nRun `make plant-not-a-target`.\n' >>"$copy/$doc"
+  run_case "help-quote: check-help names a make target that $doc quotes and the Makefile lacks, and no suite runs" \
+    "check-help: $doc quotes 'make plant-not-a-target', and plant-not-a-target is not a .PHONY target" \
+    '^(check-suites|check-help|test): '
+  cp "$root/$doc" "$copy/$doc"
+done
+
+printf 'This file quotes no command.\n' >"$copy/CONTRIBUTING.md"
+run_case "help-none: check-help names a CONTRIBUTING.md that quotes no make target, and no suite runs" \
+  "check-help: CONTRIBUTING.md quotes no make target, so this check read nothing in it" \
   '^(check-suites|check-help|test): '
 cp "$root/CONTRIBUTING.md" "$copy/CONTRIBUTING.md"
+
+pr_template=.github/PULL_REQUEST_TEMPLATE.md
+mv "$copy/$pr_template" "$tmp/pr-template"
+run_case "help-missing: check-help names a missing pull request template, and no suite runs" \
+  "check-help: $pr_template is missing" \
+  '^(check-suites|check-help|test): '
+mv "$tmp/pr-template" "$copy/$pr_template"
 
 # The floors case: the copy's README states an older Chez than the floors
 # file does. The file's floor is read from the file, so this script is no
