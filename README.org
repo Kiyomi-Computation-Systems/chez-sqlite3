@@ -86,6 +86,16 @@ The [[file:docs/quickstart.md][quick start]] shows the whole program, and how to
 
 The pages are also on the [[https://kiyomi-computation-systems.github.io/chez-sqlite3/][docs site]].
 
+** Contributing
+
+[[file:CONTRIBUTING.md][CONTRIBUTING.md]] says how to set up, which checks a pull request must
+pass, and the house rules.
+
+** Security
+
+Report a suspected vulnerability privately, as [[file:SECURITY.md][SECURITY.md]] says, never
+in a public issue.
+
 ** License
 
 © [[https://kiyomicomputation.systems/][Kiyomi Computation Systems LLC]]. Licensed under BSD-3-Clause — see

@@ -6,6 +6,11 @@ All notable changes to chez-sqlite3 are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Contributing:** CONTRIBUTING.md, SECURITY.md, and GitHub's issue and
+  pull-request templates.
+
 ## [0.1.1] - 2026-11-22
 
 Examples, and a page that shows them. The library is unchanged from
