@@ -169,6 +169,11 @@ newest first.
     ([the release](research/release-0.1.1/README.md)). ADR-0022's amendment for a later
     release's link reference and tag is accepted (2026-11-25, "Accept it"). Nothing else is
     planned.
+  - **The contributor files are PR #66,** on `contributing`, by the M3 session, the maintainer's
+    ask of 2026-11-25: CONTRIBUTING.md, SECURITY.md, and pull request and issue templates, as
+    the Chez siblings have them; README.org's Contributing and Security sections; and
+    `check-help`'s new clause, which reads the `make` commands those files quote. GitHub's
+    private vulnerability reporting is on (the maintainer's "Turn it on", 2026-11-25).
   - **The refresh ran:** a program against a bare archive's `src`, with nothing built; the
     changelog reader on link references, with a control that fails by name; and four CI runs'
     memory jobs, `memory-1` at 42 and 44 of its 60 minutes on the last two (Q9).
@@ -316,10 +321,52 @@ newest first.
   - **The release's Mac run** was on `10a9569`, PR #59's head, not on the tagged `21b3e1b`. PR
     #60 changed only text, and the maintainer chose to skip a rerun (2026-11-21). 0.1.1's Mac run
     was on `91c5ccc`, whose tree is its tag's.
+  - **`check-help` reads a quoted `make` command's first target alone,** in a code span on one
+    line. A second goal, a span wrapped across lines and a fenced block are read by nothing
+    (PR #66's second review). Its `grep -o` hasn't met a Mac's BSD grep yet; the next Mac
+    walk runs it, since `make test` does.
+  - **`check-floors` doesn't read CONTRIBUTING.md, SECURITY.md or the GitHub templates,** so
+    a floor written there passes; widening it changes its program and its suite (the
+    maintainer's "Port the target check", 2026-11-25).
   - Brief D3 to D6 are settled (the M2 plan, §2), and M2 split `test-library-loading` in #19
     (ADR-0005, amended).
 
 ## Close-outs
+
+### 2026-11-25 — the contributor files (PR #66)
+
+- **Asked** by the maintainer, after #65: "add a CONTRIBUTING.md and similar to this project",
+  from the other projects on this host. Their answers: "The siblings' five", "Turn it on" (GitHub's
+  private vulnerability reporting, now on), "Add both sections" (README.org's) and "Port the
+  target check".
+- **Built** by the M3 session, on `contributing` from `960d9f0`, rebased onto `fbf558e`:
+  - CONTRIBUTING.md, SECURITY.md, the pull request template and two issue templates, from
+    chez-httparse's and chez-cmark-gfm's, fitted to this project;
+  - README.org's Contributing and Security sections, and CHANGELOG.md's `[Unreleased]` entry;
+  - `check-help`'s clause, from chez-httparse's: CONTRIBUTING.md, SECURITY.md and the pull
+    request and bug report templates must each quote a `make` command, each starting with a
+    `.PHONY` target. `check-test-fails` gains help-quote, one case per file, help-none and
+    help-missing.
+- **Watched failing:**
+  - a dead README.org link to each new file failed `test-docs`' link row alone;
+  - without the clause, help-quote alone failed. Five mutants of it each failed exactly their
+    cases: each of three files dropped from its list, the rule for a file that quotes none,
+    and the rule for a missing file. The clause passed all 24 cases, and `make test` 93 of 93.
+- **Reviewed:** two Opus reviews, read-only.
+  - **Of `22949c6`:** no blocker, and three majors, all fixed. An `export-ignore` rule that
+    `test-manifest` refuses, `C_INCLUDE_PATH` left out, and platforms claimed beyond those that
+    ran. Its eight minors are taken, the missing check among them, by the maintainer's choice.
+  - **Of `41e2318`:** no blocker, and two majors, both fixed. The clause claimed more than it
+    reads, and is now described as it is, its reach left Open; three of its four rules had no
+    plant, and now have. Its minors are taken but two: `grep -o` on a Mac, left Open, and a
+    lowercase assignment before a goal, `make jobs=2 test`, which fails, loudly.
+- **No peer check:** the M4 session was offline.
+- **Subagents:**
+
+  | Agent | Model | Tokens | Tool calls | Time |
+  |---|---|---|---|---|
+  | Reviewer of `22949c6` | Opus | 184k | 62 | 9 min |
+  | Reviewer of `41e2318` | Opus | 182k | 54 | 13 min |
 
 ### 2026-11-22 — the release of 0.1.1 (PR #64)
 
