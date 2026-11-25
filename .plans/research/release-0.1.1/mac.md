@@ -63,3 +63,13 @@ Send `rel011-mac.tgz`. A step that fails is a result too: carry on to the next o
 - Apple's run names its unavailable rows as 0.1.0's did; Homebrew's names none.
 - `test-manifest` passes on both, holding the manifest, the changelog and the clone lines at
   0.1.1 together.
+
+## What it gave
+
+On `91c5ccc`, PR #64's head, macOS 26.7.1, 2026-11-22 ([outputs](out/mac/)). No output names the
+head, but that `macos.txt` exists shows it, since only `91c5ccc`'s steps make it.
+
+`make test` ran 93 and passed 93 with Apple's library and with Homebrew's. `test-docs` gave 191 on
+each, and the P4 lines named 3.51.0 and 3.54.1. Apple's run named the same rows unavailable as
+0.1.0's, line for line; Homebrew's named none. `test-manifest` passed on both. The squash's tree
+is `91c5ccc`'s ([the release](README.md)).

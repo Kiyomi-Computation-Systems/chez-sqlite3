@@ -15,6 +15,9 @@
   ([amendment](#amendment-2026-11-20-the-tags-rules-and-the-releases-steps-m5s-closing-review)).
   Amended 2026-11-21 by the examples task, accepted: a fifth page, the examples
   ([amendment](#amendment-2026-11-21-a-fifth-page-the-examples)).
+  Amended 2026-11-25 by the 0.1.1 release's close-out, accepted: a later release's link
+  reference and tag
+  ([amendment](#amendment-2026-11-25-a-later-release-the-011-releases-close-out)).
 - **Date:** 2026-11-20
 - **Scope:** chez-sqlite3 M5, the release: the docs, the site, the archive, CI's margin, the
   comments, and v0.1.0 with its Release
@@ -267,3 +270,23 @@ Accepted by the maintainer on 2026-11-21 ("Accept it").
 - **Every whole program runs from a directory of its own,** so what one writes by a relative path
   lands there; one that leaves a file runs again beside it and must print the same. No whole
   program names a `(chez-sqlite3 private …)` library, in its import form or anywhere else.
+
+## Amendment, 2026-11-25: a later release (the 0.1.1 release's close-out)
+
+Proposed by the 0.1.1 release's close-out ([the release](../research/release-0.1.1/README.md)),
+from the lead's review of PR #64, for the maintainer.
+Accepted by the maintainer on 2026-11-25 ("Accept it").
+
+- **A later release's own link reference compares the tag of the release below it in
+  CHANGELOG.md with its own:**
+  `[0.1.1]: …/compare/v0.1.0...v0.1.1`. Only the first release's links its tag's Release,
+  `…/releases/tag/v0.1.0`. The wording above, "the release's own linking its tag's Release",
+  fits the first release alone. `test-manifest` has held the later form since M5's closing
+  review (the M5 plan, §4.8), and it refused `[0.1.1]` written in the first release's form
+  ([its run](../research/release-0.1.1/out/tm-plant-ref.txt)).
+- **Decision 12's steps take each release's own tag and version.** A later release reads each
+  `v0.1.0` and `0.1.0` in them, as amended on 2026-11-20, and in the M5 plan's §4.9, as its own
+  tag and version: step 8's notes are its own entry, and step 9's `Akku.manifest` names its
+  version. It passes its tag to `live-check.sh` as the second argument, whose default is
+  `v0.1.0`. A fault in a tag's tree takes the next patch's tag, with its own entry: `v0.1.2`
+  after `v0.1.1`.
